@@ -1,0 +1,50 @@
+# CareOS architecture
+
+## Decision
+
+CareOS begins as a modular monolith. Java/Spring Boot owns domain logic, authorization, transactions, data access, jobs and external integration ports. React/TypeScript owns accessible browser experiences. Node.js is used to build and test the frontend; it is not a second business backend.
+
+## System boundaries
+
+| Boundary          | Responsibility                                                                 |
+| ----------------- | ------------------------------------------------------------------------------ |
+| Identity          | Users, invitations, authentication, MFA, sessions and account linkage          |
+| Tenancy           | Organizations, memberships, scopes and PostgreSQL tenant context               |
+| Governance        | Idempotency, audit evidence, transactional outbox and delivery state           |
+| Administration    | Facilities, departments, locations, services and configuration activation      |
+| Workforce         | People, engagements, practitioners, credentials, scope, assignments and access |
+| Patient registry  | Patient identity, verification, contacts, identifiers and consent              |
+| Scheduling        | Appointments, resources, availability and reminders                            |
+| Encounter         | Visits, participants, clinical state and sign-off                              |
+| Assessment        | Protected COS-01–COS-27 workflow and structured clinical evidence              |
+| Documents/results | Private files, reports, provenance and review                                  |
+| AI governance     | Purpose-bound sessions, prompts, outputs, review and approval                  |
+| Billing           | Estimates, invoices, payments, refunds and reconciliation                      |
+| Reporting         | Operational, clinical and governance projections                               |
+| Integration       | FHIR, messaging, payments, calendars and external systems                      |
+
+## Dependency rule
+
+Domain code must not depend on HTTP, database or vendor implementations. Application services coordinate use cases. Infrastructure implements ports. Web/API controllers translate transport contracts. Cross-module changes occur through explicit interfaces and outbox events.
+
+Eight ArchUnit tests currently enforce framework-free domain packages, inward application dependencies, infrastructure/API separation, API controller placement, cycle-free top-level modules, exclusion of the scanner-only quarantine stream from API packages, and exclusion of job/notification claim-completion mechanics from API packages. Every production module must retain the `domain`, `application`, `infrastructure`, and `api` direction established by the prototype, identity, tenancy, governance, and platform-capability foundations.
+
+## Tenancy and security
+
+Every tenant-owned row carries `organization_id`. The runtime uses a restricted `careos_app` database role while Flyway uses a separate migration owner. Actor-only, read-only transactions expose only the authenticated actor's live memberships and selectable organizations. `TenantAuthorizationOperations` starts a fresh tenant transaction, binds organization, actor, purpose, and correlation settings, locks and revalidates a live membership, checks a migration-owned permission mapping, and only then supplies an `AuthorizedTenantContext` to work executed in that same transaction. Forced RLS remains defense in depth.
+
+Retryable governed mutations enter `GovernedMutationExecutor`. Idempotency acquisition, first business execution, canonical audit insert, outbox insert, and cached-response completion share the authorized transaction and therefore commit or roll back together. PostgreSQL checks migration-owned event/version definitions, context metadata, payload keys and state transitions. Audit is append-only; outbox delivery is at least once using leases and unique claim tokens. The publisher coordinator is not scheduled until non-interactive identity, tenant dispatch, destination transport, and consumer deduplication are approved and implemented. See `GOVERNANCE_EVIDENCE.md`.
+
+Browser authentication uses persisted password credentials, Redis-backed indexed sessions, Origin/Referer and CSRF checks, encrypted TOTP/recovery factors, recent-authentication evidence, throttling, and security-version revocation. Organization selection is derived from live membership and stored server-side for navigation, but it is not authorization evidence. Every governed tenant operation must independently enter `TenantAuthorizationOperations`. The authorization catalogs are intentionally empty and runtime-read-only until the owner-approved policy registry is delivered, so unknown roles grant no permissions.
+
+The `platform` module defines nine external-capability ports for document security, durable notifications, Redis jobs, workers, and schedulers. `PlatformCapabilityRegistry` requires exactly one readiness probe for every port family. The foundation supplies explicit unavailable adapters that throw before I/O and reports only safe state/reason codes at `/actuator/info`; Compose services are topology, not evidence that an application capability is active. An opt-in S3-compatible adapter implements private quarantine with tenant-derived keys, conditional writes, exact byte/digest verification, verified retry, and private-bucket startup checks. A separate opt-in ClamD adapter consumes only a scanner-internal quarantine stream, validates engine/protocol/signature freshness, bounds network streaming, and re-verifies content before returning a verdict. An opt-in Redis adapter uses tenant hash-slot keys and atomic Lua transitions for deduplicated enqueue, leased claim/ack, bounded retry, expired-lease recovery, retained dead letters, incremental cleanup, and safe telemetry. An opt-in PostgreSQL adapter persists notification parameters as AES-256-GCM ciphertext under forced RLS and provides hashed leases, bounded retry/dead-letter transitions, retained evidence, key rotation, and safe telemetry only inside an authorized tenant transaction. API packages cannot consume scanner streams or the background job/notification claim-completion lifecycles. These mechanics do not promote/sign/retain content, persist scan evidence, authenticate a worker, authorize a queued effect, resolve recipient consent/destinations, or send a notification. See `PLATFORM_CAPABILITIES.md`.
+
+The migrations through `V7__durable_notification_store.sql` deliberately contain only foundation tables and security mechanics. They are not the final M1-M13 database schema. See `AUTHORIZATION_REGISTRY.md`, `GOVERNANCE_EVIDENCE.md`, and `PLATFORM_CAPABILITIES.md` for the approval and integration boundaries that remain.
+
+## HTTP contract
+
+All MVC responses receive a validated or server-generated `X-Correlation-Id`. Application, validation, and security-filter failures use `application/problem+json` with stable CareOS error codes and correlation metadata. Both public operations, all 11 browser identity operations, and both membership-backed organization-selection operations are checked into `contracts/openapi/careos-foundation.json`; protected tenant-business conventions and generated frontend clients remain Phase 0 work.
+
+## Scaling path
+
+Start with multiple stateless backend replicas behind a load balancer, managed PostgreSQL, Redis, private object storage and independent job workers. Add read replicas and projections for reporting. Extract a service only when team ownership, deployment isolation or measured load justifies the operational cost. AI/ML remains an external port; a Python service can be added later without moving the Java clinical source of truth.

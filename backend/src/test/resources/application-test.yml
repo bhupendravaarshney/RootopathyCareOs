@@ -1,0 +1,34 @@
+spring:
+  datasource:
+    url: ${TEST_DB_URL:jdbc:postgresql://localhost:5432/careos_test}
+    username: ${TEST_DB_APP_USERNAME:careos_app}
+    password: ${TEST_DB_APP_PASSWORD:careos-app-test-only}
+  flyway:
+    url: ${TEST_DB_MIGRATION_URL:${TEST_DB_URL:jdbc:postgresql://localhost:5432/careos_test}}
+    user: ${TEST_DB_MIGRATION_USERNAME:careos_migrator}
+    password: ${TEST_DB_MIGRATION_PASSWORD:careos-migrator-test-only}
+    placeholders:
+      applicationRole: ${TEST_DB_APP_USERNAME:careos_app}
+  data:
+    redis:
+      repositories:
+        enabled: false
+careos:
+  security:
+    allowed-origins:
+      - http://localhost
+      - http://localhost:4173
+    application-base-url: http://localhost:4173
+    token-pepper: CareOS-Test-Token-Pepper-Never-Production
+    mfa-encryption-key: Q2FyZU9TLUxvY2FsLU1GQS1LZXktTXVzdC1DaGFuZ2U=
+    session-absolute-timeout: 8h
+    recent-authentication-window: 10m
+    password-reset-token-ttl: 15m
+    login-attempt-limit: 5
+    login-attempt-window: 15m
+    mfa-attempt-limit: 5
+    mfa-attempt-window: 10m
+    recovery-code-count: 10
+  bootstrap-admin:
+    email: owner@rootopathy.test
+    password: CareOS-Test-Only-Change-Me

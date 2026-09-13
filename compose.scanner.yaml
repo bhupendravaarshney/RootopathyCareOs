@@ -1,0 +1,25 @@
+# Opt-in local scanner overlay. ClamD stays on the private Compose network and is never published
+# to the host because its TCP protocol is neither authenticated nor encrypted.
+services:
+  clamav:
+    image: clamav/clamav-debian:1.5.3_base@sha256:cb5b15312564be66d20d341390d8ec8ddcbfdfcd410a9c26ece8b5e8df6200c0
+    environment:
+      CLAMD_STARTUP_TIMEOUT: 900
+      FRESHCLAM_CHECKS: 4
+    expose:
+      - "3310"
+    volumes:
+      - careos-clamav-db:/var/lib/clamav
+
+  backend:
+    environment:
+      CAREOS_STORAGE_S3_ENABLED: "true"
+      CAREOS_SCANNER_CLAMAV_ENABLED: "true"
+      CAREOS_SCANNER_CLAMAV_HOST: clamav
+      CAREOS_SCANNER_CLAMAV_PORT: 3310
+    depends_on:
+      clamav:
+        condition: service_healthy
+
+volumes:
+  careos-clamav-db:

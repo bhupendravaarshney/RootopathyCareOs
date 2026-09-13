@@ -1,0 +1,1236 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ROOTOPATHY CareOS Foundation API",
+    "version": "0.3.0",
+    "description": "Checked contract for the currently implemented public foundation, browser identity, and membership-backed organization-selection endpoints. Unsafe browser operations require an approved Origin or Referer plus the double-submit CSRF cookie/header pair."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080"
+    }
+  ],
+  "paths": {
+    "/api/public/prototype-screens": {
+      "get": {
+        "operationId": "listPrototypeScreens",
+        "responses": {
+          "200": {
+            "description": "All registered prototype screens",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PrototypeScreen"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/public/system-summary": {
+      "get": {
+        "operationId": "getSystemSummary",
+        "responses": {
+          "200": {
+            "description": "Foundation system summary",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemSummary"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/csrf": {
+      "get": {
+        "operationId": "issueCsrfToken",
+        "description": "Creates or reuses an anonymous session, sets the readable XSRF-TOKEN cookie, and returns the matching raw token for an SPA request header.",
+        "responses": {
+          "200": {
+            "description": "CSRF token issued",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "Set-Cookie": {
+                "description": "Contains the XSRF-TOKEN cookie.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CsrfToken"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/session": {
+      "get": {
+        "operationId": "getAuthenticationSession",
+        "security": [
+          {},
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Anonymous, pending-MFA, or fully authenticated session state",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionState"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "login",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          }
+        ],
+        "security": [
+          {
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/AuthenticatedSession"
+          },
+          "202": {
+            "$ref": "#/components/responses/MfaPendingSession"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "$ref": "#/components/responses/NoContent"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/password-reset-requests": {
+      "post": {
+        "operationId": "requestPasswordReset",
+        "description": "Always returns the same accepted response so account existence is not disclosed.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          }
+        ],
+        "security": [
+          {
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "$ref": "#/components/responses/Accepted"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/password-resets": {
+      "post": {
+        "operationId": "completePasswordReset",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          }
+        ],
+        "security": [
+          {
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetCompletion"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "$ref": "#/components/responses/NoContent"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mfa/enrollments": {
+      "post": {
+        "operationId": "startMfaEnrollment",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MfaEnrollmentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One-time TOTP enrollment material",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaEnrollment"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mfa/enrollments/verification": {
+      "post": {
+        "operationId": "verifyMfaEnrollment",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/MfaCode"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/RecoveryCodes"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mfa/challenges": {
+      "post": {
+        "operationId": "completeMfaChallenge",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/MfaCode"
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/AuthenticatedSession"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/recent-authentications": {
+      "post": {
+        "operationId": "verifyRecentAuthentication",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecentAuthenticationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "$ref": "#/components/responses/NoContent"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mfa/recovery-codes": {
+      "post": {
+        "operationId": "regenerateRecoveryCodes",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/RecoveryCodes"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/organizations": {
+      "get": {
+        "operationId": "listSelectableOrganizations",
+        "description": "Returns only organizations for which the authenticated actor has a currently active and effective membership. A stored selection is a UX preference and is not authorization evidence.",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Selectable organizations for the current actor",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OrganizationAccess"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/organization-selections": {
+      "post": {
+        "operationId": "selectOrganization",
+        "description": "Stores a server-side organization preference only after rechecking a live membership under actor-bound RLS. The preference never replaces route-level authorization.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationSelectionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Organization preference selected",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationAccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "sessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "CAREOS_SESSION",
+        "description": "Opaque HttpOnly SameSite=Strict server-side session identifier. Secure is mandatory outside explicit local HTTP development."
+      },
+      "csrfCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "XSRF-TOKEN",
+        "description": "Readable SameSite=Strict double-submit token cookie. Secure is mandatory outside explicit local HTTP development."
+      },
+      "csrfHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-XSRF-TOKEN",
+        "description": "Must match the raw XSRF-TOKEN cookie value."
+      }
+    },
+    "parameters": {
+      "BrowserOrigin": {
+        "name": "Origin",
+        "in": "header",
+        "required": true,
+        "description": "Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.",
+        "schema": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "headers": {
+      "CorrelationId": {
+        "description": "Stable identifier used to correlate one HTTP request across logs and problem responses.",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
+      },
+      "RetryAfter": {
+        "description": "Seconds until another authentication attempt should be made.",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "requestBodies": {
+      "MfaCode": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/MfaCodeRequest"
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "AuthenticatedSession": {
+        "description": "Fully authenticated session",
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          },
+          "Set-Cookie": {
+            "description": "Contains the rotated CAREOS_SESSION cookie and may expire the prior CSRF cookie.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SessionState"
+            }
+          }
+        }
+      },
+      "MfaPendingSession": {
+        "description": "Primary credentials accepted; MFA challenge required",
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          },
+          "Set-Cookie": {
+            "description": "Contains the rotated CAREOS_SESSION cookie and may expire the prior CSRF cookie.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SessionState"
+            }
+          }
+        }
+      },
+      "RecoveryCodes": {
+        "description": "New one-time recovery codes; each plaintext code is returned only in this response",
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/RecoveryCodes"
+            }
+          }
+        }
+      },
+      "NoContent": {
+        "description": "Operation completed",
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          }
+        }
+      },
+      "Accepted": {
+        "description": "Request accepted without disclosing whether an account exists",
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          }
+        }
+      },
+      "BadRequest": {
+        "description": "Request validation, password policy, or one-time-token failure",
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Credentials, verification evidence, or session is invalid",
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Origin, CSRF, or authorization check failed",
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "The resource is unavailable or hidden from the current actor",
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "The requested MFA transition conflicts with current state",
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "PreconditionRequired": {
+        "description": "Recent authentication is required",
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "TooManyRequests": {
+        "description": "Authentication attempts are temporarily throttled",
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          },
+          "Retry-After": {
+            "$ref": "#/components/headers/RetryAfter"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "InternalError": {
+        "description": "The request failed without exposing sensitive implementation details.",
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "PrototypeScreen": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "module", "title", "purpose", "status"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^(M1|M2|COS)-[0-9]{2}$"
+          },
+          "module": {
+            "type": "string",
+            "enum": ["M1", "M2", "COS"]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "purpose": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "const": "prototype"
+          }
+        }
+      },
+      "SystemSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "product",
+          "edition",
+          "generatedAt",
+          "screenCount",
+          "modules"
+        ],
+        "properties": {
+          "product": {
+            "type": "string"
+          },
+          "edition": {
+            "type": "string"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "screenCount": {
+            "type": "integer",
+            "const": 79
+          },
+          "modules": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CsrfToken": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["headerName", "parameterName", "token"],
+        "properties": {
+          "headerName": {
+            "type": "string",
+            "const": "X-XSRF-TOKEN"
+          },
+          "parameterName": {
+            "type": "string",
+            "const": "_csrf"
+          },
+          "token": {
+            "type": "string",
+            "minLength": 16
+          }
+        }
+      },
+      "SessionState": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["state", "user", "recentAuthentication"],
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": ["anonymous", "mfa_required", "authenticated"]
+          },
+          "user": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/User"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recentAuthentication": {
+            "type": "boolean"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "email", "displayName"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 320
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["email", "password"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 320
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        }
+      },
+      "PasswordResetRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 320
+          }
+        }
+      },
+      "PasswordResetCompletion": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["token", "newPassword"],
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "newPassword": {
+            "type": "string",
+            "format": "password",
+            "minLength": 12,
+            "maxLength": 128
+          }
+        }
+      },
+      "MfaEnrollmentRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "type": ["string", "null"],
+            "maxLength": 80
+          }
+        }
+      },
+      "MfaEnrollment": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["secret", "provisioningUri"],
+        "properties": {
+          "secret": {
+            "type": "string",
+            "minLength": 16
+          },
+          "provisioningUri": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^otpauth://totp/"
+          }
+        }
+      },
+      "MfaCodeRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          }
+        }
+      },
+      "RecoveryCodes": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["recoveryCodes"],
+        "properties": {
+          "recoveryCodes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{4}-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{4}-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{4}$"
+            }
+          }
+        }
+      },
+      "RecentAuthenticationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["password"],
+        "properties": {
+          "password": {
+            "type": "string",
+            "format": "password",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "secondFactor": {
+            "type": ["string", "null"],
+            "maxLength": 32
+          }
+        }
+      },
+      "OrganizationSelectionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["organizationId"],
+        "properties": {
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "OrganizationAccess": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "displayName", "status", "roleKeys", "selected"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "active"]
+          },
+          "roleKeys": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            }
+          },
+          "selected": {
+            "type": "boolean"
+          }
+        }
+      },
+      "FieldViolation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "code", "message"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^/"
+          },
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "Problem": {
+        "type": "object",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "instance",
+          "code",
+          "correlationId"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string",
+            "format": "uri-reference"
+          },
+          "code": {
+            "type": "string"
+          },
+          "correlationId": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldViolation"
+            }
+          }
+        }
+      }
+    }
+  }
+}
