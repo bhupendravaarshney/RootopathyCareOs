@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:18-alpine
+    image: postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-careos_dev}
       POSTGRES_USER: ${DB_MIGRATION_USERNAME:-careos_migrator}
@@ -49,7 +49,7 @@ services:
       - careos-minio:/data
 
   mailpit:
-    image: axllent/mailpit:latest
+    image: axllent/mailpit:latest@sha256:98b916bd3c8d61f7633a52d3ea2f58d00620cb01ca57ab59edde68c347a95365
     ports:
       - "1025:1025"
       - "8025:8025"
@@ -57,6 +57,13 @@ services:
   backend:
     build:
       context: ./backend
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
       DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-careos_dev}
@@ -110,6 +117,9 @@ services:
       CAREOS_SCANNER_CLAMAV_DEFINITION_TIME_ZONE: ${CAREOS_SCANNER_CLAMAV_DEFINITION_TIME_ZONE:-UTC}
       CAREOS_SCANNER_CLAMAV_STREAM_CHUNK_BYTES: ${CAREOS_SCANNER_CLAMAV_STREAM_CHUNK_BYTES:-65536}
       CAREOS_SCANNER_CLAMAV_MAXIMUM_SCAN_BYTES: ${CAREOS_SCANNER_CLAMAV_MAXIMUM_SCAN_BYTES:-52428800}
+      CAREOS_TRACE_SAMPLING_PROBABILITY: ${CAREOS_TRACE_SAMPLING_PROBABILITY:-0.1}
+      CAREOS_OTLP_TRACING_ENABLED: ${CAREOS_OTLP_TRACING_ENABLED:-false}
+      CAREOS_OTLP_TRACING_ENDPOINT: ${CAREOS_OTLP_TRACING_ENDPOINT:-http://localhost:4318/v1/traces}
       REDIS_SESSION_NAMESPACE: ${REDIS_SESSION_NAMESPACE:-careos:session}
       SESSION_IDLE_TIMEOUT: ${SESSION_IDLE_TIMEOUT:-30m}
       SESSION_ABSOLUTE_TIMEOUT: ${SESSION_ABSOLUTE_TIMEOUT:-8h}
@@ -142,7 +152,14 @@ services:
       minio:
         condition: service_started
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
+      test:
+        [
+          "CMD",
+          "/busybox",
+          "wget",
+          "-qO-",
+          "http://localhost:8080/readyz",
+        ]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -150,8 +167,15 @@ services:
   frontend:
     build:
       context: ./frontend
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
     ports:
-      - "4173:80"
+      - "4173:8080"
     depends_on:
       backend:
         condition: service_healthy

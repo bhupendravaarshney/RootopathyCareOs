@@ -1,0 +1,34 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/careos_dev}
+    username: ${DB_APP_USERNAME:careos_app}
+    password: ${DB_APP_PASSWORD:careos-app-local-only}
+  flyway:
+    url: ${DB_MIGRATION_URL:${DB_URL:jdbc:postgresql://localhost:5432/careos_dev}}
+    user: ${DB_MIGRATION_USERNAME:careos_migrator}
+    password: ${DB_MIGRATION_PASSWORD:careos-migrator-local-only}
+    placeholders:
+      applicationRole: ${DB_APP_ROLE:${DB_APP_USERNAME:careos_app}}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+server:
+  servlet:
+    session:
+      cookie:
+        secure: ${SESSION_COOKIE_SECURE:false}
+careos:
+  security:
+    allowed-origins: ${CAREOS_ALLOWED_ORIGINS:http://localhost:4173,http://localhost:5173}
+    application-base-url: ${CAREOS_BASE_URL:http://localhost:4173}
+    mail-from: ${CAREOS_SECURITY_MAIL_FROM:no-reply@rootopathy.test}
+  bootstrap-admin:
+    email: ${CAREOS_BOOTSTRAP_ADMIN_EMAIL:owner@rootopathy.test}
+    password: ${CAREOS_BOOTSTRAP_ADMIN_PASSWORD:CareOS-Local-Only-Change-Me}

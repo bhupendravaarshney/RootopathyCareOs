@@ -1,6 +1,9 @@
 package com.rootopathy.careos.identity.api;
 
+import static com.rootopathy.careos.identity.infrastructure.security.CareOsAuthorities.AUTHENTICATED;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -35,6 +38,7 @@ import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -67,7 +71,9 @@ class IdentitySecurityIntegrationTest {
 
     @Container
     private static final PostgreSQLContainer POSTGRES =
-            new PostgreSQLContainer(DockerImageName.parse("postgres:18-alpine"))
+            new PostgreSQLContainer(DockerImageName.parse(
+                            "postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2")
+                    .asCompatibleSubstituteFor("postgres"))
             .withDatabaseName("careos_test")
             .withUsername(MIGRATOR_USER)
             .withPassword(MIGRATOR_PASSWORD)
@@ -162,10 +168,32 @@ class IdentitySecurityIntegrationTest {
     }
 
     @Test
+    void emitsExplicitSecurityHeadersAndLimitsHstsToSecureRequests() throws Exception {
+        mockMvc.perform(get("/api/public/system-summary").secure(true))
+                .andExpect(status().isOk())
+                .andExpect(header().string(
+                        "Content-Security-Policy",
+                        "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"))
+                .andExpect(header().string(
+                        "Permissions-Policy",
+                        "camera=(), geolocation=(), microphone=(), payment=(), usb=()"))
+                .andExpect(header().string("Referrer-Policy", "no-referrer"))
+                .andExpect(header().string("Strict-Transport-Security", "max-age=31536000"))
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("X-Frame-Options", "DENY"));
+
+        mockMvc.perform(get("/api/public/system-summary"))
+                .andExpect(status().isOk())
+                .andExpect(header().doesNotExist("Strict-Transport-Security"))
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"));
+    }
+
+    @Test
     void rotatesAndPersistsSessionWhileKeepingCredentialFailuresGenericAndThrottled() throws Exception {
         var anonymous = mockMvc.perform(get("/api/v1/auth/session"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state").value("anonymous"))
+                .andExpect(jsonPath("$.mfaEnabled").value(false))
                 .andReturn();
         var preAuthenticationSession = requireCookie(anonymous, SESSION_COOKIE);
         var csrf = csrf(preAuthenticationSession);
@@ -176,6 +204,7 @@ class IdentitySecurityIntegrationTest {
                 .andExpect(cookie().secure(SESSION_COOKIE, true))
                 .andExpect(jsonPath("$.state").value("authenticated"))
                 .andExpect(jsonPath("$.recentAuthentication").value(true))
+                .andExpect(jsonPath("$.mfaEnabled").value(false))
                 .andReturn();
         var authenticatedSession = requireCookie(login, SESSION_COOKIE);
         assertThat(authenticatedSession.getValue()).isNotEqualTo(preAuthenticationSession.getValue());
@@ -350,9 +379,15 @@ class IdentitySecurityIntegrationTest {
                 .get(0)
                 .stringValue();
 
+        mockMvc.perform(get("/api/v1/auth/session").cookie(firstSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state").value("authenticated"))
+                .andExpect(jsonPath("$.mfaEnabled").value(true));
+
         var pendingLogin = login(email, PASSWORD, csrf(), "198.51.100.61")
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.state").value("mfa_required"))
+                .andExpect(jsonPath("$.mfaEnabled").value(true))
                 .andReturn();
         var pendingSession = requireCookie(pendingLogin, SESSION_COOKIE);
         var challengeCsrf = csrf(pendingSession);
@@ -361,9 +396,10 @@ class IdentitySecurityIntegrationTest {
                         objectMapper.writeValueAsString(new CodeBody(recoveryCode)),
                         challengeCsrf,
                         "198.51.100.61",
-                        pendingSession)
+                pendingSession)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.state").value("authenticated"));
+                .andExpect(jsonPath("$.state").value("authenticated"))
+                .andExpect(jsonPath("$.mfaEnabled").value(true));
 
         var replayLogin = login(email, PASSWORD, csrf(), "198.51.100.62")
                 .andExpect(status().isAccepted())
@@ -477,6 +513,45 @@ class IdentitySecurityIntegrationTest {
         mockMvc.perform(get("/api/v1/organizations").cookie(session))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void exposesMinimalDependencyAwareProbesAndKeepsMetricsBehindAuthentication() throws Exception {
+        for (var path : new String[] {
+            "/livez", "/readyz", "/actuator/health/liveness", "/actuator/health/readiness"
+        }) {
+            mockMvc.perform(get(path).header("X-Correlation-Id", "probe-42"))
+                    .andExpect(status().isOk())
+                    .andExpect(header().string("X-Correlation-Id", "probe-42"))
+                    .andExpect(jsonPath("$.status").value("UP"))
+                    .andExpect(jsonPath("$.components").doesNotExist());
+        }
+
+        mockMvc.perform(get("/actuator/prometheus"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("authentication-required"));
+        mockMvc.perform(get("/actuator/prometheus")
+                        .with(user("observability-test")
+                                .authorities(new SimpleGrantedAuthority(AUTHENTICATED))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("application=\"careos-backend\"")))
+                .andExpect(content().string(containsString("jvm_")));
+
+        REDIS.getDockerClient().pauseContainerCmd(REDIS.getContainerId()).exec();
+        try {
+            mockMvc.perform(get("/readyz"))
+                    .andExpect(status().isServiceUnavailable())
+                    .andExpect(jsonPath("$.status").value("DOWN"))
+                    .andExpect(jsonPath("$.components").doesNotExist());
+            mockMvc.perform(get("/livez"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("UP"));
+        } finally {
+            REDIS.getDockerClient().unpauseContainerCmd(REDIS.getContainerId()).exec();
+        }
+        mockMvc.perform(get("/readyz"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"));
     }
 
     private org.springframework.test.web.servlet.ResultActions login(

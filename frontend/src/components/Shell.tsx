@@ -1,8 +1,19 @@
-import { ChevronDown, LogOut, Menu, Search, X } from 'lucide-react';
+import { LogOut, Menu, Search, X } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
-import { screens, type ModuleKey } from '../data/screens';
+import { findScreen, screens, type ModuleKey } from '../data/screens';
 
-type ShellProps = { currentId: string; children: ReactNode };
+export type ShellSessionProps = {
+  actorDisplayName: string;
+  organizations: Array<{ id: string; label: string }>;
+  onLogout(): Promise<void>;
+  onSelectOrganization(organizationId: string): Promise<void>;
+  selectedOrganizationId: string;
+  sessionBusy: boolean;
+  sessionNotice?: ReactNode;
+  signingOut: boolean;
+};
+
+type ShellProps = ShellSessionProps & { currentId: string; children: ReactNode };
 
 const workspaceLabels: Record<ModuleKey, string> = {
   M1: 'Administration',
@@ -10,8 +21,19 @@ const workspaceLabels: Record<ModuleKey, string> = {
   COS: 'Clinician workspace',
 };
 
-export function Shell({ currentId, children }: ShellProps) {
-  const current = screens.find((screen) => screen.id === currentId) ?? screens[0];
+export function Shell({
+  actorDisplayName,
+  children,
+  currentId,
+  onLogout,
+  onSelectOrganization,
+  organizations,
+  selectedOrganizationId,
+  sessionBusy,
+  sessionNotice,
+  signingOut,
+}: ShellProps) {
+  const current = findScreen(currentId);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const moduleScreens = useMemo(
@@ -40,16 +62,29 @@ export function Shell({ currentId, children }: ShellProps) {
           <span>CareOS · {workspaceLabels[current.module]}</span>
         </a>
         <div className="topbar-actions">
-          <a
-            className="workspace-switch"
-            href={
-              current.module === 'M1' ? '#/M2-01' : current.module === 'M2' ? '#/COS-01' : '#/M1-05'
-            }
+          <label className="organization-switch">
+            <span className="sr-only">Current organization</span>
+            <select
+              aria-label="Current organization"
+              value={selectedOrganizationId}
+              disabled={sessionBusy}
+              onChange={(event) => void onSelectOrganization(event.target.value)}
+            >
+              {organizations.map((organization) => (
+                <option key={organization.id} value={organization.id}>
+                  {organization.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="user-label">{actorDisplayName}</span>
+          <button
+            className="icon-button"
+            aria-label="Sign out"
+            aria-busy={signingOut}
+            disabled={sessionBusy}
+            onClick={() => void onLogout()}
           >
-            Switch workspace <ChevronDown size={16} />
-          </a>
-          <span className="user-label">Dr Prashant Gupta</span>
-          <button className="icon-button" aria-label="Sign out">
             <LogOut size={20} />
           </button>
         </div>
@@ -88,6 +123,31 @@ export function Shell({ currentId, children }: ShellProps) {
             </a>
           ))}
         </div>
+        <div className="mobile-session-controls">
+          <strong>{actorDisplayName}</strong>
+          <label>
+            Organization
+            <select
+              value={selectedOrganizationId}
+              disabled={sessionBusy}
+              onChange={(event) => void onSelectOrganization(event.target.value)}
+            >
+              {organizations.map((organization) => (
+                <option key={organization.id} value={organization.id}>
+                  {organization.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="secondary-button"
+            aria-label="Sign out from mobile navigation"
+            disabled={sessionBusy}
+            onClick={() => void onLogout()}
+          >
+            <LogOut size={17} /> Sign out
+          </button>
+        </div>
         <nav className="screen-nav">
           {groups.map((group) => (
             <section key={group}>
@@ -117,6 +177,7 @@ export function Shell({ currentId, children }: ShellProps) {
         />
       )}
       <main className="content" id="main-content">
+        {sessionNotice}
         {children}
       </main>
     </div>

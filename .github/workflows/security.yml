@@ -1,0 +1,149 @@
+name: CareOS security
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "23 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Reject newly introduced vulnerable dependencies
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+
+  source-scan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: maven
+      - name: Resolve Maven metadata before offline scanning
+        working-directory: backend
+        run: sh mvnw -B -ntp -DskipTests dependency:go-offline
+      - name: Scan dependencies, secrets, and configuration
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_OFFLINE_SCAN: true
+        with:
+          version: v0.74.0
+          timeout: 15m
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          skip-dirs: .git,backend/target,frontend/node_modules,frontend/dist
+
+  codeql:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [java-kotlin, javascript-typescript]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-extended
+      - name: Analyze
+        uses: github/codeql-action/analyze@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        with:
+          category: /language:${{ matrix.language }}
+
+  images:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build backend image from pinned bases
+        run: docker build --pull --tag careos-backend:ci ./backend
+      - name: Build frontend image from pinned bases
+        run: docker build --pull --tag careos-frontend:ci ./frontend
+      - name: Prepare SBOM output
+        run: mkdir -p security-artifacts
+      - name: Generate backend CycloneDX SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.74.0
+          timeout: 15m
+          scan-type: image
+          image-ref: careos-backend:ci
+          scanners: vuln
+          format: cyclonedx
+          output: security-artifacts/careos-backend.cdx.json
+          exit-code: "0"
+      - name: Generate frontend CycloneDX SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.74.0
+          timeout: 15m
+          scan-type: image
+          image-ref: careos-frontend:ci
+          scanners: vuln
+          format: cyclonedx
+          output: security-artifacts/careos-frontend.cdx.json
+          exit-code: "0"
+      - name: Upload image SBOMs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: careos-image-sboms
+          path: security-artifacts/*.cdx.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Scan backend image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.74.0
+          timeout: 15m
+          scan-type: image
+          image-ref: careos-backend:ci
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Scan frontend image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.74.0
+          timeout: 15m
+          scan-type: image
+          image-ref: careos-frontend:ci
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"

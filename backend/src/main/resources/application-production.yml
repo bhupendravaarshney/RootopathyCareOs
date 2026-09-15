@@ -1,0 +1,55 @@
+spring:
+  config:
+    activate:
+      on-profile: production
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_APP_USERNAME}
+    password: ${DB_APP_PASSWORD}
+  flyway:
+    url: ${DB_MIGRATION_URL}
+    user: ${DB_MIGRATION_USERNAME}
+    password: ${DB_MIGRATION_PASSWORD}
+    placeholders:
+      applicationRole: ${DB_APP_ROLE:${DB_APP_USERNAME}}
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      username: ${REDIS_USERNAME}
+      password: ${REDIS_PASSWORD}
+      ssl:
+        enabled: true
+  mail:
+    host: ${SMTP_HOST}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME}
+    password: ${SMTP_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          connectiontimeout: 5000
+          ssl:
+            checkserveridentity: true
+          starttls:
+            enable: true
+            required: true
+          timeout: 10000
+          writetimeout: 10000
+server:
+  servlet:
+    session:
+      cookie:
+        secure: true
+careos:
+  security:
+    allowed-origins: ${CAREOS_ALLOWED_ORIGINS}
+    application-base-url: ${CAREOS_BASE_URL}
+    mail-from: ${CAREOS_SECURITY_MAIL_FROM}
+    token-pepper: ${CAREOS_TOKEN_PEPPER}
+    mfa-encryption-key: ${CAREOS_MFA_ENCRYPTION_KEY}
+  storage:
+    s3:
+      allow-http: false
+      create-bucket-if-missing: false

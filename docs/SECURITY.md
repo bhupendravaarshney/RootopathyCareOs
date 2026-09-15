@@ -2,6 +2,10 @@
 
 - Never commit `.env`, database dumps, access tokens, private keys or real clinical data.
 - Use synthetic seed data in local development and automated tests.
+- Keep every third-party CI Action pinned to a reviewed full commit SHA, retain its release comment, use read-only default permissions, discard checkout credentials, and bound jobs with explicit runners, timeouts, and concurrency cancellation.
+- Do not merge dependency changes that fail dependency review, CodeQL, Trivy source/image scanning, repository security contracts, or existing quality gates. Treat a generated SBOM as inventory evidence, not proof that an artifact is safe.
+- Keep Dockerfile bases, Compose services, scanner overlays, and Testcontainers dependencies digest-pinned. Refresh pins through reviewed update automation; never suppress a fixed HIGH/CRITICAL finding merely to make the gate green.
+- Run the application images as their declared non-root users. Retain the Compose read-only root filesystems, `/tmp` tmpfs mounts, dropped capabilities, and no-new-privileges settings unless a reviewed threat model and test prove a narrower change is required.
 - Automated database tests must use the disposable PostgreSQL 18 `careos_test` container; they must never point at `careos_dev` or production.
 - Only authenticated membership/policy code may construct an `AuthorizedTenantContext`; never trust an organization header directly.
 - Every tenant-owned transaction must set and verify transaction-local organization, actor, purpose, and correlation context.
@@ -27,6 +31,16 @@
 - Scope request replay records by organization, authenticated actor, operation, and key; never log keys, request bodies, response bodies, or transport exception text.
 - Browser authentication uses persisted credentials and Redis-backed server-side sessions; HTTP Basic and default form login must remain disabled.
 - Production session cookies must set `Secure`; local HTTP development is the only permitted exception.
+- Run the production profile without `local` or `test`. It must reject documented non-production secret material, non-canonical/HTTP browser origins, plaintext PostgreSQL or Redis, optional SMTP downgrade, unsafe S3 local overrides, and a plaintext enabled OTLP exporter; inject real values only through an approved audited secret manager.
+- Preserve the explicit Spring API and Nginx response-header contracts. The frontend CSP must remain same-origin without wildcards, `unsafe-inline`, or `unsafe-eval`; do not weaken it to integrate a vendor without a reviewed purpose, data-flow, and narrow directive.
+- The repository Nginx listener is not a TLS endpoint. Production must terminate approved TLS, redirect plaintext traffic, keep backend/management access private, define trusted forwarding and service-hop transport, and test certificates, headers, renewal, and failure behavior on the real hostnames.
+- Login/MFA throttling is not a general abuse boundary. Approve and test application/edge rate limits, body/connection limits, WAF/DDoS rules, false-positive handling, emergency change audit, and accessibility-safe failures without treating IP reputation as tenant authorization.
+- Keep protected business routes under `/api/v1/organizations/{organizationId}/...`; never accept an organization header as tenant authority. Browser CORS must allow checked concurrency/idempotency headers and expose correlation/retry/ETag response metadata without reintroducing `X-Organization-Id`.
+- Generate frontend API types only from the checked local OpenAPI document and fail CI on drift. Do not hand-edit generated files, weaken strict indexed access, or remove a dependency-security override without a clean replacement audit.
+- Browser API calls must include credentials and a validated correlation ID. Obtain and validate the exact CSRF header/token contract before each unsafe request; do not send the mutation when bootstrap fails and never set `Origin` from JavaScript.
+- Do not automatically retry browser mutations. Caller-retried governed mutations require a scoped idempotency key; mutable updates/deletes require a strong `If-Match`; cursors are opaque and filters are operation allowlists. Treat malformed statuses, media types, correlation headers, Problems, ETags, cursors, and retry delays as contract failures.
+- Keep protected frontend content behind runtime-validated server session and membership-backed organization responses. Store no password, MFA/recovery code, session ID, CSRF value, or selected organization in browser persistence; clear submitted secret field state and fail closed on malformed, ambiguous, or unavailable responses.
+- Treat frontend organization selection only as navigation context. A switch must be server-acknowledged, a failed logout must not be presented as success, and each future business call must still enter transaction-bound backend authorization. Keep the frontend feature dependency gate in CI.
 - Invitation acceptance/account linking, owner-approved scoped RBAC/event/template registries, maker-checker rules, non-interactive service authentication, production platform acceptance, consent/destination transports, and consumer deduplication remain fail-closed until their governed implementations exist.
 
 Report security problems privately to the designated CareOS security owner. Do not include patient information in issue trackers.

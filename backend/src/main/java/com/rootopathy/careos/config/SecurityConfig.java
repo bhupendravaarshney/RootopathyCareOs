@@ -33,6 +33,7 @@ import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfTokenRepository;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -40,6 +41,11 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @Configuration
 @EnableConfigurationProperties(IdentitySecurityProperties.class)
 public class SecurityConfig {
+    static final String API_CONTENT_SECURITY_POLICY =
+            "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+    static final String PERMISSIONS_POLICY =
+            "camera=(), geolocation=(), microphone=(), payment=(), usb=()";
+
     @Bean
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
@@ -52,6 +58,16 @@ public class SecurityConfig {
             throws Exception {
         return http
                 .cors(Customizer.withDefaults())
+                .headers(headers -> headers
+                        .contentSecurityPolicy(
+                                policy -> policy.policyDirectives(API_CONTENT_SECURITY_POLICY))
+                        .frameOptions(frame -> frame.deny())
+                        .httpStrictTransportSecurity(hsts -> hsts
+                                .maxAgeInSeconds(31_536_000)
+                                .includeSubDomains(false)
+                                .preload(false))
+                        .permissionsPolicyHeader(policy -> policy.policy(PERMISSIONS_POLICY))
+                        .referrerPolicy(referrer -> referrer.policy(ReferrerPolicy.NO_REFERRER)))
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(csrfTokenRepository)
                         .csrfTokenRequestHandler(csrfTokenRequestHandler))
@@ -65,8 +81,19 @@ public class SecurityConfig {
                         .authenticationEntryPoint(accessFailureHandler)
                         .accessDeniedHandler(accessFailureHandler))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/public/**", "/actuator/health", "/actuator/info")
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/livez",
+                                "/readyz",
+                                "/actuator/health",
+                                "/actuator/health/liveness",
+                                "/actuator/health/readiness",
+                                "/actuator/info")
                         .permitAll()
+                        .requestMatchers("/api/public/**")
+                        .permitAll()
+                        .requestMatchers("/actuator/metrics/**", "/actuator/prometheus")
+                        .hasAuthority(AUTHENTICATED)
                         .requestMatchers(HttpMethod.GET, "/api/v1/auth/csrf", "/api/v1/auth/session")
                         .permitAll()
                         .requestMatchers(
@@ -137,9 +164,9 @@ public class SecurityConfig {
                 "X-Correlation-Id",
                 "X-CSRF-TOKEN",
                 "X-XSRF-TOKEN",
-                "X-Organization-Id",
+                "If-Match",
                 "Idempotency-Key"));
-        configuration.setExposedHeaders(List.of("X-Correlation-Id", "Retry-After"));
+        configuration.setExposedHeaders(List.of("X-Correlation-Id", "Retry-After", "ETag"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(600L);
         var source = new UrlBasedCorsConfigurationSource();

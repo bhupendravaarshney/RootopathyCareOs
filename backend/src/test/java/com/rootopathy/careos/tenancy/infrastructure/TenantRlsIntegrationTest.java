@@ -69,7 +69,9 @@ class TenantRlsIntegrationTest {
 
     @Container
     private static final PostgreSQLContainer POSTGRES =
-            new PostgreSQLContainer(DockerImageName.parse("postgres:18-alpine"))
+            new PostgreSQLContainer(DockerImageName.parse(
+                            "postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2")
+                    .asCompatibleSubstituteFor("postgres"))
             .withDatabaseName("careos_test")
             .withUsername(MIGRATOR_USER)
             .withPassword(MIGRATOR_PASSWORD)

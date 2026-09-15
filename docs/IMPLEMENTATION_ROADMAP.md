@@ -17,7 +17,7 @@
 | 12    | Reporting                                                        | Authorized operational and governance projections complete |
 | 13    | FHIR/integrations                                                | Versioned adapters and contract tests complete             |
 
-Do not implement random screens. Each phase starts with architecture, mockup review and a gap ledger, then backend contracts, UI integration, security tests, browser tests and a verified Git checkpoint.
+Do not implement random screens. Each phase starts with architecture, mockup review and a gap ledger, then backend contracts, UI integration, security tests, browser tests and a verified delivery checkpoint.
 
 ## Current build status
 
@@ -157,6 +157,83 @@ Local evidence: a clean Java 25 build compiled 135 production sources and 10 tes
 
 This is durable notification persistence and leasing, not outbound delivery. The checked default remains unavailable, and the synthetic allow-list/key material used by tests is not production template or key-management approval. Production completion still requires approved templates/payload schemas, consent and destination policy, non-interactive worker identity, provider and regional acceptance, provider idempotency, approved audit/outbox/delivery evidence, key rotation/re-encryption operations, monitoring, dead-letter replay, backup/restore, retention procedures, and operational ownership.
 
+### Phase 0K - CI supply-chain and container-runtime hardening (completed 13 September 2026)
+
+- [x] Pin every third-party GitHub Action to a full commit SHA with a readable release comment; use explicit Ubuntu runner versions, top-level read-only permissions, checkout without persisted credentials, concurrency cancellation, and finite job timeouts.
+- [x] Add pull-request dependency review, CodeQL `security-extended` analysis for Java/Kotlin and JavaScript/TypeScript, and Trivy filesystem scanning for dependencies, secrets, and configuration.
+- [x] Build both application images in the security workflow, reject fixed HIGH/CRITICAL image findings, generate CycloneDX SBOMs, and retain both SBOMs as a bounded CI artifact.
+- [x] Add weekly Dependabot coverage for Maven, npm, Docker, Compose, and GitHub Actions dependencies with bounded open-update limits.
+- [x] Pin every Dockerfile base, Compose service, scanner overlay, and PostgreSQL/Redis Testcontainers image by SHA-256 digest; explicitly declare the digest-pinned PostgreSQL image as a compatible Testcontainers substitute.
+- [x] Override the managed Tomcat runtime to the fixed 11.0.25 security floor and replace the backend runtime with the Java 25 Debian 13 distroless non-root image.
+- [x] Run the frontend as unprivileged Nginx on port 8080 and provide an unprivileged backend health probe without adding a package manager to the distroless runtime.
+- [x] Add a dependency-free repository security contract plus eight negative tests covering mutable actions/images, excessive workflow permissions, floating runners, missing timeouts/concurrency, checkout credentials, root resets, and incomplete dependency-update coverage.
+
+Local evidence: a clean Java 25 build compiled 135 production sources and 10 test sources, passed all 77 backend tests, and packaged the bootable JAR. Exact Node 24.15 frontend installation, formatting, typecheck, lint, two unit tests, production build, all eight desktop/mobile browser/Axe checks, the 79-screen register, 15-operation OpenAPI contract, both Compose models, and all eight CI-security contract tests pass. Trivy 0.74 reports zero fixed HIGH/CRITICAL findings in the Maven/npm dependency sources and final backend/frontend images, zero Dockerfile misconfigurations, and no emitted secret findings; both final images generate valid CycloneDX SBOMs. The final backend image reached health `UP` as UID 65532 with a read-only filesystem, all capabilities dropped, no-new-privileges, Flyway v7, protected metrics, correct capability readiness, and empty notification/event/Redis/mail state. The final frontend reached healthy as UID 101 under the same runtime restrictions. Temporary smoke resources were removed.
+
+This closes the locally verifiable CI/supply-chain foundation, not production deployment acceptance. The hosted security workflow, dependency-review graph access, CodeQL result upload, repository rules/required checks, signed provenance, artifact retention policy, and production registry admission still require execution and approval in the target GitHub/registry environment.
+
+### Phase 0L - checked API conventions and browser client foundation (completed 14 September 2026)
+
+- [x] Extend the OpenAPI 3.1 contract with a machine-checked protected tenant path, UUID organization parameter, opaque cursor/bounded limit metadata, operation-specific filter allowlists, strong `ETag`/required `If-Match`, scoped idempotency, and bounded caller-controlled retry policy.
+- [x] Add reusable 412, 428, 429, and 503 Problem/retry components while retaining correlation metadata on every implemented operation.
+- [x] Refactor the dependency-free API verifier into an importable contract check and add six tests that reject tenant-prefix ambiguity, permissive filters, mutation auto-retry, weakened concurrency, and dangling references.
+- [x] Pin a TypeScript 6-compatible OpenAPI generator, override its vulnerable YAML transitive range to fixed `js-yaml` 4.3.2, check in TypeScript-only artifacts, and fail CI when the generated file set or content drifts.
+- [x] Add a generated-type-backed browser client for all 15 implemented operations with credential inclusion, validated request/response correlation, per-mutation CSRF bootstrap, documented-status/body enforcement, safe RFC 9457 parsing, abort/network outcomes, strong ETag exposure, bounded `Retry-After`, and no automatic retry.
+- [x] Align backend CORS with `If-Match`, `Idempotency-Key`, `ETag`, and retry/correlation metadata while removing the unused `X-Organization-Id` alternative; cover the allow/expose lists with a focused backend test.
+- [x] Enable TypeScript `noUncheckedIndexedAccess`, repair prototype registry/navigation fallbacks, and add the generation/negative-contract gates to the quality workflow.
+
+Local evidence: a clean Java 25 build compiled 135 production sources and 11 test sources, passed all 78 backend tests against disposable dependencies, and packaged the bootable JAR. Exact Node 24.15 installation audited 290 packages with zero vulnerabilities; generated-type drift, formatting, strict typecheck, lint, 10 frontend unit tests, the Vite production build, and all eight desktop/mobile route-wide Playwright/Axe checks pass. The OpenAPI verifier accepts all 15 implemented operations plus six conventions, and all six API-contract negative tests and eight CI-security negative tests pass. Both current application images build from their clean Docker contexts.
+
+This completes the shared HTTP/client convention, not a production frontend or tenant business API. The React screens still render synthetic prototype data, and protected business operations remain fail closed until their permissions, purposes, event schemas, persistence, state transitions, and UI behavior are approved and implemented. See `API_CONVENTIONS.md`.
+
+### Phase 0M - authenticated frontend session boundary (completed 14 September 2026)
+
+- [x] Add a memory-only session state machine that bootstraps the server session before exposing any protected route content.
+- [x] Validate session/user UUID state and membership-backed organization shape, uniqueness, and selection cardinality at runtime instead of treating generated TypeScript types as response validation.
+- [x] Connect M1-01 primary login and pending M1-03 MFA challenge to the checked browser client with empty secret fields, cleared submitted secrets, disabled duplicate actions, safe Problem details, correlation references, and bounded retry guidance.
+- [x] Require explicit M1-04 organization selection when the server has no current preference; use returned organization/user state in the shell and support acknowledged organization switching from desktop and mobile navigation.
+- [x] Connect sign-out to the checked CSRF-aware mutation and retain local authenticated state if logout is not acknowledged; treat a server `401` as an already-invalid session.
+- [x] Add loading, no-membership, malformed/ambiguous-response, dependency-failure, and focused error-summary states while keeping the workspace hidden.
+- [x] Replace the synthetic invitation form with an explicitly unavailable M1-02 state until governed issuance, account linkage, expiry, and acceptance exist.
+- [x] Add a TypeScript-AST frontend dependency verifier and four negative fixtures; run it in CI before typecheck to enforce inward API/data/component/feature/page direction and feature isolation.
+- [x] Expand unit coverage to 19 tests and the desktop/mobile Playwright/Axe suite to 12 tests, including all 79 registered route states and a mocked CSRF/login/selection/logout browser flow.
+
+Local evidence: all 17 frontend source files and 30 relative imports pass the new boundary verifier; its four negative fixtures reject shared-to-feature reversal, cross-feature coupling, API-to-page reversal, and source escape. Generated API drift, strict typecheck, lint, formatting, all 19 Vitest tests, the Vite production build, and all 12 desktop/mobile browser tests pass. Browser coverage visits the 75 protected prototype entries plus four identity states and exercises the checked CSRF/login/organization-selection/logout sequence. The 15-operation API, backend behavior, and database schema remain unchanged.
+
+This closes the session-aware browser shell, not the product frontend. Organization preference is never authorization evidence; the 75 protected entries still render synthetic content. Invitations/account linkage, password-recovery and MFA-administration UI, recent-auth dialogs, expiry revalidation, permission-driven actions, approved routing/design assets, tenant business APIs/cache invalidation, and all production workflows remain open. See `FRONTEND_SESSION.md`.
+
+### Phase 0N - operational signal foundation (completed 14 September 2026)
+
+- [x] Enable Spring Boot ECS JSON console output and add one safe completion event per HTTP request with validated correlation, trace/span context, allow-listed method, framework route template, status, duration, and outcome.
+- [x] Prove request logging excludes raw URI/query values, path values, request bodies/headers, users, tenants, recipients, and payloads and restores any outer MDC correlation context.
+- [x] Add the OpenTelemetry tracing foundation with W3C propagation, baggage disabled, 10% default sampling, bounded span attributes/events/links, and trace export disabled by default.
+- [x] Disable OTLP metric/log export and ambient `OTEL_*` mapping so inherited environment settings cannot silently start telemetry export.
+- [x] Add Prometheus registry output with a bounded application tag, expose it behind full CareOS authentication, and retain non-sensitive bounded-cardinality custom adapter metrics.
+- [x] Separate public status-only liveness from readiness; keep liveness internal-only and require application readiness, PostgreSQL, and Redis for traffic readiness.
+- [x] Point the Compose backend health check at `/readyz` while retaining `/livez`, `/readyz`, and the standard Actuator probe aliases on the main application port.
+- [x] Add an integration outage drill that pauses Redis, proves `503/DOWN` readiness with continued `200/UP` liveness, resumes Redis, and proves readiness recovery.
+- [x] Add `OPERATIONS.md` with the signal contract, safe telemetry rules, first response, local drill, production monitoring/alert acceptance, and deployment/restore checklist.
+
+Local evidence: a clean pinned Java 25 build compiled 136 production sources and 11 test sources, passed all 80 backend tests, and packaged the bootable JAR. Both Compose models, all 15 checked operations, six API-contract negative tests, the 79-screen register, the CI-security contract, and its eight negative tests pass. The rebuilt distroless backend reached `UP` on both probes against fresh PostgreSQL 18/Redis 8, rejected anonymous Prometheus access, started no OTLP metrics publisher, and retained UID 65532, read-only root, dropped capabilities, and no-new-privileges in an isolated smoke. Trivy 0.74 finds zero fixed HIGH/CRITICAL vulnerabilities in its Debian 13.6 layer and packaged JAR.
+
+This completes only the repository-local signal foundation. Production still needs an approved non-interactive scrape boundary, telemetry collector and region/retention/access policy, measured service objectives, dashboards, tested alert delivery/on-call escalation, managed deployment assets, encrypted backup ownership, timed restore evidence, dead-letter procedures, and provider-specific incident/rollback runbooks. See `OPERATIONS.md`.
+
+### Phase 0O - HTTP and production-configuration hardening (completed 14 September 2026)
+
+- [x] Make the backend API response policy explicit: no-content CSP, deny framing, no referrer, no MIME sniffing, restricted browser capabilities, and one-year non-preloaded/non-subdomain HSTS on secure requests.
+- [x] Apply an always-on strict same-origin CSP and complementary isolation, permissions, referrer, HSTS, MIME, framing, cross-domain, and legacy-XSS headers at the unprivileged Nginx frontend.
+- [x] Retain the production `/api` same-origin proxy and bound its connect/send/read timeouts while removing the hop-by-hop `Connection` header and Nginx version tokens.
+- [x] Add a `production` Spring profile that requires externally injected PostgreSQL, Redis, SMTP, origin/base-URL, and identity-secret settings instead of inheriting successful local credential fallbacks.
+- [x] Move every successful synthetic database, Redis, SMTP, browser, and bootstrap fallback into profile-gated `application-local.yml`; require explicit values in the base configuration and lock that separation in the repository security contract.
+- [x] Require verified PostgreSQL TLS, authenticated Redis TLS, authenticated mandatory SMTP STARTTLS with server identity verification, secure cookies, canonical HTTPS browser origins, and an HTTPS OTLP destination whenever export is enabled.
+- [x] Reject mixed local/test production profiles, documented non-production secret material, trivial MFA key material, embedded database credentials, duplicate origins, the S3 HTTP override, and production runtime bucket creation without including secret values in errors.
+- [x] Extend backend and dependency-free repository tests to lock the header/startup policy and reject missing always-on headers, weak/wildcard CSP, server tokens, or unbounded proxy behavior.
+- [x] Add `PRODUCTION_SECURITY.md` with the configuration contract, TLS/proxy ownership, secret-manager boundary, and explicit rate-limit/WAF/deployment acceptance gaps.
+
+Local evidence: a clean pinned Java 25 build compiles 137 production sources and 11 test sources, applies all seven migrations to disposable PostgreSQL 18, passes all 84 backend tests, and packages the bootable JAR. The focused startup-guard tests cover a secure configuration plus mixed-profile, local-secret, insecure-cookie, plaintext dependency, invalid-origin, S3 override, and insecure OTLP failures. The backend integration suite proves the exact headers and secure-request-only HSTS behavior. The frontend gates remain green at 19 unit and 12 desktop/mobile browser tests; both Compose models, the 15-operation API, six API negative tests, 79-screen register, and the expanded 10-test CI-security contract pass. Rebuilt final images have zero fixed HIGH/CRITICAL OS-package findings. The backend image refuses to start without an explicit required runtime value, while the hardened frontend serves the expected strict headers as UID 101.
+
+This is a repository preflight boundary, not production TLS, secrets, or edge acceptance. The real environment still needs an approved secret manager and rotation drills; public TLS termination/redirect and trusted proxy topology; private backend/management routing; frontend-to-backend transport acceptance; operation-specific/application and coarse edge rate policy; WAF/DDoS ownership; certificate/header/CSP scans; and measured load, abuse, and false-positive tests. See `PRODUCTION_SECURITY.md`.
+
 ### Next Phase 0 slice
 
 - [ ] Approve and add the canonical permission/role/operation registry, then bind protected routes, delegation ceilings, final-owner safeguards, and maker-checker rules to the implemented authorization boundary.
@@ -167,6 +244,11 @@ This is durable notification persistence and leasing, not outbound delivery. The
 - [x] Implement and integration-test policy-neutral quarantined malware-scanning mechanics behind the Phase 0F boundary, disabled by default.
 - [x] Implement and integration-test policy-neutral Redis durable-job transport mechanics behind the Phase 0F boundary, disabled by default.
 - [x] Implement and integration-test policy-neutral encrypted notification persistence/lease mechanics behind the Phase 0F boundary, disabled by default.
+- [x] Add immutable CI dependencies, dependency/SAST/secret/configuration/container gates, update automation, SBOM generation, digest-pinned images, and unprivileged application runtimes.
+- [x] Establish protected tenant-route, pagination/filter, concurrency, idempotency/retry conventions plus generated frontend API types and a checked browser client.
+- [x] Connect the checked identity/organization client to a fail-closed frontend session gate, real login/pending-MFA/selection/switch/logout states, and an enforced session feature boundary.
+- [x] Add structured safe request telemetry, bounded disabled-by-default trace export, authenticated Prometheus format, dependency-correct probes, an outage drill, and the repository operational runbook.
+- [x] Add explicit backend/frontend response headers, strict same-origin CSP, bounded proxy behavior, and a fail-closed production configuration preflight profile.
 - [ ] Approve a production object-store/IAM/KMS design and complete its deployment, recovery, monitoring, and acceptance controls.
 - [ ] Implement and integration-test the remaining approved promotion, signed-access, retention, notification consent/destination/provider, worker, and scheduler adapters; keep each unavailable until its checklist passes.
 

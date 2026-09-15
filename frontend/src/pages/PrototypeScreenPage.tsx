@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { findScreen, screens, type Screen } from '../data/screens';
-import { Shell } from '../components/Shell';
+import { Shell, type ShellSessionProps } from '../components/Shell';
 
 const listIds = new Set([
   'M1-12',
@@ -248,33 +248,6 @@ function FormScreen({ screen }: { screen: Screen }) {
   );
 }
 
-function AuthScreen({ screen }: { screen: Screen }) {
-  return (
-    <section className="auth-panel panel">
-      <div className="auth-mark">
-        <ShieldCheck />
-      </div>
-      <h2>{screen.title}</h2>
-      <p>Secure access to the ROOTOPATHY CareOS workspace.</p>
-      <form onSubmit={(event) => event.preventDefault()}>
-        <label>
-          Email address
-          <input type="email" defaultValue="owner@rootopathy.test" />
-        </label>
-        <label>
-          {screen.id === 'M1-03' ? 'Authentication code' : 'Password'}
-          <input
-            type={screen.id === 'M1-03' ? 'text' : 'password'}
-            defaultValue={screen.id === 'M1-03' ? '123456' : 'CareOS-Local-Only'}
-          />
-        </label>
-        <button className="primary-button full-button">Continue securely</button>
-      </form>
-      <small>Synthetic local demonstration only. Never use these credentials in production.</small>
-    </section>
-  );
-}
-
 function ClinicalScreen({ screen }: { screen: Screen }) {
   const [confirmed, setConfirmed] = useState(false);
   return (
@@ -335,15 +308,13 @@ function ClinicalScreen({ screen }: { screen: Screen }) {
   );
 }
 
-export function PrototypeScreenPage({ id }: { id: string }) {
+export function PrototypeScreenPage({ id, shell }: { id: string; shell: ShellSessionProps }) {
   const screen = findScreen(id);
   const index = screens.findIndex((item) => item.id === screen.id);
-  const previous = screens[Math.max(0, index - 1)];
-  const next = screens[Math.min(screens.length - 1, index + 1)];
+  const previous = screens[Math.max(0, index - 1)] ?? screen;
+  const next = screens[Math.min(screens.length - 1, index + 1)] ?? screen;
   const body = useMemo(() => {
     if (screen.module === 'COS') return <ClinicalScreen screen={screen} />;
-    if (['M1-01', 'M1-02', 'M1-03', 'M1-04'].includes(screen.id))
-      return <AuthScreen screen={screen} />;
     if (dashboardIds.has(screen.id)) return <Dashboard screen={screen} />;
     if (listIds.has(screen.id)) return <DataList screen={screen} />;
     if (formIds.has(screen.id)) return <FormScreen screen={screen} />;
@@ -351,7 +322,7 @@ export function PrototypeScreenPage({ id }: { id: string }) {
   }, [screen]);
 
   return (
-    <Shell currentId={screen.id}>
+    <Shell currentId={screen.id} {...shell}>
       <div className="page-head">
         <div>
           <span className="eyebrow">{screen.id}</span>

@@ -78,15 +78,12 @@ public final class AuthenticationController {
         if (!(authentication != null && authentication.getPrincipal() instanceof CareOsPrincipal principal)) {
             return ResponseEntity.ok()
                     .cacheControl(CacheControl.noStore())
-                    .body(new SessionResponse("anonymous", null, false));
+                    .body(new SessionResponse("anonymous", null, false, false));
         }
         var state = hasAuthority(authentication, MFA_PENDING) ? "mfa_required" : "authenticated";
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
-                .body(new SessionResponse(
-                        state,
-                        new UserResponse(principal.id().toString(), principal.email(), principal.displayName()),
-                        isRecent(session)));
+                .body(sessionResponse(state, principal, isRecent(session)));
     }
 
     @PostMapping("/login")
@@ -374,11 +371,13 @@ public final class AuthenticationController {
                 .anyMatch(candidate -> candidate.getAuthority().equals(authority));
     }
 
-    private static SessionResponse sessionResponse(String state, CareOsPrincipal principal, boolean recent) {
+    private SessionResponse sessionResponse(String state, CareOsPrincipal principal, boolean recent) {
+        var mfaEnabled = identitySecurity.requireActiveAccount(principal.id()).mfaEnabled();
         return new SessionResponse(
                 state,
                 new UserResponse(principal.id().toString(), principal.email(), principal.displayName()),
-                recent);
+                recent,
+                mfaEnabled);
     }
 
     private static String correlationId(HttpServletRequest request) {
@@ -393,7 +392,8 @@ public final class AuthenticationController {
 
     public record UserResponse(String id, String email, String displayName) {}
 
-    public record SessionResponse(String state, UserResponse user, boolean recentAuthentication) {}
+    public record SessionResponse(
+            String state, UserResponse user, boolean recentAuthentication, boolean mfaEnabled) {}
 
     public record LoginRequest(
             @NotBlank @Email @Size(max = 320) String email,

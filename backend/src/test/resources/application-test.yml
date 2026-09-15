@@ -11,14 +11,20 @@ spring:
       applicationRole: ${TEST_DB_APP_USERNAME:careos_app}
   data:
     redis:
+      host: localhost
+      port: 6379
       repositories:
         enabled: false
+  mail:
+    host: localhost
+    port: 1025
 careos:
   security:
     allowed-origins:
       - http://localhost
       - http://localhost:4173
     application-base-url: http://localhost:4173
+    mail-from: no-reply@rootopathy.test
     token-pepper: CareOS-Test-Token-Pepper-Never-Production
     mfa-encryption-key: Q2FyZU9TLUxvY2FsLU1GQS1LZXktTXVzdC1DaGFuZ2U=
     session-absolute-timeout: 8h

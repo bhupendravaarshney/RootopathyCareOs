@@ -2,23 +2,23 @@ spring:
   application:
     name: careos-backend
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/careos_dev}
-    username: ${DB_APP_USERNAME:careos_app}
-    password: ${DB_APP_PASSWORD:careos-app-local-only}
+    url: ${DB_URL}
+    username: ${DB_APP_USERNAME}
+    password: ${DB_APP_PASSWORD}
   jpa:
     open-in-view: false
     hibernate:
       ddl-auto: validate
   flyway:
     enabled: true
-    url: ${DB_MIGRATION_URL:${DB_URL:jdbc:postgresql://localhost:5432/careos_dev}}
-    user: ${DB_MIGRATION_USERNAME:careos_migrator}
-    password: ${DB_MIGRATION_PASSWORD:careos-migrator-local-only}
+    url: ${DB_MIGRATION_URL:${DB_URL}}
+    user: ${DB_MIGRATION_USERNAME}
+    password: ${DB_MIGRATION_PASSWORD}
     placeholders:
-      applicationRole: ${DB_APP_ROLE:${DB_APP_USERNAME:careos_app}}
+      applicationRole: ${DB_APP_ROLE:${DB_APP_USERNAME}}
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
+      host: ${REDIS_HOST}
       port: ${REDIS_PORT:6379}
       connect-timeout: ${REDIS_CONNECT_TIMEOUT:2s}
       timeout: ${REDIS_COMMAND_TIMEOUT:2s}
@@ -29,7 +29,7 @@ spring:
         repository-type: indexed
     timeout: ${SESSION_IDLE_TIMEOUT:30m}
   mail:
-    host: ${SMTP_HOST:localhost}
+    host: ${SMTP_HOST}
     port: ${SMTP_PORT:1025}
   threads:
     virtual:
@@ -49,11 +49,56 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
   endpoint:
     health:
+      show-components: never
+      show-details: never
       probes:
         enabled: true
+        add-additional-paths: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db,redis
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    baggage:
+      enabled: false
+    propagation:
+      consume: w3c
+      produce: w3c
+    sampling:
+      probability: ${CAREOS_TRACE_SAMPLING_PROBABILITY:0.1}
+    export:
+      otlp:
+        enabled: ${CAREOS_OTLP_TRACING_ENABLED:false}
+  opentelemetry:
+    map-environment-variables: false
+    tracing:
+      limits:
+        max-attributes: 64
+        max-attribute-value-length: 256
+        max-events: 32
+        max-links: 16
+      export:
+        otlp:
+          endpoint: ${CAREOS_OTLP_TRACING_ENDPOINT:http://localhost:4318/v1/traces}
+  otlp:
+    metrics:
+      export:
+        enabled: false
+  logging:
+    export:
+      otlp:
+        enabled: false
+logging:
+  structured:
+    format:
+      console: ecs
 careos:
   notifications:
     postgres:
@@ -104,9 +149,9 @@ careos:
       allow-http: ${CAREOS_STORAGE_S3_ALLOW_HTTP:false}
       create-bucket-if-missing: ${CAREOS_STORAGE_S3_CREATE_BUCKET_IF_MISSING:false}
   security:
-    allowed-origins: ${CAREOS_ALLOWED_ORIGINS:http://localhost:4173,http://localhost:5173}
-    application-base-url: ${CAREOS_BASE_URL:http://localhost:4173}
-    mail-from: ${CAREOS_SECURITY_MAIL_FROM:no-reply@rootopathy.test}
+    allowed-origins: ${CAREOS_ALLOWED_ORIGINS}
+    application-base-url: ${CAREOS_BASE_URL}
+    mail-from: ${CAREOS_SECURITY_MAIL_FROM}
     token-pepper: ${CAREOS_TOKEN_PEPPER}
     mfa-encryption-key: ${CAREOS_MFA_ENCRYPTION_KEY}
     session-absolute-timeout: ${SESSION_ABSOLUTE_TIMEOUT:8h}
@@ -117,6 +162,3 @@ careos:
     mfa-attempt-limit: ${MFA_ATTEMPT_LIMIT:5}
     mfa-attempt-window: ${MFA_ATTEMPT_WINDOW:10m}
     recovery-code-count: ${MFA_RECOVERY_CODE_COUNT:10}
-  bootstrap-admin:
-    email: ${CAREOS_BOOTSTRAP_ADMIN_EMAIL:owner@rootopathy.test}
-    password: ${CAREOS_BOOTSTRAP_ADMIN_PASSWORD:CareOS-Local-Only-Change-Me}

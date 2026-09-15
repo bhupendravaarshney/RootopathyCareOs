@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "ROOTOPATHY CareOS Foundation API",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "description": "Checked contract for the currently implemented public foundation, browser identity, and membership-backed organization-selection endpoints. Unsafe browser operations require an approved Origin or Referer plus the double-submit CSRF cookie/header pair."
   },
   "servers": [
@@ -10,6 +10,42 @@
       "url": "http://localhost:8080"
     }
   ],
+  "x-careos-conventions": {
+    "tenantPathPrefix": "/api/v1/organizations/{organizationId}",
+    "organizationParameter": "#/components/parameters/OrganizationId",
+    "pagination": {
+      "strategy": "cursor",
+      "cursorParameter": "#/components/parameters/Cursor",
+      "limitParameter": "#/components/parameters/Limit",
+      "metadataSchema": "#/components/schemas/CursorPageMetadata",
+      "clientTreatment": "opaque"
+    },
+    "filtering": {
+      "mode": "operation-allow-list",
+      "unknownParameters": "reject"
+    },
+    "optimisticConcurrency": {
+      "responseHeader": "#/components/headers/ETag",
+      "requestParameter": "#/components/parameters/IfMatch",
+      "missingStatus": 428,
+      "mismatchStatus": 412,
+      "strongEtagsOnly": true
+    },
+    "idempotency": {
+      "scope": "protected-tenant-mutations",
+      "requestParameter": "#/components/parameters/IdempotencyKey",
+      "requiredForCallerRetriedMutations": true,
+      "keyReuseRequiresEquivalentRequest": true
+    },
+    "retry": {
+      "policy": "caller-controlled",
+      "retryableMethods": ["GET", "HEAD"],
+      "statusCodes": [429, 503],
+      "responseHeader": "#/components/headers/RetryAfter",
+      "maximumDelaySeconds": 86400,
+      "automaticMutationRetry": false
+    }
+  },
   "paths": {
     "/api/public/prototype-screens": {
       "get": {
@@ -649,6 +685,62 @@
           "type": "string",
           "format": "uri"
         }
+      },
+      "OrganizationId": {
+        "name": "organizationId",
+        "in": "path",
+        "required": true,
+        "description": "Organization boundary for every protected business-resource route.",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "Cursor": {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "description": "Opaque continuation cursor returned by the preceding page. Clients must not parse or construct it.",
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "description": "Maximum number of records requested for one cursor page.",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 25
+        }
+      },
+      "IfMatch": {
+        "name": "If-Match",
+        "in": "header",
+        "required": true,
+        "description": "Strong entity tag from the latest representation. Required for protected updates and deletes.",
+        "schema": {
+          "type": "string",
+          "pattern": "^\"[A-Za-z0-9._:-]{1,128}\"$"
+        }
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.",
+        "schema": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9._:-]+$"
+        }
       }
     },
     "headers": {
@@ -663,11 +755,20 @@
         }
       },
       "RetryAfter": {
-        "description": "Seconds until another authentication attempt should be made.",
+        "description": "Bounded delay in seconds before the caller may retry an eligible request.",
         "required": true,
         "schema": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "maximum": 86400
+        }
+      },
+      "ETag": {
+        "description": "Strong entity tag for optimistic concurrency.",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^\"[A-Za-z0-9._:-]{1,128}\"$"
         }
       }
     },
@@ -833,7 +934,22 @@
         }
       },
       "PreconditionRequired": {
-        "description": "Recent authentication is required",
+        "description": "A required precondition is missing, such as recent authentication or If-Match",
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "PreconditionFailed": {
+        "description": "The supplied entity tag no longer matches the current representation",
         "headers": {
           "X-Correlation-Id": {
             "$ref": "#/components/headers/CorrelationId"
@@ -849,6 +965,24 @@
       },
       "TooManyRequests": {
         "description": "Authentication attempts are temporarily throttled",
+        "headers": {
+          "X-Correlation-Id": {
+            "$ref": "#/components/headers/CorrelationId"
+          },
+          "Retry-After": {
+            "$ref": "#/components/headers/RetryAfter"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "ServiceUnavailable": {
+        "description": "The service is temporarily unable to process this request",
         "headers": {
           "X-Correlation-Id": {
             "$ref": "#/components/headers/CorrelationId"
@@ -964,7 +1098,7 @@
       "SessionState": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["state", "user", "recentAuthentication"],
+        "required": ["state", "user", "recentAuthentication", "mfaEnabled"],
         "properties": {
           "state": {
             "type": "string",
@@ -981,6 +1115,9 @@
             ]
           },
           "recentAuthentication": {
+            "type": "boolean"
+          },
+          "mfaEnabled": {
             "type": "boolean"
           }
         }
@@ -1166,6 +1303,27 @@
           },
           "selected": {
             "type": "boolean"
+          }
+        }
+      },
+      "CursorPageMetadata": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["limit", "hasMore", "nextCursor"],
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "nextCursor": {
+            "type": ["string", "null"],
+            "minLength": 1,
+            "maxLength": 512,
+            "pattern": "^[A-Za-z0-9_-]+$"
           }
         }
       },

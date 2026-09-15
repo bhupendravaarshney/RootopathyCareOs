@@ -1,6 +1,6 @@
 # ROOTOPATHY CareOS — Java + React/Node Edition
 
-This repository is the verified **from-scratch engineering foundation** for CareOS. It combines a Java Spring Boot modular monolith, a React/TypeScript frontend built with Node, PostgreSQL, Redis, opt-in private-quarantine, malware-scanner, durable-job, and encrypted durable-notification adapters, Mailpit and 79 clickable CareOS prototype routes.
+This repository is the verified **from-scratch engineering foundation** for CareOS. It combines a Java Spring Boot modular monolith, a session-aware React/TypeScript frontend built with Node, a checked OpenAPI/generated-client boundary, PostgreSQL, Redis, opt-in private-quarantine, malware-scanner, durable-job, and encrypted durable-notification adapters, Mailpit and 79 CareOS route states.
 
 > This is not a claim that all clinical production modules are complete. The runnable foundation and prototypes are complete; production workflows must be implemented module-by-module against the accompanying build specification.
 
@@ -17,24 +17,28 @@ This repository is the verified **from-scratch engineering foundation** for Care
 - Opt-in tenant-isolated PostgreSQL encrypted notification store; recipient routing and outbound delivery remain disabled
 - S3-compatible private quarantine adapter; pinned MinIO only as a synthetic local compatibility target
 - Opt-in ClamAV 1.5.3 scanner adapter; pinned official image only as a synthetic local compatibility target
-- Docker Compose
+- ECS JSON logs, correlation/trace context, Prometheus-format metrics, and separate dependency-aware liveness/readiness probes
+- Digest-pinned Java 25 distroless backend and unprivileged Nginx frontend runtime images
+- Docker Compose with digest-pinned service images
 
 Node.js is the frontend toolchain; the CareOS business backend is Java/Spring Boot.
 
 ## What is runnable
 
-- Backend health: `http://localhost:8080/actuator/health`
+- Backend liveness: `http://localhost:8080/livez`
+- Backend readiness (PostgreSQL and Redis): `http://localhost:8080/readyz`
+- Aggregate backend health: `http://localhost:8080/actuator/health`
 - Public prototype registry API: `http://localhost:8080/api/public/prototype-screens`
 - Browser identity API: `http://localhost:8080/api/v1/auth/session`
 - Membership-backed organization API: `http://localhost:8080/api/v1/organizations`
-- Frontend: `http://localhost:4173/#/M1-05`
+- Session-gated frontend: `http://localhost:4173/#/M1-05`
 - Module 1: `#/M1-01` through `#/M1-23`
 - Module 2: `#/M2-01` through `#/M2-29`
 - Clinical prototype: `#/COS-01` through `#/COS-27`
 - MinIO console: `http://localhost:9001`
 - Mailpit: `http://localhost:8025`
 
-All displayed names and records are synthetic.
+Protected prototype records remain synthetic. Once signed in, the shell's actor and organization labels come from the server session and membership APIs.
 
 ## Quick start — recommended
 
@@ -56,7 +60,9 @@ docker compose up --build -d
 docker compose ps
 ```
 
-Open `http://localhost:4173/#/M1-05`.
+`.env.example` is synthetic local-development material only. The `production` profile deliberately rejects its documented credentials and insecure transport settings; see [docs/PRODUCTION_SECURITY.md](docs/PRODUCTION_SECURITY.md).
+
+Open `http://localhost:4173/#/M1-05` and sign in with the synthetic local bootstrap values copied from `.env.example`. The form intentionally does not prefill credentials.
 
 Stop without deleting data:
 
@@ -79,6 +85,10 @@ ClamAV may need several minutes and substantial memory for its first signature d
 The Redis job transport is also disabled by default. To exercise its mechanics against the local Redis service, set `CAREOS_JOBS_REDIS_ENABLED=true` and supply an explicit comma-separated `CAREOS_JOBS_REDIS_ALLOWED_JOB_DEFINITIONS` list such as the synthetic `foundation.synthetic@1` entry in `.env.example`. This activates queue storage only: it does not start a worker or scheduler, authorize a job effect, or populate a production job registry.
 
 The durable notification store is disabled by default. Its synthetic mechanics require `CAREOS_NOTIFICATIONS_POSTGRES_ENABLED=true`, an explicit `template@version` allow-list, an active key ID, and one or more `key-id:base64-encoded-32-byte-key` entries. Keep production keys in an approved secret manager rather than `.env` or Compose. Enabling this adapter persists and leases encrypted requests only; it does not resolve consent, store a destination, invoke SMTP/SMS/push, or start a worker.
+
+The backend writes ECS-compatible JSON logs and creates bounded W3C trace context. Prometheus metrics require a fully authenticated CareOS session, and OTLP trace export is disabled by default. Keep `CAREOS_OTLP_TRACING_ENABLED=false` until an approved collector, TLS/authentication, region, retention, access policy, and non-interactive observability identity or private management boundary exist. See [docs/OPERATIONS.md](docs/OPERATIONS.md).
+
+The frontend image serves a strict same-origin CSP and explicit security headers, and the backend declares a no-content API policy. The repository Nginx listener is still plain HTTP for local/container compatibility; production TLS termination, trusted forwarding, secret injection, edge/WAF/rate policy, and provider acceptance remain external requirements. See [docs/PRODUCTION_SECURITY.md](docs/PRODUCTION_SECURITY.md).
 
 Delete local containers and volumes only when intentionally resetting synthetic data:
 
@@ -114,6 +124,9 @@ Frontend development URL: `http://localhost:5173/#/M1-05`.
 ```bash
 cd frontend
 npm ci
+npm run api:check
+npm run architecture:check
+npm run format:check
 npm run typecheck
 npm run lint
 npm test
@@ -127,6 +140,16 @@ cd backend
 ```
 
 On Windows PowerShell, use `.\mvnw.cmd test` and `.\mvnw.cmd package`.
+
+Repository and supply-chain contracts can be run without installing extra Node packages:
+
+```bash
+node scripts/verify-prototype-register.mjs
+node scripts/verify-api-contract.mjs
+node --test scripts/tests/verify-api-contract.test.mjs
+node scripts/verify-ci-security.mjs
+node --test scripts/tests/verify-ci-security.test.mjs
+```
 
 Backend tests require Docker because Testcontainers creates and removes isolated PostgreSQL 18 `careos_test`, Redis 8, and pinned object-storage instances. Redis queue tests exercise atomic scripts, retry/dead-letter state, lease recovery, application restart, and a real paused-dependency timeout/recovery. PostgreSQL notification tests exercise encrypted storage, tenant isolation, concurrent deduplication, lease/retry/dead-letter transitions, ciphertext corruption, and key rotation. Scanner protocol tests use an in-process deterministic ClamD server rather than downloading live definitions. Tests do not use development infrastructure. Never point automated tests at development or production services.
 
@@ -146,6 +169,9 @@ Backend tests require Docker because Testcontainers creates and removes isolated
 - PostgreSQL forced RLS on all current tenant-owned foundation tables
 - Disposable PostgreSQL 18 migration and cross-tenant attack tests
 - RFC 9457 problem responses and a checked OpenAPI 3.1 contract for all 15 implemented operations
+- Checked protected tenant-route, opaque cursor/filter, strong ETag/If-Match, scoped idempotency, and bounded caller-controlled retry conventions
+- Exact TypeScript-only OpenAPI generation with CI drift detection and a credentialed, correlation/CSRF-aware native browser client for all 15 current operations
+- Memory-only frontend session gating with runtime response validation, real login/pending-MFA/organization selection and switching/logout states, accessible fail-closed errors, and a CI-enforced feature dependency direction
 - UUID identifiers
 - Optimistic-lock columns
 - Migration-owned, fail-closed audit/outbox event-version registries
@@ -157,22 +183,29 @@ Backend tests require Docker because Testcontainers creates and removes isolated
 - Opt-in ClamD scanning with startup/runtime signature-freshness checks, an engine security floor, bounded `INSTREAM` framing, independent length/digest verification, and fail-closed verdicts
 - Opt-in tenant-derived Redis job queues with allow-listed schema versions, atomic Lua lifecycle transitions, opaque leases, bounded retry/dead-letter retention, integrity checks, and safe metrics
 - Opt-in PostgreSQL durable notifications with allow-listed template versions, AES-256-GCM parameters, hashed deduplication/leases, forced RLS, database-checked transitions, bounded retry/dead-letter retention, and safe metrics
+- ECS JSON request telemetry with validated correlation IDs, templated routes, bounded OpenTelemetry context, baggage disabled, and every OTLP exporter disabled by default
+- Public status-only `/livez` and PostgreSQL/Redis-aware `/readyz` probes; authenticated Prometheus-format metrics with bounded non-sensitive dimensions
+- Explicit Spring API headers plus an always-on strict same-origin Nginx CSP/header contract, hidden Nginx version tokens, and bounded same-origin API proxy timeouts
+- A production-only startup guard requiring secure cookies, canonical HTTPS browser origins, verified PostgreSQL TLS, authenticated Redis TLS, mandatory authenticated SMTP STARTTLS/identity verification, fresh non-production secrets, safe S3 flags, and HTTPS when OTLP tracing is enabled
+- Full-SHA GitHub Actions, explicit least-privilege/time/concurrency bounds, dependency review, Java/JavaScript CodeQL, Trivy dependency/secret/configuration/image gates, and weekly dependency updates
+- CycloneDX SBOM artifacts plus fixed HIGH/CRITICAL image rejection in CI
+- Digest-pinned Dockerfile, Compose, scanner, and PostgreSQL/Redis test images; final application stages declare non-root users
 - Pinned object-storage service in the local topology for synthetic compatibility only
 - Synthetic credentials only
 
-The `local` profile seeds a synthetic account and membership into the persisted identity model. Organization selection is implemented, but it is only a server-side UX preference and never authorization evidence. Authorization and event registries are fail-closed until owner-approved content is supplied. Platform capabilities are explicitly unavailable by default until tested adapters are intentionally configured; quarantine is not clean content, an in-memory scanner result is not durable promotion evidence, a queued job is not authority to execute its effect, and a persisted notification is not permission or ability to contact its recipient. Governed invitation issuance/acceptance and account linking, approved scoped RBAC/event/job/template policy, maker-checker rules, a non-interactive service-account path, production storage/scanner/Redis/key-management acceptance, remaining document adapters, consent/destination/provider wiring, and consumer deduplication still need to be completed before production.
+The `local` profile seeds a synthetic account and membership into the persisted identity model. The frontend calls the checked client for session bootstrap, login, pending MFA, organization selection/switching, and logout, but organization selection is only a server-side navigation preference and never authorization evidence. Authorization and event registries are fail-closed until owner-approved content is supplied. There is still no protected tenant business API or production business-record UI/cache. Platform capabilities are explicitly unavailable by default until tested adapters are intentionally configured; quarantine is not clean content, an in-memory scanner result is not durable promotion evidence, a queued job is not authority to execute its effect, and a persisted notification is not permission or ability to contact its recipient. Governed invitation issuance/acceptance and account linking, identity-administration UI, approved scoped RBAC/event/job/template policy, maker-checker rules, a non-interactive service-account path, production storage/scanner/Redis/key-management acceptance, remaining document adapters, consent/destination/provider wiring, and consumer deduplication still need to be completed before production.
 
 ## Repository map
 
 ```text
 backend/                 Spring Boot modular-monolith foundation
-frontend/                React/TypeScript UI and 79 clickable routes
-contracts/               Checked API contracts
-docs/                    architecture, screen register and delivery status
+frontend/                React/TypeScript session boundary and 79 route states
+contracts/               Checked API contract and shared HTTP conventions
+docs/                    architecture, operations, screen register and delivery status
 scripts/                 verification helpers
 compose.yaml             local PostgreSQL, Redis, MinIO, Mailpit and apps
 compose.scanner.yaml     optional pinned ClamAV/quarantine compatibility overlay
-.github/workflows/       continuous integration foundation
+.github/                 hardened quality/security workflows and dependency updates
 ```
 
-Read the included [complete build specification](docs/CareOS_Complete_Build_Specification_Java_Spring_Boot_React_Node_Edition.pdf), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/GOVERNANCE_EVIDENCE.md](docs/GOVERNANCE_EVIDENCE.md), [docs/PLATFORM_CAPABILITIES.md](docs/PLATFORM_CAPABILITIES.md), [docs/PROTOTYPE_REGISTER.md](docs/PROTOTYPE_REGISTER.md), [docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md) and [GIT_POSITION.md](GIT_POSITION.md) before implementation.
+Read the included [complete build specification](docs/CareOS_Complete_Build_Specification_Java_Spring_Boot_React_Node_Edition.pdf), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/API_CONVENTIONS.md](docs/API_CONVENTIONS.md), [docs/FRONTEND_SESSION.md](docs/FRONTEND_SESSION.md), [docs/GOVERNANCE_EVIDENCE.md](docs/GOVERNANCE_EVIDENCE.md), [docs/OPERATIONS.md](docs/OPERATIONS.md), [docs/PLATFORM_CAPABILITIES.md](docs/PLATFORM_CAPABILITIES.md), [docs/PROTOTYPE_REGISTER.md](docs/PROTOTYPE_REGISTER.md), [docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md) and [GIT_POSITION.md](GIT_POSITION.md) before implementation.

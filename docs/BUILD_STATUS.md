@@ -3,9 +3,11 @@
 ## Verified in the delivery environment
 
 - Frontend dependency installation
-- Strict TypeScript
+- OpenAPI TypeScript generation and isolated drift checking
+- TypeScript-AST frontend feature dependency verification and negative fixtures
+- Strict TypeScript with indexed-access checks
 - ESLint with zero warnings
-- Vitest component/registry tests
+- Vitest API-client/component/registry tests
 - Vite production build
 - npm dependency audit
 - Static 79-screen register contract: M1 23, M2 29 and COS 27
@@ -128,13 +130,85 @@
 - Bootable backend JAR packaged from 135 production sources and 10 test sources; frontend formatting/typecheck/lint/unit/build and eight browser/Axe checks, checked API (15 operations), prototype (79 routes), and both Compose contracts pass
 - Rebuilt enabled backend image reached health `UP`, applied Flyway v7, reported only durable-notification persistence mechanics available with eight capabilities unavailable, verified the restricted runtime role and forced-RLS policy/triggers, exposed no key configuration or unauthenticated metrics, retained zero notification/event rows, Redis keys, and outbound messages, and ran as non-root user `careos`
 
+## Verified during Phase 0K foundation (13 September 2026)
+
+- All third-party Actions use full commit SHAs with release comments; both workflows use explicit runners, read-only default permissions, non-persisted checkout credentials, concurrency cancellation, and finite job timeouts
+- Pull-request dependency review, Java/JavaScript CodeQL `security-extended`, Trivy source/image gates, CI image builds, CycloneDX image SBOM artifacts, and weekly Maven/npm/Docker/Actions Dependabot updates are configured
+- A dependency-free repository contract and eight negative tests enforce immutable action/image references, least workflow authority, bounded execution, non-root final images, complete update coverage, and pinned Testcontainers dependencies
+- Every Dockerfile base, Compose/overlay service, and PostgreSQL/Redis Testcontainers image is digest-pinned; the PostgreSQL fixtures explicitly declare compatibility for the pinned official image
+- Tomcat is held at the fixed 11.0.25 security floor; the backend uses Java 25 Debian 13 distroless as UID 65532 and the frontend uses unprivileged Nginx as UID 101 on port 8080
+- Trivy 0.74 reports zero fixed HIGH/CRITICAL dependency or final-image findings, zero Dockerfile misconfigurations, and no emitted secret findings; both final images generate valid CycloneDX SBOMs
+- The final backend and frontend images both pass read-only, all-capabilities-dropped, no-new-privileges runtime smokes; backend health/Flyway/capability/metrics/clean-state assertions and frontend health/root-HTML assertions pass
+- Clean Java 25 verification passes all 77 backend tests; exact Node 24.15 installation/format/typecheck/lint/unit/build, eight browser/Axe tests, 79-screen/15-operation contracts, both Compose models, and all eight CI-security tests pass
+
+## Verified during Phase 0L foundation (14 September 2026)
+
+- OpenAPI 3.1 version 0.4 retains all 15 implemented operations and adds machine-checked protected tenant-route, cursor/filter, strong ETag/If-Match, scoped idempotency, bounded retry, and reusable 412/503 conventions
+- The importable dependency-free contract verifier passes, and six mutation-based tests prove tenant-prefix, filter, mutation-retry, precondition, and local-reference weakening is rejected
+- Exact `@hey-api/openapi-ts` 0.99.0 generates two TypeScript-only files; isolated drift checking passes, `js-yaml` is forced to fixed 4.3.2, and exact Node 24.15 `npm ci` audits all 290 packages with zero vulnerabilities
+- A native generated-type-backed client wraps all 15 operations with credentialed requests, validated correlation, per-mutation CSRF bootstrap, documented response enforcement, safe Problem/network handling, ETag/retry metadata, HTTPS configuration checks, cancellation, and no automatic retry
+- Eight client tests plus two prototype tests pass under strict TypeScript with indexed-access checking; format, lint, generated drift, Vite production build, and the existing browser/Axe suite pass
+- Backend CORS now allows `If-Match`/`Idempotency-Key`, exposes correlation/retry/ETag metadata, and does not allow `X-Organization-Id`; a clean Java 25 build compiles 135 production and 11 test sources, passes all 78 tests, and packages the bootable JAR
+- Both backend and frontend application images build successfully from the updated clean Docker contexts
+- Quality CI runs generated-type drift and API negative tests before accepting type/contract changes; the repository security contract still passes all eight negative tests
+
+This is an API/client foundation checkpoint. No protected tenant business endpoint, server-state cache, or production screen integration has been added, and no policy-blocked authorization or event content has been invented.
+
+## Verified during Phase 0M foundation (14 September 2026)
+
+- A memory-only React session state machine now bootstraps and runtime-validates the server session and membership-backed organization list before exposing the protected shell
+- M1-01 login, pending M1-03 MFA, M1-04 organization selection, desktop/mobile organization switching, and sign-out call the checked CSRF/correlation-aware client; submitted secret fields are cleared and mutations are not automatically retried
+- Loading, no-membership, malformed/ambiguous response, dependency failure, safe focused error, and retry states remain outside the protected workspace; failed logout does not falsely discard authenticated local state
+- M1-02 explicitly remains unavailable and makes no invitation request until governed issuance/account-linkage/acceptance is implemented
+- The shell now uses server-returned actor and organization labels instead of a hard-coded user; the other 75 protected entries retain their clearly synthetic prototype records and actions
+- A TypeScript-AST architecture gate accepts 17 source files/30 inward relative imports; four negative tests reject reverse shared dependencies, cross-feature coupling, API-to-page imports, and source escape
+- Eight API-client tests and eleven application/session tests pass; all 12 Playwright tests pass on desktop and mobile-320 while Axe-checking 75 protected entries plus four identity states and exercising CSRF login, explicit organization selection, and logout
+- Generated API drift, architecture, format, strict typecheck, lint, production build, the 79-screen register, API contract tests, and CI-security contract tests remain green
+
+This is an authenticated frontend foundation, not production M1 delivery. Invitation/account linking, password recovery and MFA lifecycle administration UI, recent-authentication dialogs, permission-driven actions, continuous expiry revalidation, approved designs/router, tenant business APIs/caching, and every persisted business screen remain incomplete.
+
+## Verified during Phase 0N foundation (14 September 2026)
+
+- Spring Boot emits ECS-compatible JSON and a request completion event containing correlation/trace context, allow-listed methods, framework route templates, status, duration, and outcome without raw path/query values or request content
+- OpenTelemetry W3C context is bounded, baggage is disabled, trace export is off by default, OTLP metric/log exporters are disabled, and ambient `OTEL_*` environment mapping cannot silently enable export
+- Prometheus-format metrics carry the bounded `careos-backend` application tag and require full CareOS authentication; anonymous access returns the checked RFC 9457 `401`
+- Public `/livez` checks only recoverable in-process state; `/readyz` requires application readiness, PostgreSQL, and Redis; all public health responses suppress components/details
+- Pausing disposable Redis makes readiness return `503/DOWN` while liveness remains `200/UP`; unpausing Redis restores readiness
+- Compose now waits on `/readyz`; both default and scanner-overlay models resolve
+- `OPERATIONS.md` records probe/telemetry semantics, first response, a local outage drill, and explicit monitoring, alert, deployment, backup, and timed-restore acceptance gaps
+- A clean pinned Java 25 build compiled 136 production sources and 11 test sources, passed all 80 tests, and packaged the bootable JAR
+- The rebuilt Java 25 distroless image reached both probes against fresh PostgreSQL 18/Redis 8, rejected anonymous metrics, started no OTLP metrics publisher, and passed non-root/read-only/capability/no-new-privileges checks
+- Trivy 0.74 reports zero fixed HIGH/CRITICAL vulnerabilities in the rebuilt Debian 13.6 runtime layer and packaged application JAR
+- The 15-operation API and six negative contract tests, 79-screen register, CI-security repository contract, and all eight CI-security negative tests remain green
+
+This is a repository signal baseline, not production operational acceptance. No external collector, non-interactive scraper identity, dashboard, alert route/on-call escalation, managed deployment, encrypted backup, timed restore, or dead-letter replay procedure has been approved or implemented.
+
+## Verified during Phase 0O foundation (14 September 2026)
+
+- Spring Security explicitly emits no-content CSP, deny-framing, no-referrer, no-sniff, restrictive permissions, and secure-request-only one-year HSTS for the API
+- Unprivileged Nginx emits an always-on strict same-origin CSP and complementary isolation, permissions, referrer, HSTS, MIME, framing, cross-domain, and legacy-XSS headers while hiding version tokens
+- The same-origin `/api` proxy now has bounded connect/send/read behavior and removes the hop-by-hop `Connection` header
+- `application-production.yml` requires external PostgreSQL, Redis, SMTP, browser-origin/base-URL, mail, token-pepper, and MFA-key values while enabling secure cookie, Redis TLS, and authenticated mandatory SMTP STARTTLS with certificate identity checks
+- Synthetic successful dependency/browser/bootstrap fallbacks are isolated in `application-local.yml`; the base configuration requires explicit values, and the dependency-free repository contract prevents those fallbacks moving back into the default path
+- A production-only startup guard rejects mixed non-production profiles, documented local/test material, trivial MFA keys, plaintext/unverified dependency transports, embedded database credentials, non-canonical/duplicate origins, unsafe S3 switches, and insecure explicitly enabled OTLP export without disclosing secret values
+- Four focused configuration tests and one HTTP integration test cover the positive configuration, negative guard matrix, exact response headers, and secure-request-only HSTS semantics
+- The dependency-free CI-security contract now includes 10 tests and rejects missing always-on Nginx headers, unsafe/wildcard CSP, version tokens, or incomplete proxy bounds
+- A clean Java 25 build compiles 137 production sources and 11 test sources, passes all 84 tests against disposable dependencies, applies Flyway through V7, and packages the bootable JAR
+- Frontend formatting, strict typecheck, lint, all 19 unit tests, production build, and all 12 desktop/mobile Playwright/Axe tests remain green; both Compose models and all repository/API/prototype contracts pass
+- The rebuilt Nginx image passes syntax and response-header inspection as UID 101 under the existing read-only, dropped-capability, and no-new-privileges restrictions
+- Both rebuilt images report zero fixed HIGH/CRITICAL OS-package findings under Trivy 0.74; the backend image also proves a no-profile/no-configuration launch fails on a required placeholder rather than using local defaults
+
+This is a production configuration and HTTP preflight baseline, not a deployed security boundary. Secret-manager/rotation exercises, public and service-to-service TLS, trusted forwarding, private backend/management routing, operation/edge rate limits, WAF/DDoS controls, CSP reporting, real-host scans, and measured load/abuse tests remain unapproved and incomplete.
+
 ## Configured but not yet fully integration-verified
 
 - Complete six-service Docker Compose startup on the default host ports
-- Remote GitHub Actions execution of the updated workflow
+- Remote GitHub Actions execution of both updated workflows, including dependency-graph access, CodeQL result upload, required-check/repository-rule enforcement, and SBOM artifact retention
+- Signed image provenance, production-registry admission policy, and deployment-time SBOM/signature verification
 - Production object-store/IAM/KMS, scanner/network/signature operations, Redis ACL/TLS/HA/persistence/restore acceptance, and notification key-management/backup/restore acceptance; promotion, signed access, retention, notification consent/destination/provider delivery, worker, and scheduler behavior
+- Production metric/log/trace collection, non-interactive scraper identity or private management boundary, service objectives, dashboards, alert delivery/on-call escalation, encrypted backups, and timed restore evidence
 
-The current Phase 0 work has closed the Java/frontend build-verification gap and now verifies PostgreSQL migration/RLS, Redis-backed browser identity, membership-backed organization selection, fail-closed tenant authorization, policy-neutral audit/outbox/idempotency mechanics, explicit external-capability boundaries, private-quarantine storage, fail-closed scanner transport/integrity, durable Redis job-transport mechanics, and encrypted PostgreSQL notification persistence/leasing mechanics. A fresh Phase 0J image-level deployment also passed in isolated containers without binding the default PostgreSQL or Redis host ports. Owner-approved authorization/event/job/template content, governed invitations, non-interactive worker identity, production storage/scanner/Redis/key-management acceptance, durable scan evidence, consent/destination/provider delivery, remaining document adapters, and all production workflows remain incomplete.
+The current Phase 0 work has closed the local Java/frontend build-verification, shared API/client convention, session-aware frontend shell, CI supply-chain, and repository operational-signal baseline gaps and now verifies PostgreSQL migration/RLS, Redis-backed browser identity, membership-backed organization selection, fail-closed frontend and backend tenant gates, policy-neutral audit/outbox/idempotency mechanics, explicit external-capability boundaries, private-quarantine storage, fail-closed scanner transport/integrity, durable Redis job-transport mechanics, encrypted PostgreSQL notification persistence/leasing mechanics, generated frontend contract drift, credentialed CSRF-aware HTTP handling, frontend dependency direction, ECS JSON request telemetry, bounded trace context, authenticated Prometheus format, dependency-aware probes, digest-pinned image builds, vulnerability/SAST/secret/configuration gates, SBOM generation, and unprivileged container execution. Owner-approved authorization/event/job/template content, governed invitations and identity-administration UI, protected business endpoints and screen integration, non-interactive worker/scraper identity, hosted-CI/registry enforcement, production storage/scanner/Redis/key-management acceptance, durable scan evidence, consent/destination/provider delivery, external telemetry/alerting, tested backup/restore, remaining document adapters, and all production workflows remain incomplete.
 
 ## Production status
 
