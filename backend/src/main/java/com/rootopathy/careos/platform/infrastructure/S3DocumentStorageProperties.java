@@ -93,7 +93,7 @@ public final class S3DocumentStorageProperties {
 
     public void validateForActivation() {
         if (!enabled) {
-            throw new IllegalStateException("S3 quarantine storage is not enabled");
+            throw new IllegalStateException("S3 document storage is not enabled");
         }
         if (endpoint == null
                 || endpoint.getHost() == null
@@ -124,6 +124,14 @@ public final class S3DocumentStorageProperties {
         }
         if (cleanBucket.equals(quarantineBucket)) {
             throw new IllegalStateException("S3 clean and quarantine buckets must be distinct");
+        }
+    }
+
+    public void validateForRetentionActivation() {
+        validateForPromotionActivation();
+        if (createBucketIfMissing) {
+            throw new IllegalStateException(
+                    "S3 retention requires a pre-provisioned Object Lock clean bucket");
         }
     }
 

@@ -95,6 +95,9 @@ class IdentitySecurityIntegrationTest {
         registry.add("spring.flyway.placeholders.applicationRole", () -> APP_USER);
         registry.add("spring.data.redis.host", REDIS::getHost);
         registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
+        registry.add("careos.authorization.reference-policy-enabled", () -> true);
+        registry.add("careos.invitations.enabled", () -> true);
+        registry.add("careos.mfa-administration.enabled", () -> true);
     }
 
     @Autowired
@@ -456,12 +459,392 @@ class IdentitySecurityIntegrationTest {
     }
 
     @Test
+    void requiresIndependentApprovalBeforeAdministrativelyResettingMfa() throws Exception {
+        seedReferenceInviter();
+        var checkerId = UUID.randomUUID();
+        var checkerEmail = "mfa.checker+" + checkerId + "@rootopathy.test";
+        var targetId = UUID.randomUUID();
+        var targetEmail = "mfa.target+" + targetId + "@rootopathy.test";
+        seedAccount(checkerId, checkerEmail, "MFA Reset Checker");
+        seedAccount(targetId, targetEmail, "MFA Reset Target");
+        executeAsMigrator("""
+                INSERT INTO organization_memberships
+                    (organization_id, user_id, role_key, status)
+                VALUES
+                    ('%s', '%s', 'local_bootstrap', 'active'),
+                    ('%s', '%s', 'organization_member', 'active')
+                """.formatted(ORG_ONE, checkerId, ORG_ONE, targetId));
+
+        var targetLogin = login(targetEmail, PASSWORD, csrf(), "198.51.100.72")
+                .andExpect(status().isOk())
+                .andReturn();
+        var targetSession = requireCookie(targetLogin, SESSION_COOKIE);
+        var targetCsrf = csrf(targetSession);
+        var enrollment = browserPost(
+                        "/api/v1/auth/mfa/enrollments",
+                        "{\"label\":\"Administrative reset test\"}",
+                        targetCsrf,
+                        "198.51.100.72",
+                        targetSession)
+                .andExpect(status().isOk())
+                .andReturn();
+        var secret = objectMapper
+                .readTree(enrollment.getResponse().getContentAsString())
+                .get("secret")
+                .stringValue();
+        browserPost(
+                        "/api/v1/auth/mfa/enrollments/verification",
+                        objectMapper.writeValueAsString(new CodeBody(currentTotp(secret))),
+                        targetCsrf,
+                        "198.51.100.72",
+                        targetSession)
+                .andExpect(status().isOk());
+        var securityVersionBeforeReset = jdbcTemplate.queryForObject(
+                "select security_version from users where id = ?", Long.class, targetId);
+
+        var makerLogin = login(email, PASSWORD, csrf(), "198.51.100.73")
+                .andExpect(status().isOk())
+                .andReturn();
+        var makerSession = requireCookie(makerLogin, SESSION_COOKIE);
+        var requestReason = "Verified lost authenticator on support case CARE-42";
+        var request = browserIdempotentPost(
+                        "/api/v1/organizations/" + ORG_ONE + "/users/" + targetId
+                                + "/mfa-reset-requests",
+                        objectMapper.writeValueAsString(Map.of("reason", requestReason)),
+                        "mfa-reset-request-" + UUID.randomUUID(),
+                        csrf(makerSession),
+                        "198.51.100.73",
+                        makerSession)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.targetUserId").value(targetId.toString()))
+                .andExpect(jsonPath("$.status").value("pending"))
+                .andReturn();
+        var approvalId = objectMapper
+                .readTree(request.getResponse().getContentAsString())
+                .get("approvalId")
+                .stringValue();
+        var approvalPath = "/api/v1/organizations/" + ORG_ONE + "/users/" + targetId
+                + "/mfa-reset-requests/" + approvalId;
+
+        browserIdempotentPost(
+                        approvalPath + "/approvals",
+                        objectMapper.writeValueAsString(Map.of("reason", "Maker cannot self-approve")),
+                        "mfa-reset-self-approval-" + UUID.randomUUID(),
+                        csrf(makerSession),
+                        "198.51.100.73",
+                        makerSession)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("mfa-reset-approval-unavailable"));
+
+        var checkerLogin = login(checkerEmail, PASSWORD, csrf(), "198.51.100.74")
+                .andExpect(status().isOk())
+                .andReturn();
+        var checkerSession = requireCookie(checkerLogin, SESSION_COOKIE);
+        browserIdempotentPost(
+                        approvalPath + "/approvals",
+                        objectMapper.writeValueAsString(Map.of(
+                                "reason", "Independently verified support case and target identity")),
+                        "mfa-reset-approval-" + UUID.randomUUID(),
+                        csrf(checkerSession),
+                        "198.51.100.74",
+                        checkerSession)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("approved"));
+
+        browserIdempotentPost(
+                        approvalPath + "/executions",
+                        objectMapper.writeValueAsString(Map.of("reason", requestReason)),
+                        "mfa-reset-wrong-executor-" + UUID.randomUUID(),
+                        csrf(checkerSession),
+                        "198.51.100.74",
+                        checkerSession)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("independent-approval-required"));
+
+        var executionKey = "mfa-reset-execution-" + UUID.randomUUID();
+        for (var attempt = 0; attempt < 2; attempt++) {
+            browserIdempotentPost(
+                            approvalPath + "/executions",
+                            objectMapper.writeValueAsString(Map.of("reason", requestReason)),
+                            executionKey,
+                            csrf(makerSession),
+                            "198.51.100.73",
+                            makerSession)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("reset"));
+        }
+
+        mockMvc.perform(get("/api/v1/private").cookie(targetSession))
+                .andExpect(status().isUnauthorized());
+        assertThat(jdbcTemplate.queryForObject(
+                        "select security_version from users where id = ?", Long.class, targetId))
+                .isEqualTo(securityVersionBeforeReset + 1);
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM mfa_methods
+                        WHERE user_id = '%s' AND status = 'revoked'
+                          AND encrypted_secret IS NULL AND revoked_at IS NOT NULL
+                        """.formatted(targetId)))
+                .isEqualTo(1);
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM recovery_codes
+                        WHERE user_id = '%s' AND used_at IS NULL AND revoked_at IS NULL
+                        """.formatted(targetId)))
+                .isZero();
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM user_sessions
+                        WHERE user_id = '%s' AND revoked_at IS NULL
+                        """.formatted(targetId)))
+                .isZero();
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM authorization_approval_requests
+                        WHERE id = '%s' AND organization_id = '%s'
+                          AND subject_id = '%s' AND requested_by_user_id = '%s'
+                          AND decided_by_user_id = '%s' AND consumed_by_user_id = '%s'
+                          AND status = 'consumed' AND consumed_idempotency_key = '%s'
+                        """.formatted(
+                        approvalId, ORG_ONE, targetId, userId, checkerId, userId, executionKey)))
+                .isEqualTo(1);
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM audit_events
+                        WHERE (subject_id = '%s' AND event_name IN (
+                            'identity.mfa-admin-reset.requested',
+                            'identity.mfa-admin-reset.approved'))
+                           OR (subject_id = '%s'
+                               AND event_name = 'identity.mfa-admin-reset.completed')
+                        """.formatted(approvalId, targetId)))
+                .isEqualTo(3);
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM outbox_events
+                        WHERE (aggregate_id = '%s' AND event_name IN (
+                            'identity.mfa-admin-reset.requested',
+                            'identity.mfa-admin-reset.approved'))
+                           OR (aggregate_id = '%s'
+                               AND event_name = 'identity.mfa-admin-reset.completed')
+                        """.formatted(approvalId, targetId)))
+                .isEqualTo(3);
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM authentication_events
+                        WHERE user_id = '%s' AND event_name IN (
+                            'identity.mfa-admin-reset.completed', 'identity.sessions.revoked')
+                        """.formatted(targetId)))
+                .isEqualTo(2);
+        assertThat(notifications.mfaResetCount(targetEmail)).isEqualTo(1);
+    }
+
+    @Test
+    void issuesIdempotentlyAndAcceptsAOneTimeInvitationForANewAccount() throws Exception {
+        seedReferenceInviter();
+        var login = login(email, PASSWORD, csrf(), "198.51.100.91")
+                .andExpect(status().isOk())
+                .andReturn();
+        var session = requireCookie(login, SESSION_COOKIE);
+        var invitedEmail = "new.invitee+" + UUID.randomUUID() + "@rootopathy.test";
+        var invitationBody = objectMapper.writeValueAsString(Map.of(
+                "email", invitedEmail,
+                "displayName", "New Invitation Account",
+                "roleKey", "organization_member",
+                "reason", "Approved workforce onboarding"));
+        var idempotencyKey = "invitation-issue-" + UUID.randomUUID();
+
+        var issued = browserIdempotentPost(
+                        "/api/v1/organizations/" + ORG_ONE + "/invitations",
+                        invitationBody,
+                        idempotencyKey,
+                        csrf(session),
+                        "198.51.100.91",
+                        session)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("pending"))
+                .andExpect(jsonPath("$.roleKey").value("organization_member"))
+                .andReturn();
+        var invitationId = objectMapper
+                .readTree(issued.getResponse().getContentAsString())
+                .get("invitationId")
+                .stringValue();
+
+        browserIdempotentPost(
+                        "/api/v1/organizations/" + ORG_ONE + "/invitations",
+                        invitationBody,
+                        idempotencyKey,
+                        csrf(session),
+                        "198.51.100.91",
+                        session)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.invitationId").value(invitationId));
+        assertThat(notifications.invitationCount(invitedEmail)).isEqualTo(1);
+
+        var rawToken = notifications.invitationTokenFor(invitedEmail);
+        var newPassword = "New-Invited-Account-42";
+        browserPost(
+                        "/api/v1/auth/invitation-acceptances",
+                        objectMapper.writeValueAsString(Map.of(
+                                "token", rawToken, "newPassword", newPassword)),
+                        csrf(),
+                        "198.51.100.92")
+                .andExpect(status().isCreated())
+                .andExpect(header().string(
+                        "Cache-Control", org.hamcrest.Matchers.containsString("no-store")))
+                .andExpect(jsonPath("$.invitationId").value(invitationId))
+                .andExpect(jsonPath("$.organizationId").value(ORG_ONE.toString()))
+                .andExpect(jsonPath("$.roleKey").value("organization_member"))
+                .andExpect(jsonPath("$.accountLink").value("created"));
+
+        browserPost(
+                        "/api/v1/auth/invitation-acceptances",
+                        objectMapper.writeValueAsString(Map.of(
+                                "token", rawToken, "newPassword", newPassword)),
+                        csrf(),
+                        "198.51.100.92")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("invalid-or-expired-invitation"));
+        login(invitedEmail, newPassword, csrf(), "198.51.100.93")
+                .andExpect(status().isOk());
+
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM invitations
+                        WHERE id = '%s' AND status = 'accepted'
+                          AND accepted_existing_account = false
+                        """.formatted(invitationId)))
+                .isEqualTo(1);
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM organization_memberships memberships
+                        JOIN users ON users.id = memberships.user_id
+                        WHERE memberships.organization_id = '%s'
+                          AND lower(users.email) = lower('%s')
+                          AND memberships.role_key = 'organization_member'
+                          AND memberships.status = 'active'
+                        """.formatted(ORG_ONE, invitedEmail)))
+                .isEqualTo(1);
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM audit_events
+                        WHERE subject_id = '%s'
+                          AND event_name IN (
+                              'organization.invitation.issued',
+                              'organization.invitation.accepted')
+                        """.formatted(invitationId)))
+                .isEqualTo(2);
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM outbox_events
+                        WHERE aggregate_id = '%s'
+                          AND event_name IN (
+                              'organization.invitation.issued',
+                              'organization.invitation.accepted')
+                        """.formatted(invitationId)))
+                .isEqualTo(2);
+    }
+
+    @Test
+    void requiresTheExactAuthenticatedExistingAccountAndRevokesIdempotently() throws Exception {
+        seedReferenceInviter();
+        var login = login(email, PASSWORD, csrf(), "198.51.100.94")
+                .andExpect(status().isOk())
+                .andReturn();
+        var session = requireCookie(login, SESSION_COOKIE);
+        var body = objectMapper.writeValueAsString(Map.of(
+                "email", email,
+                "displayName", "Existing Invitation Account",
+                "roleKey", "organization_member",
+                "reason", "Approved existing-account linkage"));
+
+        var issued = browserIdempotentPost(
+                        "/api/v1/organizations/" + ORG_ONE + "/invitations",
+                        body,
+                        "existing-link-" + UUID.randomUUID(),
+                        csrf(session),
+                        "198.51.100.94",
+                        session)
+                .andExpect(status().isCreated())
+                .andReturn();
+        var invitationId = objectMapper
+                .readTree(issued.getResponse().getContentAsString())
+                .get("invitationId")
+                .stringValue();
+        var rawToken = notifications.invitationTokenFor(email);
+
+        browserPost(
+                        "/api/v1/auth/invitation-acceptances",
+                        objectMapper.writeValueAsString(Map.of("token", rawToken)),
+                        csrf(),
+                        "198.51.100.95")
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("invited-account-authentication-required"));
+        browserPost(
+                        "/api/v1/auth/invitation-acceptances",
+                        objectMapper.writeValueAsString(Map.of("token", rawToken)),
+                        csrf(session),
+                        "198.51.100.94",
+                        session)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accountLink").value("existing"))
+                .andExpect(jsonPath("$.userId").value(userId.toString()));
+
+        var secondEmail = "revoked+" + UUID.randomUUID() + "@rootopathy.test";
+        var secondIssue = browserIdempotentPost(
+                        "/api/v1/organizations/" + ORG_ONE + "/invitations",
+                        objectMapper.writeValueAsString(Map.of(
+                                "email", secondEmail,
+                                "displayName", "Revoked Invitation",
+                                "roleKey", "organization_member",
+                                "reason", "Temporary access request")),
+                        "revocation-issue-" + UUID.randomUUID(),
+                        csrf(session),
+                        "198.51.100.94",
+                        session)
+                .andExpect(status().isCreated())
+                .andReturn();
+        var secondInvitationId = objectMapper
+                .readTree(secondIssue.getResponse().getContentAsString())
+                .get("invitationId")
+                .stringValue();
+        var revokeBody = objectMapper.writeValueAsString(Map.of(
+                "reason", "Onboarding request withdrawn"));
+        var revokeKey = "invitation-revoke-" + UUID.randomUUID();
+        for (var attempt = 0; attempt < 2; attempt++) {
+            browserIdempotentPost(
+                            "/api/v1/organizations/" + ORG_ONE + "/invitations/"
+                                    + secondInvitationId + "/revocations",
+                            revokeBody,
+                            revokeKey,
+                            csrf(session),
+                            "198.51.100.94",
+                            session)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("revoked"));
+        }
+        browserPost(
+                        "/api/v1/auth/invitation-acceptances",
+                        objectMapper.writeValueAsString(Map.of(
+                                "token", notifications.invitationTokenFor(secondEmail),
+                                "newPassword", "Revoked-Invitation-42")),
+                        csrf(),
+                        "198.51.100.96")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("invalid-or-expired-invitation"));
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM audit_events
+                        WHERE subject_id = '%s'
+                          AND event_name = 'organization.invitation.revoked'
+                        """.formatted(secondInvitationId)))
+                .isEqualTo(1);
+    }
+
+    @Test
     void discoversAndSelectsOnlyLiveMembershipsAndIgnoresOrganizationHeaders() throws Exception {
         var unavailableOrganization = UUID.randomUUID();
         executeAsMigrator("""
                 INSERT INTO organizations (id, legal_name, display_name, country_code, timezone, status)
                 VALUES ('%s', 'Unavailable Test Organization', 'Unavailable Organization', 'IN', 'Asia/Kolkata', 'active')
                 """.formatted(unavailableOrganization));
+        executeAsMigrator("""
+                INSERT INTO authorization_roles
+                    (role_key, display_name, description, registry_version)
+                VALUES
+                    ('foundation-test-role', 'Foundation test role',
+                     'Synthetic active membership discovery role', 'test-v1'),
+                    ('suspended-test-role', 'Suspended test role',
+                     'Synthetic suspended membership discovery role', 'test-v1')
+                ON CONFLICT (role_key) DO NOTHING
+                """);
         executeAsMigrator("""
                 INSERT INTO organization_memberships
                     (organization_id, user_id, role_key, status)
@@ -580,6 +963,29 @@ class IdentitySecurityIntegrationTest {
         return mockMvc.perform(builder);
     }
 
+    private org.springframework.test.web.servlet.ResultActions browserIdempotentPost(
+            String path,
+            String json,
+            String idempotencyKey,
+            CsrfMaterial csrf,
+            String remoteAddress,
+            Cookie... cookies)
+            throws Exception {
+        var builder = post(path)
+                .header("Origin", ORIGIN)
+                .header("Idempotency-Key", idempotencyKey)
+                .header(csrf.headerName(), csrf.token())
+                .cookie(csrf.cookie())
+                .with(request -> {
+                    request.setRemoteAddr(remoteAddress);
+                    return request;
+                })
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json);
+        addCookies(builder, cookies);
+        return mockMvc.perform(builder);
+    }
+
     private CsrfMaterial csrf(Cookie... cookies) throws Exception {
         var builder = get("/api/v1/auth/csrf");
         addCookies(builder, cookies);
@@ -628,6 +1034,38 @@ class IdentitySecurityIntegrationTest {
                 var statement = connection.createStatement()) {
             statement.executeUpdate(sql);
         }
+    }
+
+    private int migratorCount(String sql) throws Exception {
+        try (var connection = java.sql.DriverManager.getConnection(
+                        POSTGRES.getJdbcUrl(), MIGRATOR_USER, MIGRATOR_PASSWORD);
+                var statement = connection.createStatement();
+                var result = statement.executeQuery(sql)) {
+            result.next();
+            return result.getInt(1);
+        }
+    }
+
+    private void seedReferenceInviter() throws Exception {
+        executeAsMigrator("""
+                INSERT INTO organization_memberships
+                    (organization_id, user_id, role_key, status)
+                VALUES ('%s', '%s', 'local_bootstrap', 'active')
+                ON CONFLICT (organization_id, user_id, role_key) DO UPDATE
+                    SET status = 'active', effective_from = now(), effective_to = NULL
+                """.formatted(ORG_ONE, userId));
+    }
+
+    private void seedAccount(UUID accountId, String accountEmail, String displayName) {
+        jdbcTemplate.update(
+                "insert into users (id, email, display_name, status) values (?, ?, ?, 'active')",
+                accountId,
+                accountEmail,
+                displayName);
+        jdbcTemplate.update(
+                "insert into password_credentials (user_id, password_hash) values (?, ?)",
+                accountId,
+                passwordEncoder.encode(PASSWORD));
     }
 
     private static void addCookies(MockHttpServletRequestBuilder builder, Cookie... cookies) {
@@ -696,6 +1134,9 @@ class IdentitySecurityIntegrationTest {
 
     static final class CapturingSecurityNotification implements SecurityNotificationPort {
         private final Map<String, String> passwordResetTokens = new ConcurrentHashMap<>();
+        private final Map<String, String> invitationTokens = new ConcurrentHashMap<>();
+        private final Map<String, Integer> invitationCounts = new ConcurrentHashMap<>();
+        private final Map<String, Integer> mfaResetCounts = new ConcurrentHashMap<>();
         private boolean failNext;
 
         @Override
@@ -707,12 +1148,46 @@ class IdentitySecurityIntegrationTest {
             passwordResetTokens.put(email, rawToken);
         }
 
+        @Override
+        public void sendInvitation(String email, String rawToken, Instant expiresAt) {
+            if (failNext) {
+                failNext = false;
+                throw new IllegalStateException("synthetic notification outage");
+            }
+            invitationTokens.put(email, rawToken);
+            invitationCounts.merge(email, 1, Integer::sum);
+        }
+
+        @Override
+        public void sendMfaAdministrativelyReset(String email) {
+            if (failNext) {
+                failNext = false;
+                throw new IllegalStateException("synthetic notification outage");
+            }
+            mfaResetCounts.merge(email, 1, Integer::sum);
+        }
+
         String tokenFor(String email) {
             return passwordResetTokens.get(email);
         }
 
+        String invitationTokenFor(String email) {
+            return invitationTokens.get(email);
+        }
+
+        int invitationCount(String email) {
+            return invitationCounts.getOrDefault(email, 0);
+        }
+
+        int mfaResetCount(String email) {
+            return mfaResetCounts.getOrDefault(email, 0);
+        }
+
         void clear() {
             passwordResetTokens.clear();
+            invitationTokens.clear();
+            invitationCounts.clear();
+            mfaResetCounts.clear();
             failNext = false;
         }
 

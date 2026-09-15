@@ -75,15 +75,67 @@ function failure(status = 503): ApiFailure {
 
 function sessionClient(overrides: Partial<SessionClient> = {}): SessionClient {
   return {
+    acceptInvitation: async () =>
+      success(
+        {
+          accountLink: 'created',
+          invitationId: '77777777-7777-4777-8777-777777777777',
+          organizationId: selectedOrganization.id,
+          roleKey: 'organization_member',
+          userId: '88888888-8888-4888-8888-888888888888',
+        },
+        201,
+      ),
+    approveMfaAdministrativeReset: async (_organizationId, targetUserId, approvalId) =>
+      success({
+        approvalId,
+        expiresAt: '2026-09-16T12:00:00Z',
+        status: 'approved',
+        targetUserId,
+      }),
     completeMfaChallenge: async () => success(authenticatedSession),
     completePasswordReset: async () => success(undefined, 204),
+    executeMfaAdministrativeReset: async (_organizationId, targetUserId, approvalId) =>
+      success({
+        approvalId,
+        expiresAt: '2026-09-16T12:00:00Z',
+        status: 'reset',
+        targetUserId,
+      }),
     getAuthenticationSession: async () => success(authenticatedSession),
+    issueInvitation: async () =>
+      success(
+        {
+          expiresAt: '2026-09-16T12:00:00Z',
+          invitationId: '77777777-7777-4777-8777-777777777777',
+          roleKey: 'organization_member',
+          status: 'pending',
+        },
+        201,
+      ),
     listSelectableOrganizations: async () => success([selectedOrganization]),
     login: async () => success(authenticatedSession),
     logout: async () => success(undefined, 204),
     regenerateRecoveryCodes: async () =>
       success({ recoveryCodes: ['2345-6789-ABCD', 'EFGH-JKLM-NPQR'] }),
     requestPasswordReset: async () => success(undefined, 202),
+    requestMfaAdministrativeReset: async (_organizationId, targetUserId) =>
+      success(
+        {
+          approvalId: '99999999-9999-4999-8999-999999999999',
+          expiresAt: '2026-09-16T12:00:00Z',
+          status: 'pending',
+          targetUserId,
+        },
+        201,
+      ),
+    revokeInvitation: async () =>
+      success({
+        expiresAt: '2026-09-16T12:00:00Z',
+        invitationId: '77777777-7777-4777-8777-777777777777',
+        roleKey: 'organization_member',
+        status: 'revoked',
+      }),
     selectOrganization: async ({ organizationId }) =>
       success({
         ...(organizationId === otherOrganization.id ? otherOrganization : selectedOrganization),
@@ -357,16 +409,111 @@ describe('CareOS frontend session boundary', () => {
     expect(logout).toHaveBeenCalledOnce();
   });
 
-  it('keeps invitation acceptance fail closed until its governed API exists', async () => {
+  it('issues and revokes a governed organization invitation with caller-owned retry keys', async () => {
     window.location.hash = '#/M1-02';
-    render(<App client={sessionClient()} />);
+    const issueInvitation = vi.fn<SessionClient['issueInvitation']>(async () =>
+      success(
+        {
+          expiresAt: '2026-09-16T12:00:00Z',
+          invitationId: '77777777-7777-4777-8777-777777777777',
+          roleKey: 'organization_member',
+          status: 'pending',
+        },
+        201,
+      ),
+    );
+    const revokeInvitation = vi.fn<SessionClient['revokeInvitation']>(async () =>
+      success({
+        expiresAt: '2026-09-16T12:00:00Z',
+        invitationId: '77777777-7777-4777-8777-777777777777',
+        roleKey: 'organization_member',
+        status: 'revoked',
+      }),
+    );
+    render(<App client={sessionClient({ issueInvitation, revokeInvitation })} />);
+
+    expect(await screen.findByRole('heading', { name: 'Organization invitations' })).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Email address'), {
+      target: { value: 'new.user@example.test' },
+    });
+    fireEvent.change(screen.getByLabelText('Display name'), {
+      target: { value: 'New User' },
+    });
+    fireEvent.change(screen.getByLabelText('Access reason'), {
+      target: { value: 'Approved onboarding request CARE-42' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Issue invitation' }));
+
+    await waitFor(() => expect(issueInvitation).toHaveBeenCalledOnce());
+    expect(issueInvitation.mock.calls[0]?.[0]).toBe(selectedOrganization.id);
+    expect(issueInvitation.mock.calls[0]?.[1]).toEqual({
+      displayName: 'New User',
+      email: 'new.user@example.test',
+      reason: 'Approved onboarding request CARE-42',
+      roleKey: 'organization_member',
+    });
+    expect(issueInvitation.mock.calls[0]?.[2]).toMatch(/^invite:[0-9a-f-]{36}$/);
+    expect(await screen.findByText(/one-time link was sent/)).toBeVisible();
+
+    fireEvent.change(screen.getByLabelText('Revocation reason'), {
+      target: { value: 'Onboarding request withdrawn' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke invitation' }));
+
+    await waitFor(() => expect(revokeInvitation).toHaveBeenCalledOnce());
+    expect(revokeInvitation.mock.calls[0]?.[0]).toBe(selectedOrganization.id);
+    expect(revokeInvitation.mock.calls[0]?.[1]).toBe('77777777-7777-4777-8777-777777777777');
+    expect(revokeInvitation.mock.calls[0]?.[2]).toEqual({
+      reason: 'Onboarding request withdrawn',
+    });
+    expect(revokeInvitation.mock.calls[0]?.[3]).toMatch(/^revoke:[0-9a-f-]{36}$/);
+    expect(await screen.findByText(/can no longer be accepted/)).toBeVisible();
+  });
+
+  it('scrubs and consumes an anonymous one-time invitation for a new account', async () => {
+    const token = 'Case_Sensitive-Invitation-Token-1234567890';
+    window.location.hash = `#/accept-invitation?token=${encodeURIComponent(token)}`;
+    const acceptInvitation = vi.fn<SessionClient['acceptInvitation']>(async () =>
+      success(
+        {
+          accountLink: 'created',
+          invitationId: '77777777-7777-4777-8777-777777777777',
+          organizationId: selectedOrganization.id,
+          roleKey: 'organization_member',
+          userId: '88888888-8888-4888-8888-888888888888',
+        },
+        201,
+      ),
+    );
+    render(
+      <App
+        client={sessionClient({
+          acceptInvitation,
+          getAuthenticationSession: async () => success(anonymousSession),
+        })}
+      />,
+    );
 
     expect(
-      await screen.findByRole('heading', { name: 'Invitation flow is not enabled' }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/issuance, account linkage, expiry, and acceptance policy/),
+      await screen.findByRole('heading', { name: 'Accept your CareOS invitation' }),
     ).toBeVisible();
+    await waitFor(() => expect(window.location.hash).toBe('#/accept-invitation'));
+    fireEvent.change(screen.getByLabelText('New password'), {
+      target: { value: 'new-secure-password-27' },
+    });
+    fireEvent.change(screen.getByLabelText('Confirm new password'), {
+      target: { value: 'new-secure-password-27' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Accept invitation' }));
+
+    await waitFor(() =>
+      expect(acceptInvitation).toHaveBeenCalledWith({
+        newPassword: 'new-secure-password-27',
+        token,
+      }),
+    );
+    expect(await screen.findByRole('heading', { name: 'Invitation accepted' })).toBeVisible();
+    expect(screen.queryByLabelText('New password')).not.toBeInTheDocument();
   });
 
   it('requests password recovery without disclosing whether an account exists', async () => {
@@ -488,6 +635,100 @@ describe('CareOS frontend session boundary', () => {
     expect(await screen.findByText('Authenticator enabled')).toBeInTheDocument();
     expect(screen.queryByText('2345-6789-ABCD')).not.toBeInTheDocument();
     expect(screen.queryByText('ABCDEFGHIJKLMNOP')).not.toBeInTheDocument();
+  });
+
+  it('drives the three-step administrator MFA reset workflow with caller-owned retry keys', async () => {
+    window.location.hash = '#/M1-03';
+    const targetUserId = '88888888-8888-4888-8888-888888888888';
+    const approvalId = '99999999-9999-4999-8999-999999999999';
+    const requestMfaAdministrativeReset = vi.fn<SessionClient['requestMfaAdministrativeReset']>(
+      async () =>
+        success(
+          {
+            approvalId,
+            expiresAt: '2026-09-16T12:00:00Z',
+            status: 'pending',
+            targetUserId,
+          },
+          201,
+        ),
+    );
+    const approveMfaAdministrativeReset = vi.fn<SessionClient['approveMfaAdministrativeReset']>(
+      async () =>
+        success({
+          approvalId,
+          expiresAt: '2026-09-16T12:00:00Z',
+          status: 'approved',
+          targetUserId,
+        }),
+    );
+    const executeMfaAdministrativeReset = vi.fn<SessionClient['executeMfaAdministrativeReset']>(
+      async () =>
+        success({
+          approvalId,
+          expiresAt: '2026-09-16T12:00:00Z',
+          status: 'reset',
+          targetUserId,
+        }),
+    );
+    render(
+      <App
+        client={sessionClient({
+          approveMfaAdministrativeReset,
+          executeMfaAdministrativeReset,
+          requestMfaAdministrativeReset,
+        })}
+      />,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Administrator MFA reset' })).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Target user ID'), {
+      target: { value: targetUserId },
+    });
+    fireEvent.change(screen.getByLabelText('Reset reason'), {
+      target: { value: 'Verified lost authenticator on support case CARE-42' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Request independent approval' }));
+
+    await waitFor(() => expect(requestMfaAdministrativeReset).toHaveBeenCalledOnce());
+    expect(requestMfaAdministrativeReset.mock.calls[0]).toEqual([
+      selectedOrganization.id,
+      targetUserId,
+      { reason: 'Verified lost authenticator on support case CARE-42' },
+      expect.stringMatching(/^mfa-request:[0-9a-f-]{36}$/),
+    ]);
+    expect(await screen.findByText(/Workflow status:/)).toHaveTextContent('pending');
+
+    fireEvent.change(screen.getByLabelText('Workflow action'), { target: { value: 'approve' } });
+    fireEvent.change(screen.getByLabelText('Independent decision reason'), {
+      target: { value: 'Identity and support case independently verified' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Approve as independent checker' }));
+
+    await waitFor(() => expect(approveMfaAdministrativeReset).toHaveBeenCalledOnce());
+    expect(approveMfaAdministrativeReset.mock.calls[0]).toEqual([
+      selectedOrganization.id,
+      targetUserId,
+      approvalId,
+      { reason: 'Identity and support case independently verified' },
+      expect.stringMatching(/^mfa-approve:[0-9a-f-]{36}$/),
+    ]);
+
+    fireEvent.change(screen.getByLabelText('Workflow action'), { target: { value: 'execute' } });
+    fireEvent.change(screen.getByLabelText('Reset reason'), {
+      target: { value: 'Verified lost authenticator on support case CARE-42' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Execute approved reset' }));
+
+    await waitFor(() => expect(executeMfaAdministrativeReset).toHaveBeenCalledOnce());
+    expect(executeMfaAdministrativeReset.mock.calls[0]).toEqual([
+      selectedOrganization.id,
+      targetUserId,
+      approvalId,
+      { reason: 'Verified lost authenticator on support case CARE-42' },
+      expect.stringMatching(/^mfa-execute:[0-9a-f-]{36}$/),
+    ]);
+    expect(await screen.findByText(/Workflow status:/)).toHaveTextContent('reset');
   });
 
   it('requires recent authentication before replacing one-use recovery codes', async () => {

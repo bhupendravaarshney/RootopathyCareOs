@@ -93,7 +93,7 @@ public class IdentitySecurityService {
 
     @Transactional
     public void resetPassword(String rawToken, String newPassword, String correlationId, String remoteAddress) {
-        validatePassword(newPassword);
+        validateNewPassword(newPassword);
         var now = clock.instant();
         var userId = identityStore
                 .consumePasswordResetToken(tokenCodec.digest(rawToken), now)
@@ -180,6 +180,38 @@ public class IdentitySecurityService {
                 clock.instant());
         recordEvent(account, AuthenticationEventType.RECOVERY_CODES_REGENERATED, correlationId, remoteAddress);
         return codes;
+    }
+
+    @Transactional
+    public void administrativelyResetMfa(
+            UUID userId, String correlationId, String remoteAddress) {
+        var account = requireActiveAccount(userId);
+        var now = clock.instant();
+        if (!identityStore.administrativelyResetMfa(userId, now)) {
+            throw new MfaAdministrationException(
+                    MfaAdministrationException.Reason.TARGET_MFA_NOT_ENABLED,
+                    "The target account does not have enabled MFA.");
+        }
+        recordEvent(account, AuthenticationEventType.MFA_ADMIN_RESET, correlationId, remoteAddress);
+        recordEvent(account, AuthenticationEventType.SESSIONS_REVOKED, correlationId, remoteAddress);
+    }
+
+    public void completeAdministrativeResetSideEffects(UUID userId) {
+        var account = requireActiveAccount(userId);
+        try {
+            sessionRevocation.revokeAllForPrincipal(account.email());
+        } catch (RuntimeException exception) {
+            LOGGER.error(
+                    "MFA-reset session cache cleanup failed ({})",
+                    exception.getClass().getSimpleName());
+        }
+        try {
+            notifications.sendMfaAdministrativelyReset(account.email());
+        } catch (RuntimeException exception) {
+            LOGGER.error(
+                    "MFA-reset notification delivery failed ({})",
+                    exception.getClass().getSimpleName());
+        }
     }
 
     @Transactional
@@ -329,7 +361,7 @@ public class IdentitySecurityService {
         return tokenCodec.digest(normalizeRecoveryCode(code));
     }
 
-    private static void validatePassword(String password) {
+    public static void validateNewPassword(String password) {
         if (password == null
                 || password.length() < 12
                 || password.length() > 128

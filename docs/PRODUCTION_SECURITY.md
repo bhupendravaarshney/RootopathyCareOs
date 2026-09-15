@@ -27,14 +27,17 @@ The base configuration now requires explicit database, Redis, SMTP, browser-orig
 The startup guard also rejects:
 
 - a mixed `production,local` or `production,test` profile;
+- activation of the provisional reference authorization policy, governed invitations, service identities, or MFA administration;
 - an insecure session cookie override;
 - missing dependency identities or passwords;
-- the documented local/test database, token, MFA, or object-store material;
+- the documented local/test database, token, MFA, service-credential, or object-store material;
 - a trivial repeated-byte MFA key;
 - duplicate or non-canonical browser origins;
 - an S3 HTTP override or runtime bucket creation;
 - local S3 credentials when document storage is enabled;
-- document promotion without enabled private S3 storage, an explicit policy key, scanner allow-list, and maximum scan age; and
+- document promotion without enabled private S3 storage, an explicit policy key, scanner allow-list, and maximum scan age;
+- signed document access without enabled private S3 storage, an explicit policy key, purpose allow-list, maximum URL TTL, and maximum authorization age;
+- document retention without enabled private S3 storage, runtime bucket creation disabled, an explicit policy key, purpose allow-list, minimum and maximum duration, and maximum authorization age; and
 - a non-HTTPS or credential-bearing OTLP endpoint when trace export is explicitly enabled.
 
 Errors identify the failed control but never include the supplied secret. Environment-variable names are an injection interface only: production values must come from an approved secret manager with access audit, rotation, revocation, separation of duties, and recovery procedures. They must not be committed to an env file, image, deployment manifest, log, support bundle, or CI artifact.

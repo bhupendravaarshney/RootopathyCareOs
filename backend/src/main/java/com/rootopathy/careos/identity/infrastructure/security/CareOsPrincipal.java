@@ -1,5 +1,6 @@
 package com.rootopathy.careos.identity.infrastructure.security;
 
+import com.rootopathy.careos.shared.domain.AuthenticatedActor;
 import java.io.Serial;
 import java.io.Serializable;
 import java.util.Collection;
@@ -10,7 +11,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
-public final class CareOsPrincipal implements UserDetails, CredentialsContainer, Serializable {
+public final class CareOsPrincipal implements UserDetails, CredentialsContainer, AuthenticatedActor, Serializable {
     @Serial
     private static final long serialVersionUID = 1L;
 
@@ -36,6 +37,7 @@ public final class CareOsPrincipal implements UserDetails, CredentialsContainer,
         this.mfaRequired = mfaRequired;
     }
 
+    @Override
     public UUID id() {
         return id;
     }

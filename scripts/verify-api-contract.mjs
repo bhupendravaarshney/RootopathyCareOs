@@ -11,28 +11,38 @@ export const expectedOperations = [
   ["post", "/api/v1/auth/logout", "logout"],
   ["post", "/api/v1/auth/password-reset-requests", "requestPasswordReset"],
   ["post", "/api/v1/auth/password-resets", "completePasswordReset"],
+  ["post", "/api/v1/auth/invitation-acceptances", "acceptInvitation"],
   ["post", "/api/v1/auth/mfa/enrollments", "startMfaEnrollment"],
-  [
-    "post",
-    "/api/v1/auth/mfa/enrollments/verification",
-    "verifyMfaEnrollment",
-  ],
+  ["post", "/api/v1/auth/mfa/enrollments/verification", "verifyMfaEnrollment"],
   ["post", "/api/v1/auth/mfa/challenges", "completeMfaChallenge"],
-  [
-    "post",
-    "/api/v1/auth/recent-authentications",
-    "verifyRecentAuthentication",
-  ],
-  [
-    "post",
-    "/api/v1/auth/mfa/recovery-codes",
-    "regenerateRecoveryCodes",
-  ],
+  ["post", "/api/v1/auth/recent-authentications", "verifyRecentAuthentication"],
+  ["post", "/api/v1/auth/mfa/recovery-codes", "regenerateRecoveryCodes"],
   ["get", "/api/v1/organizations", "listSelectableOrganizations"],
+  ["post", "/api/v1/auth/organization-selections", "selectOrganization"],
   [
     "post",
-    "/api/v1/auth/organization-selections",
-    "selectOrganization",
+    "/api/v1/organizations/{organizationId}/invitations",
+    "issueInvitation",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/invitations/{invitationId}/revocations",
+    "revokeInvitation",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/users/{targetUserId}/mfa-reset-requests",
+    "requestMfaAdministrativeReset",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/users/{targetUserId}/mfa-reset-requests/{approvalId}/approvals",
+    "approveMfaAdministrativeReset",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/users/{targetUserId}/mfa-reset-requests/{approvalId}/executions",
+    "executeMfaAdministrativeReset",
   ],
 ];
 
@@ -45,6 +55,19 @@ const sessionProtectedOperations = new Set([
   "regenerateRecoveryCodes",
   "listSelectableOrganizations",
   "selectOrganization",
+  "issueInvitation",
+  "revokeInvitation",
+  "requestMfaAdministrativeReset",
+  "approveMfaAdministrativeReset",
+  "executeMfaAdministrativeReset",
+]);
+
+const idempotentOperations = new Set([
+  "issueInvitation",
+  "revokeInvitation",
+  "requestMfaAdministrativeReset",
+  "approveMfaAdministrativeReset",
+  "executeMfaAdministrativeReset",
 ]);
 
 export function verifyApiContract(contract) {
@@ -115,7 +138,7 @@ export function verifyApiContract(contract) {
       );
     }
 
-    if (method === "post" && path.startsWith("/api/v1/auth/")) {
+    if (method === "post" && path.startsWith("/api/v1/")) {
       const origin = operation.parameters
         ?.map(resolved)
         .find((parameter) => parameter.name === "Origin");
@@ -135,6 +158,15 @@ export function verifyApiContract(contract) {
       assert(
         operation.security?.some((requirement) => requirement.sessionCookie),
         `${operationLabel} must require the server-side session cookie`,
+      );
+    }
+    if (idempotentOperations.has(operationId)) {
+      const idempotencyParameter = operation.parameters
+        ?.map(resolved)
+        .find((parameter) => parameter.name === "Idempotency-Key");
+      assert(
+        idempotencyParameter?.required,
+        `${operationLabel} must require the shared Idempotency-Key contract`,
       );
     }
   }
@@ -174,8 +206,7 @@ export function verifyApiContract(contract) {
   const conventions = contract["x-careos-conventions"];
   assert(conventions, "Missing x-careos-conventions policy");
   assert(
-    conventions.tenantPathPrefix ===
-      "/api/v1/organizations/{organizationId}",
+    conventions.tenantPathPrefix === "/api/v1/organizations/{organizationId}",
     "Protected business routes must use the organization tenant path prefix",
   );
   assert(
@@ -271,8 +302,7 @@ export function verifyApiContract(contract) {
         JSON.stringify(["GET", "HEAD"]) &&
       JSON.stringify(conventions.retry.statusCodes) ===
         JSON.stringify([429, 503]) &&
-      conventions.retry.responseHeader ===
-        "#/components/headers/RetryAfter" &&
+      conventions.retry.responseHeader === "#/components/headers/RetryAfter" &&
       conventions.retry.maximumDelaySeconds === 86400 &&
       conventions.retry.automaticMutationRetry === false,
     "Retries must be bounded, caller-controlled, and disabled for mutations",
@@ -286,8 +316,7 @@ export function verifyApiContract(contract) {
     "Retry-After must be bounded and declared for service unavailability",
   );
 
-  const sessionExpiryHeader =
-    contract.components?.headers?.SessionExpiresIn;
+  const sessionExpiryHeader = contract.components?.headers?.SessionExpiresIn;
   assert(
     conventions.sessionLifecycle?.responseHeader ===
       "#/components/headers/SessionExpiresIn" &&
@@ -325,8 +354,10 @@ export function verifyApiContract(contract) {
       if (!operation) {
         continue;
       }
-      const parameters = [...(pathItem.parameters ?? []), ...(operation.parameters ?? [])]
-        .map(resolved);
+      const parameters = [
+        ...(pathItem.parameters ?? []),
+        ...(operation.parameters ?? []),
+      ].map(resolved);
       assert(
         parameters.some(
           (parameter) =>

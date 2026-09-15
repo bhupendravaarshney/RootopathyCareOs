@@ -12,6 +12,8 @@ Flyway `V6__governance_evidence_and_delivery.sql` and the `governance` backend m
 
 `GovernedMutationExecutor` is the application entry point for this transaction shape. Calling the evidence, idempotency, or delivery adapters without a live writable `AuthorizedTenantContext` transaction fails closed.
 
+Flyway V15 and V17 are the first HTTP workflows bound to this executor. Invitation issue/revocation and MFA reset request/approval/execution use migration-owned operation-to-event mappings and commit their state change, exact replay response, audit row, and outbox row atomically. Every supplied event is `reference` and remains ignored unless the non-production reference policy is explicitly enabled.
+
 Flyway `V9__consumer_inbox_deduplication.sql` adds the complementary policy-neutral transaction shape for at-least-once consumption:
 
 1. `ConsumerInboxExecutor` asks `TenantAuthorizationOperations` to revalidate the worker principal's membership and approved permission and open the tenant-bound transaction.
@@ -24,7 +26,7 @@ This executor is a reusable boundary only. No message subscription, worker, tran
 
 ## Database invariants
 
-- `audit_event_definitions` and `outbox_event_definitions` are migration-owned and runtime-read-only. They are intentionally empty in production migrations until the owner approves canonical entries.
+- `audit_event_definitions` and `outbox_event_definitions` are migration-owned and runtime-read-only. V15/V17 contain bounded `reference` entries for invitation and MFA-administration verification; production preflight prevents their activation until an owner-approved migration promotes or replaces them.
 - Unknown or retired event/version pairs, incorrect subject/aggregate types, missing required payload keys, unapproved extra payload keys, and mismatched actor/organization/purpose/correlation metadata are rejected by PostgreSQL.
 - The `payload_schema` document is stored with every event definition. V6 enforces object size and top-level required/allowed keys; a full JSON Schema validator must be selected before nested schema rules are claimed as enforced.
 - General audit records are append-only, including for the table owner.
@@ -42,7 +44,7 @@ This executor is a reusable boundary only. No message subscription, worker, tran
 
 The publisher is intentionally not registered as a scheduled Spring component. Activating it requires all of the following:
 
-- an approved non-interactive service identity and permission;
+- an approved and provisioned non-interactive service identity and permission using the V16 authorization boundary;
 - an approved tenant-discovery/job-dispatch mechanism;
 - a destination-specific `OutboxTransportPort` adapter with security and contract tests;
 - approved consumer definitions and destination/subscription wiring that use the inbox boundary;
@@ -58,4 +60,4 @@ Registry content must be added only through a reviewed Flyway migration. Applica
 
 ## Verified failure paths
 
-The disposable PostgreSQL 18 suite covers atomic commit and rollback, replay, conflicting request hashes, concurrent identical requests, expired-key reuse, unknown events, payload drift, calls outside an authorized transaction, runtime registry mutation, owner-level audit/outbox/idempotency tampering, successful publication, retry, permanent failure, retry exhaustion, and dead-lettering. V9 coverage additionally proves canonical exact-delivery replay, changed-content conflict, unknown-consumer/payload rejection, callback rollback and retry, simultaneous consumer serialization, missing-transaction and tenant mismatch failure, cross-tenant SQL denial, restricted grants, missing-context invisibility, and owner-level inbox immutability.
+The disposable PostgreSQL 18 suite covers atomic commit and rollback, replay, conflicting request hashes, concurrent identical requests, expired-key reuse, unknown events, payload drift, calls outside an authorized transaction, runtime registry mutation, owner-level audit/outbox/idempotency tampering, successful publication, retry, permanent failure, retry exhaustion, and dead-lettering. V9 coverage additionally proves consumer replay/deduplication and tenant isolation. V15/V17 coverage proves exact mapped evidence for invitation and MFA maker-checker transitions, including rollback, idempotent replay, expiry, wrong actor/subject/reason, cross-tenant access, and evidence-tampering attacks.

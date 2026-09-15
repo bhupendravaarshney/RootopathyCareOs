@@ -43,6 +43,15 @@ server:
       cookie:
         secure: true
 careos:
+  authorization:
+    reference-policy-enabled: false
+  invitations:
+    enabled: false
+  service-identities:
+    enabled: false
+    credential-pepper: ${CAREOS_SERVICE_IDENTITY_CREDENTIAL_PEPPER:}
+  mfa-administration:
+    enabled: false
   security:
     allowed-origins: ${CAREOS_ALLOWED_ORIGINS}
     application-base-url: ${CAREOS_BASE_URL}

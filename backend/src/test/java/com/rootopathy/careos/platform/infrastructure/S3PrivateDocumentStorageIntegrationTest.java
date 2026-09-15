@@ -5,28 +5,41 @@ import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rootopathy.careos.platform.application.DocumentStorageException;
+import com.rootopathy.careos.platform.application.DocumentAccessOperations;
 import com.rootopathy.careos.platform.application.DocumentEvidenceOperations;
 import com.rootopathy.careos.platform.application.DocumentPromotionOperations;
 import com.rootopathy.careos.platform.application.DocumentPromotionPort;
+import com.rootopathy.careos.platform.application.DocumentRetentionOperations;
+import com.rootopathy.careos.platform.application.DocumentRetentionPort;
 import com.rootopathy.careos.platform.application.PlatformCapabilityRegistry;
 import com.rootopathy.careos.platform.application.PrivateDocumentStoragePort;
+import com.rootopathy.careos.platform.application.SignedDocumentAccessPort;
 import com.rootopathy.careos.platform.domain.CapabilityAvailability;
+import com.rootopathy.careos.platform.domain.DocumentAccessAuthorization;
+import com.rootopathy.careos.platform.domain.DocumentAccessPolicy;
 import com.rootopathy.careos.platform.domain.DocumentObjectReference;
 import com.rootopathy.careos.platform.domain.DocumentPromotionAuthorization;
+import com.rootopathy.careos.platform.domain.DocumentPromotionEvidence;
 import com.rootopathy.careos.platform.domain.DocumentPromotionPolicy;
 import com.rootopathy.careos.platform.domain.DocumentQuarantineRequest;
+import com.rootopathy.careos.platform.domain.DocumentRetentionAuthorization;
+import com.rootopathy.careos.platform.domain.DocumentRetentionPolicy;
 import com.rootopathy.careos.platform.domain.DocumentScanAttestation;
 import com.rootopathy.careos.platform.domain.MalwareScanResult;
 import com.rootopathy.careos.platform.domain.MalwareScanVerdict;
 import com.rootopathy.careos.platform.domain.PlatformCapability;
 import com.rootopathy.careos.tenancy.domain.AuthorizedTenantContext;
 import io.minio.GetObjectArgs;
+import io.minio.GetObjectRetentionArgs;
+import io.minio.IsObjectLegalHoldEnabledArgs;
 import io.minio.ListObjectsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
 import io.minio.SetBucketPolicyArgs;
 import io.minio.StatObjectArgs;
+import io.minio.messages.RetentionMode;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -437,6 +450,409 @@ class S3PrivateDocumentStorageIntegrationTest {
     }
 
     @Test
+    void signsABoundedReadOnlyUrlOnlyForTheVerifiedPrivateCleanObject() throws Exception {
+        var quarantineBucket = uniqueBucket();
+        var cleanBucket = uniqueCleanBucket();
+        var content = "synthetic signed clean document"
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        var request = request(content, "application/pdf");
+        var context = context(ORGANIZATION_ONE, "signed-access-clean");
+
+        try (var quarantine = adapter(quarantineBucket, 1024);
+                var promotion = promotionAdapter(quarantineBucket, cleanBucket, 1024);
+                var access = signedAccessAdapter(cleanBucket, 1024)) {
+            var reference = quarantine.quarantine(
+                    context, request, new ByteArrayInputStream(content));
+            var promotionAuthorization = promotionAuthorization(reference, request.sha256());
+            promotion.promote(context, promotionAuthorization);
+            var authorization = accessAuthorization(
+                    promotionEvidence(promotionAuthorization), Duration.ofSeconds(30), Instant.now());
+
+            var signed = access.createReadAccess(context, authorization);
+
+            assertThat(signed.accessGrantId()).isEqualTo(authorization.accessGrantId());
+            assertThat(signed.document()).isEqualTo(reference);
+            assertThat(signed.expiresAt()).isEqualTo(authorization.expiresAt());
+            assertThat(signed.readUrl().getRawQuery()).contains("X-Amz-Expires=30");
+            assertThat(access.status().availability()).isEqualTo(CapabilityAvailability.AVAILABLE);
+            var response = HttpClient.newHttpClient().send(
+                    HttpRequest.newBuilder(signed.readUrl()).GET().build(),
+                    HttpResponse.BodyHandlers.ofByteArray());
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.body()).isEqualTo(content);
+            var writeAttempt = HttpClient.newHttpClient().send(
+                    HttpRequest.newBuilder(signed.readUrl())
+                            .PUT(HttpRequest.BodyPublishers.ofByteArray(new byte[] {9}))
+                            .build(),
+                    HttpResponse.BodyHandlers.discarding());
+            assertThat(writeAttempt.statusCode() / 100).isNotEqualTo(2);
+
+            var direct = HttpClient.newHttpClient().send(
+                    HttpRequest.newBuilder(URI.create(
+                                    endpoint() + "/" + cleanBucket + "/"
+                                            + S3DocumentPromotionAdapter.objectKey(reference)))
+                            .GET()
+                            .build(),
+                    HttpResponse.BodyHandlers.discarding());
+            assertThat(direct.statusCode()).isIn(401, 403);
+        }
+    }
+
+    @Test
+    void signedAccessRejectsTenantPurposePolicyAgeMissingAndCorruptCleanObjects()
+            throws Exception {
+        var quarantineBucket = uniqueBucket();
+        var cleanBucket = uniqueCleanBucket();
+        var content = new byte[] {3, 1, 4, 1, 5};
+        var request = request(content, "application/octet-stream");
+        var context = context(ORGANIZATION_ONE, "signed-access-reject");
+
+        try (var quarantine = adapter(quarantineBucket, 1024);
+                var promotion = promotionAdapter(quarantineBucket, cleanBucket, 1024);
+                var access = signedAccessAdapter(cleanBucket, 1024)) {
+            var reference = quarantine.quarantine(
+                    context, request, new ByteArrayInputStream(content));
+            var promotionAuthorization = promotionAuthorization(reference, request.sha256());
+            promotion.promote(context, promotionAuthorization);
+            var evidence = promotionEvidence(promotionAuthorization);
+            var authorization = accessAuthorization(evidence, Duration.ofMinutes(5), Instant.now());
+
+            assertStorageError(
+                    "document-access-tenant-mismatch",
+                    () -> access.createReadAccess(
+                            context(ORGANIZATION_TWO, "signed-access-cross-tenant"), authorization));
+            assertStorageError(
+                    "document-access-purpose-mismatch",
+                    () -> access.createReadAccess(
+                            new AuthorizedTenantContext(
+                                    ORGANIZATION_ONE,
+                                    ACTOR_ID,
+                                    "document.export",
+                                    "signed-access-purpose"),
+                            authorization));
+
+            var changedPolicy = new DocumentAccessPolicy(
+                    "foundation.changed",
+                    Set.of("document.quarantine"),
+                    Duration.ofMinutes(10),
+                    Duration.ofSeconds(30),
+                    Duration.ofSeconds(2));
+            assertStorageError(
+                    "document-access-policy-mismatch",
+                    () -> access.createReadAccess(
+                            context,
+                            accessAuthorization(
+                                    evidence,
+                                    changedPolicy,
+                                    Duration.ofMinutes(5),
+                                    Instant.now())));
+
+            var stale = accessAuthorization(
+                    evidence, Duration.ofMinutes(5), Instant.now().minusSeconds(120));
+            assertStorageError(
+                    "document-access-authorization-expired",
+                    () -> access.createReadAccess(context, stale));
+
+            var missingReference = new DocumentObjectReference(
+                    ORGANIZATION_ONE, UUID.randomUUID(), UUID.randomUUID());
+            var missingPromotion = promotionEvidence(
+                    promotionAuthorization(missingReference, request.sha256()));
+            assertStorageError(
+                    "document-access-clean-object-not-found",
+                    () -> access.createReadAccess(
+                            context,
+                            accessAuthorization(
+                                    missingPromotion, Duration.ofMinutes(5), Instant.now())));
+
+            var corrupt = "tampered after promotion"
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            try (var administrator = client()) {
+                administrator.putObject(PutObjectArgs.builder()
+                        .bucket(cleanBucket)
+                        .object(S3DocumentPromotionAdapter.objectKey(reference))
+                        .stream(new ByteArrayInputStream(corrupt), (long) corrupt.length, -1L)
+                        .contentType("application/octet-stream")
+                        .userMetadata(java.util.Map.of(
+                                "careos-state", "clean",
+                                "careos-sha256", request.sha256()))
+                        .build());
+            }
+            assertStorageError(
+                    "document-access-clean-object-invalid",
+                    () -> access.createReadAccess(
+                            context,
+                            accessAuthorization(evidence, Duration.ofMinutes(5), Instant.now())));
+        }
+    }
+
+    @Test
+    void appliesComplianceRetentionAndLegalHoldToTheExactCleanVersion() throws Exception {
+        var quarantineBucket = uniqueBucket();
+        var cleanBucket = uniqueCleanBucket();
+        createObjectLockBucket(cleanBucket);
+        var content = "synthetic retained evidence"
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        var request = request(content, "application/pdf");
+        var context = context(ORGANIZATION_ONE, "retention-apply");
+        final DocumentObjectReference reference;
+        try (var storage = adapter(quarantineBucket, 1024)) {
+            reference = storage.quarantine(context, request, new ByteArrayInputStream(content));
+        }
+        var promotionAuthorization = promotionAuthorization(reference, request.sha256());
+        try (var promotion = promotionAdapter(quarantineBucket, cleanBucket, 1024)) {
+            assertThat(promotion.promote(context, promotionAuthorization)).isEqualTo(reference);
+        }
+        var promotionEvidence = promotionEvidence(promotionAuthorization);
+
+        try (var retention = retentionAdapter(cleanBucket, 1024)) {
+            var first = retentionAuthorization(
+                    promotionEvidence,
+                    UUID.randomUUID(),
+                    null,
+                    Instant.now().plus(Duration.ofMinutes(10)),
+                    true,
+                    Instant.now());
+            var receipt = retention.apply(context, first);
+            assertThat(receipt.document()).isEqualTo(reference);
+            assertThat(receipt.retainUntil()).isEqualTo(first.retainUntil());
+            assertThat(receipt.legalHold()).isTrue();
+            assertThat(receipt.storageVersionSha256()).matches("[0-9a-f]{64}");
+            assertThat(retention.apply(context, first)).isEqualTo(receipt);
+
+            try (var verifier = client()) {
+                var key = S3DocumentPromotionAdapter.objectKey(reference);
+                var stat = verifier.statObject(
+                        StatObjectArgs.builder().bucket(cleanBucket).object(key).build());
+                var providerRetention = verifier.getObjectRetention(
+                        GetObjectRetentionArgs.builder()
+                                .bucket(cleanBucket)
+                                .object(key)
+                                .versionId(stat.versionId())
+                                .build());
+                assertThat(providerRetention.mode()).isEqualTo(RetentionMode.COMPLIANCE);
+                assertThat(providerRetention.retainUntilDate().toInstant())
+                        .isEqualTo(first.retainUntil());
+                assertThat(verifier.isObjectLegalHoldEnabled(
+                                IsObjectLegalHoldEnabledArgs.builder()
+                                        .bucket(cleanBucket)
+                                        .object(key)
+                                        .versionId(stat.versionId())
+                                        .build()))
+                        .isTrue();
+                assertThatThrownBy(() -> verifier.removeObject(RemoveObjectArgs.builder()
+                                .bucket(cleanBucket)
+                                .object(key)
+                                .versionId(stat.versionId())
+                                .build()))
+                        .isInstanceOf(io.minio.errors.ErrorResponseException.class);
+            }
+
+            var extension = retentionAuthorization(
+                    promotionEvidence,
+                    UUID.randomUUID(),
+                    first.retentionDirectiveId(),
+                    first.retainUntil().plus(Duration.ofMinutes(5)),
+                    true,
+                    Instant.now());
+            assertThat(retention.apply(context, extension).retainUntil())
+                    .isEqualTo(extension.retainUntil());
+
+            var release = retentionAuthorization(
+                    promotionEvidence,
+                    UUID.randomUUID(),
+                    extension.retentionDirectiveId(),
+                    extension.retainUntil().plus(Duration.ofMinutes(5)),
+                    false,
+                    Instant.now());
+            assertStorageError(
+                    "document-legal-hold-release-not-supported",
+                    () -> retention.apply(context, release));
+        }
+    }
+
+    @Test
+    void retentionRejectsTenantPurposePolicyAuthorizationAndCleanObjectDrift() throws Exception {
+        var quarantineBucket = uniqueBucket();
+        var cleanBucket = uniqueCleanBucket();
+        createObjectLockBucket(cleanBucket);
+        var content = "synthetic retention rejection"
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        var request = request(content, "application/octet-stream");
+        var context = context(ORGANIZATION_ONE, "retention-reject");
+        final DocumentObjectReference reference;
+        try (var storage = adapter(quarantineBucket, 1024)) {
+            reference = storage.quarantine(context, request, new ByteArrayInputStream(content));
+        }
+        var promotionAuthorization = promotionAuthorization(reference, request.sha256());
+        try (var promotion = promotionAdapter(quarantineBucket, cleanBucket, 1024)) {
+            promotion.promote(context, promotionAuthorization);
+        }
+        var promotionEvidence = promotionEvidence(promotionAuthorization);
+        var authorization = retentionAuthorization(
+                promotionEvidence,
+                UUID.randomUUID(),
+                null,
+                Instant.now().plus(Duration.ofMinutes(10)),
+                false,
+                Instant.now());
+
+        try (var retention = retentionAdapter(cleanBucket, 1024)) {
+            assertStorageError(
+                    "document-retention-tenant-mismatch",
+                    () -> retention.apply(
+                            context(ORGANIZATION_TWO, "retention-cross-tenant"), authorization));
+            assertStorageError(
+                    "document-retention-purpose-mismatch",
+                    () -> retention.apply(
+                            new AuthorizedTenantContext(
+                                    ORGANIZATION_ONE,
+                                    ACTOR_ID,
+                                    "document.export",
+                                    "retention-purpose"),
+                            authorization));
+
+            var otherPolicy = new DocumentRetentionPolicy(
+                    "foundation.changed",
+                    Set.of("document.quarantine"),
+                    Duration.ofMinutes(1),
+                    Duration.ofDays(30),
+                    Duration.ofSeconds(30),
+                    Duration.ofSeconds(2));
+            assertStorageError(
+                    "document-retention-policy-mismatch",
+                    () -> retention.apply(
+                            context,
+                            retentionAuthorization(
+                                    promotionEvidence,
+                                    otherPolicy,
+                                    UUID.randomUUID(),
+                                    null,
+                                    Instant.now().plus(Duration.ofMinutes(10)),
+                                    false,
+                                    Instant.now())));
+
+            var staleAuthorizedAt = Instant.now().minus(Duration.ofMinutes(2));
+            assertStorageError(
+                    "document-retention-authorization-expired",
+                    () -> retention.apply(
+                            context,
+                            retentionAuthorization(
+                                    promotionEvidence,
+                                    UUID.randomUUID(),
+                                    null,
+                                    Instant.now().plus(Duration.ofMinutes(10)),
+                                    false,
+                                    staleAuthorizedAt)));
+
+            var missingReference = new DocumentObjectReference(
+                    ORGANIZATION_ONE, UUID.randomUUID(), UUID.randomUUID());
+            assertStorageError(
+                    "document-retention-clean-object-not-found",
+                    () -> retention.apply(
+                            context,
+                            retentionAuthorization(
+                                    promotionEvidenceFor(missingReference, request.sha256()),
+                                    UUID.randomUUID(),
+                                    null,
+                                    Instant.now().plus(Duration.ofMinutes(10)),
+                                    false,
+                                    Instant.now())));
+
+            var corrupt = "changed after promotion"
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            try (var administrator = client()) {
+                administrator.putObject(PutObjectArgs.builder()
+                        .bucket(cleanBucket)
+                        .object(S3DocumentPromotionAdapter.objectKey(reference))
+                        .stream(new ByteArrayInputStream(corrupt), (long) corrupt.length, -1L)
+                        .contentType("application/octet-stream")
+                        .userMetadata(java.util.Map.of(
+                                "careos-state", "clean",
+                                "careos-sha256", request.sha256()))
+                        .build());
+            }
+            assertStorageError(
+                    "document-retention-clean-object-invalid",
+                    () -> retention.apply(context, authorization));
+        }
+    }
+
+    @Test
+    void retentionActivationRequiresExplicitPolicyAndPreprovisionedObjectLock() throws Exception {
+        var quarantineBucket = uniqueBucket();
+        var cleanBucket = uniqueCleanBucket();
+        try (var administrator = client()) {
+            administrator.makeBucket(
+                    MakeBucketArgs.builder().bucket(quarantineBucket).build());
+        }
+        createObjectLockBucket(cleanBucket);
+
+        new ApplicationContextRunner()
+                .withUserConfiguration(
+                        PlatformCapabilityConfiguration.class,
+                        S3DocumentStorageConfiguration.class)
+                .withBean(
+                        DocumentEvidenceOperations.class,
+                        () -> Mockito.mock(DocumentEvidenceOperations.class))
+                .withPropertyValues(
+                        "careos.storage.s3.enabled=true",
+                        "careos.storage.s3.endpoint=" + endpoint(),
+                        "careos.storage.s3.access-key=" + ACCESS_KEY,
+                        "careos.storage.s3.secret-key=" + SECRET_KEY,
+                        "careos.storage.s3.quarantine-bucket=" + quarantineBucket,
+                        "careos.storage.s3.clean-bucket=" + cleanBucket,
+                        "careos.storage.s3.maximum-upload-bytes=1024",
+                        "careos.storage.s3.allow-http=true",
+                        "careos.storage.s3.create-bucket-if-missing=false",
+                        "careos.documents.retention.enabled=true",
+                        "careos.documents.retention.policy-key=foundation.synthetic",
+                        "careos.documents.retention.accepted-purposes=document.quarantine",
+                        "careos.documents.retention.minimum-retention=1m",
+                        "careos.documents.retention.maximum-retention=30d",
+                        "careos.documents.retention.maximum-authorization-age=30s",
+                        "careos.documents.retention.maximum-future-skew=2s")
+                .run(contextRunner -> {
+                    assertThat(contextRunner).hasNotFailed();
+                    assertThat(contextRunner).hasSingleBean(DocumentRetentionPort.class);
+                    assertThat(contextRunner).hasSingleBean(S3DocumentRetentionAdapter.class);
+                    assertThat(contextRunner).hasSingleBean(DocumentRetentionOperations.class);
+                    var registry = contextRunner.getBean(PlatformCapabilityRegistry.class);
+                    assertThat(registry.status(PlatformCapability.DOCUMENT_RETENTION)
+                                    .availability())
+                            .isEqualTo(CapabilityAvailability.AVAILABLE);
+                    assertThat(registry.statuses())
+                            .filteredOn(status -> status.availability()
+                                    == CapabilityAvailability.UNAVAILABLE)
+                            .hasSize(7);
+                });
+
+        new ApplicationContextRunner()
+                .withUserConfiguration(S3DocumentStorageConfiguration.class)
+                .withBean(
+                        DocumentEvidenceOperations.class,
+                        () -> Mockito.mock(DocumentEvidenceOperations.class))
+                .withPropertyValues(
+                        "careos.documents.retention.enabled=true",
+                        "careos.storage.s3.enabled=true",
+                        "careos.storage.s3.endpoint=" + endpoint(),
+                        "careos.storage.s3.access-key=" + ACCESS_KEY,
+                        "careos.storage.s3.secret-key=" + SECRET_KEY,
+                        "careos.storage.s3.quarantine-bucket=" + uniqueBucket(),
+                        "careos.storage.s3.clean-bucket=" + uniqueCleanBucket(),
+                        "careos.storage.s3.allow-http=true",
+                        "careos.storage.s3.create-bucket-if-missing=true",
+                        "careos.documents.retention.policy-key=foundation.synthetic",
+                        "careos.documents.retention.accepted-purposes=document.quarantine",
+                        "careos.documents.retention.minimum-retention=1m",
+                        "careos.documents.retention.maximum-retention=30d")
+                .run(contextRunner -> {
+                    assertThat(contextRunner).hasFailed();
+                    assertThat(contextRunner.getStartupFailure())
+                            .hasStackTraceContaining("pre-provisioned Object Lock");
+                });
+    }
+
+    @Test
     void promotionActivationRequiresExplicitPolicyAndReplacesOnlyItsFailClosedPort() {
         var quarantineBucket = uniqueBucket();
         var cleanBucket = uniqueCleanBucket();
@@ -496,6 +912,70 @@ class S3PrivateDocumentStorageIntegrationTest {
                     assertThat(context).hasFailed();
                     assertThat(context.getStartupFailure())
                             .hasStackTraceContaining("Document promotion policy is invalid");
+                });
+    }
+
+    @Test
+    void signedAccessActivationRequiresExplicitPolicyAndReplacesOnlyItsFailClosedPort() {
+        var quarantineBucket = uniqueBucket();
+        var cleanBucket = uniqueCleanBucket();
+        new ApplicationContextRunner()
+                .withUserConfiguration(
+                        PlatformCapabilityConfiguration.class,
+                        S3DocumentStorageConfiguration.class)
+                .withBean(
+                        DocumentEvidenceOperations.class,
+                        () -> Mockito.mock(DocumentEvidenceOperations.class))
+                .withPropertyValues(
+                        "careos.storage.s3.enabled=true",
+                        "careos.storage.s3.endpoint=" + endpoint(),
+                        "careos.storage.s3.access-key=" + ACCESS_KEY,
+                        "careos.storage.s3.secret-key=" + SECRET_KEY,
+                        "careos.storage.s3.quarantine-bucket=" + quarantineBucket,
+                        "careos.storage.s3.clean-bucket=" + cleanBucket,
+                        "careos.storage.s3.maximum-upload-bytes=1024",
+                        "careos.storage.s3.allow-http=true",
+                        "careos.storage.s3.create-bucket-if-missing=true",
+                        "careos.documents.signed-access.enabled=true",
+                        "careos.documents.signed-access.policy-key=foundation.synthetic",
+                        "careos.documents.signed-access.accepted-purposes=document.quarantine",
+                        "careos.documents.signed-access.maximum-ttl=10m",
+                        "careos.documents.signed-access.maximum-authorization-age=30s",
+                        "careos.documents.signed-access.maximum-future-skew=2s")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).hasSingleBean(SignedDocumentAccessPort.class);
+                    assertThat(context).hasSingleBean(S3SignedDocumentAccessAdapter.class);
+                    assertThat(context).hasSingleBean(DocumentAccessOperations.class);
+                    var registry = context.getBean(PlatformCapabilityRegistry.class);
+                    assertThat(registry.status(PlatformCapability.SIGNED_DOCUMENT_ACCESS)
+                                    .availability())
+                            .isEqualTo(CapabilityAvailability.AVAILABLE);
+                    assertThat(registry.statuses())
+                            .filteredOn(status -> status.availability()
+                                    == CapabilityAvailability.UNAVAILABLE)
+                            .hasSize(7);
+                });
+
+        new ApplicationContextRunner()
+                .withUserConfiguration(S3DocumentStorageConfiguration.class)
+                .withBean(
+                        DocumentEvidenceOperations.class,
+                        () -> Mockito.mock(DocumentEvidenceOperations.class))
+                .withPropertyValues(
+                        "careos.documents.signed-access.enabled=true",
+                        "careos.storage.s3.enabled=true",
+                        "careos.storage.s3.endpoint=" + endpoint(),
+                        "careos.storage.s3.access-key=" + ACCESS_KEY,
+                        "careos.storage.s3.secret-key=" + SECRET_KEY,
+                        "careos.storage.s3.quarantine-bucket=" + uniqueBucket(),
+                        "careos.storage.s3.clean-bucket=" + uniqueCleanBucket(),
+                        "careos.storage.s3.allow-http=true",
+                        "careos.storage.s3.create-bucket-if-missing=true")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .hasStackTraceContaining("Signed document access policy is invalid");
                 });
     }
 
@@ -569,6 +1049,39 @@ class S3PrivateDocumentStorageIntegrationTest {
         return adapter;
     }
 
+    private static S3SignedDocumentAccessAdapter signedAccessAdapter(
+            String cleanBucket, long maximumBytes) {
+        var adapter = new S3SignedDocumentAccessAdapter(
+                client(),
+                URI.create(endpoint()),
+                cleanBucket,
+                maximumBytes,
+                true,
+                accessPolicy(),
+                Clock.systemUTC());
+        adapter.initialize();
+        return adapter;
+    }
+
+    private static S3DocumentRetentionAdapter retentionAdapter(
+            String cleanBucket, long maximumBytes) {
+        var adapter = new S3DocumentRetentionAdapter(
+                client(),
+                cleanBucket,
+                maximumBytes,
+                retentionPolicy(),
+                Clock.systemUTC());
+        adapter.initialize();
+        return adapter;
+    }
+
+    private static void createObjectLockBucket(String bucket) throws Exception {
+        try (var administrator = client()) {
+            administrator.makeBucket(
+                    MakeBucketArgs.builder().bucket(bucket).objectLock(true).build());
+        }
+    }
+
     private static MinioClient client() {
         return MinioClient.builder()
                 .endpoint(endpoint())
@@ -640,6 +1153,105 @@ class S3PrivateDocumentStorageIntegrationTest {
                 "foundation.synthetic",
                 Set.of("clamav"),
                 Duration.ofMinutes(5),
+                Duration.ofSeconds(2));
+    }
+
+    private static DocumentPromotionEvidence promotionEvidence(
+            DocumentPromotionAuthorization authorization) {
+        return new DocumentPromotionEvidence(
+                authorization.scanAttestation(),
+                authorization.policyKey(),
+                authorization.acceptedScannerKeys(),
+                authorization.maximumScanAge(),
+                authorization.maximumFutureSkew(),
+                Instant.now().minusSeconds(1));
+    }
+
+    private static DocumentPromotionEvidence promotionEvidenceFor(
+            DocumentObjectReference reference, String sha256) {
+        return promotionEvidence(promotionAuthorization(reference, sha256));
+    }
+
+    private static DocumentAccessAuthorization accessAuthorization(
+            DocumentPromotionEvidence promotion, Duration requestedTtl, Instant authorizedAt) {
+        return accessAuthorization(promotion, accessPolicy(), requestedTtl, authorizedAt);
+    }
+
+    private static DocumentAccessAuthorization accessAuthorization(
+            DocumentPromotionEvidence promotion,
+            DocumentAccessPolicy policy,
+            Duration requestedTtl,
+            Instant authorizedAt) {
+        return new DocumentAccessAuthorization(
+                UUID.randomUUID(),
+                promotion,
+                policy.policyKey(),
+                policy.acceptedPurposes(),
+                requestedTtl,
+                policy.maximumTtl(),
+                policy.maximumAuthorizationAge(),
+                policy.maximumFutureSkew(),
+                "document.quarantine",
+                authorizedAt);
+    }
+
+    private static DocumentAccessPolicy accessPolicy() {
+        return new DocumentAccessPolicy(
+                "foundation.synthetic",
+                Set.of("document.quarantine"),
+                Duration.ofMinutes(10),
+                Duration.ofSeconds(30),
+                Duration.ofSeconds(2));
+    }
+
+    private static DocumentRetentionAuthorization retentionAuthorization(
+            DocumentPromotionEvidence promotion,
+            UUID directiveId,
+            UUID previousDirectiveId,
+            Instant retainUntil,
+            boolean legalHold,
+            Instant authorizedAt) {
+        return retentionAuthorization(
+                promotion,
+                retentionPolicy(),
+                directiveId,
+                previousDirectiveId,
+                retainUntil,
+                legalHold,
+                authorizedAt);
+    }
+
+    private static DocumentRetentionAuthorization retentionAuthorization(
+            DocumentPromotionEvidence promotion,
+            DocumentRetentionPolicy policy,
+            UUID directiveId,
+            UUID previousDirectiveId,
+            Instant retainUntil,
+            boolean legalHold,
+            Instant authorizedAt) {
+        return new DocumentRetentionAuthorization(
+                directiveId,
+                promotion,
+                previousDirectiveId,
+                policy.policyKey(),
+                policy.acceptedPurposes(),
+                policy.minimumRetention(),
+                policy.maximumRetention(),
+                policy.maximumAuthorizationAge(),
+                policy.maximumFutureSkew(),
+                retainUntil,
+                legalHold,
+                "document.quarantine",
+                authorizedAt);
+    }
+
+    private static DocumentRetentionPolicy retentionPolicy() {
+        return new DocumentRetentionPolicy(
+                "foundation.synthetic",
+                Set.of("document.quarantine"),
+                Duration.ofMinutes(1),
+                Duration.ofDays(30),
+                Duration.ofSeconds(30),
                 Duration.ofSeconds(2));
     }
 

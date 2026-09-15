@@ -1,8 +1,8 @@
 package com.rootopathy.careos.tenancy.api;
 
-import com.rootopathy.careos.identity.infrastructure.security.CareOsPrincipal;
 import com.rootopathy.careos.shared.api.ApiProblemException;
 import com.rootopathy.careos.shared.api.CorrelationIdFilter;
+import com.rootopathy.careos.shared.domain.AuthenticatedActor;
 import com.rootopathy.careos.tenancy.application.OrganizationSelectionService;
 import com.rootopathy.careos.tenancy.domain.OrganizationAccess;
 import jakarta.servlet.http.HttpServletRequest;
@@ -70,8 +70,8 @@ public final class OrganizationSelectionController {
                 .body(OrganizationAccessResponse.from(selected, true));
     }
 
-    private static CareOsPrincipal requirePrincipal(Authentication authentication) {
-        if (authentication == null || !(authentication.getPrincipal() instanceof CareOsPrincipal principal)) {
+    private static AuthenticatedActor requirePrincipal(Authentication authentication) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof AuthenticatedActor principal)) {
             throw new ApiProblemException(
                     HttpStatus.UNAUTHORIZED,
                     "authentication-required",

@@ -1,4 +1,10 @@
 import type {
+  AcceptInvitationData,
+  AcceptInvitationResponse,
+  AcceptInvitationResponses,
+  ApproveMfaAdministrativeResetData,
+  ApproveMfaAdministrativeResetResponse,
+  ApproveMfaAdministrativeResetResponses,
   CompleteMfaChallengeData,
   CompleteMfaChallengeResponse,
   CompleteMfaChallengeResponses,
@@ -6,6 +12,9 @@ import type {
   CompletePasswordResetResponse,
   CompletePasswordResetResponses,
   CsrfToken,
+  ExecuteMfaAdministrativeResetData,
+  ExecuteMfaAdministrativeResetResponse,
+  ExecuteMfaAdministrativeResetResponses,
   GetAuthenticationSessionData,
   GetAuthenticationSessionResponse,
   GetAuthenticationSessionResponses,
@@ -15,6 +24,9 @@ import type {
   IssueCsrfTokenData,
   IssueCsrfTokenResponse,
   IssueCsrfTokenResponses,
+  IssueInvitationData,
+  IssueInvitationResponse,
+  IssueInvitationResponses,
   ListPrototypeScreensData,
   ListPrototypeScreensResponse,
   ListPrototypeScreensResponses,
@@ -33,6 +45,12 @@ import type {
   RegenerateRecoveryCodesResponses,
   RequestPasswordResetData,
   RequestPasswordResetResponses,
+  RequestMfaAdministrativeResetData,
+  RequestMfaAdministrativeResetResponse,
+  RequestMfaAdministrativeResetResponses,
+  RevokeInvitationData,
+  RevokeInvitationResponse,
+  RevokeInvitationResponses,
   SelectOrganizationData,
   SelectOrganizationResponse,
   SelectOrganizationResponses,
@@ -49,7 +67,9 @@ import type {
 
 const ACCEPTED_RESPONSE_TYPES = 'application/json, application/problem+json';
 const CORRELATION_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
+const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{16,128}$/;
 const STRONG_ETAG_PATTERN = /^"[A-Za-z0-9._:-]{1,128}"$/;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_RETRY_AFTER_SECONDS = 86_400;
 const SESSION_EXPIRY_HEADER = 'X-CareOS-Session-Expires-In';
 const MAX_SESSION_EXPIRY_SECONDS = 2_147_483_647;
@@ -57,6 +77,16 @@ const MAX_SESSION_EXPIRY_SECONDS = 2_147_483_647;
 type ResponseStatus<T> = Extract<keyof T, number>;
 
 const endpoints = {
+  acceptInvitation: {
+    path: '/api/v1/auth/invitation-acceptances' satisfies AcceptInvitationData['url'],
+    successStatuses: [200, 201] satisfies readonly ResponseStatus<AcceptInvitationResponses>[],
+  },
+  approveMfaAdministrativeReset: {
+    path: '/api/v1/organizations/{organizationId}/users/{targetUserId}/mfa-reset-requests/{approvalId}/approvals' satisfies ApproveMfaAdministrativeResetData['url'],
+    successStatuses: [
+      200,
+    ] satisfies readonly ResponseStatus<ApproveMfaAdministrativeResetResponses>[],
+  },
   completeMfaChallenge: {
     path: '/api/v1/auth/mfa/challenges' satisfies CompleteMfaChallengeData['url'],
     successStatuses: [200] satisfies readonly ResponseStatus<CompleteMfaChallengeResponses>[],
@@ -64,6 +94,12 @@ const endpoints = {
   completePasswordReset: {
     path: '/api/v1/auth/password-resets' satisfies CompletePasswordResetData['url'],
     successStatuses: [204] satisfies readonly ResponseStatus<CompletePasswordResetResponses>[],
+  },
+  executeMfaAdministrativeReset: {
+    path: '/api/v1/organizations/{organizationId}/users/{targetUserId}/mfa-reset-requests/{approvalId}/executions' satisfies ExecuteMfaAdministrativeResetData['url'],
+    successStatuses: [
+      200,
+    ] satisfies readonly ResponseStatus<ExecuteMfaAdministrativeResetResponses>[],
   },
   getAuthenticationSession: {
     path: '/api/v1/auth/session' satisfies GetAuthenticationSessionData['url'],
@@ -76,6 +112,10 @@ const endpoints = {
   issueCsrfToken: {
     path: '/api/v1/auth/csrf' satisfies IssueCsrfTokenData['url'],
     successStatuses: [200] satisfies readonly ResponseStatus<IssueCsrfTokenResponses>[],
+  },
+  issueInvitation: {
+    path: '/api/v1/organizations/{organizationId}/invitations' satisfies IssueInvitationData['url'],
+    successStatuses: [201] satisfies readonly ResponseStatus<IssueInvitationResponses>[],
   },
   listPrototypeScreens: {
     path: '/api/public/prototype-screens' satisfies ListPrototypeScreensData['url'],
@@ -102,6 +142,16 @@ const endpoints = {
   requestPasswordReset: {
     path: '/api/v1/auth/password-reset-requests' satisfies RequestPasswordResetData['url'],
     successStatuses: [202] satisfies readonly ResponseStatus<RequestPasswordResetResponses>[],
+  },
+  requestMfaAdministrativeReset: {
+    path: '/api/v1/organizations/{organizationId}/users/{targetUserId}/mfa-reset-requests' satisfies RequestMfaAdministrativeResetData['url'],
+    successStatuses: [
+      201,
+    ] satisfies readonly ResponseStatus<RequestMfaAdministrativeResetResponses>[],
+  },
+  revokeInvitation: {
+    path: '/api/v1/organizations/{organizationId}/invitations/{invitationId}/revocations' satisfies RevokeInvitationData['url'],
+    successStatuses: [200] satisfies readonly ResponseStatus<RevokeInvitationResponses>[],
   },
   selectOrganization: {
     path: '/api/v1/auth/organization-selections' satisfies SelectOrganizationData['url'],
@@ -166,12 +216,29 @@ export type CareOsApiClientOptions = {
 
 type RequestDescriptor = {
   body?: unknown;
+  idempotencyKey?: string;
   method: 'GET' | 'POST';
   path: string;
   responseBody: 'empty' | 'json';
   signal?: AbortSignal;
   successStatuses: readonly number[];
 };
+
+function requireUuid(value: string, name: string): string {
+  if (!UUID_PATTERN.test(value)) {
+    throw new Error(`${name} must be a UUID.`);
+  }
+  return value;
+}
+
+function requireIdempotencyKey(value: string): string {
+  if (!IDEMPOTENCY_KEY_PATTERN.test(value)) {
+    throw new Error(
+      'The idempotency key must contain 16 to 128 letters, digits, periods, underscores, colons, or hyphens.',
+    );
+  }
+  return value;
+}
 
 function normalizeBaseUrl(value: string): string {
   const candidate = value.trim();
@@ -368,6 +435,9 @@ export class CareOsApiClient {
     });
     if (descriptor.body !== undefined) {
       headers.set('Content-Type', 'application/json');
+    }
+    if (descriptor.idempotencyKey !== undefined) {
+      headers.set('Idempotency-Key', descriptor.idempotencyKey);
     }
 
     try {
@@ -605,6 +675,9 @@ export class CareOsApiClient {
     if (descriptor.body !== undefined) {
       headers.set('Content-Type', 'application/json');
     }
+    if (descriptor.idempotencyKey !== undefined) {
+      headers.set('Idempotency-Key', descriptor.idempotencyKey);
+    }
 
     try {
       const requestStartedAt = this.#now();
@@ -718,6 +791,132 @@ export class CareOsApiClient {
       responseBody: 'empty',
       signal: options.signal,
       successStatuses: endpoints.completePasswordReset.successStatuses,
+    });
+  }
+
+  acceptInvitation(body: AcceptInvitationData['body'], options: ApiRequestOptions = {}) {
+    return this.#mutation<AcceptInvitationResponse>({
+      body,
+      path: relativeEndpointPath(endpoints.acceptInvitation.path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.acceptInvitation.successStatuses,
+    });
+  }
+
+  issueInvitation(
+    organizationId: string,
+    body: IssueInvitationData['body'],
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.issueInvitation.path.replace(
+      '{organizationId}',
+      requireUuid(organizationId, 'organizationId'),
+    ) as `/api/v1/organizations/${string}/invitations`;
+    return this.#mutation<IssueInvitationResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.issueInvitation.successStatuses,
+    });
+  }
+
+  revokeInvitation(
+    organizationId: string,
+    invitationId: string,
+    body: RevokeInvitationData['body'],
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.revokeInvitation.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace(
+        '{invitationId}',
+        requireUuid(invitationId, 'invitationId'),
+      ) as `/api/v1/organizations/${string}/invitations/${string}/revocations`;
+    return this.#mutation<RevokeInvitationResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.revokeInvitation.successStatuses,
+    });
+  }
+
+  requestMfaAdministrativeReset(
+    organizationId: string,
+    targetUserId: string,
+    body: RequestMfaAdministrativeResetData['body'],
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.requestMfaAdministrativeReset.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace(
+        '{targetUserId}',
+        requireUuid(targetUserId, 'targetUserId'),
+      ) as `/api/v1/organizations/${string}/users/${string}/mfa-reset-requests`;
+    return this.#mutation<RequestMfaAdministrativeResetResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.requestMfaAdministrativeReset.successStatuses,
+    });
+  }
+
+  approveMfaAdministrativeReset(
+    organizationId: string,
+    targetUserId: string,
+    approvalId: string,
+    body: ApproveMfaAdministrativeResetData['body'],
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.approveMfaAdministrativeReset.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace('{targetUserId}', requireUuid(targetUserId, 'targetUserId'))
+      .replace(
+        '{approvalId}',
+        requireUuid(approvalId, 'approvalId'),
+      ) as `/api/v1/organizations/${string}/users/${string}/mfa-reset-requests/${string}/approvals`;
+    return this.#mutation<ApproveMfaAdministrativeResetResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.approveMfaAdministrativeReset.successStatuses,
+    });
+  }
+
+  executeMfaAdministrativeReset(
+    organizationId: string,
+    targetUserId: string,
+    approvalId: string,
+    body: ExecuteMfaAdministrativeResetData['body'],
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.executeMfaAdministrativeReset.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace('{targetUserId}', requireUuid(targetUserId, 'targetUserId'))
+      .replace(
+        '{approvalId}',
+        requireUuid(approvalId, 'approvalId'),
+      ) as `/api/v1/organizations/${string}/users/${string}/mfa-reset-requests/${string}/executions`;
+    return this.#mutation<ExecuteMfaAdministrativeResetResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.executeMfaAdministrativeReset.successStatuses,
     });
   }
 

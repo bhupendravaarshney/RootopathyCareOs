@@ -6,8 +6,8 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
- * Revalidates active membership and a migration-owned permission mapping before running work in
- * the same tenant-bound transaction.
+ * Revalidates active membership and a migration-owned operation/permission mapping before running
+ * work in the same tenant-bound transaction.
  */
 public interface TenantAuthorizationOperations {
     <T> T execute(

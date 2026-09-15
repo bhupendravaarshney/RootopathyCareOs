@@ -8,6 +8,7 @@ import com.rootopathy.careos.governance.application.IdempotencyOperations;
 import com.rootopathy.careos.governance.domain.IdempotencyCommand;
 import com.rootopathy.careos.governance.domain.IdempotencyOutcome;
 import com.rootopathy.careos.governance.domain.IdempotentResponse;
+import com.rootopathy.careos.shared.domain.UuidV7Generator;
 import com.rootopathy.careos.tenancy.domain.AuthorizedTenantContext;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -44,7 +45,7 @@ public class JdbcIdempotencyOperations implements IdempotencyOperations {
         }
         deleteExpiredMatchingRecord(context, command, databaseNow);
 
-        var recordId = UUID.randomUUID();
+        var recordId = UuidV7Generator.randomUuid();
         var inserted = jdbcTemplate.update(
                 """
                 INSERT INTO idempotency_records

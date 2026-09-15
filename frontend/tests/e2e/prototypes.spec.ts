@@ -85,7 +85,7 @@ for (const { module, count, start } of routeGroups) {
   });
 }
 
-test('identity and fail-closed invitation states are accessible', async ({ page }) => {
+test('identity and governed invitation states are accessible', async ({ page }) => {
   test.setTimeout(routeSweepTimeout);
   let state: 'anonymous' | 'authenticated' | 'mfa_required' = 'anonymous';
   let selected = false;
@@ -113,9 +113,9 @@ test('identity and fail-closed invitation states are accessible', async ({ page 
   await expect(page.getByRole('heading', { name: 'Choose a new password' })).toBeVisible();
   await expectNoSeriousViolations(page, 'password-reset completion');
 
-  await page.goto('/#/M1-02');
-  await expect(page.getByRole('heading', { name: 'Invitation flow is not enabled' })).toBeVisible();
-  await expectNoSeriousViolations(page, 'M1-02 unavailable invitation');
+  await page.goto('/#/accept-invitation?token=Case_Sensitive-Invitation-Token-1234567890');
+  await expect(page.getByRole('heading', { name: 'Accept your CareOS invitation' })).toBeVisible();
+  await expectNoSeriousViolations(page, 'M1-02 invitation acceptance');
 
   state = 'mfa_required';
   await page.goto('/?identity=mfa#/M1-03');
@@ -129,6 +129,10 @@ test('identity and fail-closed invitation states are accessible', async ({ page 
   await expectNoSeriousViolations(page, 'M1-04 organization selection');
 
   selected = true;
+  await page.goto('/?identity=invitations#/M1-02');
+  await expect(page.getByRole('heading', { name: 'Organization invitations' })).toBeVisible();
+  await expectNoSeriousViolations(page, 'M1-02 invitation administration');
+
   await page.goto('/?identity=mfa-administration#/M1-03');
   await expect(page.getByRole('heading', { name: 'Multi-factor authentication' })).toBeVisible();
   await expectNoSeriousViolations(page, 'M1-03 MFA administration');
@@ -254,6 +258,80 @@ test('recent authentication gates MFA enrollment and one-time recovery-code disp
   await page.getByRole('button', { name: 'I have stored these codes securely' }).click();
   await expect(page.getByText('Authenticator enabled')).toBeVisible();
   await expect(page.getByText('2345-6789-ABCD')).toHaveCount(0);
+});
+
+test('administrator MFA reset uses the checked maker-checker transition client', async ({
+  page,
+}) => {
+  const targetUserId = '88888888-8888-4888-8888-888888888888';
+  const approvalId = '99999999-9999-4999-8999-999999999999';
+  const expiresAt = '2026-09-16T12:00:00Z';
+  await page.route('**/api/v1/**', async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    const method = request.method();
+    if (method === 'GET' && path === '/api/v1/auth/session') {
+      await jsonResponse(route, authenticatedSession);
+      return;
+    }
+    if (method === 'GET' && path === '/api/v1/organizations') {
+      await jsonResponse(route, [organization]);
+      return;
+    }
+    if (method === 'GET' && path === '/api/v1/auth/csrf') {
+      await jsonResponse(route, {
+        headerName: 'X-XSRF-TOKEN',
+        parameterName: '_csrf',
+        token: 'mfa-reset-csrf-token',
+      });
+      return;
+    }
+    const requestPath = `/api/v1/organizations/${organization.id}/users/${targetUserId}/mfa-reset-requests`;
+    if (method === 'POST' && path === requestPath) {
+      expect(request.postDataJSON()).toEqual({
+        reason: 'Verified lost authenticator on support case CARE-42',
+      });
+      expect(request.headers()['idempotency-key']).toMatch(/^mfa-request:[0-9a-f-]{36}$/);
+      await jsonResponse(route, { approvalId, expiresAt, status: 'pending', targetUserId }, 201);
+      return;
+    }
+    if (method === 'POST' && path === `${requestPath}/${approvalId}/approvals`) {
+      expect(request.postDataJSON()).toEqual({
+        reason: 'Identity and support case independently verified',
+      });
+      expect(request.headers()['idempotency-key']).toMatch(/^mfa-approve:[0-9a-f-]{36}$/);
+      await jsonResponse(route, { approvalId, expiresAt, status: 'approved', targetUserId });
+      return;
+    }
+    if (method === 'POST' && path === `${requestPath}/${approvalId}/executions`) {
+      expect(request.postDataJSON()).toEqual({
+        reason: 'Verified lost authenticator on support case CARE-42',
+      });
+      expect(request.headers()['idempotency-key']).toMatch(/^mfa-execute:[0-9a-f-]{36}$/);
+      await jsonResponse(route, { approvalId, expiresAt, status: 'reset', targetUserId });
+      return;
+    }
+    await route.abort('failed');
+  });
+
+  await page.goto('/#/M1-03');
+  await page.getByLabel('Target user ID').fill(targetUserId);
+  await page.getByLabel('Reset reason').fill('Verified lost authenticator on support case CARE-42');
+  await page.getByRole('button', { name: 'Request independent approval' }).click();
+  await expect(page.getByText(/Workflow status:/)).toContainText('pending');
+
+  await page.getByLabel('Workflow action').selectOption('approve');
+  await page
+    .getByLabel('Independent decision reason')
+    .fill('Identity and support case independently verified');
+  await page.getByRole('button', { name: 'Approve as independent checker' }).click();
+  await expect(page.getByText(/Workflow status:/)).toContainText('approved');
+
+  await page.getByLabel('Workflow action').selectOption('execute');
+  await page.getByLabel('Reset reason').fill('Verified lost authenticator on support case CARE-42');
+  await page.getByRole('button', { name: 'Execute approved reset' }).click();
+  await expect(page.getByText(/Workflow status:/)).toContainText('reset');
+  await expectNoSeriousViolations(page, 'M1-03 administrative MFA reset');
 });
 
 test('anonymous login, organization selection, and logout use the checked browser client', async ({

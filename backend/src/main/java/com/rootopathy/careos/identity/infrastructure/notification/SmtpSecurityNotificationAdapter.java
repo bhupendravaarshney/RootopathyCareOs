@@ -30,4 +30,29 @@ public final class SmtpSecurityNotificationAdapter implements SecurityNotificati
                 + "\n\nIf you did not request this, no action is required.");
         mailSender.send(message);
     }
+
+    @Override
+    public void sendInvitation(String email, String rawToken, Instant expiresAt) {
+        var message = new SimpleMailMessage();
+        message.setFrom(properties.mailFrom());
+        message.setTo(email);
+        message.setSubject("Your CareOS organization invitation");
+        message.setText("Use this one-time invitation before " + expiresAt + ":\n\n"
+                + properties.applicationBaseUrl()
+                + "/#/accept-invitation?token="
+                + rawToken
+                + "\n\nIf you were not expecting this invitation, no action is required.");
+        mailSender.send(message);
+    }
+
+    @Override
+    public void sendMfaAdministrativelyReset(String email) {
+        var message = new SimpleMailMessage();
+        message.setFrom(properties.mailFrom());
+        message.setTo(email);
+        message.setSubject("Your CareOS MFA was reset");
+        message.setText(
+                "An independently approved administrator reset removed your CareOS MFA method and signed out existing sessions. Sign in with your password and enroll MFA again. Contact support immediately if this was unexpected.");
+        mailSender.send(message);
+    }
 }

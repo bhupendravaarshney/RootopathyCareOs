@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { careOsApi, type ApiFailure, type SessionLifecycleEvent } from '../../api/client';
-import type { MfaEnrollment, OrganizationAccess, SessionState, User } from '../../api/generated';
+import type {
+  InvitationAcceptance,
+  InvitationMutation,
+  MfaEnrollment,
+  MfaResetMutation,
+  OrganizationAccess,
+  SessionState,
+  User,
+} from '../../api/generated';
 import { SessionContext } from './session-context';
 import type {
   SessionAction,
@@ -97,6 +105,47 @@ function validRecoveryCodes(value: unknown): value is { recoveryCodes: string[] 
     return false;
   }
   return new Set(value.recoveryCodes).size === value.recoveryCodes.length;
+}
+
+function validInvitationMutation(value: unknown): value is InvitationMutation {
+  return (
+    isRecord(value) &&
+    typeof value.invitationId === 'string' &&
+    UUID_PATTERN.test(value.invitationId) &&
+    (value.status === 'pending' || value.status === 'revoked') &&
+    typeof value.roleKey === 'string' &&
+    value.roleKey.length > 0 &&
+    typeof value.expiresAt === 'string' &&
+    Number.isFinite(Date.parse(value.expiresAt))
+  );
+}
+
+function validInvitationAcceptance(value: unknown): value is InvitationAcceptance {
+  return (
+    isRecord(value) &&
+    typeof value.invitationId === 'string' &&
+    UUID_PATTERN.test(value.invitationId) &&
+    typeof value.organizationId === 'string' &&
+    UUID_PATTERN.test(value.organizationId) &&
+    typeof value.userId === 'string' &&
+    UUID_PATTERN.test(value.userId) &&
+    typeof value.roleKey === 'string' &&
+    value.roleKey.length > 0 &&
+    (value.accountLink === 'existing' || value.accountLink === 'created')
+  );
+}
+
+function validMfaResetMutation(value: unknown): value is MfaResetMutation {
+  return (
+    isRecord(value) &&
+    typeof value.approvalId === 'string' &&
+    UUID_PATTERN.test(value.approvalId) &&
+    typeof value.targetUserId === 'string' &&
+    UUID_PATTERN.test(value.targetUserId) &&
+    (value.status === 'pending' || value.status === 'approved' || value.status === 'reset') &&
+    typeof value.expiresAt === 'string' &&
+    Number.isFinite(Date.parse(value.expiresAt))
+  );
 }
 
 type FullyAuthenticatedMachine =
@@ -584,6 +633,253 @@ export function SessionProvider({ children, client = careOsApi }: SessionProvide
     [clearSessionDeadline, client, pendingAction],
   );
 
+  const acceptInvitation = useCallback(
+    async (token: string, newPassword?: string) => {
+      if (pendingAction) {
+        return null;
+      }
+      const operation = ++identityOperation.current;
+      setActionIssue(null);
+      setPendingAction('accept-invitation');
+      const result = await client.acceptInvitation({
+        token,
+        ...(newPassword === undefined ? {} : { newPassword }),
+      });
+      if (operation !== identityOperation.current) {
+        return null;
+      }
+      if (!result.ok) {
+        if (result.status === 401 && hasAuthenticatedSession(machine)) {
+          lockEndedSession();
+        } else {
+          setActionIssue(issueFromFailure(result));
+          setPendingAction(null);
+        }
+        return null;
+      }
+      if (!validInvitationAcceptance(result.data)) {
+        failOnInvalidActionResponse(
+          result.correlationId,
+          'The invitation-acceptance response did not contain a valid account link.',
+        );
+        return null;
+      }
+      setPendingAction(null);
+      return result.data;
+    },
+    [client, failOnInvalidActionResponse, lockEndedSession, machine, pendingAction],
+  );
+
+  const issueInvitation = useCallback(
+    async ({
+      idempotencyKey,
+      ...request
+    }: Parameters<SessionContextValue['issueInvitation']>[0]) => {
+      if (machine.phase !== 'ready' || pendingAction) {
+        return null;
+      }
+      const operation = ++identityOperation.current;
+      setActionIssue(null);
+      setPendingAction('issue-invitation');
+      const result = await client.issueInvitation(
+        machine.selectedOrganization.id,
+        request,
+        idempotencyKey,
+      );
+      if (operation !== identityOperation.current) {
+        return null;
+      }
+      if (!result.ok) {
+        handleAuthenticatedActionFailure(result);
+        return null;
+      }
+      if (!validInvitationMutation(result.data) || result.data.status !== 'pending') {
+        failOnInvalidActionResponse(
+          result.correlationId,
+          'The invitation-issuance response did not contain a valid pending invitation.',
+        );
+        return null;
+      }
+      setPendingAction(null);
+      return result.data;
+    },
+    [client, failOnInvalidActionResponse, handleAuthenticatedActionFailure, machine, pendingAction],
+  );
+
+  const revokeInvitation = useCallback(
+    async ({
+      idempotencyKey,
+      invitationId,
+      ...request
+    }: Parameters<SessionContextValue['revokeInvitation']>[0]) => {
+      if (machine.phase !== 'ready' || pendingAction) {
+        return null;
+      }
+      const operation = ++identityOperation.current;
+      setActionIssue(null);
+      setPendingAction('revoke-invitation');
+      const result = await client.revokeInvitation(
+        machine.selectedOrganization.id,
+        invitationId,
+        request,
+        idempotencyKey,
+      );
+      if (operation !== identityOperation.current) {
+        return null;
+      }
+      if (!result.ok) {
+        handleAuthenticatedActionFailure(result);
+        return null;
+      }
+      if (
+        !validInvitationMutation(result.data) ||
+        result.data.status !== 'revoked' ||
+        result.data.invitationId !== invitationId
+      ) {
+        failOnInvalidActionResponse(
+          result.correlationId,
+          'The invitation-revocation response did not confirm the requested invitation.',
+        );
+        return null;
+      }
+      setPendingAction(null);
+      return result.data;
+    },
+    [client, failOnInvalidActionResponse, handleAuthenticatedActionFailure, machine, pendingAction],
+  );
+
+  const requestMfaAdministrativeReset = useCallback(
+    async ({
+      idempotencyKey,
+      targetUserId,
+      ...request
+    }: Parameters<SessionContextValue['requestMfaAdministrativeReset']>[0]) => {
+      if (machine.phase !== 'ready' || pendingAction) {
+        return null;
+      }
+      const operation = ++identityOperation.current;
+      setActionIssue(null);
+      setPendingAction('request-mfa-administrative-reset');
+      const result = await client.requestMfaAdministrativeReset(
+        machine.selectedOrganization.id,
+        targetUserId,
+        request,
+        idempotencyKey,
+      );
+      if (operation !== identityOperation.current) {
+        return null;
+      }
+      if (!result.ok) {
+        handleAuthenticatedActionFailure(result);
+        return null;
+      }
+      if (
+        !validMfaResetMutation(result.data) ||
+        result.data.status !== 'pending' ||
+        result.data.targetUserId !== targetUserId
+      ) {
+        failOnInvalidActionResponse(
+          result.correlationId,
+          'The MFA-reset response did not contain a valid pending approval request.',
+        );
+        return null;
+      }
+      setPendingAction(null);
+      return result.data;
+    },
+    [client, failOnInvalidActionResponse, handleAuthenticatedActionFailure, machine, pendingAction],
+  );
+
+  const approveMfaAdministrativeReset = useCallback(
+    async ({
+      approvalId,
+      idempotencyKey,
+      targetUserId,
+      ...request
+    }: Parameters<SessionContextValue['approveMfaAdministrativeReset']>[0]) => {
+      if (machine.phase !== 'ready' || pendingAction) {
+        return null;
+      }
+      const operation = ++identityOperation.current;
+      setActionIssue(null);
+      setPendingAction('approve-mfa-administrative-reset');
+      const result = await client.approveMfaAdministrativeReset(
+        machine.selectedOrganization.id,
+        targetUserId,
+        approvalId,
+        request,
+        idempotencyKey,
+      );
+      if (operation !== identityOperation.current) {
+        return null;
+      }
+      if (!result.ok) {
+        handleAuthenticatedActionFailure(result);
+        return null;
+      }
+      if (
+        !validMfaResetMutation(result.data) ||
+        result.data.status !== 'approved' ||
+        result.data.targetUserId !== targetUserId ||
+        result.data.approvalId !== approvalId
+      ) {
+        failOnInvalidActionResponse(
+          result.correlationId,
+          'The MFA-reset response did not confirm the requested independent approval.',
+        );
+        return null;
+      }
+      setPendingAction(null);
+      return result.data;
+    },
+    [client, failOnInvalidActionResponse, handleAuthenticatedActionFailure, machine, pendingAction],
+  );
+
+  const executeMfaAdministrativeReset = useCallback(
+    async ({
+      approvalId,
+      idempotencyKey,
+      targetUserId,
+      ...request
+    }: Parameters<SessionContextValue['executeMfaAdministrativeReset']>[0]) => {
+      if (machine.phase !== 'ready' || pendingAction) {
+        return null;
+      }
+      const operation = ++identityOperation.current;
+      setActionIssue(null);
+      setPendingAction('execute-mfa-administrative-reset');
+      const result = await client.executeMfaAdministrativeReset(
+        machine.selectedOrganization.id,
+        targetUserId,
+        approvalId,
+        request,
+        idempotencyKey,
+      );
+      if (operation !== identityOperation.current) {
+        return null;
+      }
+      if (!result.ok) {
+        handleAuthenticatedActionFailure(result);
+        return null;
+      }
+      if (
+        !validMfaResetMutation(result.data) ||
+        result.data.status !== 'reset' ||
+        result.data.targetUserId !== targetUserId ||
+        result.data.approvalId !== approvalId
+      ) {
+        failOnInvalidActionResponse(
+          result.correlationId,
+          'The MFA-reset response did not confirm the requested reset.',
+        );
+        return null;
+      }
+      setPendingAction(null);
+      return result.data;
+    },
+    [client, failOnInvalidActionResponse, handleAuthenticatedActionFailure, machine, pendingAction],
+  );
+
   const verifyRecentAuthentication = useCallback(
     async (credentials: { password: string; secondFactor?: string }) => {
       if (!isFullyAuthenticated(machine) || pendingAction) {
@@ -815,16 +1111,22 @@ export function SessionProvider({ children, client = careOsApi }: SessionProvide
 
   const value = useMemo<SessionContextValue>(
     () => ({
+      acceptInvitation,
       actionIssue,
+      approveMfaAdministrativeReset,
       completeMfa,
       completePasswordReset,
       dismissActionIssue,
+      executeMfaAdministrativeReset,
       login,
       logout,
+      issueInvitation,
       machine,
       pendingAction,
       regenerateRecoveryCodes,
       requestPasswordReset,
+      requestMfaAdministrativeReset,
+      revokeInvitation,
       retryBootstrap: bootstrap,
       selectOrganization,
       startMfaEnrollment,
@@ -832,17 +1134,23 @@ export function SessionProvider({ children, client = careOsApi }: SessionProvide
       verifyRecentAuthentication,
     }),
     [
+      acceptInvitation,
       actionIssue,
+      approveMfaAdministrativeReset,
       bootstrap,
       completeMfa,
       completePasswordReset,
       dismissActionIssue,
+      executeMfaAdministrativeReset,
       login,
       logout,
+      issueInvitation,
       machine,
       pendingAction,
       regenerateRecoveryCodes,
       requestPasswordReset,
+      requestMfaAdministrativeReset,
+      revokeInvitation,
       selectOrganization,
       startMfaEnrollment,
       verifyMfaEnrollment,

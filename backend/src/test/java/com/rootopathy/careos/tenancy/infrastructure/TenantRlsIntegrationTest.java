@@ -20,24 +20,34 @@ import com.rootopathy.careos.governance.domain.InboundOutboxEvent;
 import com.rootopathy.careos.governance.domain.OutboxPublicationPolicy;
 import com.rootopathy.careos.governance.domain.OutboxRecord;
 import com.rootopathy.careos.tenancy.application.ActorTransactionOperations;
+import com.rootopathy.careos.tenancy.application.ServiceIdentityAuthorizationException;
+import com.rootopathy.careos.tenancy.application.ServiceIdentityAuthorizationOperations;
 import com.rootopathy.careos.tenancy.application.TenantAuthorizationException;
 import com.rootopathy.careos.tenancy.application.TenantAuthorizationOperations;
 import com.rootopathy.careos.tenancy.domain.AuthenticatedActorContext;
 import com.rootopathy.careos.tenancy.domain.AuthorizedTenantContext;
-import com.rootopathy.careos.tenancy.domain.PermissionKey;
+import com.rootopathy.careos.tenancy.domain.IndependentApproval;
+import com.rootopathy.careos.tenancy.domain.OperationKey;
+import com.rootopathy.careos.tenancy.domain.ServiceIdentityAuthorizationRequest;
 import com.rootopathy.careos.tenancy.domain.TenantAuthorizationRequest;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.HexFormat;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.postgresql.util.PSQLException;
@@ -47,6 +57,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -66,6 +77,10 @@ class TenantRlsIntegrationTest {
     private static final UUID ORG_TWO = UUID.fromString("01900000-0000-7000-8000-000000000002");
     private static final UUID FACILITY_TWO = UUID.fromString("01900000-0000-7000-8000-000000000102");
     private static final UUID ACTOR = UUID.fromString("01900000-0000-7000-8000-000000000201");
+    private static final UUID REFERENCE_ORGANIZATION =
+            UUID.fromString("01900000-0000-7000-8000-000000000003");
+    private static final UUID REFERENCE_OWNER =
+            UUID.fromString("01900000-0000-7000-8000-000000000203");
     private static final UUID INVITATION_ONE = UUID.fromString("01900000-0000-7000-8000-000000000401");
     private static final UUID INVITATION_TWO = UUID.fromString("01900000-0000-7000-8000-000000000402");
     private static final String TEST_EVENT = "test.entity.changed";
@@ -73,6 +88,12 @@ class TenantRlsIntegrationTest {
     private static final Instant SOURCE_OCCURRED_AT = Instant.parse("2026-09-15T08:30:00.123456Z");
     private static final String REQUEST_HASH_A = "a".repeat(64);
     private static final String REQUEST_HASH_B = "b".repeat(64);
+    private static final String SERVICE_CREDENTIAL =
+            "Service_Credential-For-Exact-Test-1234567890";
+    private static final String SERVICE_CREDENTIAL_PEPPER =
+            "CareOS-Test-Service-Credential-Pepper-Never-Production";
+    private static final UUID SERVICE_IDENTITY =
+            UUID.fromString("01900000-0000-7000-8000-000000000501");
 
     @Container
     private static final PostgreSQLContainer POSTGRES =
@@ -109,6 +130,9 @@ class TenantRlsIntegrationTest {
     private TenantAuthorizationOperations tenantAuthorization;
 
     @Autowired
+    private ServiceIdentityAuthorizationOperations serviceIdentityAuthorization;
+
+    @Autowired
     private ActorTransactionOperations actorTransactions;
 
     @Autowired
@@ -122,6 +146,12 @@ class TenantRlsIntegrationTest {
 
     @Autowired
     private ConsumerInboxOperations consumerInboxOperations;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
+    @Autowired
+    private Clock clock;
 
     @BeforeEach
     void seedSecondTenantAndActor() throws SQLException {
@@ -144,16 +174,13 @@ class TenantRlsIntegrationTest {
                     ON CONFLICT (id) DO NOTHING
                     """);
             statement.executeUpdate("""
-                    INSERT INTO organization_memberships (id, organization_id, user_id, role_key, status)
-                    VALUES
-                        ('01900000-0000-7000-8000-000000000301', '01900000-0000-7000-8000-000000000001', '01900000-0000-7000-8000-000000000201', 'test_actor', 'active'),
-                        ('01900000-0000-7000-8000-000000000302', '01900000-0000-7000-8000-000000000002', '01900000-0000-7000-8000-000000000201', 'test_actor', 'active')
-                    ON CONFLICT (id) DO NOTHING
-                    """);
-            statement.executeUpdate("""
                     INSERT INTO authorization_permissions
                         (permission_key, display_name, description, registry_version)
-                    VALUES ('test.rls-access', 'RLS test access', 'Synthetic test-only permission', 'test-v1')
+                    VALUES
+                        ('test.rls-access', 'RLS test access',
+                         'Synthetic test-only permission', 'test-v1'),
+                        ('test.ungranted', 'Ungranted test access',
+                         'Synthetic ungranted permission', 'test-v1')
                     ON CONFLICT (permission_key) DO NOTHING
                     """);
             statement.executeUpdate("""
@@ -166,6 +193,48 @@ class TenantRlsIntegrationTest {
                     INSERT INTO authorization_role_permissions (role_key, permission_key)
                     VALUES ('test_actor', 'test.rls-access')
                     ON CONFLICT (role_key, permission_key) DO NOTHING
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO authorization_operations
+                        (operation_key, permission_key, display_name, description, registry_version)
+                    VALUES
+                        ('test.rls-access', 'test.rls-access', 'RLS test access',
+                         'Synthetic test-only read operation', 'test-v1'),
+                        ('test.entity.change', 'test.rls-access', 'Entity test change',
+                         'Synthetic test-only governed mutation', 'test-v1')
+                    ON CONFLICT (operation_key) DO NOTHING
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO authorization_operations
+                        (operation_key, permission_key, display_name, description,
+                         mutation, denial_mode, reason_required,
+                         recent_authentication_required,
+                         recent_authentication_max_age_seconds, maximum_future_skew_seconds,
+                         maker_checker_required, registry_version)
+                    VALUES
+                        ('test.reason-required', 'test.rls-access', 'Reason test',
+                         'Synthetic reason requirement', true, 'explicit', true,
+                         false, NULL, NULL, false, 'test-v1'),
+                        ('test.recent-required', 'test.rls-access', 'Recent authentication test',
+                         'Synthetic recent authentication requirement', true, 'explicit', false,
+                         true, 300, 5, false, 'test-v1'),
+                        ('test.approval-required', 'test.rls-access', 'Approval test',
+                         'Synthetic independent approval requirement', true, 'explicit', true,
+                         true, 300, 5, true, 'test-v1'),
+                        ('test.hidden-denial', 'test.ungranted', 'Hidden denial test',
+                         'Synthetic hidden denial behavior', false, 'hidden', false,
+                         false, NULL, NULL, false, 'test-v1'),
+                        ('test.explicit-denial', 'test.ungranted', 'Explicit denial test',
+                         'Synthetic explicit denial behavior', false, 'explicit', false,
+                         false, NULL, NULL, false, 'test-v1')
+                    ON CONFLICT (operation_key) DO NOTHING
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO organization_memberships (id, organization_id, user_id, role_key, status)
+                    VALUES
+                        ('01900000-0000-7000-8000-000000000301', '01900000-0000-7000-8000-000000000001', '01900000-0000-7000-8000-000000000201', 'test_actor', 'active'),
+                        ('01900000-0000-7000-8000-000000000302', '01900000-0000-7000-8000-000000000002', '01900000-0000-7000-8000-000000000201', 'test_actor', 'active')
+                    ON CONFLICT (id) DO NOTHING
                     """);
             statement.executeUpdate("""
                     INSERT INTO audit_event_definitions
@@ -188,6 +257,21 @@ class TenantRlsIntegrationTest {
                             ARRAY['change'], ARRAY['change'],
                             '{"type":"object"}'::jsonb, 'test-v1')
                     ON CONFLICT (event_name, schema_version) DO NOTHING
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO authorization_operation_events
+                        (operation_key, event_kind, event_name, schema_version,
+                         status, registry_version)
+                    VALUES
+                        ('test.rls-access', 'audit', 'test.entity.changed', 1,
+                         'active', 'test-v1'),
+                        ('test.rls-access', 'outbox', 'test.entity.changed', 1,
+                         'active', 'test-v1'),
+                        ('test.entity.change', 'audit', 'test.entity.changed', 1,
+                         'active', 'test-v1'),
+                        ('test.entity.change', 'outbox', 'test.entity.changed', 1,
+                         'active', 'test-v1')
+                    ON CONFLICT (operation_key, event_kind, event_name, schema_version) DO NOTHING
                     """);
             statement.executeUpdate("""
                     INSERT INTO outbox_consumer_definitions
@@ -233,6 +317,62 @@ class TenantRlsIntegrationTest {
         assertThat(role.get("rolcreaterole")).isEqualTo(false);
         assertThat(role.get("rolbypassrls")).isEqualTo(false);
         assertThat(role.get("tableowner")).isNotEqualTo(APP_USER);
+    }
+
+    @Test
+    void usesPostgresUuidV7ForEveryDatabaseGeneratedIdentifier() throws SQLException {
+        var identifierDefaults = jdbcTemplate.query(
+                """
+                SELECT relations.relname,
+                       pg_get_expr(defaults.adbin, defaults.adrelid) AS default_expression
+                FROM pg_attrdef defaults
+                JOIN pg_attribute columns
+                  ON columns.attrelid = defaults.adrelid
+                 AND columns.attnum = defaults.adnum
+                JOIN pg_class relations ON relations.oid = defaults.adrelid
+                JOIN pg_namespace schemas ON schemas.oid = relations.relnamespace
+                WHERE schemas.nspname = 'public'
+                  AND columns.attname = 'id'
+                ORDER BY relations.relname
+                """,
+                (result, rowNumber) -> Map.entry(
+                        result.getString("relname"), result.getString("default_expression")));
+        assertThat(identifierDefaults)
+                .containsExactly(
+                        Map.entry("audit_events", "uuidv7()"),
+                        Map.entry("authentication_events", "uuidv7()"),
+                        Map.entry("authorization_approval_requests", "uuidv7()"),
+                        Map.entry("facilities", "uuidv7()"),
+                        Map.entry("idempotency_records", "uuidv7()"),
+                        Map.entry("invitations", "uuidv7()"),
+                        Map.entry("mfa_methods", "uuidv7()"),
+                        Map.entry("organization_memberships", "uuidv7()"),
+                        Map.entry("organizations", "uuidv7()"),
+                        Map.entry("outbox_events", "uuidv7()"),
+                        Map.entry("password_reset_tokens", "uuidv7()"),
+                        Map.entry("recovery_codes", "uuidv7()"),
+                        Map.entry("service_identities", "uuidv7()"),
+                        Map.entry("service_identity_credentials", "uuidv7()"),
+                        Map.entry("users", "uuidv7()"));
+
+        try (var connection = DriverManager.getConnection(
+                        POSTGRES.getJdbcUrl(), MIGRATOR_USER, MIGRATOR_PASSWORD);
+                var statement = connection.prepareStatement(
+                        """
+                        INSERT INTO users (email, display_name, status)
+                        VALUES ('uuidv7.default@rootopathy.test', 'UUIDv7 Default', 'active')
+                        RETURNING id
+                        """)) {
+            connection.setAutoCommit(false);
+            try (var result = statement.executeQuery()) {
+                assertThat(result.next()).isTrue();
+                var generated = result.getObject(1, UUID.class);
+                assertThat(generated.version()).isEqualTo(7);
+                assertThat(generated.variant()).isEqualTo(2);
+            } finally {
+                connection.rollback();
+            }
+        }
     }
 
     @Test
@@ -343,12 +483,12 @@ class TenantRlsIntegrationTest {
     }
 
     @Test
-    void failsClosedForUnknownPermissionsAndActorsWithoutMembership() {
-        var unknownPermission = new TenantAuthorizationRequest(
+    void failsClosedForUnknownOperationsAndActorsWithoutMembership() {
+        var unknownOperation = new TenantAuthorizationRequest(
                 ORG_ONE,
-                new AuthenticatedActorContext(ACTOR, "rls-verification", "unknown-permission-42"),
-                new PermissionKey("test.not-approved"));
-        assertThatThrownBy(() -> tenantAuthorization.execute(unknownPermission, this::facilityCodes))
+                new AuthenticatedActorContext(ACTOR, "rls-verification", "unknown-operation-42"),
+                new OperationKey("test.not-approved"));
+        assertThatThrownBy(() -> tenantAuthorization.execute(unknownOperation, this::facilityCodes))
                 .isInstanceOf(TenantAuthorizationException.class)
                 .extracting(exception -> ((TenantAuthorizationException) exception).reason())
                 .isEqualTo(TenantAuthorizationException.Reason.PERMISSION_DENIED);
@@ -356,11 +496,472 @@ class TenantRlsIntegrationTest {
         var unknownActor = new TenantAuthorizationRequest(
                 ORG_ONE,
                 new AuthenticatedActorContext(UUID.randomUUID(), "rls-verification", "unknown-actor-42"),
-                new PermissionKey("test.rls-access"));
+                new OperationKey("test.rls-access"));
         assertThatThrownBy(() -> tenantAuthorization.execute(unknownActor, this::facilityCodes))
                 .isInstanceOf(TenantAuthorizationException.class)
                 .extracting(exception -> ((TenantAuthorizationException) exception).reason())
                 .isEqualTo(TenantAuthorizationException.Reason.MEMBERSHIP_NOT_FOUND);
+    }
+
+    @Test
+    void enforcesOperationReasonRecentAuthenticationApprovalAndDisclosureRules() {
+        var actor = new AuthenticatedActorContext(ACTOR, "policy-verification", "policy-rules-42");
+
+        assertAuthorizationReason(
+                new TenantAuthorizationRequest(
+                        ORG_ONE, actor, new OperationKey("test.reason-required")),
+                TenantAuthorizationException.Reason.REASON_REQUIRED);
+        assertThat(tenantAuthorization.execute(
+                        new TenantAuthorizationRequest(
+                                ORG_ONE,
+                                actor,
+                                new OperationKey("test.reason-required"),
+                                "Verified test reason",
+                                null),
+                        this::facilityCodes))
+                .containsExactly("GNO-01");
+
+        assertAuthorizationReason(
+                new TenantAuthorizationRequest(
+                        ORG_ONE, actor, new OperationKey("test.recent-required")),
+                TenantAuthorizationException.Reason.RECENT_AUTHENTICATION_REQUIRED);
+        assertAuthorizationReason(
+                new TenantAuthorizationRequest(
+                        ORG_ONE,
+                        actor,
+                        new OperationKey("test.recent-required"),
+                        null,
+                        clock.instant().minus(Duration.ofMinutes(6))),
+                TenantAuthorizationException.Reason.RECENT_AUTHENTICATION_REQUIRED);
+        assertThat(tenantAuthorization.execute(
+                        new TenantAuthorizationRequest(
+                                ORG_ONE,
+                                actor,
+                                new OperationKey("test.recent-required"),
+                                null,
+                                clock.instant()),
+                        this::facilityCodes))
+                .containsExactly("GNO-01");
+
+        assertAuthorizationReason(
+                new TenantAuthorizationRequest(
+                        ORG_ONE,
+                        actor,
+                        new OperationKey("test.approval-required"),
+                        "Verified high-risk reason",
+                        clock.instant()),
+                TenantAuthorizationException.Reason.INDEPENDENT_APPROVAL_REQUIRED);
+        assertAuthorizationReason(
+                new TenantAuthorizationRequest(
+                        ORG_ONE, actor, new OperationKey("test.hidden-denial")),
+                TenantAuthorizationException.Reason.MEMBERSHIP_NOT_FOUND);
+        assertAuthorizationReason(
+                new TenantAuthorizationRequest(
+                        ORG_ONE, actor, new OperationKey("test.explicit-denial")),
+                TenantAuthorizationException.Reason.PERMISSION_DENIED);
+    }
+
+    @Test
+    void keepsTheReferencePolicyExplicitlyOptInAndMigrationOwned() throws SQLException {
+        seedReferenceOwner();
+        var request = new TenantAuthorizationRequest(
+                REFERENCE_ORGANIZATION,
+                new AuthenticatedActorContext(
+                        REFERENCE_OWNER, "reference-policy-test", "reference-policy-42"),
+                new OperationKey("organization.profile.read"));
+
+        assertAuthorizationReason(request, TenantAuthorizationException.Reason.PERMISSION_DENIED);
+
+        var referenceAuthorization = new PostgresTenantAuthorizationOperations(
+                jdbcTemplate, transactionManager, clock, true);
+        assertThat(referenceAuthorization.execute(
+                        request,
+                        () -> jdbcTemplate.queryForObject(
+                                "select current_setting('app.current_operation_key', true)",
+                                String.class)))
+                .isEqualTo("organization.profile.read");
+
+        assertThat(jdbcTemplate.queryForList(
+                        """
+                        SELECT role_key
+                        FROM authorization_roles
+                        WHERE status = 'reference'
+                        ORDER BY role_key
+                        """,
+                        String.class))
+                .containsExactly(
+                        "local_bootstrap",
+                        "organization_administrator",
+                        "organization_member",
+                        "organization_owner",
+                        "service_integration_consumer",
+                        "service_job_worker",
+                        "service_notification_delivery",
+                        "service_outbox_publisher",
+                        "service_scheduler");
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT count(*) FROM authorization_operations WHERE status = 'reference'",
+                        Integer.class))
+                .isEqualTo(16);
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT count(*) FROM authorization_role_delegations", Integer.class))
+                .isEqualTo(5);
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                        "UPDATE authorization_operations SET status = 'active' WHERE status = 'reference'"))
+                .hasRootCauseInstanceOf(PSQLException.class);
+    }
+
+    @Test
+    void enforcesTheMfaMakerCheckerLifecycleAtTheDatabaseBoundary() throws SQLException {
+        var organizationId = UUID.randomUUID();
+        var makerId = UUID.randomUUID();
+        var checkerId = UUID.randomUUID();
+        var targetId = UUID.randomUUID();
+        var approvalId = UUID.randomUUID();
+        executeAsMigrator("""
+                INSERT INTO users (id, email, display_name, status)
+                VALUES
+                    ('%s', 'maker.%s@rootopathy.test', 'MFA Maker', 'active'),
+                    ('%s', 'checker.%s@rootopathy.test', 'MFA Checker', 'active'),
+                    ('%s', 'target.%s@rootopathy.test', 'MFA Target', 'active')
+                """.formatted(makerId, makerId, checkerId, checkerId, targetId, targetId));
+        executeAsMigrator("""
+                INSERT INTO organizations
+                    (id, legal_name, display_name, country_code, timezone, status)
+                VALUES ('%s', 'MFA Approval Test Organization',
+                        'MFA Approval Test Organization', 'IN', 'Asia/Kolkata', 'active')
+                """.formatted(organizationId));
+        executeAsMigrator("""
+                INSERT INTO organization_memberships
+                    (organization_id, user_id, role_key, status)
+                VALUES
+                    ('%s', '%s', 'organization_owner', 'active'),
+                    ('%s', '%s', 'organization_owner', 'active'),
+                    ('%s', '%s', 'organization_owner', 'active')
+                """.formatted(
+                organizationId,
+                makerId,
+                organizationId,
+                checkerId,
+                organizationId,
+                targetId));
+
+        var referenceAuthorization = new PostgresTenantAuthorizationOperations(
+                jdbcTemplate, transactionManager, clock, true);
+        var requestReason = "Verified lost authenticator on support case CARE-42";
+        var requestCorrelation = "mfa-db-request-42";
+        var requestAuthorization = new TenantAuthorizationRequest(
+                organizationId,
+                new AuthenticatedActorContext(
+                        makerId, "identity-administration", requestCorrelation),
+                new OperationKey("identity.mfa.admin-reset.request"),
+                requestReason,
+                clock.instant());
+        assertThat(referenceAuthorization.execute(requestAuthorization, () -> jdbcTemplate.update(
+                        """
+                        INSERT INTO authorization_approval_requests
+                            (id, organization_id, operation_key, subject_type, subject_id,
+                             requested_by_user_id, request_reason,
+                             request_correlation_id, expires_at)
+                        VALUES (?, ?, 'identity.mfa.admin-reset', 'user', ?, ?, ?, ?, ?)
+                        """,
+                        approvalId,
+                        organizationId,
+                        targetId,
+                        makerId,
+                        requestReason,
+                        requestCorrelation,
+                        Timestamp.from(clock.instant().plus(Duration.ofMinutes(10))))))
+                .isEqualTo(1);
+
+        var makerDecision = new TenantAuthorizationRequest(
+                organizationId,
+                new AuthenticatedActorContext(
+                        makerId, "identity-administration", "mfa-db-maker-decision-42"),
+                new OperationKey("identity.mfa.admin-reset.approve"),
+                "Maker attempted self approval",
+                clock.instant());
+        assertThatThrownBy(() -> referenceAuthorization.execute(
+                        makerDecision,
+                        () -> approveMfaReset(
+                                approvalId, makerId, makerDecision, clock.instant())))
+                .rootCause()
+                .isInstanceOf(PSQLException.class)
+                .hasMessageContaining("invalid authorization approval decision");
+
+        var targetDecision = new TenantAuthorizationRequest(
+                organizationId,
+                new AuthenticatedActorContext(
+                        targetId, "identity-administration", "mfa-db-target-decision-42"),
+                new OperationKey("identity.mfa.admin-reset.approve"),
+                "Target attempted own reset approval",
+                clock.instant());
+        assertThatThrownBy(() -> referenceAuthorization.execute(
+                        targetDecision,
+                        () -> approveMfaReset(
+                                approvalId, targetId, targetDecision, clock.instant())))
+                .rootCause()
+                .isInstanceOf(PSQLException.class)
+                .hasMessageContaining("invalid authorization approval decision");
+
+        var checkerDecision = new TenantAuthorizationRequest(
+                organizationId,
+                new AuthenticatedActorContext(
+                        checkerId, "identity-administration", "mfa-db-checker-decision-42"),
+                new OperationKey("identity.mfa.admin-reset.approve"),
+                "Independent identity and support case verification completed",
+                clock.instant());
+        assertThat(referenceAuthorization.execute(
+                        checkerDecision,
+                        () -> approveMfaReset(
+                                approvalId, checkerId, checkerDecision, clock.instant())))
+                .isEqualTo(1);
+
+        var executionKey = "mfa-db-execution-" + UUID.randomUUID();
+        var checkerExecution = new TenantAuthorizationRequest(
+                organizationId,
+                new AuthenticatedActorContext(
+                        checkerId, "identity-administration", "mfa-db-wrong-executor-42"),
+                new OperationKey("identity.mfa.admin-reset"),
+                requestReason,
+                clock.instant(),
+                new IndependentApproval(approvalId, "user", targetId, executionKey));
+        assertThatThrownBy(() -> referenceAuthorization.execute(checkerExecution, () -> true))
+                .isInstanceOf(TenantAuthorizationException.class)
+                .extracting(exception -> ((TenantAuthorizationException) exception).reason())
+                .isEqualTo(TenantAuthorizationException.Reason.INDEPENDENT_APPROVAL_REQUIRED);
+
+        var makerExecution = new TenantAuthorizationRequest(
+                organizationId,
+                new AuthenticatedActorContext(
+                        makerId, "identity-administration", "mfa-db-execution-42"),
+                new OperationKey("identity.mfa.admin-reset"),
+                requestReason,
+                clock.instant(),
+                new IndependentApproval(approvalId, "user", targetId, executionKey));
+        for (var attempt = 0; attempt < 2; attempt++) {
+            assertThat(referenceAuthorization.execute(
+                            makerExecution,
+                            () -> jdbcTemplate.queryForObject(
+                                    """
+                                    SELECT status FROM authorization_approval_requests
+                                    WHERE id = ?
+                                    """,
+                                    String.class,
+                                    approvalId)))
+                    .isEqualTo("consumed");
+        }
+        var changedReasonExecution = new TenantAuthorizationRequest(
+                organizationId,
+                makerExecution.actor(),
+                makerExecution.requiredOperation(),
+                "A changed reason must not consume or replay approval",
+                clock.instant(),
+                makerExecution.independentApproval());
+        assertThatThrownBy(() -> referenceAuthorization.execute(changedReasonExecution, () -> true))
+                .isInstanceOf(TenantAuthorizationException.class)
+                .extracting(exception -> ((TenantAuthorizationException) exception).reason())
+                .isEqualTo(TenantAuthorizationException.Reason.INDEPENDENT_APPROVAL_REQUIRED);
+        assertThatThrownBy(() -> executeAsMigratorInTenant(
+                        "DELETE FROM authorization_approval_requests WHERE id = '" + approvalId + "'",
+                        makerExecution))
+                .isInstanceOf(SQLException.class)
+                .hasMessageContaining("approval evidence cannot be deleted");
+
+        var expiredApprovalId = UUID.randomUUID();
+        assertThat(referenceAuthorization.execute(requestAuthorization, () -> jdbcTemplate.update(
+                        """
+                        INSERT INTO authorization_approval_requests
+                            (id, organization_id, operation_key, subject_type, subject_id,
+                             requested_by_user_id, request_reason, request_correlation_id,
+                             expires_at, created_at)
+                        VALUES (?, ?, 'identity.mfa.admin-reset', 'user', ?, ?, ?, ?,
+                                clock_timestamp() - interval '10 minutes',
+                                clock_timestamp() - interval '20 minutes')
+                        """,
+                        expiredApprovalId,
+                        organizationId,
+                        targetId,
+                        makerId,
+                        requestReason,
+                        requestCorrelation)))
+                .isEqualTo(1);
+        var replacementApprovalId = UUID.randomUUID();
+        assertThat(referenceAuthorization.execute(requestAuthorization, () -> {
+                    var expired = jdbcTemplate.update(
+                            """
+                            UPDATE authorization_approval_requests
+                            SET status = 'expired', updated_at = clock_timestamp(),
+                                lock_version = lock_version + 1
+                            WHERE id = ? AND status = 'pending'
+                              AND expires_at <= clock_timestamp()
+                            """,
+                            expiredApprovalId);
+                    var replacement = jdbcTemplate.update(
+                            """
+                            INSERT INTO authorization_approval_requests
+                                (id, organization_id, operation_key, subject_type, subject_id,
+                                 requested_by_user_id, request_reason,
+                                 request_correlation_id, expires_at)
+                            VALUES (?, ?, 'identity.mfa.admin-reset', 'user', ?, ?, ?, ?, ?)
+                            """,
+                            replacementApprovalId,
+                            organizationId,
+                            targetId,
+                            makerId,
+                            requestReason,
+                            requestCorrelation,
+                            Timestamp.from(clock.instant().plus(Duration.ofMinutes(10))));
+                    return List.of(expired, replacement);
+                }))
+                .containsExactly(1, 1);
+    }
+
+    @Test
+    void authenticatesServiceIdentitiesOnlyForTheirExactTenantPurposeRoleAndOperation()
+            throws SQLException {
+        seedServiceIdentity();
+        var request = new ServiceIdentityAuthorizationRequest(
+                ORG_ONE,
+                SERVICE_CREDENTIAL,
+                "outbox-publication",
+                "service-auth-42",
+                new OperationKey("platform.outbox.publish"));
+
+        assertThatThrownBy(() -> serviceIdentityAuthorization.execute(request, this::facilityCodes))
+                .isInstanceOf(ServiceIdentityAuthorizationException.class)
+                .extracting(exception ->
+                        ((ServiceIdentityAuthorizationException) exception).reason())
+                .isEqualTo(ServiceIdentityAuthorizationException.Reason.DISABLED);
+
+        var withoutReferencePolicy = new PostgresServiceIdentityAuthorizationOperations(
+                jdbcTemplate,
+                transactionManager,
+                new ServiceIdentityProperties(true, SERVICE_CREDENTIAL_PEPPER),
+                false);
+        assertServiceAuthorizationDenied(withoutReferencePolicy, request);
+
+        var referenceAuthorization = new PostgresServiceIdentityAuthorizationOperations(
+                jdbcTemplate,
+                transactionManager,
+                new ServiceIdentityProperties(true, SERVICE_CREDENTIAL_PEPPER),
+                true);
+        var settings = referenceAuthorization.execute(request, () -> jdbcTemplate.queryForMap("""
+                SELECT current_setting('app.current_organization_id', true) AS organization_id,
+                       current_setting('app.current_actor_id', true) AS actor_id,
+                       current_setting('app.current_actor_kind', true) AS actor_kind,
+                       current_setting('app.current_purpose', true) AS purpose,
+                       current_setting('app.current_operation_key', true) AS operation_key
+                """));
+        assertThat(settings)
+                .containsEntry("organization_id", ORG_ONE.toString())
+                .containsEntry("actor_id", SERVICE_IDENTITY.toString())
+                .containsEntry("actor_kind", "service")
+                .containsEntry("purpose", "outbox-publication")
+                .containsEntry("operation_key", "platform.outbox.publish");
+
+        assertServiceAuthorizationDenied(
+                referenceAuthorization,
+                new ServiceIdentityAuthorizationRequest(
+                        ORG_ONE,
+                        "Wrong_Service-Credential-12345678901234567890",
+                        "outbox-publication",
+                        "service-wrong-secret-42",
+                        new OperationKey("platform.outbox.publish")));
+        assertServiceAuthorizationDenied(
+                referenceAuthorization,
+                new ServiceIdentityAuthorizationRequest(
+                        ORG_ONE,
+                        SERVICE_CREDENTIAL,
+                        "notification-delivery",
+                        "service-wrong-purpose-42",
+                        new OperationKey("platform.outbox.publish")));
+        assertServiceAuthorizationDenied(
+                referenceAuthorization,
+                new ServiceIdentityAuthorizationRequest(
+                        ORG_ONE,
+                        SERVICE_CREDENTIAL,
+                        "outbox-publication",
+                        "service-wrong-operation-42",
+                        new OperationKey("platform.job.execute")));
+        assertServiceAuthorizationDenied(
+                referenceAuthorization,
+                new ServiceIdentityAuthorizationRequest(
+                        ORG_TWO,
+                        SERVICE_CREDENTIAL,
+                        "outbox-publication",
+                        "service-wrong-tenant-42",
+                        new OperationKey("platform.outbox.publish")));
+
+        assertThat(jdbcTemplate.queryForMap("""
+                SELECT has_table_privilege('service_identities', 'SELECT') AS identity_select,
+                       has_table_privilege('service_identity_credentials', 'SELECT') AS credential_select,
+                       has_table_privilege('service_identities', 'INSERT') AS identity_insert,
+                       has_table_privilege('service_identity_credentials', 'UPDATE') AS credential_update
+                """))
+                .containsEntry("identity_select", false)
+                .containsEntry("credential_select", false)
+                .containsEntry("identity_insert", false)
+                .containsEntry("credential_update", false);
+        assertThat(request.toString()).contains("presentedCredential=<redacted>").doesNotContain(SERVICE_CREDENTIAL);
+    }
+
+    @Test
+    void rejectsNonInteractiveRolesFromUserMemberships() {
+        assertThatThrownBy(() -> executeAsMigrator("""
+                        INSERT INTO organization_memberships
+                            (organization_id, user_id, role_key, status)
+                        VALUES
+                            ('01900000-0000-7000-8000-000000000001',
+                             '01900000-0000-7000-8000-000000000201',
+                             'service_job_worker', 'active')
+                        """))
+                .isInstanceOf(SQLException.class)
+                .hasMessageContaining("non-interactive roles cannot be assigned");
+    }
+
+    @Test
+    void enforcesRegisteredRolesAndProtectsTheFinalEffectiveOwner() throws SQLException {
+        seedReferenceOwner();
+
+        assertThatThrownBy(() -> executeAsMigrator("""
+                        INSERT INTO organization_memberships
+                            (organization_id, user_id, role_key, status)
+                        VALUES
+                            ('01900000-0000-7000-8000-000000000003',
+                             '01900000-0000-7000-8000-000000000204',
+                             'unregistered-role', 'active')
+                        """))
+                .isInstanceOf(SQLException.class);
+        assertThatThrownBy(() -> executeAsMigrator("""
+                        UPDATE organization_memberships
+                        SET status = 'revoked'
+                        WHERE id = '01900000-0000-7000-8000-000000000303'
+                        """))
+                .isInstanceOf(SQLException.class)
+                .hasMessageContaining("final effective organization owner");
+
+        executeAsMigrator("""
+                INSERT INTO organization_memberships
+                    (id, organization_id, user_id, role_key, status)
+                VALUES
+                    ('01900000-0000-7000-8000-000000000304',
+                     '01900000-0000-7000-8000-000000000003',
+                     '01900000-0000-7000-8000-000000000204',
+                     'organization_owner', 'active')
+                """);
+        executeAsMigrator("""
+                UPDATE organization_memberships
+                SET status = 'revoked'
+                WHERE id = '01900000-0000-7000-8000-000000000303'
+                """);
+        assertThatThrownBy(() -> executeAsMigrator("""
+                        UPDATE organization_memberships
+                        SET effective_to = now() + interval '1 hour'
+                        WHERE id = '01900000-0000-7000-8000-000000000304'
+                        """))
+                .isInstanceOf(SQLException.class)
+                .hasMessageContaining("final effective organization owner");
     }
 
     @Test
@@ -1057,7 +1658,7 @@ class TenantRlsIntegrationTest {
         return new TenantAuthorizationRequest(
                 organizationId,
                 new AuthenticatedActorContext(ACTOR, purpose, correlationId),
-                new PermissionKey("test.rls-access"));
+                new OperationKey("test.rls-access"));
     }
 
     private IdempotencyCommand command(String idempotencyKey, String requestHash) {
@@ -1151,6 +1752,123 @@ class TenantRlsIntegrationTest {
         return jdbcTemplate.queryForList("select code from facilities order by code", String.class);
     }
 
+    private void assertAuthorizationReason(
+            TenantAuthorizationRequest request, TenantAuthorizationException.Reason reason) {
+        assertThatThrownBy(() -> tenantAuthorization.execute(request, this::facilityCodes))
+                .isInstanceOf(TenantAuthorizationException.class)
+                .extracting(exception -> ((TenantAuthorizationException) exception).reason())
+                .isEqualTo(reason);
+    }
+
+    private void seedReferenceOwner() throws SQLException {
+        executeAsMigrator("""
+                INSERT INTO users (id, email, display_name, status)
+                VALUES
+                    ('01900000-0000-7000-8000-000000000203',
+                     'reference.owner@rootopathy.test', 'Reference Owner', 'active'),
+                    ('01900000-0000-7000-8000-000000000204',
+                     'reference.owner.two@rootopathy.test', 'Second Reference Owner', 'active')
+                ON CONFLICT (id) DO NOTHING
+                """);
+        executeAsMigrator("""
+                INSERT INTO organizations
+                    (id, legal_name, display_name, country_code, timezone, status)
+                VALUES
+                    ('01900000-0000-7000-8000-000000000003',
+                     'Reference Policy Organization', 'Reference Organization',
+                     'IN', 'Asia/Kolkata', 'active')
+                ON CONFLICT (id) DO UPDATE SET status = 'active'
+                """);
+        executeAsMigrator("""
+                INSERT INTO organization_memberships
+                    (id, organization_id, user_id, role_key, status, effective_from, effective_to)
+                VALUES
+                    ('01900000-0000-7000-8000-000000000303',
+                     '01900000-0000-7000-8000-000000000003',
+                     '01900000-0000-7000-8000-000000000203',
+                     'organization_owner', 'active', now(), NULL)
+                ON CONFLICT (id) DO UPDATE
+                    SET role_key = 'organization_owner',
+                        status = 'active',
+                        effective_from = now(),
+                        effective_to = NULL
+                """);
+        executeAsMigrator("""
+                DELETE FROM organization_memberships
+                WHERE id = '01900000-0000-7000-8000-000000000304'
+                """);
+    }
+
+    private void seedServiceIdentity() throws SQLException {
+        executeAsMigrator("""
+                INSERT INTO service_identities
+                    (id, organization_id, service_key, display_name, role_key,
+                     allowed_purposes, status, provisioning_reference)
+                VALUES
+                    ('01900000-0000-7000-8000-000000000501',
+                     '01900000-0000-7000-8000-000000000001',
+                     'test.outbox-publisher', 'Test outbox publisher',
+                     'service_outbox_publisher', ARRAY['outbox-publication'],
+                     'active', 'TEST-SECURITY-42')
+                ON CONFLICT (id) DO NOTHING
+                """);
+        executeAsMigrator("""
+                INSERT INTO service_identity_credentials
+                    (organization_id, service_identity_id, credential_version,
+                     credential_hash, active_from, expires_at, provisioning_reference)
+                VALUES
+                    ('01900000-0000-7000-8000-000000000001',
+                     '01900000-0000-7000-8000-000000000501', 1,
+                     '%s', now() - interval '1 minute', now() + interval '1 day',
+                     'TEST-SECURITY-42')
+                ON CONFLICT (service_identity_id, credential_version) DO NOTHING
+                """.formatted(serviceCredentialDigest(SERVICE_CREDENTIAL)));
+    }
+
+    private void assertServiceAuthorizationDenied(
+            ServiceIdentityAuthorizationOperations authorization,
+            ServiceIdentityAuthorizationRequest request) {
+        assertThatThrownBy(() -> authorization.execute(request, this::facilityCodes))
+                .isInstanceOf(ServiceIdentityAuthorizationException.class)
+                .hasMessage("Service identity authorization failed.")
+                .extracting(exception ->
+                        ((ServiceIdentityAuthorizationException) exception).reason())
+                .isEqualTo(
+                        ServiceIdentityAuthorizationException.Reason.CREDENTIAL_OR_PERMISSION_DENIED);
+    }
+
+    private static String serviceCredentialDigest(String credential) {
+        try {
+            var mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(
+                    SERVICE_CREDENTIAL_PEPPER.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            return HexFormat.of().formatHex(mac.doFinal(credential.getBytes(StandardCharsets.UTF_8)));
+        } catch (GeneralSecurityException exception) {
+            throw new IllegalStateException(exception);
+        }
+    }
+
+    private int approveMfaReset(
+            UUID approvalId,
+            UUID decisionActorId,
+            TenantAuthorizationRequest authorization,
+            Instant decidedAt) {
+        return jdbcTemplate.update(
+                """
+                UPDATE authorization_approval_requests
+                SET status = 'approved', decided_by_user_id = ?, decision_reason = ?,
+                    decision_correlation_id = ?, decided_at = ?, updated_at = ?,
+                    lock_version = lock_version + 1
+                WHERE id = ? AND status = 'pending'
+                """,
+                decisionActorId,
+                authorization.reason(),
+                authorization.actor().correlationId(),
+                Timestamp.from(decidedAt),
+                Timestamp.from(decidedAt),
+                approvalId);
+    }
+
     private void executeAsMigrator(String sql) throws SQLException {
         try (var connection = DriverManager.getConnection(
                         POSTGRES.getJdbcUrl(), MIGRATOR_USER, MIGRATOR_PASSWORD);
@@ -1179,6 +1897,10 @@ class TenantRlsIntegrationTest {
                         setting,
                         "app.current_correlation_id",
                         authorizationRequest.actor().correlationId());
+                setTransactionSetting(
+                        setting,
+                        "app.current_operation_key",
+                        authorizationRequest.requiredOperation().value());
                 try (var statement = connection.createStatement()) {
                     statement.executeUpdate(sql);
                 }

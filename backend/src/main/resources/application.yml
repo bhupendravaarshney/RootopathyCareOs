@@ -100,6 +100,21 @@ logging:
     format:
       console: ecs
 careos:
+  authorization:
+    reference-policy-enabled: ${CAREOS_AUTHORIZATION_REFERENCE_POLICY_ENABLED:false}
+  invitations:
+    enabled: ${CAREOS_INVITATIONS_ENABLED:false}
+    token-ttl: ${CAREOS_INVITATION_TOKEN_TTL:24h}
+    idempotency-ttl: ${CAREOS_INVITATION_IDEMPOTENCY_TTL:24h}
+    acceptance-attempt-limit: ${CAREOS_INVITATION_ACCEPTANCE_ATTEMPT_LIMIT:10}
+    acceptance-attempt-window: ${CAREOS_INVITATION_ACCEPTANCE_ATTEMPT_WINDOW:15m}
+  service-identities:
+    enabled: ${CAREOS_SERVICE_IDENTITIES_ENABLED:false}
+    credential-pepper: ${CAREOS_SERVICE_IDENTITY_CREDENTIAL_PEPPER:}
+  mfa-administration:
+    enabled: ${CAREOS_MFA_ADMINISTRATION_ENABLED:false}
+    approval-ttl: ${CAREOS_MFA_ADMINISTRATION_APPROVAL_TTL:30m}
+    idempotency-ttl: ${CAREOS_MFA_ADMINISTRATION_IDEMPOTENCY_TTL:24h}
   notifications:
     postgres:
       enabled: ${CAREOS_NOTIFICATIONS_POSTGRES_ENABLED:false}
@@ -156,6 +171,21 @@ careos:
       accepted-scanner-keys: ${CAREOS_DOCUMENT_PROMOTION_ACCEPTED_SCANNER_KEYS:}
       maximum-scan-age: ${CAREOS_DOCUMENT_PROMOTION_MAXIMUM_SCAN_AGE:}
       maximum-future-skew: ${CAREOS_DOCUMENT_PROMOTION_MAXIMUM_FUTURE_SKEW:0s}
+    signed-access:
+      enabled: ${CAREOS_DOCUMENT_SIGNED_ACCESS_ENABLED:false}
+      policy-key: ${CAREOS_DOCUMENT_SIGNED_ACCESS_POLICY_KEY:}
+      accepted-purposes: ${CAREOS_DOCUMENT_SIGNED_ACCESS_ACCEPTED_PURPOSES:}
+      maximum-ttl: ${CAREOS_DOCUMENT_SIGNED_ACCESS_MAXIMUM_TTL:}
+      maximum-authorization-age: ${CAREOS_DOCUMENT_SIGNED_ACCESS_MAXIMUM_AUTHORIZATION_AGE:30s}
+      maximum-future-skew: ${CAREOS_DOCUMENT_SIGNED_ACCESS_MAXIMUM_FUTURE_SKEW:2s}
+    retention:
+      enabled: ${CAREOS_DOCUMENT_RETENTION_ENABLED:false}
+      policy-key: ${CAREOS_DOCUMENT_RETENTION_POLICY_KEY:}
+      accepted-purposes: ${CAREOS_DOCUMENT_RETENTION_ACCEPTED_PURPOSES:}
+      minimum-retention: ${CAREOS_DOCUMENT_RETENTION_MINIMUM_RETENTION:}
+      maximum-retention: ${CAREOS_DOCUMENT_RETENTION_MAXIMUM_RETENTION:}
+      maximum-authorization-age: ${CAREOS_DOCUMENT_RETENTION_MAXIMUM_AUTHORIZATION_AGE:30s}
+      maximum-future-skew: ${CAREOS_DOCUMENT_RETENTION_MAXIMUM_FUTURE_SKEW:2s}
   security:
     allowed-origins: ${CAREOS_ALLOWED_ORIGINS}
     application-base-url: ${CAREOS_BASE_URL}

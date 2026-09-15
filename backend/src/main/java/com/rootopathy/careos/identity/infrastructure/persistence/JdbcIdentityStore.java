@@ -241,6 +241,51 @@ public class JdbcIdentityStore implements IdentityStore {
     }
 
     @Override
+    public boolean administrativelyResetMfa(UUID userId, Instant resetAt) {
+        var reset = Timestamp.from(resetAt);
+        var changed = jdbcTemplate.update(
+                """
+                UPDATE mfa_methods
+                SET status = 'revoked', encrypted_secret = NULL, revoked_at = ?,
+                    lock_version = lock_version + 1
+                WHERE user_id = ? AND status = 'enabled'
+                """,
+                reset,
+                userId);
+        if (changed != 1) {
+            return false;
+        }
+        jdbcTemplate.update(
+                """
+                UPDATE recovery_codes
+                SET revoked_at = ?
+                WHERE user_id = ? AND used_at IS NULL AND revoked_at IS NULL
+                """,
+                reset,
+                userId);
+        jdbcTemplate.update(
+                """
+                UPDATE user_sessions
+                SET revoked_at = ?, revocation_reason = 'mfa_admin_reset'
+                WHERE user_id = ? AND revoked_at IS NULL
+                """,
+                reset,
+                userId);
+        var versionChanged = jdbcTemplate.update(
+                """
+                UPDATE users
+                SET security_version = security_version + 1, updated_at = ?
+                WHERE id = ? AND status = 'active'
+                """,
+                reset,
+                userId);
+        if (versionChanged != 1) {
+            throw new IllegalStateException("Active reset target disappeared");
+        }
+        return true;
+    }
+
+    @Override
     public void recordSession(
             String sessionIdHash,
             UUID userId,

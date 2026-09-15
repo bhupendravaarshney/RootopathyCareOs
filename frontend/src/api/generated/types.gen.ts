@@ -75,6 +75,48 @@ export type RecentAuthenticationRequest = {
   secondFactor?: string | null;
 };
 
+export type InvitationIssueRequest = {
+  email: string;
+  displayName: string;
+  roleKey: string;
+  reason: string;
+};
+
+export type InvitationRevocationRequest = {
+  reason: string;
+};
+
+export type MfaAdministrationReasonRequest = {
+  reason: string;
+};
+
+export type MfaResetMutation = {
+  approvalId: string;
+  targetUserId: string;
+  status: 'pending' | 'approved' | 'reset';
+  expiresAt: string;
+};
+
+export type InvitationAcceptanceRequest = {
+  token: string;
+  newPassword?: string | null;
+};
+
+export type InvitationMutation = {
+  invitationId: string;
+  status: 'pending' | 'revoked';
+  roleKey: string;
+  expiresAt: string;
+};
+
+export type InvitationAcceptance = {
+  invitationId: string;
+  organizationId: string;
+  userId: string;
+  roleKey: string;
+  accountLink: 'existing' | 'created';
+};
+
 export type OrganizationSelectionRequest = {
   organizationId: string;
 };
@@ -119,6 +161,21 @@ export type BrowserOrigin = string;
  * Organization boundary for every protected business-resource route.
  */
 export type OrganizationId = string;
+
+/**
+ * Opaque organization invitation identifier.
+ */
+export type InvitationId = string;
+
+/**
+ * Opaque identifier of the organization member whose MFA is being administered.
+ */
+export type TargetUserId = string;
+
+/**
+ * Opaque identifier of a time-bounded independent approval workflow.
+ */
+export type ApprovalId = string;
 
 /**
  * Opaque continuation cursor returned by the preceding page. Clients must not parse or construct it.
@@ -748,3 +805,432 @@ export type SelectOrganizationResponses = {
 
 export type SelectOrganizationResponse =
   SelectOrganizationResponses[keyof SelectOrganizationResponses];
+
+export type AcceptInvitationData = {
+  body: InvitationAcceptanceRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+  };
+  path?: never;
+  query?: never;
+  url: '/api/v1/auth/invitation-acceptances';
+};
+
+export type AcceptInvitationErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The requested MFA transition conflicts with current state
+   */
+  409: Problem;
+  /**
+   * Authentication attempts are temporarily throttled
+   */
+  429: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type AcceptInvitationError = AcceptInvitationErrors[keyof AcceptInvitationErrors];
+
+export type AcceptInvitationResponses = {
+  /**
+   * Invitation linked to the authenticated existing account
+   */
+  200: InvitationAcceptance;
+  /**
+   * Invitation accepted and a new account created
+   */
+  201: InvitationAcceptance;
+};
+
+export type AcceptInvitationResponse = AcceptInvitationResponses[keyof AcceptInvitationResponses];
+
+export type IssueInvitationData = {
+  body: InvitationIssueRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/invitations';
+};
+
+export type IssueInvitationErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested MFA transition conflicts with current state
+   */
+  409: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type IssueInvitationError = IssueInvitationErrors[keyof IssueInvitationErrors];
+
+export type IssueInvitationResponses = {
+  /**
+   * Invitation issued
+   */
+  201: InvitationMutation;
+};
+
+export type IssueInvitationResponse = IssueInvitationResponses[keyof IssueInvitationResponses];
+
+export type RevokeInvitationData = {
+  body: InvitationRevocationRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    /**
+     * Opaque organization invitation identifier.
+     */
+    invitationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/invitations/{invitationId}/revocations';
+};
+
+export type RevokeInvitationErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested MFA transition conflicts with current state
+   */
+  409: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type RevokeInvitationError = RevokeInvitationErrors[keyof RevokeInvitationErrors];
+
+export type RevokeInvitationResponses = {
+  /**
+   * Invitation revoked
+   */
+  200: InvitationMutation;
+};
+
+export type RevokeInvitationResponse = RevokeInvitationResponses[keyof RevokeInvitationResponses];
+
+export type RequestMfaAdministrativeResetData = {
+  body: MfaAdministrationReasonRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    /**
+     * Opaque identifier of the organization member whose MFA is being administered.
+     */
+    targetUserId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/users/{targetUserId}/mfa-reset-requests';
+};
+
+export type RequestMfaAdministrativeResetErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested MFA transition conflicts with current state
+   */
+  409: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type RequestMfaAdministrativeResetError =
+  RequestMfaAdministrativeResetErrors[keyof RequestMfaAdministrativeResetErrors];
+
+export type RequestMfaAdministrativeResetResponses = {
+  /**
+   * MFA reset approval requested
+   */
+  201: MfaResetMutation;
+};
+
+export type RequestMfaAdministrativeResetResponse =
+  RequestMfaAdministrativeResetResponses[keyof RequestMfaAdministrativeResetResponses];
+
+export type ApproveMfaAdministrativeResetData = {
+  body: MfaAdministrationReasonRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    /**
+     * Opaque identifier of the organization member whose MFA is being administered.
+     */
+    targetUserId: string;
+    /**
+     * Opaque identifier of a time-bounded independent approval workflow.
+     */
+    approvalId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/users/{targetUserId}/mfa-reset-requests/{approvalId}/approvals';
+};
+
+export type ApproveMfaAdministrativeResetErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested MFA transition conflicts with current state
+   */
+  409: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type ApproveMfaAdministrativeResetError =
+  ApproveMfaAdministrativeResetErrors[keyof ApproveMfaAdministrativeResetErrors];
+
+export type ApproveMfaAdministrativeResetResponses = {
+  /**
+   * MFA reset independently approved
+   */
+  200: MfaResetMutation;
+};
+
+export type ApproveMfaAdministrativeResetResponse =
+  ApproveMfaAdministrativeResetResponses[keyof ApproveMfaAdministrativeResetResponses];
+
+export type ExecuteMfaAdministrativeResetData = {
+  body: MfaAdministrationReasonRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    /**
+     * Opaque identifier of the organization member whose MFA is being administered.
+     */
+    targetUserId: string;
+    /**
+     * Opaque identifier of a time-bounded independent approval workflow.
+     */
+    approvalId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/users/{targetUserId}/mfa-reset-requests/{approvalId}/executions';
+};
+
+export type ExecuteMfaAdministrativeResetErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested MFA transition conflicts with current state
+   */
+  409: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type ExecuteMfaAdministrativeResetError =
+  ExecuteMfaAdministrativeResetErrors[keyof ExecuteMfaAdministrativeResetErrors];
+
+export type ExecuteMfaAdministrativeResetResponses = {
+  /**
+   * MFA reset completed
+   */
+  200: MfaResetMutation;
+};
+
+export type ExecuteMfaAdministrativeResetResponse =
+  ExecuteMfaAdministrativeResetResponses[keyof ExecuteMfaAdministrativeResetResponses];

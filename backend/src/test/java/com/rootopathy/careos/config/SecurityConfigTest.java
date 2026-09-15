@@ -89,6 +89,70 @@ class SecurityConfigTest {
                 .hasMessageContaining("maximum scan age");
     }
 
+    @Test
+    void rejectsSignedAccessWithoutStorageAndAnExplicitPolicyInProduction() {
+        var environment = productionEnvironment();
+        environment.setProperty("careos.documents.signed-access.enabled", "true");
+
+        assertThatThrownBy(() -> ProductionConfigurationGuard.validate(properties(), environment))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("signed document access requires private S3 document storage")
+                .hasMessageContaining("access policy key")
+                .hasMessageContaining("purpose allow-list")
+                .hasMessageContaining("maximum TTL")
+                .hasMessageContaining("maximum authorization age");
+    }
+
+    @Test
+    void rejectsRetentionWithoutStorageAndAnExplicitPolicyInProduction() {
+        var environment = productionEnvironment();
+        environment.setProperty("careos.documents.retention.enabled", "true");
+
+        assertThatThrownBy(() -> ProductionConfigurationGuard.validate(properties(), environment))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("document retention requires private S3 document storage")
+                .hasMessageContaining("retention policy key")
+                .hasMessageContaining("retention purpose allow-list")
+                .hasMessageContaining("minimum duration")
+                .hasMessageContaining("maximum duration")
+                .hasMessageContaining("maximum authorization age");
+    }
+
+    @Test
+    void rejectsTheProvisionalAuthorizationPolicyInProduction() {
+        var environment = productionEnvironment();
+        environment.setProperty("careos.authorization.reference-policy-enabled", "true");
+
+        assertThatThrownBy(() -> ProductionConfigurationGuard.validate(properties(), environment))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("reference authorization policy must be disabled");
+    }
+
+    @Test
+    void rejectsProvisionalInvitationAndMfaAdministrationActivationInProduction() {
+        var environment = productionEnvironment();
+        environment.setProperty("careos.invitations.enabled", "true");
+        environment.setProperty("careos.mfa-administration.enabled", "true");
+
+        assertThatThrownBy(() -> ProductionConfigurationGuard.validate(properties(), environment))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("governed invitations must remain disabled")
+                .hasMessageContaining("MFA administration must remain disabled");
+    }
+
+    @Test
+    void rejectsDocumentedServiceCredentialMaterialInProduction() {
+        var environment = productionEnvironment();
+        environment.setProperty("careos.service-identities.enabled", "true");
+        environment.setProperty(
+                "careos.service-identities.credential-pepper",
+                "CareOS-Local-Service-Credential-Pepper-Change-Me");
+
+        assertThatThrownBy(() -> ProductionConfigurationGuard.validate(properties(), environment))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("service identity credential pepper must not use documented local or test material");
+    }
+
     private static IdentitySecurityProperties properties() {
         return new IdentitySecurityProperties(
                 List.of("https://careos.example"),

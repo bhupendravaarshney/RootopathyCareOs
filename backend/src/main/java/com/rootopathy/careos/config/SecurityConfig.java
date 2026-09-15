@@ -8,6 +8,8 @@ import com.rootopathy.careos.identity.api.CareOsSpaCsrfTokenRequestHandler;
 import com.rootopathy.careos.identity.api.SecurityAccessFailureHandler;
 import com.rootopathy.careos.identity.api.SessionValidityFilter;
 import com.rootopathy.careos.identity.infrastructure.config.IdentitySecurityProperties;
+import com.rootopathy.careos.identity.infrastructure.config.InvitationPolicyProperties;
+import com.rootopathy.careos.identity.infrastructure.config.MfaAdministrationPolicyProperties;
 import com.rootopathy.careos.identity.infrastructure.security.PersistentUserDetailsService;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,7 +41,11 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
-@EnableConfigurationProperties(IdentitySecurityProperties.class)
+@EnableConfigurationProperties({
+    IdentitySecurityProperties.class,
+    InvitationPolicyProperties.class,
+    MfaAdministrationPolicyProperties.class
+})
 public class SecurityConfig {
     static final String API_CONTENT_SECURITY_POLICY =
             "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
@@ -99,6 +105,7 @@ public class SecurityConfig {
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/v1/auth/login",
+                                "/api/v1/auth/invitation-acceptances",
                                 "/api/v1/auth/password-reset-requests",
                                 "/api/v1/auth/password-resets")
                         .permitAll()

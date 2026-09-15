@@ -1,12 +1,22 @@
-import { KeyRound, ShieldCheck, Smartphone } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
-import type { MfaEnrollment, User } from '../../api/generated';
+import { KeyRound, ShieldCheck, Smartphone, UserPlus } from 'lucide-react';
+import { useRef, useState, type FormEvent } from 'react';
+import type {
+  InvitationAcceptance,
+  InvitationIssueRequest,
+  InvitationMutation,
+  InvitationRevocationRequest,
+  MfaEnrollment,
+  MfaResetMutation,
+  OrganizationAccess,
+  User,
+} from '../../api/generated';
 import { SessionIssueAlert } from './SessionIssueAlert';
 import { IdentityFrame, IdentityMark } from './SessionScreens';
 import type { SessionAction, SessionIssue } from './session-types';
 
 const MAX_PASSWORD_BYTES = 72;
 const MAX_RESET_TOKEN_LENGTH = 512;
+const MIN_INVITATION_TOKEN_LENGTH = 32;
 
 type PasswordResetRequestScreenProps = {
   busy: boolean;
@@ -209,11 +219,418 @@ export function PasswordResetCompletionScreen({
   );
 }
 
+type InvitationAcceptanceScreenProps = {
+  authenticatedEmail?: string;
+  busy: boolean;
+  issue: SessionIssue | null;
+  onAccept(token: string, newPassword?: string): Promise<InvitationAcceptance | null>;
+  onForgetToken(): void;
+  token?: string;
+};
+
+export function InvitationAcceptanceScreen({
+  authenticatedEmail,
+  busy,
+  issue,
+  onAccept,
+  onForgetToken,
+  token,
+}: InvitationAcceptanceScreenProps) {
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+  const [validationIssue, setValidationIssue] = useState('');
+  const [acceptance, setAcceptance] = useState<InvitationAcceptance | null>(null);
+  const usableToken =
+    typeof token === 'string' &&
+    token.length >= MIN_INVITATION_TOKEN_LENGTH &&
+    token.length <= MAX_RESET_TOKEN_LENGTH;
+  const creatingAccount = authenticatedEmail === undefined;
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setValidationIssue('');
+    if (!usableToken) {
+      return;
+    }
+    let submittedPassword: string | undefined;
+    if (creatingAccount) {
+      if (newPassword !== confirmation) {
+        setValidationIssue('The password confirmation does not match.');
+        return;
+      }
+      const byteLength = new TextEncoder().encode(newPassword).byteLength;
+      if (newPassword.length < 12 || byteLength > MAX_PASSWORD_BYTES) {
+        setValidationIssue('Use at least 12 characters and no more than 72 UTF-8 bytes.');
+        return;
+      }
+      submittedPassword = newPassword;
+    }
+
+    setNewPassword('');
+    setConfirmation('');
+    const result = await onAccept(token, submittedPassword);
+    if (result) {
+      onForgetToken();
+      setAcceptance(result);
+    }
+  };
+
+  return (
+    <IdentityFrame>
+      <section className="auth-panel panel" aria-labelledby="invitation-acceptance-heading">
+        <span className="eyebrow">M1-02</span>
+        <IdentityMark>
+          <UserPlus aria-hidden="true" />
+        </IdentityMark>
+        <h1 id="invitation-acceptance-heading">
+          {acceptance ? 'Invitation accepted' : 'Accept your CareOS invitation'}
+        </h1>
+        {acceptance ? (
+          <>
+            <p className="success-callout" role="status">
+              Organization access was linked to your {acceptance.accountLink} account.
+            </p>
+            <p>
+              The one-time invitation is consumed. Role: <strong>{acceptance.roleKey}</strong>.
+            </p>
+            <a className="primary-button full-button button-link" href="#/M1-01">
+              {acceptance.accountLink === 'created' ? 'Sign in to CareOS' : 'Continue to CareOS'}
+            </a>
+          </>
+        ) : !usableToken ? (
+          <>
+            <p className="warning-callout" role="alert">
+              This invitation link is missing its one-time token or is malformed.
+            </p>
+            <a className="primary-button full-button button-link" href="#/M1-01">
+              Continue to sign in
+            </a>
+          </>
+        ) : (
+          <>
+            <p>
+              {creatingAccount
+                ? 'Choose a password to create the invited account. If this email already belongs to an account, sign in first and reopen the invitation link.'
+                : `Accept this invitation as ${authenticatedEmail}. The server will reject a token addressed to any other account.`}
+            </p>
+            {issue && <SessionIssueAlert issue={issue} />}
+            {validationIssue && (
+              <p className="warning-callout" role="alert">
+                {validationIssue}
+              </p>
+            )}
+            <form onSubmit={(event) => void submit(event)}>
+              {creatingAccount && (
+                <>
+                  <label htmlFor="invitation-password">
+                    New password
+                    <input
+                      id="invitation-password"
+                      type="password"
+                      autoComplete="new-password"
+                      minLength={12}
+                      maxLength={128}
+                      required
+                      value={newPassword}
+                      onChange={(event) => setNewPassword(event.target.value)}
+                      disabled={busy}
+                    />
+                  </label>
+                  <label htmlFor="invitation-password-confirmation">
+                    Confirm new password
+                    <input
+                      id="invitation-password-confirmation"
+                      type="password"
+                      autoComplete="new-password"
+                      minLength={12}
+                      maxLength={128}
+                      required
+                      value={confirmation}
+                      onChange={(event) => setConfirmation(event.target.value)}
+                      disabled={busy}
+                    />
+                  </label>
+                </>
+              )}
+              <button className="primary-button full-button" disabled={busy}>
+                {busy ? 'Accepting invitation...' : 'Accept invitation'}
+              </button>
+            </form>
+            <p className="security-note">
+              The token is removed from browser history after this page captures it and is sent only
+              to the checked acceptance endpoint.
+            </p>
+          </>
+        )}
+      </section>
+    </IdentityFrame>
+  );
+}
+
+type InvitationAdministrationScreenProps = {
+  busyAction: SessionAction | null;
+  issue: SessionIssue | null;
+  onIssue(
+    invitation: InvitationIssueRequest & { idempotencyKey: string },
+  ): Promise<InvitationMutation | null>;
+  onRevoke(
+    invitation: InvitationRevocationRequest & {
+      idempotencyKey: string;
+      invitationId: string;
+    },
+  ): Promise<InvitationMutation | null>;
+  organization: OrganizationAccess;
+  recentAuthentication: boolean;
+};
+
+function idempotencyKey(scope: string): string {
+  if (!globalThis.crypto?.randomUUID) {
+    throw new Error('Secure browser randomness is required for governed mutations.');
+  }
+  return `${scope}:${globalThis.crypto.randomUUID()}`;
+}
+
+export function InvitationAdministrationScreen({
+  busyAction,
+  issue,
+  onIssue,
+  onRevoke,
+  organization,
+  recentAuthentication,
+}: InvitationAdministrationScreenProps) {
+  const [email, setEmail] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [roleKey, setRoleKey] = useState('organization_member');
+  const [reason, setReason] = useState('');
+  const [revocationReason, setRevocationReason] = useState('');
+  const [invitation, setInvitation] = useState<InvitationMutation | null>(null);
+  const [localIssue, setLocalIssue] = useState('');
+  const issueAttempt = useRef<{ fingerprint: string; key: string } | null>(null);
+  const revokeAttempt = useRef<{ fingerprint: string; key: string } | null>(null);
+  const busy = busyAction !== null;
+
+  const submitIssue = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLocalIssue('');
+    const request = {
+      displayName: displayName.trim(),
+      email: email.trim(),
+      reason: reason.trim(),
+      roleKey,
+    };
+    const fingerprint = JSON.stringify(request);
+    try {
+      if (issueAttempt.current?.fingerprint !== fingerprint) {
+        issueAttempt.current = { fingerprint, key: idempotencyKey('invite') };
+      }
+      const result = await onIssue({
+        ...request,
+        idempotencyKey: issueAttempt.current.key,
+      });
+      if (result) {
+        issueAttempt.current = null;
+        revokeAttempt.current = null;
+        setEmail('');
+        setDisplayName('');
+        setReason('');
+        setRevocationReason('');
+        setInvitation(result);
+      }
+    } catch (error) {
+      setLocalIssue(error instanceof Error ? error.message : 'Invitation could not be prepared.');
+    }
+  };
+
+  const submitRevoke = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!invitation || invitation.status !== 'pending') {
+      return;
+    }
+    setLocalIssue('');
+    const request = {
+      invitationId: invitation.invitationId,
+      reason: revocationReason.trim(),
+    };
+    const fingerprint = JSON.stringify(request);
+    try {
+      if (revokeAttempt.current?.fingerprint !== fingerprint) {
+        revokeAttempt.current = { fingerprint, key: idempotencyKey('revoke') };
+      }
+      const result = await onRevoke({
+        ...request,
+        idempotencyKey: revokeAttempt.current.key,
+      });
+      if (result) {
+        revokeAttempt.current = null;
+        setRevocationReason('');
+        setInvitation(result);
+      }
+    } catch (error) {
+      setLocalIssue(error instanceof Error ? error.message : 'Revocation could not be prepared.');
+    }
+  };
+
+  return (
+    <IdentityFrame homeHref="#/M1-05" homeLabel="ROOTOPATHY CareOS workspace home">
+      <section
+        className="auth-panel security-workflow-panel panel"
+        aria-labelledby="invitation-administration-heading"
+      >
+        <span className="eyebrow">M1-02</span>
+        <IdentityMark>
+          <UserPlus aria-hidden="true" />
+        </IdentityMark>
+        <h1 id="invitation-administration-heading">Organization invitations</h1>
+        <p>
+          Issue access to <strong>{organization.displayName}</strong>. The server enforces your
+          role's delegation ceiling and records the stated reason.
+        </p>
+        {issue && <SessionIssueAlert issue={issue} />}
+        {localIssue && (
+          <p className="warning-callout" role="alert">
+            {localIssue}
+          </p>
+        )}
+
+        {!recentAuthentication ? (
+          <div className="security-action-card">
+            <h2>Recent verification required</h2>
+            <p>Verify your password and second factor before issuing or revoking access.</p>
+            <a className="primary-button full-button button-link" href="#/M1-03">
+              Verify identity
+            </a>
+          </div>
+        ) : invitation ? (
+          <div className="security-action-card">
+            <h2>{invitation.status === 'pending' ? 'Invitation issued' : 'Invitation revoked'}</h2>
+            <p className="success-callout" role="status">
+              {invitation.status === 'pending'
+                ? 'A one-time link was sent by the configured notification channel.'
+                : 'The invitation token can no longer be accepted.'}
+            </p>
+            <p>
+              Role: <strong>{invitation.roleKey}</strong>
+              <br />
+              Expires: <time dateTime={invitation.expiresAt}>{invitation.expiresAt}</time>
+              <br />
+              Reference: {invitation.invitationId}
+            </p>
+            {invitation.status === 'pending' && (
+              <form onSubmit={(event) => void submitRevoke(event)}>
+                <label htmlFor="invitation-revocation-reason">
+                  Revocation reason
+                  <textarea
+                    id="invitation-revocation-reason"
+                    maxLength={2000}
+                    required
+                    value={revocationReason}
+                    onChange={(event) => setRevocationReason(event.target.value)}
+                    disabled={busy}
+                  />
+                </label>
+                <button className="secondary-button full-button" disabled={busy}>
+                  {busyAction === 'revoke-invitation' ? 'Revoking...' : 'Revoke invitation'}
+                </button>
+              </form>
+            )}
+            <button
+              type="button"
+              className="text-action centered-action"
+              disabled={busy}
+              onClick={() => setInvitation(null)}
+            >
+              Issue another invitation
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={(event) => void submitIssue(event)}>
+            <label htmlFor="invitation-email">
+              Email address
+              <input
+                id="invitation-email"
+                type="email"
+                autoComplete="off"
+                maxLength={320}
+                required
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                disabled={busy}
+              />
+            </label>
+            <label htmlFor="invitation-display-name">
+              Display name
+              <input
+                id="invitation-display-name"
+                type="text"
+                autoComplete="off"
+                maxLength={160}
+                required
+                value={displayName}
+                onChange={(event) => setDisplayName(event.target.value)}
+                disabled={busy}
+              />
+            </label>
+            <label htmlFor="invitation-role">
+              Role
+              <select
+                id="invitation-role"
+                value={roleKey}
+                onChange={(event) => setRoleKey(event.target.value)}
+                disabled={busy}
+              >
+                <option value="organization_member">Organization member</option>
+                <option value="organization_administrator">Organization administrator</option>
+              </select>
+            </label>
+            <label htmlFor="invitation-reason">
+              Access reason
+              <textarea
+                id="invitation-reason"
+                maxLength={2000}
+                required
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+                disabled={busy}
+              />
+            </label>
+            <button className="primary-button full-button" disabled={busy}>
+              {busyAction === 'issue-invitation' ? 'Issuing invitation...' : 'Issue invitation'}
+            </button>
+          </form>
+        )}
+
+        <div className="security-footer-actions">
+          <a className="text-action button-link" href="#/M1-05">
+            Return to workspace
+          </a>
+        </div>
+      </section>
+    </IdentityFrame>
+  );
+}
+
 type MfaAdministrationScreenProps = {
   issue: SessionIssue | null;
   mfaEnabled: boolean;
+  onApproveAdministrativeReset(request: {
+    approvalId: string;
+    idempotencyKey: string;
+    reason: string;
+    targetUserId: string;
+  }): Promise<MfaResetMutation | null>;
+  onExecuteAdministrativeReset(request: {
+    approvalId: string;
+    idempotencyKey: string;
+    reason: string;
+    targetUserId: string;
+  }): Promise<MfaResetMutation | null>;
   onLogout(): Promise<void>;
   onRegenerateRecoveryCodes(): Promise<string[] | null>;
+  onRequestAdministrativeReset(request: {
+    idempotencyKey: string;
+    reason: string;
+    targetUserId: string;
+  }): Promise<MfaResetMutation | null>;
   onStartEnrollment(label?: string): Promise<MfaEnrollment | null>;
   onVerifyEnrollment(code: string): Promise<string[] | null>;
   onVerifyRecentAuthentication(credentials: {
@@ -222,6 +639,7 @@ type MfaAdministrationScreenProps = {
   }): Promise<boolean>;
   pendingAction: SessionAction | null;
   recentAuthentication: boolean;
+  selectedOrganization?: OrganizationAccess;
   user: User;
 };
 
@@ -233,13 +651,17 @@ type MfaView =
 export function MfaAdministrationScreen({
   issue,
   mfaEnabled,
+  onApproveAdministrativeReset,
+  onExecuteAdministrativeReset,
   onLogout,
   onRegenerateRecoveryCodes,
+  onRequestAdministrativeReset,
   onStartEnrollment,
   onVerifyEnrollment,
   onVerifyRecentAuthentication,
   pendingAction,
   recentAuthentication,
+  selectedOrganization,
   user,
 }: MfaAdministrationScreenProps) {
   const busy = pendingAction !== null;
@@ -275,6 +697,16 @@ export function MfaAdministrationScreen({
             onVerifyEnrollment={onVerifyEnrollment}
             pendingAction={pendingAction}
             user={user}
+          />
+        )}
+
+        {recentAuthentication && selectedOrganization && (
+          <MfaAdministrativeResetPanel
+            busyAction={pendingAction}
+            onApprove={onApproveAdministrativeReset}
+            onExecute={onExecuteAdministrativeReset}
+            onRequest={onRequestAdministrativeReset}
+            organization={selectedOrganization}
           />
         )}
 
@@ -406,10 +838,198 @@ function RecentlyAuthenticatedMfaControls({
         </div>
       )}
       <p className="security-note">
-        MFA disable and administrator reset are intentionally unavailable until their governed
-        support policy is approved.
+        Self-service MFA disable remains unavailable. Administrator reset uses a separate,
+        time-bounded maker-checker workflow and never reveals the target's MFA material.
       </p>
     </div>
+  );
+}
+
+type AdministrativeResetAction = 'approve' | 'execute' | 'request';
+
+function MfaAdministrativeResetPanel({
+  busyAction,
+  onApprove,
+  onExecute,
+  onRequest,
+  organization,
+}: {
+  busyAction: SessionAction | null;
+  onApprove(request: {
+    approvalId: string;
+    idempotencyKey: string;
+    reason: string;
+    targetUserId: string;
+  }): Promise<MfaResetMutation | null>;
+  onExecute(request: {
+    approvalId: string;
+    idempotencyKey: string;
+    reason: string;
+    targetUserId: string;
+  }): Promise<MfaResetMutation | null>;
+  onRequest(request: {
+    idempotencyKey: string;
+    reason: string;
+    targetUserId: string;
+  }): Promise<MfaResetMutation | null>;
+  organization: OrganizationAccess;
+}) {
+  const [action, setAction] = useState<AdministrativeResetAction>('request');
+  const [approvalId, setApprovalId] = useState('');
+  const [targetUserId, setTargetUserId] = useState('');
+  const [reason, setReason] = useState('');
+  const [outcome, setOutcome] = useState<MfaResetMutation | null>(null);
+  const [localIssue, setLocalIssue] = useState('');
+  const attempt = useRef<{
+    action: AdministrativeResetAction;
+    fingerprint: string;
+    key: string;
+  } | null>(null);
+  const busy = busyAction !== null;
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLocalIssue('');
+    const normalizedTarget = targetUserId.trim();
+    const normalizedApproval = approvalId.trim();
+    const normalizedReason = reason.trim();
+    const fingerprint = JSON.stringify({
+      action,
+      approvalId: normalizedApproval,
+      reason: normalizedReason,
+      targetUserId: normalizedTarget,
+    });
+    try {
+      if (attempt.current?.fingerprint !== fingerprint || attempt.current.action !== action) {
+        attempt.current = { action, fingerprint, key: idempotencyKey(`mfa-${action}`) };
+      }
+      const request = {
+        idempotencyKey: attempt.current.key,
+        reason: normalizedReason,
+        targetUserId: normalizedTarget,
+      };
+      const result =
+        action === 'request'
+          ? await onRequest(request)
+          : action === 'approve'
+            ? await onApprove({ ...request, approvalId: normalizedApproval })
+            : await onExecute({ ...request, approvalId: normalizedApproval });
+      if (result) {
+        attempt.current = null;
+        setOutcome(result);
+        setApprovalId(result.approvalId);
+      }
+    } catch (error) {
+      setLocalIssue(
+        error instanceof Error ? error.message : 'The MFA reset action could not be prepared.',
+      );
+    }
+  };
+
+  const actionLabel =
+    action === 'request'
+      ? 'Request independent approval'
+      : action === 'approve'
+        ? 'Approve as independent checker'
+        : 'Execute approved reset';
+  const pending =
+    busyAction === 'request-mfa-administrative-reset' ||
+    busyAction === 'approve-mfa-administrative-reset' ||
+    busyAction === 'execute-mfa-administrative-reset';
+
+  return (
+    <section className="security-action-card" aria-labelledby="administrative-mfa-reset-heading">
+      <h2 id="administrative-mfa-reset-heading">Administrator MFA reset</h2>
+      <p>
+        Governed action for <strong>{organization.displayName}</strong>. One administrator requests
+        the reset, a different authorized administrator approves it, and only the original requester
+        can execute that exact request.
+      </p>
+      {localIssue && (
+        <p className="warning-callout" role="alert">
+          {localIssue}
+        </p>
+      )}
+      {outcome && (
+        <p className="success-callout" role="status">
+          Workflow status: <strong>{outcome.status}</strong>
+          <br />
+          Approval reference: {outcome.approvalId}
+          <br />
+          Expires: <time dateTime={outcome.expiresAt}>{outcome.expiresAt}</time>
+        </p>
+      )}
+      <form onSubmit={(event) => void submit(event)}>
+        <label htmlFor="administrative-mfa-reset-action">
+          Workflow action
+          <select
+            id="administrative-mfa-reset-action"
+            value={action}
+            onChange={(event) => {
+              setAction(event.target.value as AdministrativeResetAction);
+              setOutcome(null);
+            }}
+            disabled={busy}
+          >
+            <option value="request">Request reset</option>
+            <option value="approve">Independently approve</option>
+            <option value="execute">Execute approved reset</option>
+          </select>
+        </label>
+        <label htmlFor="administrative-mfa-target-user">
+          Target user ID
+          <input
+            id="administrative-mfa-target-user"
+            type="text"
+            inputMode="text"
+            autoComplete="off"
+            pattern="[0-9a-fA-F-]{36}"
+            maxLength={36}
+            required
+            value={targetUserId}
+            onChange={(event) => setTargetUserId(event.target.value)}
+            disabled={busy}
+          />
+        </label>
+        {action !== 'request' && (
+          <label htmlFor="administrative-mfa-approval-id">
+            Approval reference
+            <input
+              id="administrative-mfa-approval-id"
+              type="text"
+              inputMode="text"
+              autoComplete="off"
+              pattern="[0-9a-fA-F-]{36}"
+              maxLength={36}
+              required
+              value={approvalId}
+              onChange={(event) => setApprovalId(event.target.value)}
+              disabled={busy}
+            />
+          </label>
+        )}
+        <label htmlFor="administrative-mfa-reset-reason">
+          {action === 'approve' ? 'Independent decision reason' : 'Reset reason'}
+          <textarea
+            id="administrative-mfa-reset-reason"
+            maxLength={2000}
+            required
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            disabled={busy}
+          />
+        </label>
+        {action === 'execute' && (
+          <p className="security-note">
+            Execution must use the exact reason entered by the original requester. The approval is
+            consumed atomically if the reset succeeds.
+          </p>
+        )}
+        <button className="secondary-button full-button" disabled={busy}>
+          {pending ? 'Submitting governed action...' : actionLabel}
+        </button>
+      </form>
+    </section>
   );
 }
 

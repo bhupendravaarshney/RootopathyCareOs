@@ -3,7 +3,10 @@ package com.rootopathy.careos.tenancy.application;
 public final class TenantAuthorizationException extends RuntimeException {
     public enum Reason {
         MEMBERSHIP_NOT_FOUND,
-        PERMISSION_DENIED
+        PERMISSION_DENIED,
+        REASON_REQUIRED,
+        RECENT_AUTHENTICATION_REQUIRED,
+        INDEPENDENT_APPROVAL_REQUIRED
     }
 
     private final Reason reason;

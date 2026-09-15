@@ -2,14 +2,20 @@ package com.rootopathy.careos.platform.infrastructure;
 
 import com.rootopathy.careos.platform.application.DocumentEvidenceException;
 import com.rootopathy.careos.platform.application.DocumentEvidenceOperations;
+import com.rootopathy.careos.platform.domain.DocumentAccessAuthorization;
+import com.rootopathy.careos.platform.domain.DocumentAccessGrantEvidence;
 import com.rootopathy.careos.platform.domain.DocumentObjectReference;
 import com.rootopathy.careos.platform.domain.DocumentPromotionEvidence;
 import com.rootopathy.careos.platform.domain.DocumentPromotionPolicy;
 import com.rootopathy.careos.platform.domain.DocumentQuarantineEvidence;
 import com.rootopathy.careos.platform.domain.DocumentQuarantineRequest;
+import com.rootopathy.careos.platform.domain.DocumentRetentionAuthorization;
+import com.rootopathy.careos.platform.domain.DocumentRetentionEvidence;
+import com.rootopathy.careos.platform.domain.DocumentRetentionReceipt;
 import com.rootopathy.careos.platform.domain.DocumentScanAttestation;
 import com.rootopathy.careos.platform.domain.MalwareScanResult;
 import com.rootopathy.careos.platform.domain.MalwareScanVerdict;
+import com.rootopathy.careos.shared.domain.UuidV7Generator;
 import com.rootopathy.careos.tenancy.domain.AuthorizedTenantContext;
 import com.rootopathy.careos.tenancy.infrastructure.AuthorizedTenantTransactionGuard;
 import java.sql.ResultSet;
@@ -24,7 +30,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-/** PostgreSQL-backed append-only quarantine metadata and malware-scan evidence. */
+/** PostgreSQL-backed append-only quarantine, scan, promotion, access, and retention evidence. */
 public final class PostgresDocumentEvidenceAdapter implements DocumentEvidenceOperations {
     private static final String NOT_INITIALIZED = "document-evidence-store-not-initialized";
     private static final String STORE_REJECTED = "document-evidence-store-rejected";
@@ -35,6 +41,10 @@ public final class PostgresDocumentEvidenceAdapter implements DocumentEvidenceOp
     private static final String PROMOTION_CONFLICT = "document-promotion-evidence-conflict";
     private static final String PROMOTION_SCANNER_REJECTED =
             "document-promotion-scanner-not-approved";
+    private static final String ACCESS_GRANT_CONFLICT = "document-access-evidence-conflict";
+    private static final String ACCESS_PURPOSE_MISMATCH = "document-access-purpose-mismatch";
+    private static final String RETENTION_CONFLICT = "document-retention-evidence-conflict";
+    private static final String RETENTION_PURPOSE_MISMATCH = "document-retention-purpose-mismatch";
     private static final String TENANT_MISMATCH = "document-evidence-tenant-mismatch";
     private static final String REFERENCE_MISMATCH = "document-evidence-reference-mismatch";
 
@@ -72,6 +82,16 @@ public final class PostgresDocumentEvidenceAdapter implements DocumentEvidenceOp
                     "document_promotion_evidence_tenant_policy",
                     "document_promotion_evidence_validate_insert",
                     "document_promotion_evidence_reject_mutation");
+            verifyTableSecurity(
+                    "document_access_grant_evidence",
+                    "document_access_grant_evidence_tenant_policy",
+                    "document_access_grant_evidence_validate_insert",
+                    "document_access_grant_evidence_reject_mutation");
+            verifyTableSecurity(
+                    "document_retention_evidence",
+                    "document_retention_evidence_tenant_policy",
+                    "document_retention_evidence_validate_insert",
+                    "document_retention_evidence_reject_mutation");
             var hasRequiredConstraints = jdbcTemplate.queryForObject(
                     """
                     SELECT EXISTS (
@@ -154,6 +174,101 @@ public final class PostgresDocumentEvidenceAdapter implements DocumentEvidenceOp
                               'document_id', 'object_version_id'
                           ]::text[]
                     )
+                    AND EXISTS (
+                        SELECT 1
+                        FROM pg_constraint constraints
+                        JOIN pg_class tables ON tables.oid = constraints.conrelid
+                        JOIN pg_class referenced_tables
+                          ON referenced_tables.oid = constraints.confrelid
+                        JOIN pg_namespace schemas ON schemas.oid = tables.relnamespace
+                        WHERE schemas.nspname = 'public'
+                          AND tables.relname = 'document_access_grant_evidence'
+                          AND referenced_tables.relname = 'document_promotion_evidence'
+                          AND constraints.conname = 'document_access_grant_evidence_promotion_fk'
+                          AND constraints.contype = 'f'
+                          AND (
+                              SELECT array_agg(attributes.attname::text ORDER BY keys.ordinality)
+                              FROM unnest(constraints.conkey) WITH ORDINALITY keys(attribute_number, ordinality)
+                              JOIN pg_attribute attributes
+                                ON attributes.attrelid = constraints.conrelid
+                               AND attributes.attnum = keys.attribute_number
+                          ) = ARRAY[
+                              'organization_id', 'document_id', 'object_version_id'
+                          ]::text[]
+                          AND (
+                              SELECT array_agg(attributes.attname::text ORDER BY keys.ordinality)
+                              FROM unnest(constraints.confkey) WITH ORDINALITY keys(attribute_number, ordinality)
+                              JOIN pg_attribute attributes
+                                ON attributes.attrelid = constraints.confrelid
+                               AND attributes.attnum = keys.attribute_number
+                          ) = ARRAY[
+                              'organization_id', 'document_id', 'object_version_id'
+                          ]::text[]
+                    )
+                    AND EXISTS (
+                        SELECT 1
+                        FROM pg_constraint constraints
+                        JOIN pg_class tables ON tables.oid = constraints.conrelid
+                        JOIN pg_class referenced_tables
+                          ON referenced_tables.oid = constraints.confrelid
+                        JOIN pg_namespace schemas ON schemas.oid = tables.relnamespace
+                        WHERE schemas.nspname = 'public'
+                          AND tables.relname = 'document_retention_evidence'
+                          AND referenced_tables.relname = 'document_promotion_evidence'
+                          AND constraints.conname = 'document_retention_evidence_promotion_fk'
+                          AND constraints.contype = 'f'
+                          AND (
+                              SELECT array_agg(attributes.attname::text ORDER BY keys.ordinality)
+                              FROM unnest(constraints.conkey) WITH ORDINALITY keys(attribute_number, ordinality)
+                              JOIN pg_attribute attributes
+                                ON attributes.attrelid = constraints.conrelid
+                               AND attributes.attnum = keys.attribute_number
+                          ) = ARRAY[
+                              'organization_id', 'document_id', 'object_version_id'
+                          ]::text[]
+                          AND (
+                              SELECT array_agg(attributes.attname::text ORDER BY keys.ordinality)
+                              FROM unnest(constraints.confkey) WITH ORDINALITY keys(attribute_number, ordinality)
+                              JOIN pg_attribute attributes
+                                ON attributes.attrelid = constraints.confrelid
+                               AND attributes.attnum = keys.attribute_number
+                          ) = ARRAY[
+                              'organization_id', 'document_id', 'object_version_id'
+                          ]::text[]
+                    )
+                    AND EXISTS (
+                        SELECT 1
+                        FROM pg_constraint constraints
+                        JOIN pg_class tables ON tables.oid = constraints.conrelid
+                        JOIN pg_class referenced_tables
+                          ON referenced_tables.oid = constraints.confrelid
+                        JOIN pg_namespace schemas ON schemas.oid = tables.relnamespace
+                        WHERE schemas.nspname = 'public'
+                          AND tables.relname = 'document_retention_evidence'
+                          AND referenced_tables.relname = 'document_retention_evidence'
+                          AND constraints.conname = 'document_retention_evidence_previous_fk'
+                          AND constraints.contype = 'f'
+                          AND (
+                              SELECT array_agg(attributes.attname::text ORDER BY keys.ordinality)
+                              FROM unnest(constraints.conkey) WITH ORDINALITY keys(attribute_number, ordinality)
+                              JOIN pg_attribute attributes
+                                ON attributes.attrelid = constraints.conrelid
+                               AND attributes.attnum = keys.attribute_number
+                          ) = ARRAY[
+                              'organization_id', 'previous_retention_directive_id',
+                              'document_id', 'object_version_id'
+                          ]::text[]
+                          AND (
+                              SELECT array_agg(attributes.attname::text ORDER BY keys.ordinality)
+                              FROM unnest(constraints.confkey) WITH ORDINALITY keys(attribute_number, ordinality)
+                              JOIN pg_attribute attributes
+                                ON attributes.attrelid = constraints.confrelid
+                               AND attributes.attnum = keys.attribute_number
+                          ) = ARRAY[
+                              'organization_id', 'retention_directive_id',
+                              'document_id', 'object_version_id'
+                          ]::text[]
+                    )
                     """,
                     Boolean.class);
             var visibleWithoutTenant = jdbcTemplate.queryForObject(
@@ -161,6 +276,8 @@ public final class PostgresDocumentEvidenceAdapter implements DocumentEvidenceOp
                     SELECT (SELECT count(*) FROM document_quarantine_evidence)
                          + (SELECT count(*) FROM document_scan_attestations)
                          + (SELECT count(*) FROM document_promotion_evidence)
+                         + (SELECT count(*) FROM document_access_grant_evidence)
+                         + (SELECT count(*) FROM document_retention_evidence)
                     """,
                     Long.class);
             if (!Boolean.TRUE.equals(hasRequiredConstraints)
@@ -244,7 +361,7 @@ public final class PostgresDocumentEvidenceAdapter implements DocumentEvidenceOp
                     result.definitionsVersion(),
                     result.sha256(),
                     result.scannedAt().truncatedTo(ChronoUnit.MICROS));
-            var attestationId = UUID.randomUUID();
+            var attestationId = UuidV7Generator.randomUuid();
             var inserted = jdbcTemplate.update(
                     """
                     INSERT INTO document_scan_attestations
@@ -344,6 +461,145 @@ public final class PostgresDocumentEvidenceAdapter implements DocumentEvidenceOp
     }
 
     @Override
+    public DocumentAccessGrantEvidence recordAccessGrant(
+            AuthorizedTenantContext context, DocumentAccessAuthorization authorization) {
+        Objects.requireNonNull(authorization, "authorization");
+        var document = authorization.document();
+        requireContext(context, document);
+        if (!context.purpose().equals(authorization.purpose())) {
+            throw new DocumentEvidenceException(ACCESS_PURPOSE_MISMATCH);
+        }
+
+        try {
+            var existing = readAccessGrant(document, authorization.accessGrantId());
+            if (existing.isPresent()) {
+                var stored = existing.orElseThrow();
+                if (!matches(stored, authorization, context)) {
+                    throw new DocumentEvidenceException(ACCESS_GRANT_CONFLICT);
+                }
+                return stored;
+            }
+            var inserted = jdbcTemplate.update(
+                    """
+                    INSERT INTO document_access_grant_evidence
+                        (organization_id, access_grant_id, document_id, object_version_id,
+                         access_policy_key, accepted_purposes, requested_ttl_seconds,
+                         maximum_ttl_seconds, maximum_authorization_age_seconds,
+                         maximum_future_skew_seconds, authorized_at, granted_to_actor_id,
+                         purpose, correlation_id, expires_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT DO NOTHING
+                    """,
+                    context.organizationId(),
+                    authorization.accessGrantId(),
+                    document.documentId(),
+                    document.objectVersionId(),
+                    authorization.policyKey(),
+                    authorization.acceptedPurposes().stream()
+                            .sorted()
+                            .collect(java.util.stream.Collectors.joining(",")),
+                    Math.toIntExact(authorization.requestedTtl().toSeconds()),
+                    Math.toIntExact(authorization.maximumTtl().toSeconds()),
+                    Math.toIntExact(authorization.maximumAuthorizationAge().toSeconds()),
+                    Math.toIntExact(authorization.maximumFutureSkew().toSeconds()),
+                    Timestamp.from(authorization.authorizedAt()),
+                    context.actorId(),
+                    context.purpose(),
+                    context.correlationId(),
+                    Timestamp.from(authorization.expiresAt()));
+            if (inserted != 0 && inserted != 1) {
+                throw new DocumentEvidenceException(STORE_REJECTED);
+            }
+            var stored = readAccessGrant(document, authorization.accessGrantId())
+                    .orElseThrow(() -> new DocumentEvidenceException(STORE_REJECTED));
+            if (!matches(stored, authorization, context)) {
+                throw new DocumentEvidenceException(ACCESS_GRANT_CONFLICT);
+            }
+            return stored;
+        } catch (DocumentEvidenceException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw new DocumentEvidenceException(STORE_REJECTED, exception);
+        }
+    }
+
+    @Override
+    public DocumentRetentionEvidence recordRetention(
+            AuthorizedTenantContext context,
+            DocumentRetentionAuthorization authorization,
+            DocumentRetentionReceipt receipt) {
+        Objects.requireNonNull(authorization, "authorization");
+        Objects.requireNonNull(receipt, "receipt");
+        var document = authorization.document();
+        requireContext(context, document);
+        if (!context.purpose().equals(authorization.purpose())) {
+            throw new DocumentEvidenceException(RETENTION_PURPOSE_MISMATCH);
+        }
+        if (!document.equals(receipt.document())
+                || !authorization.retainUntil().equals(receipt.retainUntil())
+                || authorization.legalHold() != receipt.legalHold()) {
+            throw new DocumentEvidenceException(RETENTION_CONFLICT);
+        }
+
+        try {
+            var existing = readRetention(document, authorization.retentionDirectiveId());
+            if (existing.isPresent()) {
+                var stored = existing.orElseThrow();
+                if (!matches(stored, authorization, receipt, context)) {
+                    throw new DocumentEvidenceException(RETENTION_CONFLICT);
+                }
+                return stored;
+            }
+            var inserted = jdbcTemplate.update(
+                    """
+                    INSERT INTO document_retention_evidence
+                        (organization_id, retention_directive_id, document_id,
+                         object_version_id, previous_retention_directive_id,
+                         retention_policy_key, accepted_purposes,
+                         minimum_retention_seconds, maximum_retention_seconds,
+                         maximum_authorization_age_seconds, maximum_future_skew_seconds,
+                         retain_until, legal_hold, retention_mode, storage_version_sha256,
+                         authorized_at, applied_by_actor_id, purpose, correlation_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'compliance', ?, ?, ?, ?, ?)
+                    ON CONFLICT DO NOTHING
+                    """,
+                    context.organizationId(),
+                    authorization.retentionDirectiveId(),
+                    document.documentId(),
+                    document.objectVersionId(),
+                    authorization.previousRetentionDirectiveId(),
+                    authorization.policyKey(),
+                    authorization.acceptedPurposes().stream()
+                            .sorted()
+                            .collect(java.util.stream.Collectors.joining(",")),
+                    authorization.minimumRetention().toSeconds(),
+                    authorization.maximumRetention().toSeconds(),
+                    Math.toIntExact(authorization.maximumAuthorizationAge().toSeconds()),
+                    Math.toIntExact(authorization.maximumFutureSkew().toSeconds()),
+                    Timestamp.from(authorization.retainUntil()),
+                    authorization.legalHold(),
+                    receipt.storageVersionSha256(),
+                    Timestamp.from(authorization.authorizedAt()),
+                    context.actorId(),
+                    context.purpose(),
+                    context.correlationId());
+            if (inserted != 0 && inserted != 1) {
+                throw new DocumentEvidenceException(STORE_REJECTED);
+            }
+            var stored = readRetention(document, authorization.retentionDirectiveId())
+                    .orElseThrow(() -> new DocumentEvidenceException(STORE_REJECTED));
+            if (!matches(stored, authorization, receipt, context)) {
+                throw new DocumentEvidenceException(RETENTION_CONFLICT);
+            }
+            return stored;
+        } catch (DocumentEvidenceException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw new DocumentEvidenceException(STORE_REJECTED, exception);
+        }
+    }
+
+    @Override
     public Optional<DocumentQuarantineEvidence> findQuarantine(
             AuthorizedTenantContext context, DocumentObjectReference document) {
         requireContext(context, document);
@@ -389,6 +645,69 @@ public final class PostgresDocumentEvidenceAdapter implements DocumentEvidenceOp
         requireContext(context, document);
         try {
             return readPromotion(document);
+        } catch (DocumentEvidenceException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw new DocumentEvidenceException(STORE_REJECTED, exception);
+        }
+    }
+
+    @Override
+    public Optional<DocumentAccessGrantEvidence> findAccessGrant(
+            AuthorizedTenantContext context,
+            DocumentObjectReference document,
+            UUID accessGrantId) {
+        Objects.requireNonNull(accessGrantId, "accessGrantId");
+        requireContext(context, document);
+        try {
+            return readAccessGrant(document, accessGrantId);
+        } catch (DocumentEvidenceException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw new DocumentEvidenceException(STORE_REJECTED, exception);
+        }
+    }
+
+    @Override
+    public Optional<DocumentRetentionEvidence> findRetention(
+            AuthorizedTenantContext context,
+            DocumentObjectReference document,
+            UUID retentionDirectiveId) {
+        Objects.requireNonNull(retentionDirectiveId, "retentionDirectiveId");
+        requireContext(context, document);
+        try {
+            return readRetention(document, retentionDirectiveId);
+        } catch (DocumentEvidenceException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw new DocumentEvidenceException(STORE_REJECTED, exception);
+        }
+    }
+
+    @Override
+    public Optional<DocumentRetentionEvidence> findLatestRetention(
+            AuthorizedTenantContext context, DocumentObjectReference document) {
+        requireContext(context, document);
+        try {
+            var rows = jdbcTemplate.query(
+                    """
+                    SELECT retention_directive_id, organization_id, document_id,
+                           object_version_id, previous_retention_directive_id,
+                           retention_policy_key, accepted_purposes,
+                           minimum_retention_seconds, maximum_retention_seconds,
+                           maximum_authorization_age_seconds, maximum_future_skew_seconds,
+                           retain_until, legal_hold, storage_version_sha256,
+                           applied_by_actor_id, purpose, correlation_id, authorized_at, applied_at
+                    FROM document_retention_evidence
+                    WHERE organization_id = ? AND document_id = ? AND object_version_id = ?
+                    ORDER BY applied_at DESC, retention_directive_id DESC
+                    LIMIT 1
+                    """,
+                    PostgresDocumentEvidenceAdapter::mapRetention,
+                    document.organizationId(),
+                    document.documentId(),
+                    document.objectVersionId());
+            return rows.stream().findFirst();
         } catch (DocumentEvidenceException exception) {
             throw exception;
         } catch (RuntimeException exception) {
@@ -516,6 +835,69 @@ public final class PostgresDocumentEvidenceAdapter implements DocumentEvidenceOp
         return rows.stream().findFirst();
     }
 
+    private Optional<DocumentAccessGrantEvidence> readAccessGrant(
+            DocumentObjectReference document, UUID accessGrantId) {
+        var exists = jdbcTemplate.queryForObject(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM document_access_grant_evidence
+                    WHERE organization_id = ? AND access_grant_id = ?
+                      AND document_id = ? AND object_version_id = ?
+                )
+                """,
+                Boolean.class,
+                document.organizationId(),
+                accessGrantId,
+                document.documentId(),
+                document.objectVersionId());
+        if (!Boolean.TRUE.equals(exists)) {
+            return Optional.empty();
+        }
+        var promotion = readPromotion(document)
+                .orElseThrow(() -> new DocumentEvidenceException(STORE_REJECTED));
+        var rows = jdbcTemplate.query(
+                """
+                SELECT access_grant_id, access_policy_key, accepted_purposes,
+                       requested_ttl_seconds, maximum_ttl_seconds,
+                       maximum_authorization_age_seconds, maximum_future_skew_seconds,
+                       authorized_at, granted_to_actor_id, purpose, correlation_id,
+                       granted_at, expires_at
+                FROM document_access_grant_evidence
+                WHERE organization_id = ? AND access_grant_id = ?
+                  AND document_id = ? AND object_version_id = ?
+                """,
+                (result, rowNumber) -> mapAccessGrant(result, promotion),
+                document.organizationId(),
+                accessGrantId,
+                document.documentId(),
+                document.objectVersionId());
+        return rows.stream().findFirst();
+    }
+
+    private Optional<DocumentRetentionEvidence> readRetention(
+            DocumentObjectReference document, UUID retentionDirectiveId) {
+        var rows = jdbcTemplate.query(
+                """
+                SELECT retention_directive_id, organization_id, document_id,
+                       object_version_id, previous_retention_directive_id,
+                       retention_policy_key, accepted_purposes,
+                       minimum_retention_seconds, maximum_retention_seconds,
+                       maximum_authorization_age_seconds, maximum_future_skew_seconds,
+                       retain_until, legal_hold, storage_version_sha256,
+                       applied_by_actor_id, purpose, correlation_id, authorized_at, applied_at
+                FROM document_retention_evidence
+                WHERE organization_id = ? AND retention_directive_id = ?
+                  AND document_id = ? AND object_version_id = ?
+                """,
+                PostgresDocumentEvidenceAdapter::mapRetention,
+                document.organizationId(),
+                retentionDirectiveId,
+                document.documentId(),
+                document.objectVersionId());
+        return rows.stream().findFirst();
+    }
+
     private void requireContext(
             AuthorizedTenantContext context, DocumentObjectReference document) {
         if (!initialized) {
@@ -547,6 +929,51 @@ public final class PostgresDocumentEvidenceAdapter implements DocumentEvidenceOp
                 && evidence.acceptedScannerKeys().equals(policy.acceptedScannerKeys())
                 && evidence.maximumScanAge().equals(policy.maximumScanAge())
                 && evidence.maximumFutureSkew().equals(policy.maximumFutureSkew());
+    }
+
+    private static boolean matches(
+            DocumentAccessGrantEvidence evidence,
+            DocumentAccessAuthorization authorization,
+            AuthorizedTenantContext context) {
+        return evidence.accessGrantId().equals(authorization.accessGrantId())
+                && evidence.promotionEvidence().equals(authorization.promotionEvidence())
+                && evidence.policyKey().equals(authorization.policyKey())
+                && evidence.acceptedPurposes().equals(authorization.acceptedPurposes())
+                && evidence.requestedTtl().equals(authorization.requestedTtl())
+                && evidence.maximumTtl().equals(authorization.maximumTtl())
+                && evidence.maximumAuthorizationAge()
+                        .equals(authorization.maximumAuthorizationAge())
+                && evidence.maximumFutureSkew().equals(authorization.maximumFutureSkew())
+                && evidence.authorizedAt().equals(authorization.authorizedAt())
+                && evidence.expiresAt().equals(authorization.expiresAt())
+                && evidence.actorId().equals(context.actorId())
+                && evidence.purpose().equals(context.purpose())
+                && evidence.correlationId().equals(context.correlationId());
+    }
+
+    private static boolean matches(
+            DocumentRetentionEvidence evidence,
+            DocumentRetentionAuthorization authorization,
+            DocumentRetentionReceipt receipt,
+            AuthorizedTenantContext context) {
+        return evidence.retentionDirectiveId().equals(authorization.retentionDirectiveId())
+                && evidence.document().equals(authorization.document())
+                && Objects.equals(
+                        evidence.previousRetentionDirectiveId(),
+                        authorization.previousRetentionDirectiveId())
+                && evidence.policyKey().equals(authorization.policyKey())
+                && evidence.acceptedPurposes().equals(authorization.acceptedPurposes())
+                && evidence.minimumRetention().equals(authorization.minimumRetention())
+                && evidence.maximumRetention().equals(authorization.maximumRetention())
+                && evidence.maximumAuthorizationAge()
+                        .equals(authorization.maximumAuthorizationAge())
+                && evidence.maximumFutureSkew().equals(authorization.maximumFutureSkew())
+                && evidence.retainUntil().equals(authorization.retainUntil())
+                && evidence.legalHold() == authorization.legalHold()
+                && evidence.storageVersionSha256().equals(receipt.storageVersionSha256())
+                && evidence.actorId().equals(context.actorId())
+                && evidence.purpose().equals(context.purpose())
+                && evidence.authorizedAt().equals(authorization.authorizedAt());
     }
 
     private static DocumentQuarantineEvidence mapQuarantine(ResultSet rows, int rowNumber)
@@ -593,5 +1020,50 @@ public final class PostgresDocumentEvidenceAdapter implements DocumentEvidenceOp
                 Duration.ofSeconds(rows.getInt("maximum_scan_age_seconds")),
                 Duration.ofSeconds(rows.getInt("maximum_future_skew_seconds")),
                 rows.getTimestamp("promoted_at").toInstant());
+    }
+
+    private static DocumentAccessGrantEvidence mapAccessGrant(
+            ResultSet rows, DocumentPromotionEvidence promotion) throws SQLException {
+        return new DocumentAccessGrantEvidence(
+                rows.getObject("access_grant_id", UUID.class),
+                promotion,
+                rows.getString("access_policy_key"),
+                Set.copyOf(java.util.Arrays.asList(rows.getString("accepted_purposes").split(","))),
+                Duration.ofSeconds(rows.getInt("requested_ttl_seconds")),
+                Duration.ofSeconds(rows.getInt("maximum_ttl_seconds")),
+                Duration.ofSeconds(rows.getInt("maximum_authorization_age_seconds")),
+                Duration.ofSeconds(rows.getInt("maximum_future_skew_seconds")),
+                rows.getObject("granted_to_actor_id", UUID.class),
+                rows.getString("purpose"),
+                rows.getString("correlation_id"),
+                rows.getTimestamp("authorized_at").toInstant(),
+                rows.getTimestamp("granted_at").toInstant(),
+                rows.getTimestamp("expires_at").toInstant());
+    }
+
+    private static DocumentRetentionEvidence mapRetention(ResultSet rows, int rowNumber)
+            throws SQLException {
+        return new DocumentRetentionEvidence(
+                rows.getObject("retention_directive_id", UUID.class),
+                new DocumentObjectReference(
+                        rows.getObject("organization_id", UUID.class),
+                        rows.getObject("document_id", UUID.class),
+                        rows.getObject("object_version_id", UUID.class)),
+                rows.getObject("previous_retention_directive_id", UUID.class),
+                rows.getString("retention_policy_key"),
+                Set.copyOf(java.util.Arrays.asList(
+                        rows.getString("accepted_purposes").split(","))),
+                Duration.ofSeconds(rows.getLong("minimum_retention_seconds")),
+                Duration.ofSeconds(rows.getLong("maximum_retention_seconds")),
+                Duration.ofSeconds(rows.getInt("maximum_authorization_age_seconds")),
+                Duration.ofSeconds(rows.getInt("maximum_future_skew_seconds")),
+                rows.getTimestamp("retain_until").toInstant(),
+                rows.getBoolean("legal_hold"),
+                rows.getString("storage_version_sha256"),
+                rows.getObject("applied_by_actor_id", UUID.class),
+                rows.getString("purpose"),
+                rows.getString("correlation_id"),
+                rows.getTimestamp("authorized_at").toInstant(),
+                rows.getTimestamp("applied_at").toInstant());
     }
 }

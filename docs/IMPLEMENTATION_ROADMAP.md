@@ -21,7 +21,7 @@ Do not implement random screens. Each phase starts with architecture, mockup rev
 
 ## Current build status
 
-**Phase 0 is in progress.** Module 1 has not started.
+**Phase 0 repository implementation is complete at a provisional reference-policy checkpoint.** Production acceptance remains open for owner-approved policy and target-environment controls. Module 1 has not started.
 
 ### Phase 0A - build verification and reproducibility (completed 13 September 2026)
 
@@ -126,7 +126,7 @@ This is storage mechanics, not production document completion. Provider approval
 
 Local evidence: a clean Java 25 build compiled 120 production sources and 8 test sources, passed all 55 backend tests, and packaged the bootable JAR. Seven deterministic scanner scenarios cover wire framing/chunk bounds, clean/infected/error mapping, content-integrity drift, size ceilings, stale definitions, old engines, missing protocol support, outage, timeout, tenant mismatch, and Spring adapter replacement; six S3 scenarios also exercise the scanner-only read boundary against the pinned object store. The checked 15-operation API and 79-screen registry, frontend formatting/typecheck/lint/unit/build gates, and both default and scanner-overlay Compose contracts pass. A pinned official ClamAV 1.5.3 daemon returned `stream: OK` for synthetic clean bytes and `FOUND` for the standard EICAR test pattern. A rebuilt isolated backend image reached health `UP`, Flyway v6, exactly two available capabilities (private quarantine and malware scanning), seven unavailable capabilities, empty production event registries, safe Actuator output, and non-root user `careos`; all temporary resources were removed.
 
-This is scanner transport and integrity mechanics, not an approved production document workflow. ClamD TCP is unauthenticated and unencrypted and must remain on a trusted segmented network. Durable scan attestations, rescan/version policy, provider/IAM/KMS acceptance, promotion authorization and state transitions, signed reads, retention/legal hold, monitoring, recovery, and operational ownership remain open.
+This is scanner transport and integrity mechanics, not an approved production document workflow. ClamD TCP is unauthenticated and unencrypted and must remain on a trusted segmented network. Later slices add durable scan attestations, promotion, signed-read, and immutable-retention mechanics; rescan/version policy, provider/IAM/KMS/Object-Lock acceptance, governed hold release/disposal, monitoring, recovery, and operational ownership remain open.
 
 ### Phase 0I - durable Redis job-transport mechanics (completed 13 September 2026)
 
@@ -275,7 +275,7 @@ This completes automatic expiry convergence for calls made through the checked b
 
 Local evidence: a clean Java 25 build compiled 146 production sources and 14 test sources, applied all eight migrations to disposable PostgreSQL 18, passed all 99 backend tests across PostgreSQL, Redis, pinned object storage, and deterministic ClamD fixtures, and packaged the bootable JAR. The new evidence slice contributes five application tests, six PostgreSQL integration tests, and one architecture rule. The API/frontend surface is intentionally unchanged at 15 operations, seven conventions/seven negative tests, 29 frontend unit tests, and 18 desktop/mobile Playwright/Axe tests.
 
-This completes durable quarantine/scan evidence mechanics, not the M7 document workflow. Storage and scanning remain opt-in and disabled by default; promotion, signed access, and retention stay explicitly unavailable. Approved permissions/events, a business document/provenance model, governed upload/finalization, scan freshness, provider IAM/KMS/operations, and protected API/browser coverage remain required. See `PLATFORM_CAPABILITIES.md`.
+This completes durable quarantine/scan evidence mechanics, not the M7 document workflow. Storage and scanning remain opt-in and disabled by default; Phases 0T/0U later add separately opt-in promotion and signed-read mechanics, and Phase 0V later adds immutable retention/legal-hold-enablement mechanics. Approved permissions/events, a business document/provenance model, governed upload/finalization/read/disposal behavior, provider IAM/KMS/operations, and protected API/browser coverage remain required. See `PLATFORM_CAPABILITIES.md`.
 
 ### Phase 0S - durable consumer inbox and deduplication mechanics (completed 15 September 2026)
 
@@ -306,12 +306,70 @@ This completes the reusable consumer inbox/deduplication transaction boundary, n
 
 Local evidence: a clean Java 25 build compiled 161 production sources and 15 test sources, applied all ten migrations to disposable PostgreSQL 18, passed all 119 backend tests across PostgreSQL, Redis, pinned object storage, and deterministic ClamD fixtures, and packaged the bootable JAR. Both Compose models resolve. The unchanged 15-operation/seven-convention API and all seven negative tests, 79-screen register, and CI-security verifier/all ten negative tests were rerun and pass. Frontend source is unchanged at its latest verified 29 unit tests and 18 desktop/mobile Playwright/Axe tests.
 
-This completes only disabled-by-default clean-promotion mechanics. It does not approve a promotion policy or production provider, expose an upload/read route, add an M7 document/provenance state machine or governed permission/event transition, sign access, execute retention/legal hold, or complete IAM/KMS/versioning/backup/monitoring acceptance. A clean private copy without committed V10 evidence is not deliverable content. See `PLATFORM_CAPABILITIES.md`.
+This completes only disabled-by-default clean-promotion mechanics. It does not approve a promotion policy or production provider, expose an upload/read route, add an M7 document/provenance state machine or governed permission/event transition, or complete IAM/KMS/versioning/Object-Lock/backup/monitoring acceptance. Phase 0U later adds internal signed-read mechanics and Phase 0V later adds immutable retention/legal-hold-enablement mechanics, but a clean private copy without committed V10 evidence remains non-deliverable. See `PLATFORM_CAPABILITIES.md`.
 
-### Next Phase 0 slice
+### Phase 0U - promotion-evidence-gated signed document access mechanics (completed 15 September 2026)
 
-- [ ] Approve and add the canonical permission/role/operation registry, then bind protected routes, delegation ceilings, final-owner safeguards, and maker-checker rules to the implemented authorization boundary.
-- [ ] Complete governed invitation issuance/acceptance, existing-account linkage, and a separate non-interactive service-account path using that approved policy.
+- [x] Replace the raw-reference signer call with a bounded in-memory authorization derived by `DocumentAccessOperations` from committed V10 promotion evidence and the current authorized tenant/purpose context.
+- [x] Add an explicit signed-access policy covering policy key, one-to-sixteen accepted purposes, one-second-to-one-hour maximum URL TTL, one-second-to-five-minute authorization age, and zero-to-one-minute future skew.
+- [x] Add Flyway V11 URL-free access-grant evidence linked to promotion by composite tenant/document/version keys, with snapshotted policy/lifetime and request context.
+- [x] Apply forced RLS, `SELECT`/`INSERT`-only runtime grants, PostgreSQL-time context/purpose/authorization/expiry validation, owner-level immutability, composite-link readiness checks, and missing-context invisibility.
+- [x] Add an opt-in S3-compatible signer that requires the private clean bucket, rechecks current policy/authorization, verifies state/digest/type/size/ETag, downloads and hashes the complete clean object, signs only bounded `GET`, and validates the returned URL origin.
+- [x] Keep signed access disabled unless `careos.documents.signed-access.enabled=true` and the explicit policy is valid; extend production preflight and the API architecture boundary.
+- [x] Cover ordering, missing promotion, tenant/purpose/policy/authorization drift, signer/evidence failure, RLS/direct SQL/immutability, missing/corrupt clean objects, real signed retrieval, write denial, and capability activation.
+
+Local evidence: a clean Java 25 build compiled 170 production sources and 16 test sources, applied all eleven migrations to disposable PostgreSQL 18, passed all 131 backend tests across PostgreSQL, Redis, pinned object storage, and deterministic ClamD fixtures, and packaged the bootable JAR. The focused signed-access/security run passed all 49 tests. Both Compose models resolve. The unchanged 15-operation/seven-convention API and all seven negative tests, 79-screen register, and CI-security verifier/all ten negative tests were rerun and pass. Frontend source is unchanged at its latest verified 29 unit tests and 18 desktop/mobile Playwright/Axe tests.
+
+This completes only disabled-by-default internal signed-access mechanics. It does not approve a document-read permission or purpose, expose a download route, add an M7 document/provenance state machine, complete a governed audit/outbox read workflow, or approve production object storage/IAM/KMS/versioning/Object-Lock/backup/monitoring. Phase 0V later adds immutable retention/legal-hold-enablement mechanics, while governed release, disposal, and revocation remain open. Bearer URLs are never persisted and the coordinator cannot return one without committed V10 promotion evidence and matching V11 grant evidence. See `PLATFORM_CAPABILITIES.md`.
+
+### Phase 0V - immutable document retention and legal-hold mechanics (completed 15 September 2026)
+
+- [x] Replace the raw retention-port call with `DocumentRetentionOperations`, which requires committed V10 promotion evidence, the authorized tenant/purpose context, a matching explicit policy, and the latest durable retention state before constructing a bounded authorization.
+- [x] Make directive replay durable and exact while rejecting changed replay content, retention shortening, legal-hold release, and no-op directives before storage I/O.
+- [x] Add Flyway V12 append-only retention evidence linked to the exact promotion and exact predecessor directive, with snapshotted policy/context/deadline/hold data and only a SHA-256 provider-version identifier.
+- [x] Apply forced RLS, `SELECT`/`INSERT`-only runtime grants, transaction-context/server-time insertion, per-document advisory serialization, monotonic predecessor checks, and owner-level update/delete rejection; verify all controls and missing-context invisibility at startup.
+- [x] Add an opt-in S3-compatible adapter that requires an existing private versioned/Object-Lock-enabled clean bucket, verifies the exact current version and full ETag-bound SHA-256 content, applies only Object Lock `COMPLIANCE` retention, optionally enables legal hold, and verifies provider state afterward.
+- [x] Never create the retention bucket at runtime, bypass governance mode, shorten retention, disable a hold, delete an object, or persist a raw bucket, object key, or provider version.
+- [x] Keep retention disabled unless `careos.documents.retention.enabled=true`, private S3 storage is enabled with runtime bucket creation disabled, and an explicit bounded policy is configured; extend production preflight and the API architecture boundary.
+- [x] Cover promotion/order/replay/failure/drift, monotonicity, policy bounds, RLS/direct-SQL/immutability, exact-version provider locking/deletion denial, content corruption, Object Lock readiness, activation, and production preflight.
+
+Local evidence: a clean Java 25 build compiled 179 production sources and 17 test sources, applied all twelve migrations to disposable PostgreSQL 18, passed all 144 backend tests with zero failures, errors, or skips across PostgreSQL, Redis, pinned Object-Lock-capable storage, and deterministic ClamD fixtures, and packaged the bootable JAR. The focused retention/security run passed all 56 tests. Both Compose models resolve. The unchanged 15-operation/seven-convention API and all seven negative tests, 79-screen register, and CI-security verifier/all ten negative tests were rerun and pass. Frontend source is unchanged at its latest verified 29 unit tests and 18 desktop/mobile Playwright/Axe tests.
+
+This completes only disabled-by-default immutable retention application and legal-hold enablement mechanics. It does not approve a jurisdictional schedule, permission, or purpose; expose an HTTP route; implement the M7 document/provenance lifecycle; release a hold; shorten retention; dispose of content; or approve production provider IAM/KMS/Object-Lock/backup/monitoring. Those policy-sensitive transitions remain fail-closed. See `PLATFORM_CAPABILITIES.md`.
+
+### Phase 0W - UUIDv7 identifier strategy (completed 15 September 2026)
+
+- [x] Add one shared RFC 9562 UUIDv7 generator for application-created identifiers, using a secure random source and synchronized process-local monotonic advancement for equal-millisecond generation and clock rollback.
+- [x] Replace every production `UUID.randomUUID()` call with the shared generator, including correlation IDs, local identity bootstrap, idempotency, governance evidence, document scan attestations, and document-access grants.
+- [x] Add Flyway V13 to require PostgreSQL 18 and switch all 12 active database-generated identifier defaults from `gen_random_uuid()` to native `uuidv7()`.
+- [x] Preserve pre-V13 and caller-supplied UUID compatibility: do not rewrite historical rows or add version checks that would reject valid existing/reference identifiers.
+- [x] Add an ArchUnit rule that rejects future direct production UUIDv4 generation and database catalog coverage that locks the exact expected UUIDv7 default set.
+- [x] Document that UUIDv7 ordering and embedded timestamps are implementation properties, not authorization, secrecy, or trusted chronology evidence.
+
+Local evidence: a clean Java 25 build compiled 180 production sources and 18 test sources, applied all thirteen migrations to disposable PostgreSQL 18, passed all 150 backend tests with zero failures, errors, or skips across PostgreSQL, Redis, pinned Object-Lock-capable storage, and deterministic ClamD fixtures, and packaged the bootable JAR. Four generator tests, one new architecture rule, and one PostgreSQL default test cover the slice; the focused generator/architecture and fresh-database runs also pass. Both Compose models resolve. The unchanged 15-operation/seven-convention API and all seven negative tests, 79-screen register, and CI-security verifier/all ten negative tests were rerun and pass. Frontend source is unchanged at its latest verified 29 unit tests and 18 desktop/mobile Playwright/Axe tests.
+
+This completes current identifier generation strategy only. UUIDs remain opaque references, existing identifiers remain valid, and every future table/module must retain UUIDv7 generation while using server timestamps, tenant authorization, and database integrity for security and chronology.
+
+### Phase 0X - reference authorization and governed identity administration (completed 15 September 2026)
+
+- [x] Add Flyway V14 with a bounded `careos-phase0-reference-v1` permission, interactive-role, operation-risk, delegation-ceiling, and final-owner policy that remains ignored unless explicitly enabled outside production.
+- [x] Add Flyway V15 and a governed invitation service for recent-authenticated, reason-bound, idempotent issue/revoke operations plus one-use expiry-checked acceptance and existing-account linkage, with atomic audit/outbox evidence and no raw token returned to an administrator.
+- [x] Add Flyway V16 and a separate non-interactive service-identity authorization boundary with disjoint roles, exact tenant/purpose/operation checks, bounded expiring credential digests, row locking, and no browser-session or human-membership fallback.
+- [x] Add Flyway V17 and an append-only maker-checker approval lifecycle for administrative MFA reset: the target cannot request or approve, maker and checker must differ, only the original maker may execute, approved evidence is consumed exactly once, and expired open evidence can be retired without deletion.
+- [x] Revoke target MFA/recovery material and every session atomically with completed reset evidence; deliver post-commit notification/session-cache cleanup only on first execution, not idempotent replay.
+- [x] Extend the checked OpenAPI/client/session boundary and M1-02/M1-03 browser states to invitation and administrative-reset transitions, including explicit reason, recent-authentication, retry-key retention, runtime response validation, safe token handling, accessibility, and desktop/mobile coverage.
+- [x] Reject activation of the provisional reference policy, invitations, service identities, and MFA administration in the production preflight; keep canonical catalogs migration-owned/runtime-read-only and preserve deny-by-default behavior.
+- [x] Preserve cycle-free modules by exposing only a shared authenticated-actor contract to tenancy rather than coupling tenant delivery code to the concrete identity principal.
+
+Local evidence: a clean Java 25 build compiles 210 production sources and 18 test sources, applies all 17 migrations to disposable PostgreSQL 18, passes all 162 backend tests with zero failures, errors, or skips across PostgreSQL, Redis, pinned Object-Lock-capable storage, and deterministic ClamD fixtures, and packages the bootable JAR. The database suite covers the reference catalogs, delegation/final-owner attacks, invitation issuance/acceptance/linkage, disjoint service identities, and the complete MFA maker-checker lifecycle. The OpenAPI 3.1 version 0.8.0 contract covers 21 operations and passes seven conventions plus all seven negative tests. Frontend generation, its 18-source/35-import architecture boundary and four negative tests, strict typecheck, lint, formatting, all 35 unit tests, production build, and all 20 desktop/mobile Playwright/Axe tests pass. The 79-screen and CI-security contracts/all ten negative tests, both Compose models, and both current application container builds also pass. A fresh isolated hardened smoke reaches backend readiness at Flyway V17 and serves/proxies the frontend successfully under the declared non-root/read-only/capability restrictions; all temporary resources were removed.
+
+This closes the repository work that can be safely implemented without inventing production policy. It does **not** approve the reference registry, permit its production activation, provision or rotate a production service credential, activate a worker, decide whether self-service MFA disable is allowed, or provide deployment-owned security/operations evidence. Those are explicit production-acceptance inputs below.
+
+### Remaining Phase 0 production acceptance
+
+- [ ] Owner-review, replace or activate the provisional permission/role/operation/event registry and decide organization MFA-enforcement/self-disable policy; bind each future protected business route to an approved operation.
+- [x] Provide disabled-in-production reference implementations for governed invitation issuance/revocation/acceptance, existing-account linkage, and a separate non-interactive service-identity authorization path.
+- [x] Enforce delegation ceilings, final-owner protection, recent authentication/reasons, and database-backed maker-checker administrative MFA reset for the reference policy.
 - [ ] Extend V8's composite tenant-link pattern and add operation-specific database invariants as the first production business vertical slice is introduced.
 - [x] Define fail-closed document, notification, Redis, worker, and scheduler ports.
 - [x] Implement and integration-test policy-neutral private-quarantine storage mechanics behind the Phase 0F boundary, disabled by default.
@@ -321,6 +379,9 @@ This completes only disabled-by-default clean-promotion mechanics. It does not a
 - [x] Persist transaction-bound, append-only quarantine metadata and scan attestations under forced RLS without activating promotion or document delivery.
 - [x] Add a migration-owned consumer allow-list and transaction-bound, forced-RLS append-only inbox receipts with concurrent exact-delivery deduplication, without activating a transport or worker.
 - [x] Add disabled-by-default, evidence-gated clean-promotion mechanics with an explicit policy snapshot, a distinct private clean bucket, and append-only forced-RLS proof without exposing document delivery.
+- [x] Add disabled-by-default, promotion-evidence-gated signed-read mechanics with a purpose/TTL policy, full clean-object re-verification, and URL-free append-only forced-RLS grant evidence without exposing an HTTP route.
+- [x] Add disabled-by-default, promotion-evidence-gated immutable retention and legal-hold enablement with S3 Object Lock `COMPLIANCE`, monotonic policy enforcement, exact provider-version verification, and append-only forced-RLS evidence without exposing release or disposal.
+- [x] Standardize new application and database-generated identifiers on UUIDv7 without rewriting or rejecting historical/reference UUIDs.
 - [x] Add immutable CI dependencies, dependency/SAST/secret/configuration/container gates, update automation, SBOM generation, digest-pinned images, and unprivileged application runtimes.
 - [x] Establish protected tenant-route, pagination/filter, concurrency, idempotency/retry conventions plus generated frontend API types and a checked browser client.
 - [x] Connect the checked identity/organization client to a fail-closed frontend session gate, real login/pending-MFA/selection/switch/logout states, and an enforced session feature boundary.
@@ -329,6 +390,6 @@ This completes only disabled-by-default clean-promotion mechanics. It does not a
 - [x] Add structured safe request telemetry, bounded disabled-by-default trace export, authenticated Prometheus format, dependency-correct probes, an outage drill, and the repository operational runbook.
 - [x] Add explicit backend/frontend response headers, strict same-origin CSP, bounded proxy behavior, and a fail-closed production configuration preflight profile.
 - [ ] Approve a production object-store/IAM/KMS design and complete its deployment, recovery, monitoring, and acceptance controls.
-- [ ] Bind clean promotion to an approved permission/event/document-state workflow and production provider controls; implement and integration-test the remaining signed-access, retention, notification consent/destination/provider, worker, and scheduler adapters, keeping each unavailable until its checklist passes.
+- [ ] Bind clean promotion, signed access, and retention application to an approved permission/event/document-state/read-audit workflow and production provider controls; design separately governed legal-hold release and disposal, and implement notification consent/destination/provider plus authorized worker and scheduler adapters, keeping each unavailable until its checklist passes.
 
-Phase 0 remains incomplete until every foundation exit condition in `IMPLEMENTATION_GAPS.md` is satisfied and CI passes.
+The repository-level Phase 0 implementation is complete at the provisional reference-policy checkpoint. Production Phase 0 acceptance remains incomplete until the owner/environment items in `IMPLEMENTATION_GAPS.md` are approved, deployed, and evidenced; none may be converted to a code-only PASS.

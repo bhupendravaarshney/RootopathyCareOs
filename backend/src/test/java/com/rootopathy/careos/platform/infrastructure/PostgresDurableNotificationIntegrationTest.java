@@ -16,7 +16,7 @@ import com.rootopathy.careos.platform.domain.PlatformCapability;
 import com.rootopathy.careos.tenancy.application.TenantAuthorizationOperations;
 import com.rootopathy.careos.tenancy.domain.AuthenticatedActorContext;
 import com.rootopathy.careos.tenancy.domain.AuthorizedTenantContext;
-import com.rootopathy.careos.tenancy.domain.PermissionKey;
+import com.rootopathy.careos.tenancy.domain.OperationKey;
 import com.rootopathy.careos.tenancy.domain.TenantAuthorizationRequest;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
@@ -176,6 +176,14 @@ class PostgresDurableNotificationIntegrationTest {
                     INSERT INTO authorization_role_permissions (role_key, permission_key)
                     VALUES ('notification_test_actor', 'test.notification-store')
                     ON CONFLICT (role_key, permission_key) DO NOTHING
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO authorization_operations
+                        (operation_key, permission_key, display_name, description, registry_version)
+                    VALUES ('test.notification-store', 'test.notification-store',
+                            'Notification store test operation',
+                            'Synthetic notification mechanics operation', 'test-v1')
+                    ON CONFLICT (operation_key) DO NOTHING
                     """);
             statement.executeUpdate("""
                     INSERT INTO organization_memberships
@@ -662,7 +670,7 @@ class PostgresDurableNotificationIntegrationTest {
                 organizationId,
                 new AuthenticatedActorContext(
                         ACTOR, "notification-mechanics", correlationId),
-                new PermissionKey("test.notification-store"));
+                new OperationKey("test.notification-store"));
     }
 
     private static AuthorizedTenantContext context(UUID organizationId, String correlationId) {

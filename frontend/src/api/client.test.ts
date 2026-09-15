@@ -283,6 +283,158 @@ describe('CareOsApiClient', () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
+  it('sends a caller-owned idempotency key on governed invitation issuance', async () => {
+    const fetcher = mockFetch(
+      jsonResponse({
+        headerName: 'X-XSRF-TOKEN',
+        parameterName: '_csrf',
+        token: 'valid-csrf-token-123456',
+      }),
+      jsonResponse(
+        {
+          expiresAt: '2026-09-16T12:00:00Z',
+          invitationId: '77777777-7777-4777-8777-777777777777',
+          roleKey: 'organization_member',
+          status: 'pending',
+        },
+        { status: 201 },
+      ),
+    );
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+
+    const result = await client.issueInvitation(
+      '22222222-2222-4222-8222-222222222222',
+      {
+        displayName: 'Invited User',
+        email: 'invited@example.test',
+        reason: 'Approved access request CARE-42',
+        roleKey: 'organization_member',
+      },
+      'invite:11111111-1111-4111-8111-111111111111',
+    );
+
+    expect(result).toMatchObject({ ok: true, status: 201 });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    const [url, init] = fetcher.mock.calls[1]!;
+    const headers = new Headers(init?.headers);
+    expect(url).toBe('/api/v1/organizations/22222222-2222-4222-8222-222222222222/invitations');
+    expect(headers.get('Idempotency-Key')).toBe('invite:11111111-1111-4111-8111-111111111111');
+    expect(headers.get('X-XSRF-TOKEN')).toBe('valid-csrf-token-123456');
+  });
+
+  it('rejects malformed invitation route identifiers and idempotency keys before fetching', () => {
+    const fetcher = mockFetch();
+    const client = createCareOsApiClient({ baseUrl: '/api', fetch: fetcher });
+    const request = {
+      displayName: 'Invited User',
+      email: 'invited@example.test',
+      reason: 'Approved access request',
+      roleKey: 'organization_member',
+    };
+
+    expect(() => client.issueInvitation('not-a-uuid', request, 'valid-key-value-1234')).toThrow(
+      /organizationId must be a UUID/,
+    );
+    expect(() =>
+      client.issueInvitation('22222222-2222-4222-8222-222222222222', request, 'too-short'),
+    ).toThrow(/idempotency key/);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('sends all governed MFA reset transitions to their exact tenant paths', async () => {
+    const csrfPayload = {
+      headerName: 'X-XSRF-TOKEN',
+      parameterName: '_csrf',
+      token: 'valid-csrf-token-123456',
+    };
+    const organizationId = '22222222-2222-4222-8222-222222222222';
+    const targetUserId = '88888888-8888-4888-8888-888888888888';
+    const approvalId = '99999999-9999-4999-8999-999999999999';
+    const expiresAt = '2026-09-16T12:00:00Z';
+    const fetcher = mockFetch(
+      jsonResponse(csrfPayload),
+      jsonResponse({ approvalId, expiresAt, status: 'pending', targetUserId }, { status: 201 }),
+      jsonResponse(csrfPayload),
+      jsonResponse({ approvalId, expiresAt, status: 'approved', targetUserId }),
+      jsonResponse(csrfPayload),
+      jsonResponse({ approvalId, expiresAt, status: 'reset', targetUserId }),
+    );
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+
+    await expect(
+      client.requestMfaAdministrativeReset(
+        organizationId,
+        targetUserId,
+        { reason: 'Verified support case CARE-42' },
+        'mfa-request:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ ok: true, status: 201 });
+    await expect(
+      client.approveMfaAdministrativeReset(
+        organizationId,
+        targetUserId,
+        approvalId,
+        { reason: 'Independent identity verification completed' },
+        'mfa-approve:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ ok: true, status: 200 });
+    await expect(
+      client.executeMfaAdministrativeReset(
+        organizationId,
+        targetUserId,
+        approvalId,
+        { reason: 'Verified support case CARE-42' },
+        'mfa-execute:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ ok: true, status: 200 });
+
+    const mutationCalls = [fetcher.mock.calls[1]!, fetcher.mock.calls[3]!, fetcher.mock.calls[5]!];
+    expect(mutationCalls.map(([url]) => url)).toEqual([
+      `/api/v1/organizations/${organizationId}/users/${targetUserId}/mfa-reset-requests`,
+      `/api/v1/organizations/${organizationId}/users/${targetUserId}/mfa-reset-requests/${approvalId}/approvals`,
+      `/api/v1/organizations/${organizationId}/users/${targetUserId}/mfa-reset-requests/${approvalId}/executions`,
+    ]);
+    expect(
+      mutationCalls.map(([, init]) => new Headers(init?.headers).get('Idempotency-Key')),
+    ).toEqual([
+      'mfa-request:11111111-1111-4111-8111-111111111111',
+      'mfa-approve:11111111-1111-4111-8111-111111111111',
+      'mfa-execute:11111111-1111-4111-8111-111111111111',
+    ]);
+  });
+
+  it('rejects malformed MFA reset route identifiers before fetching', () => {
+    const fetcher = mockFetch();
+    const client = createCareOsApiClient({ baseUrl: '/api', fetch: fetcher });
+
+    expect(() =>
+      client.requestMfaAdministrativeReset(
+        '22222222-2222-4222-8222-222222222222',
+        'not-a-user-id',
+        { reason: 'Verified support case' },
+        'mfa-request:11111111-1111-4111-8111-111111111111',
+      ),
+    ).toThrow(/targetUserId must be a UUID/);
+    expect(() =>
+      client.approveMfaAdministrativeReset(
+        '22222222-2222-4222-8222-222222222222',
+        '88888888-8888-4888-8888-888888888888',
+        'not-an-approval-id',
+        { reason: 'Independent verification completed' },
+        'mfa-approve:11111111-1111-4111-8111-111111111111',
+      ),
+    ).toThrow(/approvalId must be a UUID/);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it('turns undocumented success payloads into safe contract failures', async () => {
     const fetcher = mockFetch(emptyResponse(200));
     const client = createCareOsApiClient({

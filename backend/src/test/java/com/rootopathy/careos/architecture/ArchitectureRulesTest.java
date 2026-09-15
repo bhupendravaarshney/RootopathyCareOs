@@ -7,16 +7,19 @@ import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.sli
 import com.rootopathy.careos.governance.application.ConsumerInboxOperations;
 import com.rootopathy.careos.platform.application.DocumentEvidenceOperations;
 import com.rootopathy.careos.platform.application.DocumentPromotionPort;
+import com.rootopathy.careos.platform.application.DocumentRetentionPort;
 import com.rootopathy.careos.platform.application.DurableNotificationPort;
 import com.rootopathy.careos.platform.application.JobQueuePort;
 import com.rootopathy.careos.platform.application.MalwareScannerPort;
 import com.rootopathy.careos.platform.application.PrivateDocumentStoragePort;
 import com.rootopathy.careos.platform.application.QuarantinedDocumentContent;
 import com.rootopathy.careos.platform.application.QuarantinedDocumentContentSourcePort;
+import com.rootopathy.careos.platform.application.SignedDocumentAccessPort;
 import com.rootopathy.careos.platform.domain.DurableJobClaim;
 import com.rootopathy.careos.platform.domain.DurableNotificationClaim;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -69,6 +72,11 @@ class ArchitectureRulesTest {
     @Test
     void topLevelModulesAreFreeOfCycles() {
         slices().matching("com.rootopathy.careos.(*)..").should().beFreeOfCycles().check(productionClasses);
+    }
+
+    @Test
+    void productionCodeUsesTheSharedUuidV7Strategy() {
+        noClasses().should().callMethod(UUID.class, "randomUUID").check(productionClasses);
     }
 
     @Test
@@ -128,6 +136,20 @@ class ArchitectureRulesTest {
                 .should()
                 .dependOnClassesThat()
                 .areAssignableTo(DocumentPromotionPort.class)
+                .check(productionClasses);
+        noClasses()
+                .that()
+                .resideInAPackage("..api..")
+                .should()
+                .dependOnClassesThat()
+                .areAssignableTo(SignedDocumentAccessPort.class)
+                .check(productionClasses);
+        noClasses()
+                .that()
+                .resideInAPackage("..api..")
+                .should()
+                .dependOnClassesThat()
+                .areAssignableTo(DocumentRetentionPort.class)
                 .check(productionClasses);
     }
 

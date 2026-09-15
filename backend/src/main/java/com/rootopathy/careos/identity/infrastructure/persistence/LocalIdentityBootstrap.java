@@ -2,6 +2,7 @@ package com.rootopathy.careos.identity.infrastructure.persistence;
 
 import com.rootopathy.careos.identity.application.IdentitySecurityService;
 import com.rootopathy.careos.identity.application.PasswordHashingPort;
+import com.rootopathy.careos.shared.domain.UuidV7Generator;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,7 +80,7 @@ public class LocalIdentityBootstrap implements ApplicationRunner {
     }
 
     private UUID createUser() {
-        var userId = UUID.randomUUID();
+        var userId = UuidV7Generator.randomUuid();
         jdbcTemplate.update(
                 """
                 INSERT INTO users (id, email, display_name, status)

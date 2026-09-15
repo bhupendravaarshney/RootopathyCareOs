@@ -7,6 +7,7 @@ import java.util.regex.Pattern;
 final class PlatformValues {
     private static final int MAX_JSON_BYTES = 1_048_576;
     private static final Pattern KEY = Pattern.compile("[a-z][a-z0-9]*([.:-][a-z0-9]+)*");
+    private static final Pattern PURPOSE = Pattern.compile("[a-z0-9][a-z0-9._:-]{0,127}");
     private static final Pattern TOKEN = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._:-]*");
     private static final Pattern SHA_256 = Pattern.compile("[0-9a-f]{64}");
 
@@ -16,6 +17,14 @@ final class PlatformValues {
         Objects.requireNonNull(value, name);
         if (value.length() > maxLength || !KEY.matcher(value).matches()) {
             throw new IllegalArgumentException(name + " has an invalid format");
+        }
+        return value;
+    }
+
+    static String purpose(String value) {
+        Objects.requireNonNull(value, "purpose");
+        if (!PURPOSE.matcher(value).matches()) {
+            throw new IllegalArgumentException("purpose has an invalid format");
         }
         return value;
     }

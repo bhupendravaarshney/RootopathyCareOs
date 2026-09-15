@@ -329,27 +329,3 @@ export function NoOrganizationScreen({
     </IdentityFrame>
   );
 }
-
-export function InvitationUnavailableScreen({ authenticated }: { authenticated: boolean }) {
-  return (
-    <IdentityFrame>
-      <section className="auth-panel panel" aria-labelledby="invitation-heading">
-        <span className="eyebrow">M1-02</span>
-        <IdentityMark>
-          <ShieldCheck aria-hidden="true" />
-        </IdentityMark>
-        <h1 id="invitation-heading">Invitation flow is not enabled</h1>
-        <p>
-          Governed invitation issuance, account linkage, expiry, and acceptance policy must be
-          approved before this route can accept a token.
-        </p>
-        <a
-          className="primary-button full-button button-link"
-          href={authenticated ? '#/M1-05' : '#/M1-01'}
-        >
-          {authenticated ? 'Return to workspace' : 'Continue to sign in'}
-        </a>
-      </section>
-    </IdentityFrame>
-  );
-}

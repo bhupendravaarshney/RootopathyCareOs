@@ -13,10 +13,12 @@ import com.rootopathy.careos.platform.application.SignedDocumentAccessPort;
 import com.rootopathy.careos.platform.application.WorkerExecutionPort;
 import com.rootopathy.careos.platform.domain.CapabilityAvailability;
 import com.rootopathy.careos.platform.domain.CapabilityStatus;
+import com.rootopathy.careos.platform.domain.DocumentAccessAuthorization;
 import com.rootopathy.careos.platform.domain.DocumentObjectReference;
 import com.rootopathy.careos.platform.domain.DocumentPromotionAuthorization;
 import com.rootopathy.careos.platform.domain.DocumentQuarantineRequest;
-import com.rootopathy.careos.platform.domain.DocumentRetentionDirective;
+import com.rootopathy.careos.platform.domain.DocumentRetentionAuthorization;
+import com.rootopathy.careos.platform.domain.DocumentRetentionReceipt;
 import com.rootopathy.careos.platform.domain.DurableJob;
 import com.rootopathy.careos.platform.domain.DurableJobClaim;
 import com.rootopathy.careos.platform.domain.DurableNotification;
@@ -29,8 +31,6 @@ import com.rootopathy.careos.platform.domain.NotificationQueueSnapshot;
 import com.rootopathy.careos.platform.domain.PlatformCapability;
 import com.rootopathy.careos.tenancy.domain.AuthorizedTenantContext;
 import java.io.InputStream;
-import java.net.URI;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
@@ -91,10 +91,8 @@ public final class UnavailablePlatformAdapters {
         }
 
         @Override
-        public URI createReadUrl(
-                AuthorizedTenantContext context,
-                DocumentObjectReference document,
-                Duration requestedTtl) {
+        public com.rootopathy.careos.platform.domain.SignedDocumentAccess createReadAccess(
+                AuthorizedTenantContext context, DocumentAccessAuthorization authorization) {
             throw unavailable();
         }
     }
@@ -106,10 +104,8 @@ public final class UnavailablePlatformAdapters {
         }
 
         @Override
-        public void apply(
-                AuthorizedTenantContext context,
-                DocumentObjectReference document,
-                DocumentRetentionDirective directive) {
+        public DocumentRetentionReceipt apply(
+                AuthorizedTenantContext context, DocumentRetentionAuthorization authorization) {
             throw unavailable();
         }
     }

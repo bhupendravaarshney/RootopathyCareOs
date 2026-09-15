@@ -25,6 +25,15 @@ server:
       cookie:
         secure: ${SESSION_COOKIE_SECURE:false}
 careos:
+  authorization:
+    reference-policy-enabled: true
+  invitations:
+    enabled: true
+  service-identities:
+    enabled: true
+    credential-pepper: ${CAREOS_SERVICE_IDENTITY_CREDENTIAL_PEPPER:CareOS-Local-Service-Credential-Pepper-Change-Me}
+  mfa-administration:
+    enabled: true
   security:
     allowed-origins: ${CAREOS_ALLOWED_ORIGINS:http://localhost:4173,http://localhost:5173}
     application-base-url: ${CAREOS_BASE_URL:http://localhost:4173}

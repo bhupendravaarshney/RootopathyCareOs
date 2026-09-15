@@ -1,12 +1,15 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const e2ePort = 41730;
+const e2eBaseUrl = `http://127.0.0.1:${e2ePort}`;
+
 export default defineConfig({
   testDir: './tests/e2e',
   timeout: 30_000,
   fullyParallel: false,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
-    baseURL: 'http://127.0.0.1:5173',
+    baseURL: e2eBaseUrl,
     trace: 'retain-on-failure',
   },
   projects: [
@@ -17,8 +20,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev -- --host 127.0.0.1',
-    url: 'http://127.0.0.1:5173',
-    reuseExistingServer: true,
+    command: `npm run dev -- --host 127.0.0.1 --port ${e2ePort} --strictPort`,
+    url: e2eBaseUrl,
+    reuseExistingServer: false,
   },
 });

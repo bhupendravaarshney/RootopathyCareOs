@@ -159,7 +159,7 @@ This is an API/client foundation checkpoint. No protected tenant business endpoi
 - A memory-only React session state machine now bootstraps and runtime-validates the server session and membership-backed organization list before exposing the protected shell
 - M1-01 login, pending M1-03 MFA, M1-04 organization selection, desktop/mobile organization switching, and sign-out call the checked CSRF/correlation-aware client; submitted secret fields are cleared and mutations are not automatically retried
 - Loading, no-membership, malformed/ambiguous response, dependency failure, safe focused error, and retry states remain outside the protected workspace; failed logout does not falsely discard authenticated local state
-- M1-02 explicitly remains unavailable and makes no invitation request until governed issuance/account-linkage/acceptance is implemented
+- At this checkpoint M1-02 remained unavailable; Phase 0X later replaces it with governed reference issue/revoke/acceptance/linkage
 - The shell now uses server-returned actor and organization labels instead of a hard-coded user; the other 75 protected entries retain their clearly synthetic prototype records and actions
 - A TypeScript-AST architecture gate accepts 17 source files/30 inward relative imports; four negative tests reject reverse shared dependencies, cross-feature coupling, API-to-page imports, and source escape
 - Eight API-client tests and eleven application/session tests pass; all 12 Playwright tests pass on desktop and mobile-320 while Axe-checking 75 protected entries plus four identity states and exercising CSRF login, explicit organization selection, and logout
@@ -207,13 +207,13 @@ This is a production configuration and HTTP preflight baseline, not a deployed s
 - Reset tokens retain case during parsing, are removed from the active browser-history entry immediately after capture, remain only in React memory, and are forgotten after successful use
 - Authenticated M1-03 now requires recent password plus conditional second-factor verification before TOTP enrollment or recovery-code replacement, including for users without tenant membership
 - TOTP setup and unique recovery-code responses are runtime-validated; one-time plaintext material is removed when acknowledged or when the recent-authenticated child view unmounts
-- Recovery-code regeneration requires explicit acknowledgement that previous codes are immediately revoked; MFA disable and administrator reset remain deliberately unavailable
+- Recovery-code regeneration requires explicit acknowledgement that previous codes are immediately revoked; at this checkpoint MFA disable and administrator reset remained unavailable, with reference administrator reset added later in Phase 0X
 - The frontend architecture gate accepts 18 source files and 35 inward relative imports; generated drift, format, strict typecheck, lint, 24 unit tests, and the Vite production build pass
 - All 16 Playwright tests pass on desktop and mobile-320, including the 75 protected-route Axe sweep plus checked-client password recovery and recent-authenticated MFA enrollment flows
 - A clean host-side Java 25 build compiles 137 production sources and 11 test sources, passes all 84 tests against disposable dependencies, applies Flyway through V7, and packages the bootable JAR
 - The 15-operation OpenAPI 3.1 version 0.5.0 contract/six conventions, six API negative tests, 79-screen register, and CI-security verifier/10 negative tests remain green
 
-This closes password-recovery and MFA enrollment/recovery-code browser self-service only. Governed invitations/account linkage, MFA disable/administrator reset, automatic session-expiry revalidation, permission-driven identity administration, service identities, and every tenant business workflow remain incomplete.
+This closed password-recovery and MFA enrollment/recovery-code browser self-service at that checkpoint. Phase 0Q later adds expiry convergence, and Phase 0X adds reference invitations/linkage, service authorization, and maker-checker administrator reset. Self-disable policy, production approval, and every tenant business workflow remain incomplete.
 
 ## Verified during Phase 0Q foundation (15 September 2026)
 
@@ -227,7 +227,7 @@ This closes password-recovery and MFA enrollment/recovery-code browser self-serv
 - A clean Java 25 build compiles 138 production sources and 12 test sources, applies Flyway through V7, passes all 87 tests against disposable dependencies, and packages the bootable JAR
 - The 15-operation API/seven conventions, seven API negative tests, 79-screen register, and CI-security verifier/10 negative tests remain green
 
-This closes automatic browser session-expiry convergence for the checked client. Direct credentialed fetches remain prohibited because they would bypass lifecycle publication. Governed invitations/account linkage, MFA disable/administrator reset, permission-driven administration, service identities, and every tenant business workflow remain incomplete.
+This closes automatic browser session-expiry convergence for the checked client. Direct credentialed fetches remain prohibited because they would bypass lifecycle publication. Phase 0X later adds reference invitations/linkage, service authorization, and maker-checker administrator reset; self-disable policy, production approval, and every tenant business workflow remain incomplete.
 
 ## Verified during Phase 0R foundation (15 September 2026)
 
@@ -241,7 +241,7 @@ This closes automatic browser session-expiry convergence for the checked client.
 - Five focused application tests and six disposable PostgreSQL 18 tests pass for ordering, idempotency, rollback, missing/mismatched/ambiguous evidence, forced RLS, cross-tenant denial, request-context binding, restricted grants, and append-only migration-owner attacks
 - A clean Java 25 build compiles 146 production sources and 14 test sources, applies Flyway through V8, passes all 99 tests against disposable dependencies, and packages the bootable JAR
 
-This closes the policy-neutral durable evidence gap only. It adds no upload/download route, business document state machine, permission/event entry, approved freshness policy, clean promotion, signed access, retention/legal hold, or production object-store/scanner acceptance. The external storage/scanner adapters remain disabled by default.
+This closes the policy-neutral durable evidence gap only. It adds no upload/download route, business document state machine, permission/event entry, approved freshness policy, clean promotion, signed access, immutable retention, or production object-store/scanner acceptance. Later slices supply the three document mechanics; approved policies, governed hold release/disposal, and provider acceptance remain open. The external storage/scanner adapters remain disabled by default.
 
 ## Verified during Phase 0S foundation (15 September 2026)
 
@@ -271,18 +271,72 @@ This closes only reusable consumer inbox/deduplication mechanics. No production 
 - A clean Java 25 build compiles 161 production sources and 15 test sources, applies Flyway through V10, passes all 119 tests against disposable dependencies, and packages the bootable JAR
 - Both Compose models and the unchanged 15-operation/seven-convention API with seven negative tests, 79-screen register, and CI-security verifier with ten negative tests pass
 
-This closes only clean-promotion mechanics. Promotion remains disabled by default, the checked values are synthetic, and no route can deliver the object. Approved M7 document state/provenance, permission/event/outbox transitions, production storage/IAM/KMS/versioning/backup/monitoring acceptance, signed access, retention/legal hold, and protected HTTP/browser coverage remain open.
+This closes only clean-promotion mechanics. Promotion remains disabled by default, the checked values are synthetic, and no route can deliver the object. Phase 0U later adds internal signed-read mechanics and Phase 0V later adds immutable retention/legal-hold-enablement mechanics; approved M7 document state/provenance, permission/event/outbox transitions, production storage/IAM/KMS/versioning/Object-Lock/backup/monitoring acceptance, governed hold release/disposal, and protected HTTP/browser coverage remain open.
+
+## Verified during Phase 0U foundation (15 September 2026)
+
+- Flyway V11 adds URL-free append-only document-access grant evidence linked by tenant/document/version keys to committed V10 promotion evidence
+- The row snapshots policy key, canonical accepted purposes, requested/maximum TTL, authorization age/future skew, actor, purpose, correlation, authorization/grant time, and expiry without storing a bearer URL, signature, credential, bucket, or object key
+- Forced RLS, `SELECT`/`INSERT`-only runtime grants, context-bound insertion, PostgreSQL-time purpose/authorization/expiry validation, composite promotion linkage, and owner-level mutation rejection protect the table; startup checks every control and missing-context invisibility
+- `DocumentAccessOperations` requires committed promotion evidence, tenant/purpose policy, exact signer response, and matching persisted evidence before returning a URL from the authorized transaction
+- The disabled-by-default S3 signer rechecks its configured policy and authorization age, verifies clean metadata/size/type/ETag, performs an ETag-bound full SHA-256 download, signs only bounded `GET`, and rejects a returned URL outside the configured origin
+- Configuration permits one-to-sixteen explicit purposes, one-second-to-one-hour URL TTL, one-second-to-five-minute authorization age, and zero-to-one-minute future skew; production preflight rejects incomplete activation
+- The document architecture rule prevents API packages from invoking the low-level signer
+- Twelve added backend tests cover orchestration and failure ordering, promotion/purpose/TTL constraints, database RLS/direct-SQL/immutability attacks, private clean-object integrity, real signed retrieval and write denial, activation, and production preflight
+- A focused 49-test security run and a clean Java 25 build compile 170 production sources and 16 test sources, apply Flyway through V11, pass all 131 tests against disposable dependencies, and package the bootable JAR
+- Both Compose models and the unchanged 15-operation/seven-convention API with seven negative tests, 79-screen register, and CI-security verifier with ten negative tests pass
+
+This closes only internal signed-access mechanics. Signed access remains disabled by default, the checked policy is synthetic, bearer URLs are never persisted, and no HTTP route exists. Phase 0V later adds immutable retention/legal-hold-enablement mechanics; approved document-read/retention permissions, purposes and state, governed audit/event behavior, production storage/IAM/KMS/versioning/Object-Lock/backup/monitoring, hold release/disposal/revocation, and protected HTTP/browser coverage remain open.
+
+## Verified during Phase 0V foundation (15 September 2026)
+
+- Flyway V12 adds append-only tenant/document/object-version retention evidence linked to exact V10 promotion evidence and exact predecessor directives
+- The row snapshots policy and request context, requested deadline, hold state, authorization/application time, and only a SHA-256 provider-version identifier; it has no bucket, object key, or raw provider version
+- Forced RLS, `SELECT`/`INSERT`-only runtime grants, context/server-time binding, per-document advisory serialization, exact predecessor lineage, and owner-level immutability protect the table; the database rejects unpromoted, stale, unapproved, shortened, hold-releasing, no-op, and conflicting evidence
+- `DocumentRetentionOperations` requires committed promotion and current durable state, enforces tenant/purpose/policy and monotonic rules, returns exact durable replay without storage I/O, and records evidence only after validating the provider receipt
+- The disabled-by-default S3 adapter requires an existing private versioned/Object-Lock-enabled clean bucket, rechecks authorization and current clean-object metadata, performs a version- and ETag-bound full SHA-256 read, applies only Object Lock `COMPLIANCE` retention, optionally enables legal hold, and verifies the exact provider state afterward
+- The adapter never creates a bucket, bypasses governance, shortens retention, disables a hold, deletes content, or returns a raw storage identifier; configuration and production preflight require an explicit bounded policy and private S3 storage with runtime bucket creation disabled
+- Thirteen added backend tests cover coordinator order/replay/failure/drift, monotonic policy enforcement, PostgreSQL RLS/direct-SQL/immutability attacks, real exact-version Object Lock and delete rejection, content/provider drift, activation, and production preflight
+- A focused 56-test retention/security run and a clean Java 25 build compile 179 production sources and 17 test sources, apply Flyway through V12, pass all 144 tests with zero failures, errors, or skips against disposable dependencies, and package the bootable JAR
+- Both Compose models and the unchanged 15-operation/seven-convention API with seven negative tests, 79-screen register, and CI-security verifier with ten negative tests pass
+
+This closes only immutable retention application and legal-hold enablement mechanics. Retention remains disabled by default and the checked policy is synthetic. No route, M7 lifecycle, approved schedule/permission/event, hold release, retention shortening, disposal, or production provider IAM/KMS/Object-Lock/backup/monitoring acceptance exists.
+
+## Verified during Phase 0W foundation (15 September 2026)
+
+- A shared Java `UuidV7Generator` emits RFC 9562 UUIDv7 identifiers from a cryptographically secure random source and preserves process-local monotonic ordering during same-millisecond generation or wall-clock rollback
+- Every production Java UUID-generation call site uses the shared strategy; an eleventh ArchUnit test rejects future direct `UUID.randomUUID()` use in production code
+- Flyway V13 requires PostgreSQL 18 and changes all 12 active database-generated identifier defaults to native `uuidv7()` without rewriting historical rows or rejecting caller-supplied/reference UUIDs
+- Four generator tests prove timestamp/version/variant encoding, 10,001 unique strictly ordered same-millisecond identifiers, rollback handling, and invalid input rejection; a database integration test verifies the exact default set and a generated version-7 identifier
+- A focused 15-test generator/architecture run, a fresh 26-test PostgreSQL migration/RLS run, and a clean Java 25 build compile 180 production sources and 18 test sources, apply Flyway through V13, pass all 150 tests with zero failures, errors, or skips, and package the bootable JAR
+- Both Compose models and the unchanged 15-operation/seven-convention API with seven negative tests, 79-screen register, and CI-security verifier with ten negative tests pass
+
+This closes current identifier-generation consistency, not identifier-based trust. UUID timestamps/order are observable implementation details and never replace tenant authorization, server-owned event time, or database integrity; existing identifiers remain valid.
+
+## Verified during Phase 0X foundation (15 September 2026)
+
+- Flyway V14 adds an explicitly opt-in, migration-owned/runtime-read-only reference authorization policy with operation risk, denial, reason, recent-authentication, delegation-ceiling, and final-effective-owner controls; production preflight rejects its activation
+- V15 and the identity service implement governed, idempotent invitation issuance/revocation plus one-use expiry-checked acceptance and existing-account linkage with atomic audit/outbox evidence and no administrator-visible raw token
+- V16 supplies disjoint tenant-scoped non-interactive identities and expiring credential digests plus exact credential/tenant/purpose/role/operation authorization; human memberships cannot use service roles and no browser session can substitute for a service credential
+- V17 supplies append-only MFA-reset approval evidence: target, maker, and checker are separated; only the original maker consumes an unexpired approval with exact reason/target/idempotency; execution revokes MFA, recovery codes, and sessions and emits evidence exactly once
+- M1-02 and M1-03 drive invitation and all three MFA administrator transitions through the generated-type-backed checked client with runtime response validation, recent authentication, explicit reasons, stable retry keys, accessible states, and no persistent token/secret material
+- A shared authenticated-actor contract removes tenancy's dependency on the concrete identity principal, and Playwright uses a dedicated strict port instead of reusing an arbitrary application
+- A clean Java 25 build compiles 210 production sources and 18 test sources, applies Flyway through V17, passes all 162 tests with zero failures/errors/skips, and packages the JAR; all 11 ArchUnit rules pass
+- OpenAPI 3.1 version 0.8.0 checks all 21 operations/seven conventions and all seven negative tests; frontend generation/architecture/type/lint/format/build, all 35 unit tests, all 20 desktop/mobile Playwright/Axe tests, the 79-screen and CI-security contracts/all ten negative tests, both Compose models, and both current container-image builds pass
+- A fresh isolated hardened smoke reaches backend readiness at Flyway V17 as UID 65532 and serves/proxies the frontend as `nginx`; both retain read-only roots, dropped capabilities, and no-new-privileges, and all temporary smoke resources were removed
+
+This is the repository-complete Phase 0 reference checkpoint. Production still requires owner approval/replacement of the provisional policy, a decision on MFA enforcement/self-disable, service-credential provisioning/rotation and worker activation, target-environment security/operations evidence, and business-module implementation.
 
 ## Configured but not yet fully integration-verified
 
 - Complete six-service Docker Compose startup on the default host ports
 - Remote GitHub Actions execution of both updated workflows, including dependency-graph access, CodeQL result upload, required-check/repository-rule enforcement, and SBOM artifact retention
 - Signed image provenance, production-registry admission policy, and deployment-time SBOM/signature verification
-- Production object-store/IAM/KMS/versioning, scanner/network/signature operations, Redis ACL/TLS/HA/persistence/restore acceptance, and notification key-management/backup/restore acceptance; governed promotion activation, signed access, retention, notification consent/destination/provider delivery, worker, and scheduler behavior
-- Production metric/log/trace collection, non-interactive scraper identity or private management boundary, service objectives, dashboards, alert delivery/on-call escalation, encrypted backups, and timed restore evidence
+- Production object-store/IAM/KMS/versioning/Object-Lock, scanner/network/signature operations, Redis ACL/TLS/HA/persistence/restore acceptance, and notification key-management/backup/restore acceptance; governed promotion/signed-access/retention activation, hold release/disposal, notification consent/destination/provider delivery, worker, and scheduler behavior
+- Production service-credential provisioning/rotation, metric/log/trace collection, scraper/worker activation or private management boundary, service objectives, dashboards, alert delivery/on-call escalation, encrypted backups, and timed restore evidence
 
-The current Phase 0 work has closed the local Java/frontend build-verification, shared API/client convention, session-aware frontend shell, automatic no-polling session-expiry convergence, browser password-recovery and MFA enrollment/recovery-code self-service, CI supply-chain, and repository operational-signal baseline gaps and now verifies PostgreSQL migration/RLS, Redis-backed browser identity, membership-backed organization selection, fail-closed frontend and backend tenant gates, policy-neutral audit/outbox/idempotency and consumer-inbox/deduplication mechanics, explicit external-capability boundaries, private-quarantine storage, fail-closed scanner transport/integrity, append-only quarantine/scan/promotion evidence, evidence-gated private clean-copy mechanics, durable Redis job-transport mechanics, encrypted PostgreSQL notification persistence/leasing mechanics, generated frontend contract drift, credentialed CSRF-aware HTTP handling, frontend dependency direction, ECS JSON request telemetry, bounded trace context, authenticated Prometheus format, dependency-aware probes, digest-pinned image builds, vulnerability/SAST/secret/configuration gates, SBOM generation, and unprivileged container execution. Owner-approved authorization/event/consumer/job/template/promotion policy, governed invitations/account linkage and administrative MFA reset, protected business endpoints and screen integration, non-interactive worker/scraper/service identity, hosted-CI/registry enforcement, production storage/scanner/Redis/key-management acceptance, consent/destination/provider and real producer/consumer wiring, external telemetry/alerting, tested backup/restore, signed-access/retention adapters, and all production workflows remain incomplete.
+The current Phase 0 repository work is complete at the provisional reference-policy checkpoint. In addition to the earlier foundation, it now verifies reference authorization/operation/event policy, delegation and final-owner enforcement, governed invitations/account linkage, disjoint service-identity authorization, maker-checker administrator MFA reset, all 21 checked HTTP operations, and the real M1-02/M1-03 identity-administration states. Production acceptance remains incomplete: owners must approve or replace the reference policy and MFA rules, provision and rotate service credentials, activate and operate real workers/providers, enforce hosted CI/registry controls, accept production TLS/secrets/edge/storage/scanner/Redis/key management, deploy telemetry/alerting and backup/restore, and implement all business modules and governed provider workflows.
 
 ## Production status
 
-This checkpoint is intentionally named **foundation**. It is runnable and suitable for starting development. It is not a production release, clinical-device claim, security certification or completed implementation of Modules 1-13.
+This checkpoint is intentionally a **reference foundation**. It is runnable, locally verified, and suitable for beginning approved Module 1 vertical slices. It is not production acceptance, a production release, a clinical-device claim, a security certification, or completion of Modules 1-13.

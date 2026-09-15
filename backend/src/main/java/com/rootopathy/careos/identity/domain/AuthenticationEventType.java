@@ -15,6 +15,7 @@ public enum AuthenticationEventType {
     RECOVERY_CODES_REGENERATED("identity.recovery-codes.regenerated"),
     RECENT_AUTHENTICATION_SUCCEEDED("identity.recent-authentication.succeeded"),
     RECENT_AUTHENTICATION_FAILED("identity.recent-authentication.failed"),
+    MFA_ADMIN_RESET("identity.mfa-admin-reset.completed"),
     SESSIONS_REVOKED("identity.sessions.revoked");
 
     private final String value;

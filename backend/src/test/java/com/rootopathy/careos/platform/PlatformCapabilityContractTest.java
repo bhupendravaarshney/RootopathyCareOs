@@ -9,10 +9,14 @@ import com.rootopathy.careos.platform.application.CapabilityProbe;
 import com.rootopathy.careos.platform.application.PlatformCapabilityRegistry;
 import com.rootopathy.careos.platform.application.PlatformCapabilityUnavailableException;
 import com.rootopathy.careos.platform.domain.CapabilityAvailability;
+import com.rootopathy.careos.platform.domain.DocumentAccessAuthorization;
+import com.rootopathy.careos.platform.domain.DocumentAccessPolicy;
 import com.rootopathy.careos.platform.domain.DocumentObjectReference;
 import com.rootopathy.careos.platform.domain.DocumentPromotionAuthorization;
+import com.rootopathy.careos.platform.domain.DocumentPromotionEvidence;
 import com.rootopathy.careos.platform.domain.DocumentQuarantineRequest;
-import com.rootopathy.careos.platform.domain.DocumentRetentionDirective;
+import com.rootopathy.careos.platform.domain.DocumentRetentionAuthorization;
+import com.rootopathy.careos.platform.domain.DocumentRetentionPolicy;
 import com.rootopathy.careos.platform.domain.DocumentScanAttestation;
 import com.rootopathy.careos.platform.domain.DurableJob;
 import com.rootopathy.careos.platform.domain.DurableJobClaim;
@@ -82,6 +86,38 @@ class PlatformCapabilityContractTest {
                 Duration.ofMinutes(5),
                 Duration.ZERO,
                 NOW);
+        var promotionEvidence = new DocumentPromotionEvidence(
+                promotionAuthorization.scanAttestation(),
+                promotionAuthorization.policyKey(),
+                promotionAuthorization.acceptedScannerKeys(),
+                promotionAuthorization.maximumScanAge(),
+                promotionAuthorization.maximumFutureSkew(),
+                NOW);
+        var accessAuthorization = new DocumentAccessAuthorization(
+                UUID.randomUUID(),
+                promotionEvidence,
+                "foundation.synthetic",
+                java.util.Set.of("document.security"),
+                Duration.ofMinutes(5),
+                Duration.ofMinutes(10),
+                Duration.ofSeconds(30),
+                Duration.ofSeconds(2),
+                context.purpose(),
+                NOW);
+        var retentionAuthorization = new DocumentRetentionAuthorization(
+                UUID.randomUUID(),
+                promotionEvidence,
+                null,
+                "foundation.synthetic",
+                java.util.Set.of("document.security"),
+                Duration.ofMinutes(1),
+                Duration.ofDays(1),
+                Duration.ofSeconds(30),
+                Duration.ofSeconds(2),
+                NOW.plusSeconds(3600),
+                true,
+                context.purpose(),
+                NOW);
         var contentRead = new AtomicBoolean();
         var content = new InputStream() {
             @Override
@@ -103,13 +139,10 @@ class PlatformCapabilityContractTest {
                 () -> adapters.promotion.promote(context, promotionAuthorization));
         assertUnavailable(
                 PlatformCapability.SIGNED_DOCUMENT_ACCESS,
-                () -> adapters.signedAccess.createReadUrl(context, reference, Duration.ofMinutes(5)));
+                () -> adapters.signedAccess.createReadAccess(context, accessAuthorization));
         assertUnavailable(
                 PlatformCapability.DOCUMENT_RETENTION,
-                () -> adapters.retention.apply(
-                        context,
-                        reference,
-                        new DocumentRetentionDirective("credential.evidence", NOW.plusSeconds(3600), true)));
+                () -> adapters.retention.apply(context, retentionAuthorization));
         assertUnavailable(
                 PlatformCapability.DURABLE_NOTIFICATION_DELIVERY,
                 () -> adapters.notifications.enqueue(
@@ -284,6 +317,23 @@ class PlatformCapabilityContractTest {
                         "lease-token",
                         NOW))
                 .withMessageContaining("attempt");
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new DocumentAccessPolicy(
+                        "foundation.synthetic",
+                        java.util.Set.of("document.read"),
+                        Duration.ofHours(2),
+                        Duration.ofSeconds(30),
+                        Duration.ZERO))
+                .withMessageContaining("maximumTtl");
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> new DocumentRetentionPolicy(
+                        "foundation.synthetic",
+                        java.util.Set.of("document.retention"),
+                        Duration.ofDays(10),
+                        Duration.ofDays(1),
+                        Duration.ofSeconds(30),
+                        Duration.ZERO))
+                .withMessageContaining("maximumRetention");
     }
 
     private static void assertUnavailable(

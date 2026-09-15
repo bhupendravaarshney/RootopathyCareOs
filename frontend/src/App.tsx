@@ -3,12 +3,13 @@ import type { SessionClient } from './features/session/session-types';
 import { SessionProvider } from './features/session/SessionProvider';
 import { useSession } from './features/session/session-context';
 import {
+  InvitationAcceptanceScreen,
+  InvitationAdministrationScreen,
   MfaAdministrationScreen,
   PasswordResetCompletionScreen,
   PasswordResetRequestScreen,
 } from './features/session/IdentitySecurityScreens';
 import {
-  InvitationUnavailableScreen,
   LoginScreen,
   MfaChallengeScreen,
   NoOrganizationScreen,
@@ -19,37 +20,47 @@ import {
 import { SessionIssueAlert } from './features/session/SessionIssueAlert';
 import { PrototypeScreenPage } from './pages/PrototypeScreenPage';
 
-type HashRoute = { id: string; resetToken?: string };
+type HashRoute = { id: string; invitationToken?: string; resetToken?: string };
 
 function readHashRoute(hash = window.location.hash): HashRoute {
   const value = hash.replace(/^#\/?/, '');
   const queryStart = value.indexOf('?');
   const path = queryStart >= 0 ? value.slice(0, queryStart) : value;
   const id = path.toUpperCase() || 'M1-05';
-  if (id !== 'RESET-PASSWORD' || queryStart < 0) {
+  if (queryStart < 0 || (id !== 'RESET-PASSWORD' && id !== 'ACCEPT-INVITATION')) {
     return { id };
   }
   const token = new URLSearchParams(value.slice(queryStart + 1)).get('token');
-  return token ? { id, resetToken: token } : { id };
+  if (!token) {
+    return { id };
+  }
+  return id === 'RESET-PASSWORD' ? { id, resetToken: token } : { id, invitationToken: token };
 }
 
 const identityRoutes = new Set(['M1-01', 'M1-02', 'M1-03', 'M1-04']);
 
 function RoutedApp() {
   const [route, setRoute] = useState<HashRoute>(readHashRoute);
+  const invitationTokenRetired = useRef(false);
   const resetTokenRetired = useRef(false);
-  const { id, resetToken } = route;
+  const { id, invitationToken, resetToken } = route;
   const {
+    acceptInvitation,
     actionIssue,
+    approveMfaAdministrativeReset,
     completeMfa,
     completePasswordReset,
     dismissActionIssue,
+    executeMfaAdministrativeReset,
     login,
     logout,
+    issueInvitation,
     machine,
     pendingAction,
     regenerateRecoveryCodes,
     requestPasswordReset,
+    requestMfaAdministrativeReset,
+    revokeInvitation,
     retryBootstrap,
     selectOrganization,
     startMfaEnrollment,
@@ -62,13 +73,21 @@ function RoutedApp() {
       const eventRoute = readHashRoute(new URL(event.newURL).hash);
       const currentRoute = readHashRoute();
       const tokenWasJustScrubbed =
-        !resetTokenRetired.current &&
-        eventRoute.id === 'RESET-PASSWORD' &&
-        Boolean(eventRoute.resetToken) &&
-        currentRoute.id === 'RESET-PASSWORD' &&
-        !currentRoute.resetToken;
+        (!resetTokenRetired.current &&
+          eventRoute.id === 'RESET-PASSWORD' &&
+          Boolean(eventRoute.resetToken) &&
+          currentRoute.id === 'RESET-PASSWORD' &&
+          !currentRoute.resetToken) ||
+        (!invitationTokenRetired.current &&
+          eventRoute.id === 'ACCEPT-INVITATION' &&
+          Boolean(eventRoute.invitationToken) &&
+          currentRoute.id === 'ACCEPT-INVITATION' &&
+          !currentRoute.invitationToken);
       if (currentRoute.resetToken) {
         resetTokenRetired.current = false;
+      }
+      if (currentRoute.invitationToken) {
+        invitationTokenRetired.current = false;
       }
       setRoute(tokenWasJustScrubbed ? eventRoute : currentRoute);
     };
@@ -81,6 +100,12 @@ function RoutedApp() {
       window.history.replaceState(window.history.state, '', scrubbedUrl);
     }
   }, [id, resetToken]);
+  useLayoutEffect(() => {
+    if (id === 'ACCEPT-INVITATION' && invitationToken) {
+      const scrubbedUrl = `${window.location.pathname}${window.location.search}#/accept-invitation`;
+      window.history.replaceState(window.history.state, '', scrubbedUrl);
+    }
+  }, [id, invitationToken]);
   useEffect(() => {
     dismissActionIssue();
   }, [dismissActionIssue, id]);
@@ -113,8 +138,28 @@ function RoutedApp() {
       />
     );
   }
-  if (id === 'M1-02') {
-    return <InvitationUnavailableScreen authenticated={machine.phase === 'ready'} />;
+  if (id === 'ACCEPT-INVITATION') {
+    const authenticatedEmail =
+      machine.phase === 'ready' ||
+      machine.phase === 'selecting_organization' ||
+      machine.phase === 'no_organization'
+        ? machine.user.email
+        : undefined;
+    return (
+      <InvitationAcceptanceScreen
+        authenticatedEmail={authenticatedEmail}
+        busy={pendingAction === 'accept-invitation'}
+        issue={actionIssue}
+        onAccept={acceptInvitation}
+        onForgetToken={() => {
+          invitationTokenRetired.current = true;
+          setRoute((current) =>
+            current.id === 'ACCEPT-INVITATION' ? { id: current.id } : current,
+          );
+        }}
+        token={invitationToken}
+      />
+    );
   }
   if (machine.phase === 'loading') {
     return <SessionLoadingScreen reason={machine.reason} />;
@@ -141,13 +186,17 @@ function RoutedApp() {
       <MfaAdministrationScreen
         issue={actionIssue}
         mfaEnabled={machine.mfaEnabled}
+        onApproveAdministrativeReset={approveMfaAdministrativeReset}
+        onExecuteAdministrativeReset={executeMfaAdministrativeReset}
         onLogout={logout}
         onRegenerateRecoveryCodes={regenerateRecoveryCodes}
+        onRequestAdministrativeReset={requestMfaAdministrativeReset}
         onStartEnrollment={startMfaEnrollment}
         onVerifyEnrollment={verifyMfaEnrollment}
         onVerifyRecentAuthentication={verifyRecentAuthentication}
         pendingAction={pendingAction}
         recentAuthentication={machine.recentAuthentication}
+        selectedOrganization={machine.phase === 'ready' ? machine.selectedOrganization : undefined}
         user={machine.user}
       />
     );
@@ -171,6 +220,18 @@ function RoutedApp() {
         issue={actionIssue}
         onLogout={logout}
         user={machine.user}
+      />
+    );
+  }
+  if (id === 'M1-02') {
+    return (
+      <InvitationAdministrationScreen
+        busyAction={pendingAction}
+        issue={actionIssue}
+        onIssue={issueInvitation}
+        onRevoke={revokeInvitation}
+        organization={machine.selectedOrganization}
+        recentAuthentication={machine.recentAuthentication}
       />
     );
   }

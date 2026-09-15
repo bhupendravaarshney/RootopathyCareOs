@@ -63,12 +63,22 @@ public class PlatformCapabilityConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(SignedDocumentAccessPort.class)
+    @ConditionalOnProperty(
+            prefix = "careos.documents.signed-access",
+            name = "enabled",
+            havingValue = "false",
+            matchIfMissing = true)
     SignedDocumentAccess unavailableSignedDocumentAccess() {
         return new SignedDocumentAccess();
     }
 
     @Bean
     @ConditionalOnMissingBean(DocumentRetentionPort.class)
+    @ConditionalOnProperty(
+            prefix = "careos.documents.retention",
+            name = "enabled",
+            havingValue = "false",
+            matchIfMissing = true)
     DocumentRetention unavailableDocumentRetention() {
         return new DocumentRetention();
     }

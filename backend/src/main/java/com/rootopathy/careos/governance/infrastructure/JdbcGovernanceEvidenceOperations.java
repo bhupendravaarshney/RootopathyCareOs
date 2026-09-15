@@ -3,11 +3,11 @@ package com.rootopathy.careos.governance.infrastructure;
 import com.rootopathy.careos.governance.application.GovernanceEvidenceOperations;
 import com.rootopathy.careos.governance.domain.GovernanceEvidence;
 import com.rootopathy.careos.governance.domain.GovernanceEvidenceIds;
+import com.rootopathy.careos.shared.domain.UuidV7Generator;
 import com.rootopathy.careos.tenancy.domain.AuthorizedTenantContext;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.util.Objects;
-import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -28,8 +28,8 @@ public class JdbcGovernanceEvidenceOperations implements GovernanceEvidenceOpera
         Objects.requireNonNull(evidence, "evidence");
         TenantTransactionContextVerifier.requireAuthorizedWriteTransaction(jdbcTemplate, context);
 
-        var auditId = UUID.randomUUID();
-        var outboxId = UUID.randomUUID();
+        var auditId = UuidV7Generator.randomUuid();
+        var outboxId = UuidV7Generator.randomUuid();
         var occurredAt = Timestamp.from(clock.instant());
         var audit = evidence.audit();
         jdbcTemplate.update(

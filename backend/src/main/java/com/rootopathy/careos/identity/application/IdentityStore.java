@@ -36,6 +36,8 @@ public interface IdentityStore {
 
     boolean consumeRecoveryCode(UUID userId, UUID methodId, String codeHash, Instant usedAt);
 
+    boolean administrativelyResetMfa(UUID userId, Instant resetAt);
+
     void recordSession(
             String sessionIdHash,
             UUID userId,

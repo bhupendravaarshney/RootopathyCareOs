@@ -24,6 +24,8 @@ final class ProductionConfigurationGuard {
             "careos-migrator-test-only",
             "CareOS-Local-Token-Pepper-Change-Me",
             "CareOS-Test-Token-Pepper-Never-Production",
+            "CareOS-Local-Service-Credential-Pepper-Change-Me",
+            "CareOS-Test-Service-Credential-Pepper-Never-Production",
             "Q2FyZU9TLUxvY2FsLU1GQS1LZXktTXVzdC1DaGFuZ2U=",
             "careos-local",
             "careos-local-change-me");
@@ -117,6 +119,25 @@ final class ProductionConfigurationGuard {
                 "careos.storage.s3.create-bucket-if-missing", Boolean.class, false)) {
             violations.add("production must not create document buckets at runtime");
         }
+        if (environment.getProperty(
+                "careos.authorization.reference-policy-enabled", Boolean.class, false)) {
+            violations.add("the provisional reference authorization policy must be disabled");
+        }
+        if (environment.getProperty("careos.invitations.enabled", Boolean.class, false)) {
+            violations.add(
+                    "governed invitations must remain disabled until the reference policy is owner-approved");
+        }
+        if (environment.getProperty("careos.service-identities.enabled", Boolean.class, false)) {
+            requireNonProductionSecretAbsent(
+                    environment,
+                    "careos.service-identities.credential-pepper",
+                    "service identity credential pepper",
+                    violations);
+        }
+        if (environment.getProperty("careos.mfa-administration.enabled", Boolean.class, false)) {
+            violations.add(
+                    "MFA administration must remain disabled until the reference maker-checker policy is owner-approved");
+        }
         var s3Enabled = environment.getProperty("careos.storage.s3.enabled", Boolean.class, false);
         if (s3Enabled) {
             requireNonProductionSecretAbsent(
@@ -143,6 +164,63 @@ final class ProductionConfigurationGuard {
                     environment,
                     "careos.documents.promotion.maximum-scan-age",
                     "document promotion maximum scan age",
+                    violations);
+        }
+        if (environment.getProperty(
+                "careos.documents.signed-access.enabled", Boolean.class, false)) {
+            if (!s3Enabled) {
+                violations.add("signed document access requires private S3 document storage");
+            }
+            requireText(
+                    environment,
+                    "careos.documents.signed-access.policy-key",
+                    "signed document access policy key",
+                    violations);
+            requireText(
+                    environment,
+                    "careos.documents.signed-access.accepted-purposes",
+                    "signed document access purpose allow-list",
+                    violations);
+            requireText(
+                    environment,
+                    "careos.documents.signed-access.maximum-ttl",
+                    "signed document access maximum TTL",
+                    violations);
+            requireText(
+                    environment,
+                    "careos.documents.signed-access.maximum-authorization-age",
+                    "signed document access maximum authorization age",
+                    violations);
+        }
+        if (environment.getProperty(
+                "careos.documents.retention.enabled", Boolean.class, false)) {
+            if (!s3Enabled) {
+                violations.add("document retention requires private S3 document storage");
+            }
+            requireText(
+                    environment,
+                    "careos.documents.retention.policy-key",
+                    "document retention policy key",
+                    violations);
+            requireText(
+                    environment,
+                    "careos.documents.retention.accepted-purposes",
+                    "document retention purpose allow-list",
+                    violations);
+            requireText(
+                    environment,
+                    "careos.documents.retention.minimum-retention",
+                    "document retention minimum duration",
+                    violations);
+            requireText(
+                    environment,
+                    "careos.documents.retention.maximum-retention",
+                    "document retention maximum duration",
+                    violations);
+            requireText(
+                    environment,
+                    "careos.documents.retention.maximum-authorization-age",
+                    "document retention maximum authorization age",
                     violations);
         }
 

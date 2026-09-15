@@ -55,7 +55,7 @@ CAREOS_OTLP_TRACING_ENDPOINT=http://localhost:4318/v1/traces
 
 Do not enable trace export until the collector endpoint, TLS/authentication, region, tenancy, field review, sampling/cost ceiling, retention, access, and outage behavior are approved. The localhost endpoint is inert while export is disabled; it is not a production collector recommendation.
 
-The Prometheus endpoint currently follows the browser authentication boundary. It is therefore mechanically verified but not a production scraper integration. Do not make it anonymous. Production completion requires a separate non-interactive observability identity or a private management network with an approved trust boundary and attack tests.
+The Prometheus endpoint currently follows the browser authentication boundary. It is therefore mechanically verified but not a production scraper integration. Do not make it anonymous. V16's reference service-identity authorization is deliberately not wired to management endpoints; production completion requires an owner-approved/provisioned observability identity or a private management network with an approved trust boundary and attack tests.
 
 ## First response guide
 
