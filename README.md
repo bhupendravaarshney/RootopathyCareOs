@@ -32,6 +32,8 @@ Node.js is the frontend toolchain; the CareOS business backend is Java/Spring Bo
 - Browser identity API: `http://localhost:8080/api/v1/auth/session`
 - Membership-backed organization API: `http://localhost:8080/api/v1/organizations`
 - Session-gated frontend: `http://localhost:4173/#/M1-05`
+- Password recovery request: `http://localhost:4173/#/forgot-password` (the local reset email appears in Mailpit)
+- Authenticated MFA self-service: `http://localhost:4173/#/M1-03`
 - Module 1: `#/M1-01` through `#/M1-23`
 - Module 2: `#/M2-01` through `#/M2-29`
 - Clinical prototype: `#/COS-01` through `#/COS-27`
@@ -151,7 +153,7 @@ node scripts/verify-ci-security.mjs
 node --test scripts/tests/verify-ci-security.test.mjs
 ```
 
-Backend tests require Docker because Testcontainers creates and removes isolated PostgreSQL 18 `careos_test`, Redis 8, and pinned object-storage instances. Redis queue tests exercise atomic scripts, retry/dead-letter state, lease recovery, application restart, and a real paused-dependency timeout/recovery. PostgreSQL notification tests exercise encrypted storage, tenant isolation, concurrent deduplication, lease/retry/dead-letter transitions, ciphertext corruption, and key rotation. Scanner protocol tests use an in-process deterministic ClamD server rather than downloading live definitions. Tests do not use development infrastructure. Never point automated tests at development or production services.
+Backend tests require Docker because Testcontainers creates and removes isolated PostgreSQL 18 `careos_test`, Redis 8, and pinned object-storage instances. Redis queue tests exercise atomic scripts, retry/dead-letter state, lease recovery, application restart, and a real paused-dependency timeout/recovery. PostgreSQL notification tests exercise encrypted storage, tenant isolation, concurrent deduplication, lease/retry/dead-letter transitions, ciphertext corruption, and key rotation. Document-evidence tests exercise authorized-transaction ordering, exact replay, rollback, forced RLS, composite tenant linkage, append-only metadata/attestations, digest mismatch, and cross-tenant attacks. Scanner protocol tests use an in-process deterministic ClamD server rather than downloading live definitions. Tests do not use development infrastructure. Never point automated tests at development or production services.
 
 ## Security baseline already represented
 
@@ -171,7 +173,7 @@ Backend tests require Docker because Testcontainers creates and removes isolated
 - RFC 9457 problem responses and a checked OpenAPI 3.1 contract for all 15 implemented operations
 - Checked protected tenant-route, opaque cursor/filter, strong ETag/If-Match, scoped idempotency, and bounded caller-controlled retry conventions
 - Exact TypeScript-only OpenAPI generation with CI drift detection and a credentialed, correlation/CSRF-aware native browser client for all 15 current operations
-- Memory-only frontend session gating with runtime response validation, real login/pending-MFA/organization selection and switching/logout states, accessible fail-closed errors, and a CI-enforced feature dependency direction
+- Memory-only frontend session gating with runtime response validation, server-derived idle/absolute deadline locking, event-driven resume revalidation without background polling, real login/password-recovery/MFA challenge and self-service/organization selection and switching/logout states, accessible fail-closed errors, and a CI-enforced feature dependency direction
 - UUID identifiers
 - Optimistic-lock columns
 - Migration-owned, fail-closed audit/outbox event-version registries
@@ -181,6 +183,7 @@ Backend tests require Docker because Testcontainers creates and removes isolated
 - Explicit fail-closed ports, adapter-completeness checks, and safe status reporting for document security, durable notifications, Redis jobs, workers, and schedulers
 - Opt-in private-quarantine storage with tenant-derived keys, exact length/digest verification, mismatch cleanup, verified retries, and anonymous-access denial
 - Opt-in ClamD scanning with startup/runtime signature-freshness checks, an engine security floor, bounded `INSTREAM` framing, independent length/digest verification, and fail-closed verdicts
+- Transaction-bound PostgreSQL quarantine metadata and scan attestations with forced RLS, context/server-time binding, composite tenant/object linkage, exact-replay handling, and database-enforced append-only evidence
 - Opt-in tenant-derived Redis job queues with allow-listed schema versions, atomic Lua lifecycle transitions, opaque leases, bounded retry/dead-letter retention, integrity checks, and safe metrics
 - Opt-in PostgreSQL durable notifications with allow-listed template versions, AES-256-GCM parameters, hashed deduplication/leases, forced RLS, database-checked transitions, bounded retry/dead-letter retention, and safe metrics
 - ECS JSON request telemetry with validated correlation IDs, templated routes, bounded OpenTelemetry context, baggage disabled, and every OTLP exporter disabled by default
@@ -193,7 +196,7 @@ Backend tests require Docker because Testcontainers creates and removes isolated
 - Pinned object-storage service in the local topology for synthetic compatibility only
 - Synthetic credentials only
 
-The `local` profile seeds a synthetic account and membership into the persisted identity model. The frontend calls the checked client for session bootstrap, login, pending MFA, organization selection/switching, and logout, but organization selection is only a server-side navigation preference and never authorization evidence. Authorization and event registries are fail-closed until owner-approved content is supplied. There is still no protected tenant business API or production business-record UI/cache. Platform capabilities are explicitly unavailable by default until tested adapters are intentionally configured; quarantine is not clean content, an in-memory scanner result is not durable promotion evidence, a queued job is not authority to execute its effect, and a persisted notification is not permission or ability to contact its recipient. Governed invitation issuance/acceptance and account linking, identity-administration UI, approved scoped RBAC/event/job/template policy, maker-checker rules, a non-interactive service-account path, production storage/scanner/Redis/key-management acceptance, remaining document adapters, consent/destination/provider wiring, and consumer deduplication still need to be completed before production.
+The `local` profile seeds a synthetic account and membership into the persisted identity model. The frontend calls the checked client for session bootstrap, login, generic password recovery, pending MFA, recent-authenticated MFA enrollment/recovery-code replacement, organization selection/switching, and logout. It consumes the server's effective session deadline, locks without polling when it passes, and performs checked revalidation only when an unexpired browser view returns to use. Reset tokens are removed from browser history after capture, and credential/MFA material is held only in the active React view. Organization selection is only a server-side navigation preference and never authorization evidence. Authorization and event registries are fail-closed until owner-approved content is supplied. There is still no protected tenant business API or production business-record UI/cache. Platform capabilities are explicitly unavailable by default until tested adapters are intentionally configured; quarantine is not clean content, a raw scanner return must pass through the V8 evidence boundary and still needs an approved freshness rule before promotion, a queued job is not authority to execute its effect, and a persisted notification is not permission or ability to contact its recipient. Governed invitation issuance/acceptance and account linking, MFA disable/administrator reset, approved scoped RBAC/event/job/template policy, maker-checker rules, a non-interactive service-account path, production storage/scanner/Redis/key-management acceptance, promotion/signed-access/retention adapters, consent/destination/provider wiring, and consumer deduplication still need to be completed before production.
 
 ## Repository map
 

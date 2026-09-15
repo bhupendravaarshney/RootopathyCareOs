@@ -1,7 +1,6 @@
 package com.rootopathy.careos.identity.api;
 
 import com.rootopathy.careos.identity.application.IdentityStore;
-import com.rootopathy.careos.identity.infrastructure.config.IdentitySecurityProperties;
 import com.rootopathy.careos.identity.infrastructure.security.CareOsPrincipal;
 import com.rootopathy.careos.shared.api.SecurityProblemWriter;
 import jakarta.servlet.FilterChain;
@@ -9,8 +8,6 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.time.Clock;
-import java.time.Instant;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -19,19 +16,16 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Component
 public final class SessionValidityFilter extends OncePerRequestFilter {
     private final IdentityStore identityStore;
-    private final IdentitySecurityProperties properties;
+    private final SessionExpiryHeaderWriter expiryHeaders;
     private final SecurityProblemWriter problemWriter;
-    private final Clock clock;
 
     public SessionValidityFilter(
             IdentityStore identityStore,
-            IdentitySecurityProperties properties,
-            SecurityProblemWriter problemWriter,
-            Clock clock) {
+            SessionExpiryHeaderWriter expiryHeaders,
+            SecurityProblemWriter problemWriter) {
         this.identityStore = identityStore;
-        this.properties = properties;
+        this.expiryHeaders = expiryHeaders;
         this.problemWriter = problemWriter;
-        this.clock = clock;
     }
 
     @Override
@@ -47,12 +41,8 @@ public final class SessionValidityFilter extends OncePerRequestFilter {
         }
 
         var session = request.getSession(false);
-        var authenticatedAt = session == null ? null : session.getAttribute(AuthenticationSessionState.AUTHENTICATED_AT);
-        var start = authenticatedAt instanceof Long epochMillis
-                ? Instant.ofEpochMilli(epochMillis)
-                : session == null ? Instant.EPOCH : Instant.ofEpochMilli(session.getCreationTime());
         var currentVersion = identityStore.findSecurityVersion(principal.id());
-        var expired = !clock.instant().isBefore(start.plus(properties.sessionAbsoluteTimeout()));
+        var expired = session == null || expiryHeaders.isAbsolutelyExpired(session);
         var revoked = currentVersion.isEmpty() || currentVersion.get() != principal.securityVersion();
 
         if (session == null || expired || revoked) {
@@ -69,6 +59,7 @@ public final class SessionValidityFilter extends OncePerRequestFilter {
                     "The session is no longer valid. Sign in again.");
             return;
         }
+        expiryHeaders.write(session, response);
         filterChain.doFilter(request, response);
     }
 }

@@ -1,12 +1,12 @@
 # Clickable prototype register
 
-The frontend exposes a session-gated shell with server-backed organization switching, workspace search/tabs, responsive navigation and previous/next prototype traversal.
+The frontend exposes a session-gated shell with server-backed organization switching, no-polling idle/absolute deadline lock and resume revalidation, workspace search/tabs, responsive navigation and previous/next prototype traversal.
 
 ## Administration workspace
 
 `M1-01` Login; `M1-02` Invitation; `M1-03` MFA; `M1-04` Organization selector; `M1-05` Administration dashboard; `M1-06` Setup checklist; `M1-07` Organization profile; `M1-08` Registration and identifiers; `M1-09` Addresses and contacts; `M1-10` International settings; `M1-11` Governance contacts; `M1-12` Facilities; `M1-13` Facility wizard; `M1-14` Departments and units; `M1-15` Locations; `M1-16` Operating hours; `M1-17` Service catalogue; `M1-18` Facility services; `M1-19` Identifier schemes; `M1-20` Administrator access; `M1-21` Review and activate; `M1-22` Configuration history; `M1-23` Audit log.
 
-M1-01, a pending M1-03 challenge, and M1-04 now call the checked server identity/organization client. M1-02 explicitly remains unavailable until governed invitation issuance and acceptance exist. These are Phase 0 identity states, not completion of the M1 administration module.
+M1-01, both pending-challenge and authenticated self-service variants of M1-03, and M1-04 call the checked server identity/organization client. Public `#/forgot-password` and token-bearing `#/reset-password` recovery routes support the backend's email flow without adding registered module screens. M1-02 explicitly remains unavailable until governed invitation issuance and acceptance exist. These are Phase 0 identity states, not completion of the M1 administration module.
 
 ## Workforce workspace
 
@@ -18,4 +18,4 @@ M1-01, a pending M1-03 challenge, and M1-04 now call the checked server identity
 
 ## Prototype limitation
 
-Login, pending MFA, organization selection/switching, and logout use foundation APIs. Other buttons demonstrate navigation, validation, and local interaction states only; they do not claim production persistence. The Spring Boot registry API independently verifies the 79-screen contract.
+Login, session-expiry convergence, password recovery, MFA challenge/enrollment/recovery-code self-service, recent authentication, organization selection/switching, and logout use foundation APIs. Other buttons demonstrate navigation, validation, and local interaction states only; they do not claim production persistence. The Spring Boot registry API independently verifies the 79-screen contract.

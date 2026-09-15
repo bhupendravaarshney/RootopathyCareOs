@@ -77,6 +77,67 @@ describe('CareOsApiClient', () => {
     expect(headers.get('X-Correlation-Id')).toBe('request-1');
   });
 
+  it('publishes a checked server session deadline without depending on the browser clock', async () => {
+    const fetcher = mockFetch(
+      jsonResponse(
+        {
+          mfaEnabled: false,
+          recentAuthentication: true,
+          state: 'authenticated',
+          user: {
+            displayName: 'CareOS User',
+            email: 'user@example.test',
+            id: '8cbabf2c-203c-4723-8b02-866d682adf92',
+          },
+        },
+        { headers: { 'X-CareOS-Session-Expires-In': '120' } },
+      ),
+    );
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+      now: () => 10_000,
+    });
+    const listener = vi.fn();
+    const unsubscribe = client.subscribeSessionLifecycle(listener);
+
+    const result = await client.getAuthenticationSession();
+
+    expect(result).toMatchObject({ ok: true, sessionExpiresAt: 130_000 });
+    expect(listener).toHaveBeenCalledWith({ expiresAt: 130_000, type: 'deadline' });
+    unsubscribe();
+  });
+
+  it('publishes session invalidation on any unauthorized API response', async () => {
+    const unauthorized = jsonResponse(
+      {
+        code: 'session-expired',
+        correlationId: 'expired-correlation',
+        detail: 'Sign in again.',
+        instance: '/api/v1/organizations',
+        status: 401,
+        title: 'Session expired',
+        type: 'about:blank',
+      },
+      { status: 401 },
+    );
+    unauthorized.headers.set('Content-Type', 'application/problem+json');
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: mockFetch(unauthorized),
+    });
+    const listener = vi.fn();
+    client.subscribeSessionLifecycle(listener);
+
+    const result = await client.listSelectableOrganizations();
+
+    expect(result).toMatchObject({ kind: 'http', ok: false, status: 401 });
+    expect(listener).toHaveBeenCalledOnce();
+    expect(listener).toHaveBeenCalledWith({ type: 'invalidated' });
+  });
+
   it('bootstraps CSRF before an unsafe request and uses the returned header', async () => {
     const fetcher = mockFetch(
       jsonResponse(

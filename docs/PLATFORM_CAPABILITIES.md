@@ -4,7 +4,7 @@
 
 Phase 0F establishes the activation boundary for infrastructure that must never gain an unsafe local or best-effort fallback. It defines framework-independent application ports, validated metadata records, one status probe per capability, explicit unavailable adapters, and non-secret status reporting.
 
-This is a completed **fail-closed boundary**, not a claim that the production integrations exist. The Compose presence of object storage, Redis, Mailpit, or ClamAV does not make a corresponding application capability available. Phase 0G adds an opt-in quarantine adapter, Phase 0H adds an opt-in scanner adapter, Phase 0I adds an opt-in durable Redis job transport, and Phase 0J adds an opt-in encrypted PostgreSQL notification store. All four remain disabled by default; none activates document promotion/access/retention, outbound notification delivery, or worker execution.
+This is a completed **fail-closed boundary**, not a claim that the production integrations exist. The Compose presence of object storage, Redis, Mailpit, or ClamAV does not make a corresponding application capability available. Phase 0G adds an opt-in quarantine adapter, Phase 0H adds an opt-in scanner adapter, Phase 0I adds an opt-in durable Redis job transport, Phase 0J adds an opt-in encrypted PostgreSQL notification store, and Phase 0R adds mandatory PostgreSQL quarantine/scan evidence mechanics. The four external adapters remain disabled by default; the evidence store does not activate document promotion/access/retention, outbound notification delivery, or worker execution.
 
 ## Capability registry
 
@@ -34,7 +34,7 @@ The document boundary separates five decisions that must be independently implem
 4. Signed access is read-only, short-lived, tenant-authorized, and limited to a promoted clean object. Bucket and storage keys stay inside the adapter.
 5. Retention applies an approved policy key and must preserve legal holds. Disposal is a governed mutation with audit evidence, not a raw storage delete.
 
-Phase 0G implements step 1 and Phase 0H implements the transport/integrity mechanics of step 2, each behind an explicit configuration switch. No durable document/scan state store, promotion state transition, URL signer, or retention executor is wired.
+Phase 0G implements step 1 and Phase 0H implements the transport/integrity mechanics of step 2, each behind an explicit configuration switch. Phase 0R durably records the exact quarantine metadata and every scanner observation through a transaction-bound coordinator. No business document/provenance state machine, scan-freshness policy, promotion state transition, URL signer, or retention executor is wired.
 
 ## Private quarantine adapter checkpoint
 
@@ -47,7 +47,7 @@ The MinIO Java client is used as an S3-compatible transport. Activation requires
 
 Object keys are derived inside the adapter as `organizations/{organizationId}/documents/{documentId}/versions/{objectVersionId}/quarantine`. Callers cannot supply keys or filenames. Writes use conditional creation, stream through an exact-length SHA-256 verifier, remove content that fails post-upload verification, and accept an existing object only after downloading and matching its byte length, media type, and digest. This supports a retry after a surrounding transaction failure without allowing different content to overwrite the same version.
 
-The adapter is disabled by default. The pinned MinIO server digest in Compose and tests is a synthetic compatibility target only: it is not an approved production provider or deployment. Production activation still requires provider selection, separate provisioning credentials, least-privilege runtime IAM, account-level public-access controls, TLS/network policy, KMS-backed encryption, versioning/object-lock decisions, monitoring, backup/restore, and security/operational acceptance. The current adapter has no HTTP upload route and creates no document database record.
+The adapter is disabled by default. The pinned MinIO server digest in Compose and tests is a synthetic compatibility target only: it is not an approved production provider or deployment. Production activation still requires provider selection, separate provisioning credentials, least-privilege runtime IAM, account-level public-access controls, TLS/network policy, KMS-backed encryption, versioning/object-lock decisions, monitoring, backup/restore, and security/operational acceptance. The storage adapter itself has no HTTP upload route and creates no database record; `DocumentSecurityOperations` is the separate application boundary that records V8 evidence after storage acceptance.
 
 ## Malware scanner adapter checkpoint
 
@@ -55,9 +55,21 @@ The adapter is disabled by default. The pinned MinIO server digest in Compose an
 
 Activation requires an explicit host/port, bounded connect and read timeouts, a total scan ceiling, a signature-age ceiling, and an explicit time zone for ClamD's zone-less database timestamp. Startup fails unless `PING` returns `PONG`, `VERSIONCOMMANDS` has the expected bounded format and advertises `INSTREAM`, the engine is at least the current security floor of 1.5.3, and definitions are not stale or implausibly in the future. The identity check is repeated for every scan so a long-running instance cannot keep producing clean verdicts from definitions that have aged beyond policy.
 
-Content uses recommended NUL command framing and four-byte network-order chunk lengths. Only exact `stream: OK` plus matching local size/digest produces `CLEAN`; a non-empty `... FOUND` response produces `INFECTED`; every other response, timeout, socket/storage failure, oversize object, or integrity mismatch produces `ERROR`. The result carries a bounded scanner key, database version, expected digest, and timestamp, but is not yet durable evidence.
+Content uses recommended NUL command framing and four-byte network-order chunk lengths. Only exact `stream: OK` plus matching local size/digest produces `CLEAN`; a non-empty `... FOUND` response produces `INFECTED`; every other response, timeout, socket/storage failure, oversize object, or integrity mismatch produces `ERROR`. The result carries a bounded scanner key, database version, observed-or-explicitly-unknown digest, and timestamp. A raw return value alone is not evidence; `DocumentSecurityOperations` persists it before returning a `DocumentScanAttestation`.
 
-Both adapters remain disabled in the default stack. `compose.scanner.yaml` is an optional local overlay that enables quarantine and scanning together and pins the official multi-architecture ClamAV 1.5.3 base image by digest. It does not publish port 3310. ClamD TCP has no authentication or encryption, so production requires trusted network segmentation, egress/ingress policy, current signature operations, resource sizing, metrics/alerts, and owner acceptance. Promotion must also require a durable, current scan attestation bound to authoritative document metadata; the in-memory return value alone is not sufficient.
+Both adapters remain disabled in the default stack. `compose.scanner.yaml` is an optional local overlay that enables quarantine and scanning together and pins the official multi-architecture ClamAV 1.5.3 base image by digest. It does not publish port 3310. ClamD TCP has no authentication or encryption, so production requires trusted network segmentation, egress/ingress policy, current signature operations, resource sizing, metrics/alerts, and owner acceptance. Promotion must require an authoritative matching `CLEAN` attestation and a still-unapproved freshness rule; V8 persistence alone is not permission to promote.
+
+## PostgreSQL document-security evidence checkpoint
+
+Flyway V8 adds `document_quarantine_evidence` and `document_scan_attestations`. Both tables use forced RLS and the canonical transaction-local organization setting. The runtime role receives only `SELECT` and `INSERT`; insert triggers bind organization, actor, purpose, and correlation to the authorized transaction and replace record timestamps with PostgreSQL server time. Update and delete triggers reject mutation even when normal table privileges would otherwise allow it. Scan rows have a composite `(organization_id, document_id, object_version_id)` foreign key to the exact quarantine evidence row.
+
+The evidence adapter initializes only after migrations and refuses an unsafe superuser/`BYPASSRLS`/owner runtime, missing forced RLS, policies, insert/immutability triggers, the composite foreign key, excess update/delete privileges, or any evidence visibility without tenant context. Every operation also verifies the active writable transaction against its `AuthorizedTenantContext` before reading or writing.
+
+Exact quarantine retries return the original evidence; the same object identity with changed size, media type, or digest conflicts. Scan observations are append-only and deduplicate on tenant, object, scanner, and scanner timestamp. A contradictory replay at that identity conflicts. `CLEAN` and `INFECTED` must carry the quarantine digest. `ERROR` remains evidence even when the scanner could not observe content and returned the explicit unknown digest, but it can never qualify for promotion. Latest-observation reads are deterministically ordered and bounded to one row.
+
+`DefaultDocumentSecurityOperations` checks the authorized evidence boundary before invoking storage, accepts only the expected tenant/document/object-version reference, and records evidence after the external adapter returns. A transaction rollback removes database evidence; the S3 adapter's verified exact-object replay makes a later retry safe if the object already exists. Scanning is refused without quarantine evidence, and API packages are prohibited from depending directly on storage, scanner, or evidence-store ports.
+
+This is infrastructure evidence, not the M7 document model. It creates no upload or download endpoint, document owner/subject/provenance model, approved permission/event, freshness policy, promotion record, signed URL, retention/legal hold, audit/outbox workflow, or provider acceptance. Those remain required before content can leave quarantine.
 
 ## Notification and job contract
 
@@ -75,7 +87,7 @@ Every enqueue, claim, acknowledgement, failure, snapshot, recovery, and cleanup 
 
 Due selection uses deterministic ordering with `FOR UPDATE SKIP LOCKED`. The adapter issues a new opaque 256-bit lease for every attempt and stores only its SHA-256 hash. PostgreSQL server time controls due dates, lease expiry, exponential retry, exhaustion, and retention. Exact enqueue and acknowledgement replays are idempotent; changed identifiers/deduplication content, stale or cross-tenant claims, unapproved template versions, distant schedules, ciphertext/AAD/digest drift, and missing decryption keys cannot return parameters for delivery. Retry and retention policy is copied into every row so a later configuration change cannot silently rewrite active work. Payload-free tenant snapshots and bounded-cardinality Micrometer transition counters expose mechanics only.
 
-The adapter is disabled by default, and an eighth ArchUnit rule prevents API packages from accessing notification claim/completion mechanics. It does not send a message and starts no loop. A future authorized non-interactive worker must claim a request, resolve current recipient consent and destination at delivery time, invoke an approved provider with its own idempotency contract, and record approved audit/outbox/delivery evidence. Production still requires approved templates and payload schemas, a key-management/rotation/re-encryption design, destination and consent policy, provider security and regional acceptance, monitoring/alerts, dead-letter inspection/replay, backup/restore, retention operations, and owner acceptance.
+The adapter is disabled by default, and the architecture rules prevent API packages from accessing notification claim/completion mechanics. It does not send a message and starts no loop. A future authorized non-interactive worker must claim a request, resolve current recipient consent and destination at delivery time, invoke an approved provider with its own idempotency contract, and record approved audit/outbox/delivery evidence. Production still requires approved templates and payload schemas, a key-management/rotation/re-encryption design, destination and consent policy, provider security and regional acceptance, monitoring/alerts, dead-letter inspection/replay, backup/restore, retention operations, and owner acceptance.
 
 ## Redis durable job adapter checkpoint
 
@@ -93,7 +105,7 @@ Worker and scheduler ports require an `AuthorizedTenantContext`. They cannot be 
 
 ## Adapter activation checklist
 
-The foundation status probe reports whether an intentionally enabled adapter's checked mechanics are ready; it is not a production-acceptance or workflow-readiness signal. Before a production workflow may rely on a capability, all applicable items below must also be complete:
+The foundation status probe reports whether an intentionally enabled external adapter's checked mechanics are ready; it is not a production-acceptance or workflow-readiness signal. The mandatory document-evidence store instead fails application startup if its PostgreSQL security contract is absent. Before a production workflow may rely on a capability, all applicable items below must also be complete:
 
 - The concrete adapter implements both its application port and `CapabilityProbe`; replacing a port without a probe remains a startup error.
 - Owner-approved retention, notification, job, service-identity, and event policies have stable versioned registry entries where required.

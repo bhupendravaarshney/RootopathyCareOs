@@ -51,6 +51,8 @@ const ACCEPTED_RESPONSE_TYPES = 'application/json, application/problem+json';
 const CORRELATION_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
 const STRONG_ETAG_PATTERN = /^"[A-Za-z0-9._:-]{1,128}"$/;
 const MAX_RETRY_AFTER_SECONDS = 86_400;
+const SESSION_EXPIRY_HEADER = 'X-CareOS-Session-Expires-In';
+const MAX_SESSION_EXPIRY_SECONDS = 2_147_483_647;
 
 type ResponseStatus<T> = Extract<keyof T, number>;
 
@@ -132,6 +134,7 @@ export type ApiSuccess<T> = {
   data: T;
   etag?: string;
   ok: true;
+  sessionExpiresAt?: number;
   status: number;
 };
 
@@ -151,10 +154,14 @@ export type ApiRequestOptions = {
   signal?: AbortSignal;
 };
 
+export type SessionLifecycleEvent =
+  { expiresAt: number; type: 'deadline' } | { type: 'invalidated' };
+
 export type CareOsApiClientOptions = {
   baseUrl?: string;
   correlationIdFactory?: () => string;
   fetch?: FetchImplementation;
+  now?: () => number;
 };
 
 type RequestDescriptor = {
@@ -295,6 +302,15 @@ function retryAfterSeconds(headers: Headers): number | undefined {
   return seconds >= 1 && seconds <= MAX_RETRY_AFTER_SECONDS ? seconds : undefined;
 }
 
+function sessionExpirySeconds(headers: Headers): number | undefined {
+  const value = headers.get(SESSION_EXPIRY_HEADER)?.trim();
+  if (!value || !/^\d{1,10}$/.test(value)) {
+    return undefined;
+  }
+  const seconds = Number(value);
+  return seconds <= MAX_SESSION_EXPIRY_SECONDS ? seconds : undefined;
+}
+
 function responseMediaType(headers: Headers): string {
   return headers.get('Content-Type')?.split(';', 1)[0]?.trim().toLowerCase() ?? '';
 }
@@ -323,6 +339,8 @@ export class CareOsApiClient {
   readonly #baseUrl: string;
   readonly #correlationIdFactory: () => string;
   readonly #fetch: FetchImplementation;
+  readonly #now: () => number;
+  readonly #sessionLifecycleListeners = new Set<(event: SessionLifecycleEvent) => void>();
 
   constructor(options: CareOsApiClientOptions = {}) {
     this.#baseUrl = normalizeBaseUrl(
@@ -330,6 +348,12 @@ export class CareOsApiClient {
     );
     this.#correlationIdFactory = options.correlationIdFactory ?? defaultCorrelationId;
     this.#fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
+    this.#now = options.now ?? Date.now;
+  }
+
+  subscribeSessionLifecycle(listener: (event: SessionLifecycleEvent) => void): () => void {
+    this.#sessionLifecycleListeners.add(listener);
+    return () => this.#sessionLifecycleListeners.delete(listener);
   }
 
   async #request<T>(descriptor: RequestDescriptor): Promise<ApiResult<T>> {
@@ -347,6 +371,7 @@ export class CareOsApiClient {
     }
 
     try {
+      const requestStartedAt = this.#now();
       const response = await this.#fetch(`${this.#baseUrl}${descriptor.path}`, {
         body: descriptor.body === undefined ? undefined : JSON.stringify(descriptor.body),
         credentials: 'include',
@@ -354,7 +379,12 @@ export class CareOsApiClient {
         method: descriptor.method,
         signal: descriptor.signal,
       });
-      return await this.#resultFromResponse<T>(response, descriptor, correlationId);
+      return await this.#resultFromResponse<T>(
+        response,
+        descriptor,
+        correlationId,
+        requestStartedAt,
+      );
     } catch (error) {
       const aborted = wasAborted(error);
       return {
@@ -380,6 +410,7 @@ export class CareOsApiClient {
     response: Response,
     descriptor: RequestDescriptor,
     requestCorrelationId: string,
+    requestStartedAt: number,
   ): Promise<ApiResult<T>> {
     const responseCorrelationId = response.headers.get('X-Correlation-Id');
     const correlationId =
@@ -387,6 +418,7 @@ export class CareOsApiClient {
         ? responseCorrelationId
         : requestCorrelationId;
     const retryAfter = retryAfterSeconds(response.headers);
+    const sessionExpiresAt = this.#publishSessionLifecycle(response, requestStartedAt);
     const text = await response.text();
 
     if (!responseCorrelationId || !CORRELATION_ID_PATTERN.test(responseCorrelationId)) {
@@ -456,6 +488,7 @@ export class CareOsApiClient {
         correlationId,
         data: undefined as T,
         ok: true,
+        ...(sessionExpiresAt === undefined ? {} : { sessionExpiresAt }),
         status: response.status,
       };
     }
@@ -490,8 +523,33 @@ export class CareOsApiClient {
       data,
       ...(etag && STRONG_ETAG_PATTERN.test(etag) ? { etag } : {}),
       ok: true,
+      ...(sessionExpiresAt === undefined ? {} : { sessionExpiresAt }),
       status: response.status,
     };
+  }
+
+  #publishSessionLifecycle(response: Response, requestStartedAt: number): number | undefined {
+    if (response.status === 401) {
+      this.#notifySessionLifecycle({ type: 'invalidated' });
+      return undefined;
+    }
+    const expiresInSeconds = sessionExpirySeconds(response.headers);
+    if (expiresInSeconds === undefined) {
+      return undefined;
+    }
+    const expiresAt = requestStartedAt + expiresInSeconds * 1_000;
+    this.#notifySessionLifecycle({ expiresAt, type: 'deadline' });
+    return expiresAt;
+  }
+
+  #notifySessionLifecycle(event: SessionLifecycleEvent): void {
+    for (const listener of this.#sessionLifecycleListeners) {
+      try {
+        listener(event);
+      } catch {
+        // A UI observer cannot change the checked transport result.
+      }
+    }
   }
 
   #contractFailure(
@@ -549,6 +607,7 @@ export class CareOsApiClient {
     }
 
     try {
+      const requestStartedAt = this.#now();
       const response = await this.#fetch(`${this.#baseUrl}${descriptor.path}`, {
         body: descriptor.body === undefined ? undefined : JSON.stringify(descriptor.body),
         credentials: 'include',
@@ -560,6 +619,7 @@ export class CareOsApiClient {
         response,
         { ...descriptor, method: 'POST' },
         correlationId,
+        requestStartedAt,
       );
     } catch (error) {
       const aborted = wasAborted(error);

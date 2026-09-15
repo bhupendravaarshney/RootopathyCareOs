@@ -166,7 +166,8 @@ public class SecurityConfig {
                 "X-XSRF-TOKEN",
                 "If-Match",
                 "Idempotency-Key"));
-        configuration.setExposedHeaders(List.of("X-Correlation-Id", "Retry-After", "ETag"));
+        configuration.setExposedHeaders(
+                List.of("X-Correlation-Id", "Retry-After", "ETag", "X-CareOS-Session-Expires-In"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(600L);
         var source = new UrlBasedCorsConfigurationSource();

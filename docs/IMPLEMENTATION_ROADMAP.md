@@ -234,19 +234,65 @@ Local evidence: a clean pinned Java 25 build compiles 137 production sources and
 
 This is a repository preflight boundary, not production TLS, secrets, or edge acceptance. The real environment still needs an approved secret manager and rotation drills; public TLS termination/redirect and trusted proxy topology; private backend/management routing; frontend-to-backend transport acceptance; operation-specific/application and coarse edge rate policy; WAF/DDoS ownership; certificate/header/CSP scans; and measured load, abuse, and false-positive tests. See `PRODUCTION_SECURITY.md`.
 
+### Phase 0P - browser identity lifecycle self-service (completed 15 September 2026)
+
+- [x] Extend the checked session schema with authoritative `mfaEnabled` state and have every authenticated session response read the persisted account state, including immediately after enrollment.
+- [x] Add public password-reset request and completion routes using the checked CSRF/correlation-aware client, the backend's generic request response, matching password and UTF-8 byte checks, and explicit all-session-revocation confirmation.
+- [x] Preserve case-sensitive email tokens while parsing the reset fragment, immediately replace the browser-history entry with a token-free hash, retain the token only in React memory, and forget it after successful consumption.
+- [x] Turn authenticated M1-03 into identity-level MFA self-service, available even without a selected organization, with current-password and conditional second-factor recent authentication.
+- [x] Connect TOTP enrollment/verification and recovery-code regeneration; require explicit destructive acknowledgement before replacement and show plaintext setup/recovery material only in the active memory-only view.
+- [x] Runtime-validate the session/MFA status, `otpauth:` enrollment material, and unique recovery-code format; fail closed on invalid responses or `401`, and return to recent authentication on server `428`.
+- [x] Expand unit and desktop/mobile browser coverage for generic recovery, missing/mismatched reset input, token case preservation/scrubbing, recent authentication, MFA enrollment, one-time codes, and accessibility.
+
+Local evidence: a clean host-side Java 25 build compiled 137 production sources and 11 test sources, passed all 84 tests against disposable PostgreSQL 18, Redis 8, object storage, and deterministic ClamD fixtures, applied Flyway through V7, and packaged the bootable JAR. The checked OpenAPI 3.1 contract is version 0.5.0, retains 15 operations, and passes all six conventions; all six API negative tests, the 79-screen register, the CI-security contract, and its 10 negative tests pass. Frontend generated drift, its 18-source/35-import architecture boundary and four negative tests, formatting, strict typecheck, lint, all 24 unit tests, production build, and all 16 desktop/mobile Playwright/Axe tests pass. Browser flows prove CSRF-backed generic reset request/completion with token removal and recent-authenticated MFA enrollment with one-time recovery-code handling.
+
+This completes policy-neutral browser password recovery and MFA enrollment/recovery-code self-service, not the governed identity program. Invitation issuance/acceptance and existing-account linkage, MFA disable and administrator reset/support policy, non-interactive service accounts, session-expiry revalidation, permission-driven identity administration, and all tenant business workflows remain open. See `FRONTEND_SESSION.md`.
+
+### Phase 0Q - browser session-expiry convergence (completed 15 September 2026)
+
+- [x] Publish `X-CareOS-Session-Expires-In` on valid authenticated responses as the bounded effective seconds to the earlier Redis idle or application absolute deadline; omit it for anonymous sessions and expose it through CORS.
+- [x] Advance OpenAPI 3.1 to version 0.6.0 with a seventh checked convention requiring authenticated deadline responses, refresh-on-real-request semantics, local deadline lock, and no background polling.
+- [x] Extend the checked client with a session-lifecycle publisher that derives a conservative deadline from request start, ignores malformed optional expiry metadata, and broadcasts every `401` as invalidation without changing transport results.
+- [x] Require authenticated bootstrap/login/MFA responses to contain valid expiry metadata before exposing protected content, and fail closed when it is absent or elapsed.
+- [x] Arm a bounded memory-only browser timer, cancel in-flight session/identity generations at expiry, and return to M1-01 with a safe notice without contacting the server.
+- [x] Revalidate the full session/organization boundary on focus, visible-tab return, online return, and persisted-page restoration only while the local deadline is still valid; lock without a request after expiry.
+- [x] Add focused server calculation/CORS/integration coverage, checked-client deadline/invalidation tests, application missing-deadline/timeout/resume tests, and desktop/mobile no-polling browser coverage.
+
+Local evidence: a clean Java 25 build compiles 138 production sources and 12 test sources, applies all seven migrations to disposable PostgreSQL 18, passes all 87 backend tests, and packages the bootable JAR. Frontend generated drift, its 18-source/35-import architecture boundary and four negative tests, formatting, strict typecheck, lint, all 29 unit tests, production build, and all 18 desktop/mobile Playwright/Axe tests pass. The checked 15-operation OpenAPI 3.1 version 0.6.0 contract passes seven conventions and all seven negative tests; the 79-screen register and CI-security verifier/10 negative tests remain green.
+
+This completes automatic expiry convergence for calls made through the checked browser client without weakening server idle expiry. It does not approve invitation/account-linking or administrative MFA policy, service identities, permission-driven business administration, tenant record caching, or any production business workflow. See `FRONTEND_SESSION.md`.
+
+### Phase 0R - durable document-security evidence mechanics (completed 15 September 2026)
+
+- [x] Add Flyway V8 with separate append-only quarantine-evidence and scan-attestation tables keyed by organization, document, and object version.
+- [x] Apply forced RLS to both tables, grant the runtime role only `SELECT`/`INSERT`, bind actor/purpose/correlation and server record time in insert triggers, and reject update/delete even for ordinary migration-owner operations.
+- [x] Link scan attestations to the exact quarantine row through a composite tenant/document/object-version foreign key and verify the role, ownership, RLS, policies, triggers, grants, foreign key, and missing-context visibility at startup.
+- [x] Make exact quarantine and scan observation replays idempotent while rejecting changed metadata and contradictory observations at the same scanner/time identity.
+- [x] Require authoritative digest equality for `CLEAN` and `INFECTED`; retain `ERROR` evidence with an explicit unknown digest without allowing it to become promotion evidence.
+- [x] Add `DocumentSecurityOperations` to check the authorized evidence transaction before storage I/O, verify returned opaque references, require quarantine evidence before scanning, and persist each accepted result.
+- [x] Prevent API packages from calling storage, scanner, or low-level evidence ports directly with a ninth ArchUnit rule.
+- [x] Cover orchestration order, rollback, exact replay, conflicts, latest observation, missing metadata, digest drift, forced RLS, cross-tenant writes, restricted grants, and append-only owner attacks.
+
+Local evidence: a clean Java 25 build compiled 146 production sources and 14 test sources, applied all eight migrations to disposable PostgreSQL 18, passed all 99 backend tests across PostgreSQL, Redis, pinned object storage, and deterministic ClamD fixtures, and packaged the bootable JAR. The new evidence slice contributes five application tests, six PostgreSQL integration tests, and one architecture rule. The API/frontend surface is intentionally unchanged at 15 operations, seven conventions/seven negative tests, 29 frontend unit tests, and 18 desktop/mobile Playwright/Axe tests.
+
+This completes durable quarantine/scan evidence mechanics, not the M7 document workflow. Storage and scanning remain opt-in and disabled by default; promotion, signed access, and retention stay explicitly unavailable. Approved permissions/events, a business document/provenance model, governed upload/finalization, scan freshness, provider IAM/KMS/operations, and protected API/browser coverage remain required. See `PLATFORM_CAPABILITIES.md`.
+
 ### Next Phase 0 slice
 
 - [ ] Approve and add the canonical permission/role/operation registry, then bind protected routes, delegation ceilings, final-owner safeguards, and maker-checker rules to the implemented authorization boundary.
 - [ ] Complete governed invitation issuance/acceptance, existing-account linkage, and a separate non-interactive service-account path using that approved policy.
-- [ ] Add composite tenant foreign keys and database-enforced invariants as the first production vertical slice is introduced.
+- [ ] Extend V8's composite tenant-link pattern and add operation-specific database invariants as the first production business vertical slice is introduced.
 - [x] Define fail-closed document, notification, Redis, worker, and scheduler ports.
 - [x] Implement and integration-test policy-neutral private-quarantine storage mechanics behind the Phase 0F boundary, disabled by default.
 - [x] Implement and integration-test policy-neutral quarantined malware-scanning mechanics behind the Phase 0F boundary, disabled by default.
 - [x] Implement and integration-test policy-neutral Redis durable-job transport mechanics behind the Phase 0F boundary, disabled by default.
 - [x] Implement and integration-test policy-neutral encrypted notification persistence/lease mechanics behind the Phase 0F boundary, disabled by default.
+- [x] Persist transaction-bound, append-only quarantine metadata and scan attestations under forced RLS without activating promotion or document delivery.
 - [x] Add immutable CI dependencies, dependency/SAST/secret/configuration/container gates, update automation, SBOM generation, digest-pinned images, and unprivileged application runtimes.
 - [x] Establish protected tenant-route, pagination/filter, concurrency, idempotency/retry conventions plus generated frontend API types and a checked browser client.
 - [x] Connect the checked identity/organization client to a fail-closed frontend session gate, real login/pending-MFA/selection/switch/logout states, and an enforced session feature boundary.
+- [x] Connect public password recovery plus recent-authenticated M1-03 MFA enrollment/recovery-code self-service without persisting secrets.
+- [x] Add server-derived idle/absolute deadline locking and event-driven browser session revalidation without a background heartbeat.
 - [x] Add structured safe request telemetry, bounded disabled-by-default trace export, authenticated Prometheus format, dependency-correct probes, an outage drill, and the repository operational runbook.
 - [x] Add explicit backend/frontend response headers, strict same-origin CSP, bounded proxy behavior, and a fail-closed production configuration preflight profile.
 - [ ] Approve a production object-store/IAM/KMS design and complete its deployment, recovery, monitoring, and acceptance controls.

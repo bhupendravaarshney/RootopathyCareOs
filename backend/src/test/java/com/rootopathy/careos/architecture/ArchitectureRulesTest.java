@@ -4,8 +4,11 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
-import com.rootopathy.careos.platform.application.JobQueuePort;
+import com.rootopathy.careos.platform.application.DocumentEvidenceOperations;
 import com.rootopathy.careos.platform.application.DurableNotificationPort;
+import com.rootopathy.careos.platform.application.JobQueuePort;
+import com.rootopathy.careos.platform.application.MalwareScannerPort;
+import com.rootopathy.careos.platform.application.PrivateDocumentStoragePort;
 import com.rootopathy.careos.platform.application.QuarantinedDocumentContent;
 import com.rootopathy.careos.platform.application.QuarantinedDocumentContentSourcePort;
 import com.rootopathy.careos.platform.domain.DurableJobClaim;
@@ -91,6 +94,31 @@ class ArchitectureRulesTest {
                 .should()
                 .dependOnClassesThat()
                 .areAssignableTo(QuarantinedDocumentContent.class)
+                .check(productionClasses);
+    }
+
+    @Test
+    void deliveryLayerCannotBypassDurableDocumentSecurityOperations() {
+        noClasses()
+                .that()
+                .resideInAPackage("..api..")
+                .should()
+                .dependOnClassesThat()
+                .areAssignableTo(PrivateDocumentStoragePort.class)
+                .check(productionClasses);
+        noClasses()
+                .that()
+                .resideInAPackage("..api..")
+                .should()
+                .dependOnClassesThat()
+                .areAssignableTo(MalwareScannerPort.class)
+                .check(productionClasses);
+        noClasses()
+                .that()
+                .resideInAPackage("..api..")
+                .should()
+                .dependOnClassesThat()
+                .areAssignableTo(DocumentEvidenceOperations.class)
                 .check(productionClasses);
     }
 

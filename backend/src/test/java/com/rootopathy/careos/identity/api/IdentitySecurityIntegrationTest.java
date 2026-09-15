@@ -192,6 +192,7 @@ class IdentitySecurityIntegrationTest {
     void rotatesAndPersistsSessionWhileKeepingCredentialFailuresGenericAndThrottled() throws Exception {
         var anonymous = mockMvc.perform(get("/api/v1/auth/session"))
                 .andExpect(status().isOk())
+                .andExpect(header().doesNotExist(SessionExpiryHeaderWriter.HEADER_NAME))
                 .andExpect(jsonPath("$.state").value("anonymous"))
                 .andExpect(jsonPath("$.mfaEnabled").value(false))
                 .andReturn();
@@ -200,6 +201,7 @@ class IdentitySecurityIntegrationTest {
 
         var login = login(email, PASSWORD, csrf, "198.51.100.10", preAuthenticationSession)
                 .andExpect(status().isOk())
+                .andExpect(header().string(SessionExpiryHeaderWriter.HEADER_NAME, "1800"))
                 .andExpect(cookie().httpOnly(SESSION_COOKIE, true))
                 .andExpect(cookie().secure(SESSION_COOKIE, true))
                 .andExpect(jsonPath("$.state").value("authenticated"))
@@ -211,6 +213,7 @@ class IdentitySecurityIntegrationTest {
 
         mockMvc.perform(get("/api/v1/auth/session").cookie(authenticatedSession))
                 .andExpect(status().isOk())
+                .andExpect(header().string(SessionExpiryHeaderWriter.HEADER_NAME, "1800"))
                 .andExpect(jsonPath("$.state").value("authenticated"))
                 .andExpect(jsonPath("$.user.email").value(email));
         assertThat(redisTemplate.keys("careos:session:*")).isNotEmpty();

@@ -45,7 +45,13 @@ const mfaSession: SessionState = {
 };
 
 function success<T>(data: T, status = 200): ApiResult<T> {
-  return { correlationId, data, ok: true, status };
+  return {
+    correlationId,
+    data,
+    ok: true,
+    sessionExpiresAt: Date.now() + 30 * 60 * 1_000,
+    status,
+  };
 }
 
 function failure(status = 503): ApiFailure {
@@ -89,6 +95,7 @@ function sessionClient(overrides: Partial<SessionClient> = {}): SessionClient {
           'otpauth://totp/ROOTOPATHY%20CareOS:asha@example.test?secret=ABCDEFGHIJKLMNOP',
         secret: 'ABCDEFGHIJKLMNOP',
       }),
+    subscribeSessionLifecycle: () => () => undefined,
     verifyMfaEnrollment: async () =>
       success({ recoveryCodes: ['2345-6789-ABCD', 'EFGH-JKLM-NPQR'] }),
     verifyRecentAuthentication: async () => success(undefined, 204),
@@ -269,6 +276,60 @@ describe('CareOS frontend session boundary', () => {
     expect(getAuthenticationSession).toHaveBeenCalledOnce();
 
     fireEvent.click(screen.getByRole('button', { name: 'Check session again' }));
+    expect(await screen.findByRole('heading', { name: 'Sign in to CareOS' })).toBeInTheDocument();
+    expect(getAuthenticationSession).toHaveBeenCalledTimes(2);
+  });
+
+  it('fails closed when an authenticated response omits its server expiry deadline', async () => {
+    render(
+      <App
+        client={sessionClient({
+          getAuthenticationSession: async () => ({
+            correlationId,
+            data: authenticatedSession,
+            ok: true,
+            status: 200,
+          }),
+        })}
+      />,
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'CareOS access is unavailable' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('server expiry deadline');
+    expect(screen.queryByText('North Clinic')).not.toBeInTheDocument();
+  });
+
+  it('locks an expired workspace locally without polling the server', async () => {
+    const getAuthenticationSession = vi.fn(async () => ({
+      ...success(authenticatedSession),
+      sessionExpiresAt: Date.now() + 500,
+    }));
+    render(<App client={sessionClient({ getAuthenticationSession })} />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Administration dashboard' }),
+    ).toBeInTheDocument();
+    expect(getAuthenticationSession).toHaveBeenCalledOnce();
+
+    expect(
+      await screen.findByRole('heading', { name: 'Sign in to CareOS' }, { timeout: 1_500 }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Session ended');
+    expect(getAuthenticationSession).toHaveBeenCalledOnce();
+  });
+
+  it('revalidates an authenticated session when the browser regains focus', async () => {
+    const getAuthenticationSession = vi
+      .fn<SessionClient['getAuthenticationSession']>()
+      .mockResolvedValueOnce(success(authenticatedSession))
+      .mockResolvedValueOnce(success(anonymousSession));
+    render(<App client={sessionClient({ getAuthenticationSession })} />);
+    await screen.findByRole('heading', { name: 'Administration dashboard' });
+
+    fireEvent.focus(window);
+
     expect(await screen.findByRole('heading', { name: 'Sign in to CareOS' })).toBeInTheDocument();
     expect(getAuthenticationSession).toHaveBeenCalledTimes(2);
   });

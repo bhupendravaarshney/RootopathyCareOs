@@ -26,14 +26,22 @@ const routeGroups = [
 ];
 const routeSweepTimeout = 60_000;
 
-async function jsonResponse(route: Route, data: unknown, status = 200) {
+async function jsonResponse(route: Route, data: unknown, status = 200, sessionExpiresIn?: string) {
   const correlationId = route.request().headers()['x-correlation-id'] ?? 'playwright-session';
+  const authenticatedState =
+    typeof data === 'object' &&
+    data !== null &&
+    'state' in data &&
+    (data.state === 'authenticated' || data.state === 'mfa_required');
   await route.fulfill({
     body: JSON.stringify(data),
     headers: {
       'Cache-Control': 'no-store',
       'Content-Type': 'application/json',
       'X-Correlation-Id': correlationId,
+      ...(sessionExpiresIn || authenticatedState
+        ? { 'X-CareOS-Session-Expires-In': sessionExpiresIn ?? '1800' }
+        : {}),
     },
     status,
   });
@@ -327,4 +335,21 @@ test('workspace navigation and mobile menu are usable', async ({ page, isMobile 
   await page.getByRole('link', { name: 'M2', exact: true }).click();
   await expect(page).toHaveURL(/M2-01/);
   await expect(page.locator('main h1')).toHaveText('Workforce dashboard');
+});
+
+test('an idle workspace locks at the server deadline without polling', async ({ page }) => {
+  let sessionRequests = 0;
+  await page.route('**/api/v1/auth/session', async (route) => {
+    sessionRequests += 1;
+    await jsonResponse(route, authenticatedSession, 200, '1');
+  });
+  await page.route('**/api/v1/organizations', (route) => jsonResponse(route, [organization]));
+
+  await page.goto('/#/M1-05');
+  await expect(page.getByRole('heading', { name: 'Administration dashboard' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in to CareOS' })).toBeVisible({
+    timeout: 3_000,
+  });
+  await expect(page.getByRole('alert')).toContainText('Session ended');
+  expect(sessionRequests).toBe(1);
 });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { careOsApi, type ApiFailure } from '../../api/client';
+import { careOsApi, type ApiFailure, type SessionLifecycleEvent } from '../../api/client';
 import type { MfaEnrollment, OrganizationAccess, SessionState, User } from '../../api/generated';
 import { SessionContext } from './session-context';
 import type {
@@ -11,6 +11,7 @@ import type {
 } from './session-types';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const MAX_TIMER_DELAY_MS = 2_147_000_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -111,6 +112,10 @@ function isFullyAuthenticated(machine: SessionMachine): machine is FullyAuthenti
   );
 }
 
+function hasAuthenticatedSession(machine: SessionMachine): boolean {
+  return machine.phase === 'mfa_required' || isFullyAuthenticated(machine);
+}
+
 function issueFromFailure(failure: ApiFailure): SessionIssue {
   return {
     code: failure.problem.code,
@@ -143,6 +148,78 @@ export function SessionProvider({ children, client = careOsApi }: SessionProvide
   const [actionIssue, setActionIssue] = useState<SessionIssue | null>(null);
   const generation = useRef(0);
   const identityOperation = useRef(0);
+  const expiryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sessionDeadline = useRef<number | null>(null);
+  const machineRef = useRef(machine);
+  const pendingActionRef = useRef(pendingAction);
+  const resumeRevalidationInFlight = useRef(false);
+
+  useEffect(() => {
+    machineRef.current = machine;
+    pendingActionRef.current = pendingAction;
+  }, [machine, pendingAction]);
+
+  const clearSessionDeadline = useCallback(() => {
+    sessionDeadline.current = null;
+    if (expiryTimer.current !== null) {
+      clearTimeout(expiryTimer.current);
+      expiryTimer.current = null;
+    }
+  }, []);
+
+  const lockEndedSession = useCallback(() => {
+    clearSessionDeadline();
+    ++generation.current;
+    ++identityOperation.current;
+    setMachine({ phase: 'anonymous' });
+    setPendingAction(null);
+    setActionIssue({
+      code: 'session-expired',
+      correlationId: 'unavailable',
+      detail: 'Your session ended or was revoked. Sign in again to continue.',
+      title: 'Session ended',
+    });
+  }, [clearSessionDeadline]);
+
+  const scheduleSessionDeadline = useCallback(
+    (expiresAt: number): boolean => {
+      if (!Number.isSafeInteger(expiresAt) || expiresAt <= 0) {
+        return false;
+      }
+      clearSessionDeadline();
+      sessionDeadline.current = expiresAt;
+
+      const checkDeadline = () => {
+        const remaining = expiresAt - Date.now();
+        if (remaining <= 0) {
+          lockEndedSession();
+          return;
+        }
+        expiryTimer.current = setTimeout(checkDeadline, Math.min(remaining, MAX_TIMER_DELAY_MS));
+      };
+      checkDeadline();
+      return expiresAt > Date.now();
+    },
+    [clearSessionDeadline, lockEndedSession],
+  );
+
+  useEffect(
+    () =>
+      client.subscribeSessionLifecycle((event: SessionLifecycleEvent) => {
+        if (event.type === 'invalidated') {
+          if (sessionDeadline.current !== null || hasAuthenticatedSession(machineRef.current)) {
+            lockEndedSession();
+          }
+          return;
+        }
+        if (sessionDeadline.current !== null) {
+          scheduleSessionDeadline(event.expiresAt);
+        }
+      }),
+    [client, lockEndedSession, scheduleSessionDeadline],
+  );
+
+  useEffect(() => clearSessionDeadline, [clearSessionDeadline]);
 
   const updateAuthenticationIndicators = useCallback(
     (updates: { mfaEnabled?: boolean; recentAuthentication?: boolean }) => {
@@ -159,8 +236,7 @@ export function SessionProvider({ children, client = careOsApi }: SessionProvide
   const handleAuthenticatedActionFailure = useCallback(
     (failure: ApiFailure) => {
       if (failure.status === 401) {
-        ++generation.current;
-        setMachine({ phase: 'anonymous' });
+        lockEndedSession();
       } else {
         if (failure.status === 428) {
           updateAuthenticationIndicators({ recentAuthentication: false });
@@ -169,22 +245,28 @@ export function SessionProvider({ children, client = careOsApi }: SessionProvide
       }
       setPendingAction(null);
     },
-    [updateAuthenticationIndicators],
+    [lockEndedSession, updateAuthenticationIndicators],
   );
 
-  const failOnInvalidActionResponse = useCallback((correlationId: string, detail: string) => {
-    setMachine({ issue: contractIssue(correlationId, detail), phase: 'failure' });
-    setPendingAction(null);
-  }, []);
+  const failOnInvalidActionResponse = useCallback(
+    (correlationId: string, detail: string) => {
+      clearSessionDeadline();
+      setMachine({ issue: contractIssue(correlationId, detail), phase: 'failure' });
+      setPendingAction(null);
+    },
+    [clearSessionDeadline],
+  );
 
   const resolveAuthenticatedSession = useCallback(
     async (
       session: SessionState,
       correlationId: string,
       operation: number,
+      expiresAt: number | undefined,
       signal?: AbortSignal,
     ) => {
       if (!validSession(session)) {
+        clearSessionDeadline();
         setMachine({
           issue: contractIssue(
             correlationId,
@@ -197,7 +279,20 @@ export function SessionProvider({ children, client = careOsApi }: SessionProvide
       }
 
       if (session.state === 'anonymous') {
+        clearSessionDeadline();
         setMachine({ phase: 'anonymous' });
+        setPendingAction(null);
+        return;
+      }
+      if (expiresAt === undefined || !scheduleSessionDeadline(expiresAt)) {
+        clearSessionDeadline();
+        setMachine({
+          issue: contractIssue(
+            correlationId,
+            'The authenticated session response omitted a valid server expiry deadline.',
+          ),
+          phase: 'failure',
+        });
         setPendingAction(null);
         return;
       }
@@ -226,14 +321,16 @@ export function SessionProvider({ children, client = careOsApi }: SessionProvide
       }
       if (!organizationsResult.ok) {
         if (organizationsResult.status === 401) {
-          setMachine({ phase: 'anonymous' });
+          lockEndedSession();
         } else {
+          clearSessionDeadline();
           setMachine({ issue: issueFromFailure(organizationsResult), phase: 'failure' });
         }
         setPendingAction(null);
         return;
       }
       if (!validOrganizations(organizationsResult.data)) {
+        clearSessionDeadline();
         setMachine({
           issue: contractIssue(
             organizationsResult.correlationId,
@@ -275,7 +372,7 @@ export function SessionProvider({ children, client = careOsApi }: SessionProvide
       }
       setPendingAction(null);
     },
-    [client],
+    [clearSessionDeadline, client, lockEndedSession, scheduleSessionDeadline],
   );
 
   const bootstrap = useCallback(
@@ -292,12 +389,19 @@ export function SessionProvider({ children, client = careOsApi }: SessionProvide
         if (result.kind === 'aborted') {
           return;
         }
+        clearSessionDeadline();
         setMachine({ issue: issueFromFailure(result), phase: 'failure' });
         return;
       }
-      await resolveAuthenticatedSession(result.data, result.correlationId, operation, signal);
+      await resolveAuthenticatedSession(
+        result.data,
+        result.correlationId,
+        operation,
+        result.sessionExpiresAt,
+        signal,
+      );
     },
-    [client, resolveAuthenticatedSession],
+    [clearSessionDeadline, client, resolveAuthenticatedSession],
   );
 
   useEffect(() => {
@@ -311,6 +415,47 @@ export function SessionProvider({ children, client = careOsApi }: SessionProvide
       controller.abort();
     };
   }, [bootstrap]);
+
+  useEffect(() => {
+    const revalidateOnResume = () => {
+      if (
+        !hasAuthenticatedSession(machineRef.current) ||
+        pendingActionRef.current !== null ||
+        resumeRevalidationInFlight.current
+      ) {
+        return;
+      }
+      const deadline = sessionDeadline.current;
+      if (deadline === null || deadline <= Date.now()) {
+        lockEndedSession();
+        return;
+      }
+      resumeRevalidationInFlight.current = true;
+      void bootstrap().finally(() => {
+        resumeRevalidationInFlight.current = false;
+      });
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        revalidateOnResume();
+      }
+    };
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        revalidateOnResume();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('focus', revalidateOnResume);
+    window.addEventListener('online', revalidateOnResume);
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('focus', revalidateOnResume);
+      window.removeEventListener('online', revalidateOnResume);
+      window.removeEventListener('pageshow', onPageShow);
+    };
+  }, [bootstrap, lockEndedSession]);
 
   const login = useCallback(
     async (credentials: { email: string; password: string }) => {
@@ -339,7 +484,12 @@ export function SessionProvider({ children, client = careOsApi }: SessionProvide
         setPendingAction(null);
         return;
       }
-      await resolveAuthenticatedSession(result.data, result.correlationId, operation);
+      await resolveAuthenticatedSession(
+        result.data,
+        result.correlationId,
+        operation,
+        result.sessionExpiresAt,
+      );
     },
     [client, machine.phase, pendingAction, resolveAuthenticatedSession],
   );
@@ -358,7 +508,7 @@ export function SessionProvider({ children, client = careOsApi }: SessionProvide
       }
       if (!result.ok) {
         if (result.status === 401) {
-          setMachine({ phase: 'anonymous' });
+          lockEndedSession();
         } else {
           setActionIssue(issueFromFailure(result));
         }
@@ -375,9 +525,14 @@ export function SessionProvider({ children, client = careOsApi }: SessionProvide
         setPendingAction(null);
         return;
       }
-      await resolveAuthenticatedSession(result.data, result.correlationId, operation);
+      await resolveAuthenticatedSession(
+        result.data,
+        result.correlationId,
+        operation,
+        result.sessionExpiresAt,
+      );
     },
-    [client, machine.phase, pendingAction, resolveAuthenticatedSession],
+    [client, lockEndedSession, machine.phase, pendingAction, resolveAuthenticatedSession],
   );
 
   const requestPasswordReset = useCallback(
@@ -421,11 +576,12 @@ export function SessionProvider({ children, client = careOsApi }: SessionProvide
         return false;
       }
       ++generation.current;
+      clearSessionDeadline();
       setMachine({ phase: 'anonymous' });
       setPendingAction(null);
       return true;
     },
-    [client, pendingAction],
+    [clearSessionDeadline, client, pendingAction],
   );
 
   const verifyRecentAuthentication = useCallback(
@@ -596,7 +752,7 @@ export function SessionProvider({ children, client = careOsApi }: SessionProvide
       }
       if (!result.ok) {
         if (result.status === 401) {
-          setMachine({ phase: 'anonymous' });
+          lockEndedSession();
         } else {
           setActionIssue(issueFromFailure(result));
         }
@@ -631,7 +787,7 @@ export function SessionProvider({ children, client = careOsApi }: SessionProvide
       });
       setPendingAction(null);
     },
-    [client, machine, pendingAction],
+    [client, lockEndedSession, machine, pendingAction],
   );
 
   const logout = useCallback(async () => {
@@ -646,13 +802,14 @@ export function SessionProvider({ children, client = careOsApi }: SessionProvide
       return;
     }
     if (result.ok || result.status === 401) {
+      clearSessionDeadline();
       setMachine({ phase: 'anonymous' });
       setPendingAction(null);
       return;
     }
     setActionIssue(issueFromFailure(result));
     setPendingAction(null);
-  }, [client, machine.phase, pendingAction]);
+  }, [clearSessionDeadline, client, machine.phase, pendingAction]);
 
   const dismissActionIssue = useCallback(() => setActionIssue(null), []);
 

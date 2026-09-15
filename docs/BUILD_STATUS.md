@@ -200,6 +200,49 @@ This is a repository signal baseline, not production operational acceptance. No 
 
 This is a production configuration and HTTP preflight baseline, not a deployed security boundary. Secret-manager/rotation exercises, public and service-to-service TLS, trusted forwarding, private backend/management routing, operation/edge rate limits, WAF/DDoS controls, CSP reporting, real-host scans, and measured load/abuse tests remain unapproved and incomplete.
 
+## Verified during Phase 0P foundation (15 September 2026)
+
+- OpenAPI 3.1 advances to version 0.5.0; its checked session response includes persisted `mfaEnabled` state and stays authoritative for a session created before MFA enrollment
+- M1-01 links to public reset request/completion routes with a generic accepted state, password confirmation/UTF-8 bounds, submitted-field clearing, and server-confirmed all-session revocation
+- Reset tokens retain case during parsing, are removed from the active browser-history entry immediately after capture, remain only in React memory, and are forgotten after successful use
+- Authenticated M1-03 now requires recent password plus conditional second-factor verification before TOTP enrollment or recovery-code replacement, including for users without tenant membership
+- TOTP setup and unique recovery-code responses are runtime-validated; one-time plaintext material is removed when acknowledged or when the recent-authenticated child view unmounts
+- Recovery-code regeneration requires explicit acknowledgement that previous codes are immediately revoked; MFA disable and administrator reset remain deliberately unavailable
+- The frontend architecture gate accepts 18 source files and 35 inward relative imports; generated drift, format, strict typecheck, lint, 24 unit tests, and the Vite production build pass
+- All 16 Playwright tests pass on desktop and mobile-320, including the 75 protected-route Axe sweep plus checked-client password recovery and recent-authenticated MFA enrollment flows
+- A clean host-side Java 25 build compiles 137 production sources and 11 test sources, passes all 84 tests against disposable dependencies, applies Flyway through V7, and packages the bootable JAR
+- The 15-operation OpenAPI 3.1 version 0.5.0 contract/six conventions, six API negative tests, 79-screen register, and CI-security verifier/10 negative tests remain green
+
+This closes password-recovery and MFA enrollment/recovery-code browser self-service only. Governed invitations/account linkage, MFA disable/administrator reset, automatic session-expiry revalidation, permission-driven identity administration, service identities, and every tenant business workflow remain incomplete.
+
+## Verified during Phase 0Q foundation (15 September 2026)
+
+- Valid authenticated responses expose `X-CareOS-Session-Expires-In`, calculated as the effective time to the earlier Redis idle or absolute deadline; anonymous session responses omit it
+- CORS exposes the bounded header, and focused calculation tests prove idle-first, absolute-first, and already-elapsed behavior
+- OpenAPI 3.1 advances to version 0.6.0 with a seventh checked no-polling session-lifecycle convention and a seventh negative contract test
+- The checked browser client derives a conservative local deadline from request start and publishes deadline updates or global `401` invalidation without persisting the value
+- Authenticated bootstrap fails closed without valid expiry metadata; a bounded timer removes protected state at expiry without issuing a refresh request
+- Focus, visible-tab, online, and BFCache return events perform full checked session/organization revalidation only while the local deadline remains valid
+- The frontend architecture/generation/format/type/lint/build gates pass with 29 unit tests, and all 18 desktop/mobile Playwright/Axe tests pass, including a no-polling deadline assertion
+- A clean Java 25 build compiles 138 production sources and 12 test sources, applies Flyway through V7, passes all 87 tests against disposable dependencies, and packages the bootable JAR
+- The 15-operation API/seven conventions, seven API negative tests, 79-screen register, and CI-security verifier/10 negative tests remain green
+
+This closes automatic browser session-expiry convergence for the checked client. Direct credentialed fetches remain prohibited because they would bypass lifecycle publication. Governed invitations/account linkage, MFA disable/administrator reset, permission-driven administration, service identities, and every tenant business workflow remain incomplete.
+
+## Verified during Phase 0R foundation (15 September 2026)
+
+- Flyway V8 creates distinct `document_quarantine_evidence` and `document_scan_attestations` tables with forced RLS, canonical tenant policies, composite tenant/object linkage, restricted `SELECT`/`INSERT` runtime grants, transaction-context/server-time insert triggers, and update/delete rejection
+- The mandatory PostgreSQL adapter refuses unsafe role/table ownership, missing RLS/policies/triggers/composite linkage, excess privileges, or evidence visibility without tenant context before serving operations
+- Exact quarantine metadata replays converge while changed byte count, media type, or digest conflicts; database rollback removes evidence and the existing S3 exact-object replay supports a safe subsequent retry
+- Scan observations are immutable and deduplicated by tenant/object/scanner/time; contradictory observations conflict, latest lookup is deterministic and bounded, and `CLEAN`/`INFECTED` require the quarantine digest
+- Scanner `ERROR` observations remain durable when the digest could not be observed, but cannot authorize promotion
+- `DocumentSecurityOperations` verifies the authorized transaction before storage I/O, rejects returned-reference drift, requires durable quarantine metadata before scanning, and persists the accepted result
+- A ninth ArchUnit rule prevents API packages from bypassing the coordinator through storage, scanner, or evidence-store ports
+- Five focused application tests and six disposable PostgreSQL 18 tests pass for ordering, idempotency, rollback, missing/mismatched/ambiguous evidence, forced RLS, cross-tenant denial, request-context binding, restricted grants, and append-only migration-owner attacks
+- A clean Java 25 build compiles 146 production sources and 14 test sources, applies Flyway through V8, passes all 99 tests against disposable dependencies, and packages the bootable JAR
+
+This closes the policy-neutral durable evidence gap only. It adds no upload/download route, business document state machine, permission/event entry, approved freshness policy, clean promotion, signed access, retention/legal hold, or production object-store/scanner acceptance. The external storage/scanner adapters remain disabled by default.
+
 ## Configured but not yet fully integration-verified
 
 - Complete six-service Docker Compose startup on the default host ports
@@ -208,7 +251,7 @@ This is a production configuration and HTTP preflight baseline, not a deployed s
 - Production object-store/IAM/KMS, scanner/network/signature operations, Redis ACL/TLS/HA/persistence/restore acceptance, and notification key-management/backup/restore acceptance; promotion, signed access, retention, notification consent/destination/provider delivery, worker, and scheduler behavior
 - Production metric/log/trace collection, non-interactive scraper identity or private management boundary, service objectives, dashboards, alert delivery/on-call escalation, encrypted backups, and timed restore evidence
 
-The current Phase 0 work has closed the local Java/frontend build-verification, shared API/client convention, session-aware frontend shell, CI supply-chain, and repository operational-signal baseline gaps and now verifies PostgreSQL migration/RLS, Redis-backed browser identity, membership-backed organization selection, fail-closed frontend and backend tenant gates, policy-neutral audit/outbox/idempotency mechanics, explicit external-capability boundaries, private-quarantine storage, fail-closed scanner transport/integrity, durable Redis job-transport mechanics, encrypted PostgreSQL notification persistence/leasing mechanics, generated frontend contract drift, credentialed CSRF-aware HTTP handling, frontend dependency direction, ECS JSON request telemetry, bounded trace context, authenticated Prometheus format, dependency-aware probes, digest-pinned image builds, vulnerability/SAST/secret/configuration gates, SBOM generation, and unprivileged container execution. Owner-approved authorization/event/job/template content, governed invitations and identity-administration UI, protected business endpoints and screen integration, non-interactive worker/scraper identity, hosted-CI/registry enforcement, production storage/scanner/Redis/key-management acceptance, durable scan evidence, consent/destination/provider delivery, external telemetry/alerting, tested backup/restore, remaining document adapters, and all production workflows remain incomplete.
+The current Phase 0 work has closed the local Java/frontend build-verification, shared API/client convention, session-aware frontend shell, automatic no-polling session-expiry convergence, browser password-recovery and MFA enrollment/recovery-code self-service, CI supply-chain, and repository operational-signal baseline gaps and now verifies PostgreSQL migration/RLS, Redis-backed browser identity, membership-backed organization selection, fail-closed frontend and backend tenant gates, policy-neutral audit/outbox/idempotency mechanics, explicit external-capability boundaries, private-quarantine storage, fail-closed scanner transport/integrity, append-only quarantine/scan evidence, durable Redis job-transport mechanics, encrypted PostgreSQL notification persistence/leasing mechanics, generated frontend contract drift, credentialed CSRF-aware HTTP handling, frontend dependency direction, ECS JSON request telemetry, bounded trace context, authenticated Prometheus format, dependency-aware probes, digest-pinned image builds, vulnerability/SAST/secret/configuration gates, SBOM generation, and unprivileged container execution. Owner-approved authorization/event/job/template content, governed invitations/account linkage and administrative MFA reset, protected business endpoints and screen integration, non-interactive worker/scraper/service identity, hosted-CI/registry enforcement, production storage/scanner/Redis/key-management acceptance, consent/destination/provider delivery, external telemetry/alerting, tested backup/restore, promotion/signed-access/retention adapters, and all production workflows remain incomplete.
 
 ## Production status
 

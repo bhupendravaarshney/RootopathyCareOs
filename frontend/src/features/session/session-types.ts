@@ -13,6 +13,7 @@ export type SessionClient = Pick<
   | 'requestPasswordReset'
   | 'selectOrganization'
   | 'startMfaEnrollment'
+  | 'subscribeSessionLifecycle'
   | 'verifyMfaEnrollment'
   | 'verifyRecentAuthentication'
 >;

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "ROOTOPATHY CareOS Foundation API",
-    "version": "0.4.0",
+    "version": "0.6.0",
     "description": "Checked contract for the currently implemented public foundation, browser identity, and membership-backed organization-selection endpoints. Unsafe browser operations require an approved Origin or Referer plus the double-submit CSRF cookie/header pair."
   },
   "servers": [
@@ -44,6 +44,12 @@
       "responseHeader": "#/components/headers/RetryAfter",
       "maximumDelaySeconds": 86400,
       "automaticMutationRetry": false
+    },
+    "sessionLifecycle": {
+      "responseHeader": "#/components/headers/SessionExpiresIn",
+      "refreshOnAuthenticatedRequest": true,
+      "backgroundPolling": false,
+      "clientDeadlineTreatment": "lock-without-refresh"
     }
   },
   "paths": {
@@ -147,6 +153,9 @@
             "headers": {
               "X-Correlation-Id": {
                 "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
               }
             },
             "content": {
@@ -770,6 +779,14 @@
           "type": "string",
           "pattern": "^\"[A-Za-z0-9._:-]{1,128}\"$"
         }
+      },
+      "SessionExpiresIn": {
+        "description": "Effective seconds remaining before the authenticated browser session reaches its idle or absolute deadline. Omitted when no authenticated session exists.",
+        "schema": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        }
       }
     },
     "requestBodies": {
@@ -791,6 +808,9 @@
           "X-Correlation-Id": {
             "$ref": "#/components/headers/CorrelationId"
           },
+          "X-CareOS-Session-Expires-In": {
+            "$ref": "#/components/headers/SessionExpiresIn"
+          },
           "Set-Cookie": {
             "description": "Contains the rotated CAREOS_SESSION cookie and may expire the prior CSRF cookie.",
             "schema": {
@@ -811,6 +831,9 @@
         "headers": {
           "X-Correlation-Id": {
             "$ref": "#/components/headers/CorrelationId"
+          },
+          "X-CareOS-Session-Expires-In": {
+            "$ref": "#/components/headers/SessionExpiresIn"
           },
           "Set-Cookie": {
             "description": "Contains the rotated CAREOS_SESSION cookie and may expire the prior CSRF cookie.",

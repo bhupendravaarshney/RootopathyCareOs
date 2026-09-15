@@ -54,6 +54,17 @@ test("rejects automatic mutation retries", () => {
   );
 });
 
+test("rejects session polling that would defeat idle expiry", () => {
+  const contract = changed((candidate) => {
+    candidate["x-careos-conventions"].sessionLifecycle.backgroundPolling = true;
+  });
+
+  assert.throws(
+    () => verifyApiContract(contract),
+    /deadline without background polling/,
+  );
+});
+
 test("rejects a weakened concurrency precondition", () => {
   const contract = changed((candidate) => {
     candidate.components.parameters.IfMatch.required = false;

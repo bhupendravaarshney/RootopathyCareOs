@@ -25,7 +25,8 @@ class SecurityConfigTest {
                 .contains("If-Match", "Idempotency-Key", "X-Correlation-Id", "X-XSRF-TOKEN")
                 .doesNotContain("X-Organization-Id");
         assertThat(configuration.getExposedHeaders())
-                .containsExactly("X-Correlation-Id", "Retry-After", "ETag");
+                .containsExactly(
+                        "X-Correlation-Id", "Retry-After", "ETag", "X-CareOS-Session-Expires-In");
         assertThat(configuration.getAllowCredentials()).isTrue();
     }
 

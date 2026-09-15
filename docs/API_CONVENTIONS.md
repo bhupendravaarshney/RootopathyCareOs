@@ -2,7 +2,7 @@
 
 Status: checked Phase 0 foundation convention. This document governs every future protected business endpoint but does not authorize or implement one.
 
-The machine-readable source is `contracts/openapi/careos-foundation.json`. Its `x-careos-conventions` object and reusable components are enforced by `scripts/verify-api-contract.mjs` and negative tests. If this document and the checked contract disagree, stop and reconcile them before adding an endpoint.
+The machine-readable source is `contracts/openapi/careos-foundation.json`, currently version `0.6.0`. Its `x-careos-conventions` object and reusable components are enforced by `scripts/verify-api-contract.mjs` and negative tests. If this document and the checked contract disagree, stop and reconcile them before adding an endpoint.
 
 ## Route and tenant boundary
 
@@ -48,7 +48,9 @@ The machine-readable source is `contracts/openapi/careos-foundation.json`. Its `
 - The API base URL is `/api` by default and must end in `/api`. Absolute non-local URLs require HTTPS and may not contain credentials, a query, or a fragment.
 - Every request uses `credentials: include`. JavaScript never sets `Origin`; the browser owns that header and the backend validates it.
 - Before each unsafe browser operation, the client obtains `/api/v1/auth/csrf`, validates the exact `X-XSRF-TOKEN` header name and `_csrf` parameter metadata, and then sends the returned token. If bootstrap or validation fails, the mutation is not sent.
-- Cookies, CSRF values, passwords, MFA material, recovery codes, idempotency keys, and full response bodies must not enter logs, URLs, caches, or client persistence.
+- Every response made under a valid authenticated session carries `X-CareOS-Session-Expires-In`, the bounded effective seconds remaining to the earlier Redis idle or absolute session deadline. CORS exposes this signal. The checked client converts it from the request start into a local deadline and publishes later deadline or `401` invalidation events to the session feature.
+- The browser locks locally when that deadline passes and performs no background polling, because polling would itself keep the Redis idle session alive. Focus, visible-tab return, online return, and back/forward-cache restoration trigger a full checked session revalidation only if the locally held deadline has not passed.
+- Cookies, CSRF values, passwords, MFA material, recovery codes, idempotency keys, and full response bodies must not enter logs, caches, client persistence, or CareOS navigation URLs. The only token-bearing browser URL is the email-delivered password-reset fragment; the application must capture it case-safely, immediately replace that history entry with the token-free reset route, keep it only in memory, and retire it after successful use.
 
 ## Generated types and checked client
 
@@ -62,7 +64,7 @@ npm run api:check
 
 Generated files live in `frontend/src/api/generated/` and must not be hand-edited. `api:check` regenerates into an isolated directory and compares both the file set and normalized contents. CI runs this before typecheck.
 
-`frontend/src/api/client.ts` wraps all 15 currently implemented operations with generated request/response types, credential inclusion, per-mutation CSRF bootstrap, correlation handling, safe Problem parsing, abort/network outcomes, strict status/body checks, ETag exposure, and bounded `Retry-After` parsing. The session feature now calls the identity/session/organization subset for login, pending MFA, selection/switching, and logout. Protected business integration must still happen as approved screen-specific vertical slices replace placeholder behavior. See `FRONTEND_SESSION.md`.
+`frontend/src/api/client.ts` wraps all 15 currently implemented operations with generated request/response types, credential inclusion, per-mutation CSRF bootstrap, correlation handling, safe Problem parsing, abort/network outcomes, strict status/body checks, session-lifecycle publication, ETag exposure, and bounded `Retry-After` parsing. The session feature calls the identity/session/organization subset for login, public password recovery, pending MFA, recent authentication, MFA enrollment/recovery-code replacement, selection/switching, and logout. Protected business integration must still happen as approved screen-specific vertical slices replace placeholder behavior. See `FRONTEND_SESSION.md`.
 
 ## Endpoint review checklist
 

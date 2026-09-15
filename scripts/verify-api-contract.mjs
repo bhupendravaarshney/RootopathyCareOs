@@ -286,6 +286,35 @@ export function verifyApiContract(contract) {
     "Retry-After must be bounded and declared for service unavailability",
   );
 
+  const sessionExpiryHeader =
+    contract.components?.headers?.SessionExpiresIn;
+  assert(
+    conventions.sessionLifecycle?.responseHeader ===
+      "#/components/headers/SessionExpiresIn" &&
+      conventions.sessionLifecycle.refreshOnAuthenticatedRequest === true &&
+      conventions.sessionLifecycle.backgroundPolling === false &&
+      conventions.sessionLifecycle.clientDeadlineTreatment ===
+        "lock-without-refresh",
+    "Browser sessions must publish a deadline without background polling",
+  );
+  assert(
+    sessionExpiryHeader?.schema?.type === "integer" &&
+      sessionExpiryHeader.schema.minimum === 0 &&
+      sessionExpiryHeader.schema.maximum === 2147483647,
+    "The session-expiry signal must be a bounded non-negative duration",
+  );
+  for (const response of [
+    contract.paths?.["/api/v1/auth/session"]?.get?.responses?.["200"],
+    contract.components?.responses?.AuthenticatedSession,
+    contract.components?.responses?.MfaPendingSession,
+  ]) {
+    assert(
+      resolved(response)?.headers?.["X-CareOS-Session-Expires-In"]?.$ref ===
+        "#/components/headers/SessionExpiresIn",
+      "Authenticated session responses must declare the session-expiry signal",
+    );
+  }
+
   const tenantPrefix = `${conventions.tenantPathPrefix}/`;
   for (const [path, pathItem] of Object.entries(contract.paths ?? {})) {
     if (!path.startsWith(tenantPrefix)) {
@@ -314,7 +343,7 @@ export function verifyApiContract(contract) {
     contract: "contracts/openapi/careos-foundation.json",
     openapi: contract.openapi,
     operations: expectedOperations.length,
-    conventions: 6,
+    conventions: 7,
     status: "PASS",
   };
 }

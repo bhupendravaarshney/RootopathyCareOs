@@ -46,6 +46,7 @@ public final class AuthenticationController {
     private final IdentitySecurityService identitySecurity;
     private final SecurityRateLimitPort rateLimits;
     private final IdentitySecurityProperties properties;
+    private final SessionExpiryHeaderWriter expiryHeaders;
     private final Clock clock;
 
     public AuthenticationController(
@@ -55,6 +56,7 @@ public final class AuthenticationController {
             IdentitySecurityService identitySecurity,
             SecurityRateLimitPort rateLimits,
             IdentitySecurityProperties properties,
+            SessionExpiryHeaderWriter expiryHeaders,
             Clock clock) {
         this.authenticationManager = authenticationManager;
         this.securityContextRepository = securityContextRepository;
@@ -62,6 +64,7 @@ public final class AuthenticationController {
         this.identitySecurity = identitySecurity;
         this.rateLimits = rateLimits;
         this.properties = properties;
+        this.expiryHeaders = expiryHeaders;
         this.clock = clock;
     }
 
@@ -126,6 +129,7 @@ public final class AuthenticationController {
 
         if (principal.mfaRequired()) {
             saveAuthentication(authentication, request, response);
+            expiryHeaders.write(session, response);
             return ResponseEntity.status(HttpStatus.ACCEPTED)
                     .cacheControl(CacheControl.noStore())
                     .body(sessionResponse("mfa_required", principal, false));
@@ -136,6 +140,7 @@ public final class AuthenticationController {
         identitySecurity.recordLoginSucceeded(
                 account, session.getId(), false, correlationId(request), remoteAddress);
         saveAuthentication(authentication, request, response);
+        expiryHeaders.write(session, response);
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(sessionResponse("authenticated", principal, true));
@@ -258,6 +263,7 @@ public final class AuthenticationController {
                 correlationId(request),
                 remoteAddress);
         saveAuthentication(upgraded, request, response);
+        expiryHeaders.write(session, response);
         rateLimits.clear("mfa-user", principal.id().toString());
         rateLimits.clear("mfa-remote", remoteAddress);
         return ResponseEntity.ok()
