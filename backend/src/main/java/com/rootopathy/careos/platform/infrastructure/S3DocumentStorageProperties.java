@@ -14,6 +14,7 @@ public final class S3DocumentStorageProperties {
     private String accessKey;
     private String secretKey;
     private String quarantineBucket = "careos-document-quarantine";
+    private String cleanBucket = "careos-document-clean";
     private long maximumUploadBytes = 50L * 1024 * 1024;
     private boolean allowHttp;
     private boolean createBucketIfMissing;
@@ -56,6 +57,14 @@ public final class S3DocumentStorageProperties {
 
     public void setQuarantineBucket(String quarantineBucket) {
         this.quarantineBucket = quarantineBucket;
+    }
+
+    public String getCleanBucket() {
+        return cleanBucket;
+    }
+
+    public void setCleanBucket(String cleanBucket) {
+        this.cleanBucket = cleanBucket;
     }
 
     public long getMaximumUploadBytes() {
@@ -108,12 +117,23 @@ public final class S3DocumentStorageProperties {
         }
     }
 
+    public void validateForPromotionActivation() {
+        validateForActivation();
+        if (cleanBucket == null || !BUCKET.matcher(cleanBucket).matches()) {
+            throw new IllegalStateException("S3 clean bucket has an invalid format");
+        }
+        if (cleanBucket.equals(quarantineBucket)) {
+            throw new IllegalStateException("S3 clean and quarantine buckets must be distinct");
+        }
+    }
+
     @Override
     public String toString() {
         return "S3DocumentStorageProperties[enabled=" + enabled
                 + ", endpoint=" + endpoint
                 + ", accessKey=<redacted>, secretKey=<redacted>, quarantineBucket="
                 + quarantineBucket
+                + ", cleanBucket=" + cleanBucket
                 + ", maximumUploadBytes=" + maximumUploadBytes
                 + ", allowHttp=" + allowHttp
                 + ", createBucketIfMissing=" + createBucketIfMissing + "]";

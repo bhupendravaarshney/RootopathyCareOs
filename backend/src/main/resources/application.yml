@@ -145,9 +145,17 @@ careos:
       access-key: ${CAREOS_STORAGE_S3_ACCESS_KEY:}
       secret-key: ${CAREOS_STORAGE_S3_SECRET_KEY:}
       quarantine-bucket: ${CAREOS_STORAGE_S3_QUARANTINE_BUCKET:careos-document-quarantine}
+      clean-bucket: ${CAREOS_STORAGE_S3_CLEAN_BUCKET:careos-document-clean}
       maximum-upload-bytes: ${CAREOS_STORAGE_S3_MAXIMUM_UPLOAD_BYTES:52428800}
       allow-http: ${CAREOS_STORAGE_S3_ALLOW_HTTP:false}
       create-bucket-if-missing: ${CAREOS_STORAGE_S3_CREATE_BUCKET_IF_MISSING:false}
+  documents:
+    promotion:
+      enabled: ${CAREOS_DOCUMENT_PROMOTION_ENABLED:false}
+      policy-key: ${CAREOS_DOCUMENT_PROMOTION_POLICY_KEY:}
+      accepted-scanner-keys: ${CAREOS_DOCUMENT_PROMOTION_ACCEPTED_SCANNER_KEYS:}
+      maximum-scan-age: ${CAREOS_DOCUMENT_PROMOTION_MAXIMUM_SCAN_AGE:}
+      maximum-future-skew: ${CAREOS_DOCUMENT_PROMOTION_MAXIMUM_FUTURE_SKEW:0s}
   security:
     allowed-origins: ${CAREOS_ALLOWED_ORIGINS}
     application-base-url: ${CAREOS_BASE_URL}

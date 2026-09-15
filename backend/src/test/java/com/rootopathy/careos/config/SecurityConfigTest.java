@@ -76,6 +76,19 @@ class SecurityConfigTest {
                 .hasMessageContaining("OTLP tracing endpoint must use an HTTPS URL");
     }
 
+    @Test
+    void rejectsPromotionWithoutStorageAndAnExplicitPolicyInProduction() {
+        var environment = productionEnvironment();
+        environment.setProperty("careos.documents.promotion.enabled", "true");
+
+        assertThatThrownBy(() -> ProductionConfigurationGuard.validate(properties(), environment))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("requires private S3 document storage")
+                .hasMessageContaining("promotion policy key")
+                .hasMessageContaining("scanner allow-list")
+                .hasMessageContaining("maximum scan age");
+    }
+
     private static IdentitySecurityProperties properties() {
         return new IdentitySecurityProperties(
                 List.of("https://careos.example"),

@@ -10,6 +10,7 @@ final class GovernanceValues {
             Pattern.compile("[a-z][a-z0-9]*([.:-][a-z0-9]+)*");
     private static final Pattern TYPE_KEY =
             Pattern.compile("[a-z][a-z0-9]*([._:-][a-z0-9]+)*");
+    private static final Pattern CORRELATION_ID = Pattern.compile("[A-Za-z0-9._:-]{1,128}");
 
     private GovernanceValues() {}
 
@@ -19,6 +20,10 @@ final class GovernanceValues {
 
     static String typeKey(String value, String name, int maxLength) {
         return matching(value, name, maxLength, TYPE_KEY);
+    }
+
+    static String correlationId(String value, String name) {
+        return matching(value, name, 128, CORRELATION_ID);
     }
 
     static String jsonObject(String value, String name) {

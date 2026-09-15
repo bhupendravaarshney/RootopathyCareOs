@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.rootopathy.careos.platform.application.DocumentEvidenceException;
 import com.rootopathy.careos.platform.application.DocumentEvidenceOperations;
 import com.rootopathy.careos.platform.domain.DocumentObjectReference;
+import com.rootopathy.careos.platform.domain.DocumentPromotionPolicy;
 import com.rootopathy.careos.platform.domain.DocumentQuarantineRequest;
 import com.rootopathy.careos.platform.domain.MalwareScanResult;
 import com.rootopathy.careos.platform.domain.MalwareScanVerdict;
@@ -17,8 +18,10 @@ import com.rootopathy.careos.tenancy.domain.PermissionKey;
 import com.rootopathy.careos.tenancy.domain.TenantAuthorizationRequest;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,6 +59,8 @@ class PostgresDocumentEvidenceIntegrationTest {
             UUID.fromString("01900000-0000-7000-8000-000000000601");
     private static final String SHA_256 = "a".repeat(64);
     private static final Instant SCANNED_AT = Instant.parse("2026-09-15T06:30:00.123456Z");
+    private static final DocumentPromotionPolicy PROMOTION_POLICY = new DocumentPromotionPolicy(
+            "foundation.synthetic", Set.of("clamav"), Duration.ofDays(1), Duration.ofSeconds(5));
 
     @Container
     private static final PostgreSQLContainer POSTGRES =
@@ -100,7 +105,7 @@ class PostgresDocumentEvidenceIntegrationTest {
                         POSTGRES.getJdbcUrl(), MIGRATOR_USER, MIGRATOR_PASSWORD);
                 var statement = connection.createStatement()) {
             statement.executeUpdate(
-                    "TRUNCATE document_scan_attestations, document_quarantine_evidence");
+                    "TRUNCATE document_promotion_evidence, document_scan_attestations, document_quarantine_evidence");
             statement.executeUpdate("""
                     INSERT INTO users (id, email, display_name, status)
                     VALUES ('01900000-0000-7000-8000-000000000201',
@@ -318,12 +323,154 @@ class PostgresDocumentEvidenceIntegrationTest {
     }
 
     @Test
+    void recordsCleanPromotionEvidenceWithAnImmutablePolicySnapshot() throws SQLException {
+        var reference = createQuarantine();
+        var clean = scan(
+                reference,
+                MalwareScanVerdict.CLEAN,
+                "clamav",
+                "20260915.1",
+                SHA_256,
+                Instant.now().minusSeconds(30));
+        var attestation = authorize(
+                ORG_ONE, "promotion-scan", context -> evidence.recordScan(context, clean));
+
+        assertThatThrownBy(() -> authorize(ORG_ONE, "promotion-unapproved-scanner", context -> {
+                    jdbcTemplate.update(
+                            """
+                            INSERT INTO document_promotion_evidence
+                                (organization_id, document_id, object_version_id,
+                                 scan_attestation_id, promotion_policy_key,
+                                 accepted_scanner_keys, maximum_scan_age_seconds,
+                                 maximum_future_skew_seconds, promoted_by_actor_id,
+                                 purpose, correlation_id)
+                            VALUES (?, ?, ?, ?, 'foundation.synthetic', 'other-scanner',
+                                    86400, 5, ?, ?, ?)
+                            """,
+                            context.organizationId(),
+                            reference.documentId(),
+                            reference.objectVersionId(),
+                            attestation.attestationId(),
+                            context.actorId(),
+                            context.purpose(),
+                            context.correlationId());
+                    return null;
+                }))
+                .hasRootCauseInstanceOf(PSQLException.class);
+
+        var first = authorize(ORG_ONE, "promotion-first", context ->
+                evidence.recordPromotion(context, attestation, PROMOTION_POLICY));
+        var replay = authorize(ORG_ONE, "promotion-replay", context ->
+                evidence.recordPromotion(context, attestation, PROMOTION_POLICY));
+        var found = authorize(ORG_ONE, "promotion-read", context ->
+                        evidence.findPromotion(context, reference))
+                .orElseThrow();
+
+        assertThat(replay).isEqualTo(first);
+        assertThat(found).isEqualTo(first);
+        assertThat(first.scanAttestation()).isEqualTo(attestation);
+        assertThat(first.policyKey()).isEqualTo("foundation.synthetic");
+        assertThat(first.maximumScanAge()).isEqualTo(Duration.ofDays(1));
+        assertThat(first.maximumFutureSkew()).isEqualTo(Duration.ofSeconds(5));
+
+        var stored = migratorRow("""
+                SELECT scan_attestation_id, promotion_policy_key,
+                       accepted_scanner_keys,
+                       maximum_scan_age_seconds, maximum_future_skew_seconds,
+                       promoted_by_actor_id, purpose, correlation_id
+                FROM document_promotion_evidence
+                """);
+        assertThat(stored)
+                .containsEntry("scan_attestation_id", attestation.attestationId())
+                .containsEntry("promotion_policy_key", "foundation.synthetic")
+                .containsEntry("accepted_scanner_keys", "clamav")
+                .containsEntry("maximum_scan_age_seconds", 86400)
+                .containsEntry("maximum_future_skew_seconds", 5)
+                .containsEntry("promoted_by_actor_id", ACTOR)
+                .containsEntry("purpose", "document-security")
+                .containsEntry("correlation_id", "promotion-first");
+    }
+
+    @Test
+    void rejectsNonCleanStaleAndConflictingPromotionEvidence() {
+        var reference = createQuarantine();
+        var olderClean = authorize(ORG_ONE, "promotion-older-clean-scan", context -> evidence.recordScan(
+                context,
+                scan(
+                        reference,
+                        MalwareScanVerdict.CLEAN,
+                        "clamav",
+                        "20260915.0",
+                        SHA_256,
+                        Instant.now().minusSeconds(240))));
+        var infected = authorize(ORG_ONE, "promotion-infected-scan", context -> evidence.recordScan(
+                context,
+                scan(
+                        reference,
+                        MalwareScanVerdict.INFECTED,
+                        "clamav",
+                        "20260915.1",
+                        SHA_256,
+                        Instant.now().minusSeconds(180))));
+        assertReason(
+                () -> authorize(ORG_ONE, "promotion-not-latest", context ->
+                        evidence.recordPromotion(context, olderClean, PROMOTION_POLICY)),
+                "document-evidence-store-rejected");
+        assertReason(
+                () -> authorize(ORG_ONE, "promotion-infected", context ->
+                        evidence.recordPromotion(context, infected, PROMOTION_POLICY)),
+                "document-evidence-store-rejected");
+
+        var staleScan = authorize(ORG_ONE, "promotion-stale-scan", context -> evidence.recordScan(
+                context,
+                scan(
+                        reference,
+                        MalwareScanVerdict.CLEAN,
+                        "clamav",
+                        "20260915.2",
+                        SHA_256,
+                        Instant.now().minusSeconds(120))));
+        var oneMinutePolicy = new DocumentPromotionPolicy(
+                "foundation.short", Set.of("clamav"), Duration.ofMinutes(1), Duration.ZERO);
+        assertReason(
+                () -> authorize(ORG_ONE, "promotion-stale", context ->
+                        evidence.recordPromotion(context, staleScan, oneMinutePolicy)),
+                "document-evidence-store-rejected");
+
+        var clean = authorize(ORG_ONE, "promotion-clean-scan", context -> evidence.recordScan(
+                context,
+                scan(
+                        reference,
+                        MalwareScanVerdict.CLEAN,
+                        "clamav",
+                        "20260915.3",
+                        SHA_256,
+                        Instant.now().minusSeconds(10))));
+        authorize(ORG_ONE, "promotion-clean", context ->
+                evidence.recordPromotion(context, clean, PROMOTION_POLICY));
+        var anotherPolicy = new DocumentPromotionPolicy(
+                "foundation.changed", Set.of("clamav"), Duration.ofHours(2), Duration.ZERO);
+        assertReason(
+                () -> authorize(ORG_ONE, "promotion-conflict", context ->
+                        evidence.recordPromotion(context, clean, anotherPolicy)),
+                "document-promotion-evidence-conflict");
+    }
+
+    @Test
     void databaseRejectsCrossTenantWritesAndMutationEvenForTheMigrationOwner()
             throws SQLException {
         var reference = createQuarantine();
         var clean = scan(
-                reference, MalwareScanVerdict.CLEAN, "clamav", "20260915.1", SHA_256, SCANNED_AT);
-        authorize(ORG_ONE, "immutable-scan", context -> evidence.recordScan(context, clean));
+                reference,
+                MalwareScanVerdict.CLEAN,
+                "clamav",
+                "20260915.1",
+                SHA_256,
+                Instant.now().minusSeconds(10));
+        var attestation = authorize(
+                ORG_ONE, "immutable-scan", context -> evidence.recordScan(context, clean));
+        authorize(ORG_ONE, "immutable-promotion", context ->
+                evidence.recordPromotion(context, attestation, PROMOTION_POLICY));
 
         assertThatThrownBy(() -> authorize(ORG_ONE, "cross-tenant-insert", context -> {
                     jdbcTemplate.update(
@@ -353,22 +500,33 @@ class PostgresDocumentEvidenceIntegrationTest {
                         "DELETE FROM document_scan_attestations"))
                 .isInstanceOf(PSQLException.class)
                 .hasMessageContaining("append-only");
+        assertThatThrownBy(() -> executeAsMigrator(
+                        "DELETE FROM document_promotion_evidence"))
+                .isInstanceOf(PSQLException.class)
+                .hasMessageContaining("append-only");
 
         var security = migratorRow("""
                 SELECT objects.relrowsecurity AS objects_rls,
                        objects.relforcerowsecurity AS objects_forced,
                        scans.relrowsecurity AS scans_rls,
                        scans.relforcerowsecurity AS scans_forced,
+                       promotions.relrowsecurity AS promotions_rls,
+                       promotions.relforcerowsecurity AS promotions_forced,
                        has_table_privilege('careos_app', 'document_quarantine_evidence', 'UPDATE')
                            AS objects_update,
                        has_table_privilege('careos_app', 'document_scan_attestations', 'DELETE')
-                           AS scans_delete
+                           AS scans_delete,
+                       has_table_privilege('careos_app', 'document_promotion_evidence', 'UPDATE')
+                           AS promotions_update
                 FROM pg_class objects
                 JOIN pg_namespace object_schema ON object_schema.oid = objects.relnamespace
                 JOIN pg_class scans ON scans.relname = 'document_scan_attestations'
                 JOIN pg_namespace scan_schema ON scan_schema.oid = scans.relnamespace
+                JOIN pg_class promotions ON promotions.relname = 'document_promotion_evidence'
+                JOIN pg_namespace promotion_schema ON promotion_schema.oid = promotions.relnamespace
                 WHERE object_schema.nspname = 'public'
                   AND scan_schema.nspname = 'public'
+                  AND promotion_schema.nspname = 'public'
                   AND objects.relname = 'document_quarantine_evidence'
                 """);
         assertThat(security)
@@ -376,8 +534,11 @@ class PostgresDocumentEvidenceIntegrationTest {
                 .containsEntry("objects_forced", true)
                 .containsEntry("scans_rls", true)
                 .containsEntry("scans_forced", true)
+                .containsEntry("promotions_rls", true)
+                .containsEntry("promotions_forced", true)
                 .containsEntry("objects_update", false)
-                .containsEntry("scans_delete", false);
+                .containsEntry("scans_delete", false)
+                .containsEntry("promotions_update", false);
     }
 
     private DocumentObjectReference createQuarantine() {

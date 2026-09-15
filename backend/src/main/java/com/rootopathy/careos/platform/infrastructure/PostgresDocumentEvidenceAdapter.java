@@ -3,6 +3,8 @@ package com.rootopathy.careos.platform.infrastructure;
 import com.rootopathy.careos.platform.application.DocumentEvidenceException;
 import com.rootopathy.careos.platform.application.DocumentEvidenceOperations;
 import com.rootopathy.careos.platform.domain.DocumentObjectReference;
+import com.rootopathy.careos.platform.domain.DocumentPromotionEvidence;
+import com.rootopathy.careos.platform.domain.DocumentPromotionPolicy;
 import com.rootopathy.careos.platform.domain.DocumentQuarantineEvidence;
 import com.rootopathy.careos.platform.domain.DocumentQuarantineRequest;
 import com.rootopathy.careos.platform.domain.DocumentScanAttestation;
@@ -13,10 +15,12 @@ import com.rootopathy.careos.tenancy.infrastructure.AuthorizedTenantTransactionG
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -28,6 +32,9 @@ public final class PostgresDocumentEvidenceAdapter implements DocumentEvidenceOp
     private static final String QUARANTINE_MISSING = "document-quarantine-evidence-not-found";
     private static final String SCAN_CONFLICT = "document-scan-evidence-conflict";
     private static final String SCAN_DIGEST_MISMATCH = "document-scan-evidence-digest-mismatch";
+    private static final String PROMOTION_CONFLICT = "document-promotion-evidence-conflict";
+    private static final String PROMOTION_SCANNER_REJECTED =
+            "document-promotion-scanner-not-approved";
     private static final String TENANT_MISMATCH = "document-evidence-tenant-mismatch";
     private static final String REFERENCE_MISMATCH = "document-evidence-reference-mismatch";
 
@@ -60,7 +67,12 @@ public final class PostgresDocumentEvidenceAdapter implements DocumentEvidenceOp
                     "document_scan_attestations_tenant_policy",
                     "document_scan_attestations_validate_insert",
                     "document_scan_attestations_reject_mutation");
-            var hasRequiredScanConstraints = jdbcTemplate.queryForObject(
+            verifyTableSecurity(
+                    "document_promotion_evidence",
+                    "document_promotion_evidence_tenant_policy",
+                    "document_promotion_evidence_validate_insert",
+                    "document_promotion_evidence_reject_mutation");
+            var hasRequiredConstraints = jdbcTemplate.queryForObject(
                     """
                     SELECT EXISTS (
                         SELECT 1
@@ -109,15 +121,49 @@ public final class PostgresDocumentEvidenceAdapter implements DocumentEvidenceOp
                               'scanner_key', 'scanned_at'
                           ]::text[]
                     )
+                    AND EXISTS (
+                        SELECT 1
+                        FROM pg_constraint constraints
+                        JOIN pg_class tables ON tables.oid = constraints.conrelid
+                        JOIN pg_class referenced_tables
+                          ON referenced_tables.oid = constraints.confrelid
+                        JOIN pg_namespace schemas ON schemas.oid = tables.relnamespace
+                        WHERE schemas.nspname = 'public'
+                          AND tables.relname = 'document_promotion_evidence'
+                          AND referenced_tables.relname = 'document_scan_attestations'
+                          AND constraints.conname = 'document_promotion_evidence_scan_fk'
+                          AND constraints.contype = 'f'
+                          AND (
+                              SELECT array_agg(attributes.attname::text ORDER BY keys.ordinality)
+                              FROM unnest(constraints.conkey) WITH ORDINALITY keys(attribute_number, ordinality)
+                              JOIN pg_attribute attributes
+                                ON attributes.attrelid = constraints.conrelid
+                               AND attributes.attnum = keys.attribute_number
+                          ) = ARRAY[
+                              'organization_id', 'scan_attestation_id',
+                              'document_id', 'object_version_id'
+                          ]::text[]
+                          AND (
+                              SELECT array_agg(attributes.attname::text ORDER BY keys.ordinality)
+                              FROM unnest(constraints.confkey) WITH ORDINALITY keys(attribute_number, ordinality)
+                              JOIN pg_attribute attributes
+                                ON attributes.attrelid = constraints.confrelid
+                               AND attributes.attnum = keys.attribute_number
+                          ) = ARRAY[
+                              'organization_id', 'attestation_id',
+                              'document_id', 'object_version_id'
+                          ]::text[]
+                    )
                     """,
                     Boolean.class);
             var visibleWithoutTenant = jdbcTemplate.queryForObject(
                     """
                     SELECT (SELECT count(*) FROM document_quarantine_evidence)
                          + (SELECT count(*) FROM document_scan_attestations)
+                         + (SELECT count(*) FROM document_promotion_evidence)
                     """,
                     Long.class);
-            if (!Boolean.TRUE.equals(hasRequiredScanConstraints)
+            if (!Boolean.TRUE.equals(hasRequiredConstraints)
                     || visibleWithoutTenant == null
                     || visibleWithoutTenant != 0L) {
                 throw new IllegalStateException(
@@ -238,6 +284,66 @@ public final class PostgresDocumentEvidenceAdapter implements DocumentEvidenceOp
     }
 
     @Override
+    public DocumentPromotionEvidence recordPromotion(
+            AuthorizedTenantContext context,
+            DocumentScanAttestation scanAttestation,
+            DocumentPromotionPolicy policy) {
+        Objects.requireNonNull(scanAttestation, "scanAttestation");
+        Objects.requireNonNull(policy, "policy");
+        var document = scanAttestation.result().document();
+        requireContext(context, document);
+        if (!policy.acceptsScanner(scanAttestation.result().scannerKey())) {
+            throw new DocumentEvidenceException(PROMOTION_SCANNER_REJECTED);
+        }
+
+        try {
+            var existing = readPromotion(document);
+            if (existing.isPresent()) {
+                var stored = existing.orElseThrow();
+                if (!matches(stored, scanAttestation, policy)) {
+                    throw new DocumentEvidenceException(PROMOTION_CONFLICT);
+                }
+                return stored;
+            }
+            var inserted = jdbcTemplate.update(
+                    """
+                    INSERT INTO document_promotion_evidence
+                        (organization_id, document_id, object_version_id,
+                         scan_attestation_id, promotion_policy_key,
+                         accepted_scanner_keys, maximum_scan_age_seconds,
+                         maximum_future_skew_seconds,
+                         promoted_by_actor_id, purpose, correlation_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT DO NOTHING
+                    """,
+                    context.organizationId(),
+                    document.documentId(),
+                    document.objectVersionId(),
+                    scanAttestation.attestationId(),
+                    policy.policyKey(),
+                    policy.canonicalAcceptedScannerKeys(),
+                    Math.toIntExact(policy.maximumScanAge().toSeconds()),
+                    Math.toIntExact(policy.maximumFutureSkew().toSeconds()),
+                    context.actorId(),
+                    context.purpose(),
+                    context.correlationId());
+            if (inserted != 0 && inserted != 1) {
+                throw new DocumentEvidenceException(STORE_REJECTED);
+            }
+            var stored = readPromotion(document)
+                    .orElseThrow(() -> new DocumentEvidenceException(STORE_REJECTED));
+            if (!matches(stored, scanAttestation, policy)) {
+                throw new DocumentEvidenceException(PROMOTION_CONFLICT);
+            }
+            return stored;
+        } catch (DocumentEvidenceException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw new DocumentEvidenceException(STORE_REJECTED, exception);
+        }
+    }
+
+    @Override
     public Optional<DocumentQuarantineEvidence> findQuarantine(
             AuthorizedTenantContext context, DocumentObjectReference document) {
         requireContext(context, document);
@@ -270,6 +376,19 @@ public final class PostgresDocumentEvidenceAdapter implements DocumentEvidenceOp
                     document.documentId(),
                     document.objectVersionId());
             return rows.stream().findFirst();
+        } catch (DocumentEvidenceException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw new DocumentEvidenceException(STORE_REJECTED, exception);
+        }
+    }
+
+    @Override
+    public Optional<DocumentPromotionEvidence> findPromotion(
+            AuthorizedTenantContext context, DocumentObjectReference document) {
+        requireContext(context, document);
+        try {
+            return readPromotion(document);
         } catch (DocumentEvidenceException exception) {
             throw exception;
         } catch (RuntimeException exception) {
@@ -361,6 +480,42 @@ public final class PostgresDocumentEvidenceAdapter implements DocumentEvidenceOp
         return rows.stream().findFirst();
     }
 
+    private Optional<DocumentPromotionEvidence> readPromotion(
+            DocumentObjectReference document) {
+        var rows = jdbcTemplate.query(
+                """
+                SELECT promotions.organization_id,
+                       promotions.document_id,
+                       promotions.object_version_id,
+                       promotions.promotion_policy_key,
+                       promotions.accepted_scanner_keys,
+                       promotions.maximum_scan_age_seconds,
+                       promotions.maximum_future_skew_seconds,
+                       promotions.promoted_at,
+                       scans.attestation_id,
+                       scans.verdict,
+                       scans.scanner_key,
+                       scans.definitions_version,
+                       scans.sha256,
+                       scans.scanned_at,
+                       scans.recorded_at
+                FROM document_promotion_evidence promotions
+                JOIN document_scan_attestations scans
+                  ON scans.organization_id = promotions.organization_id
+                 AND scans.attestation_id = promotions.scan_attestation_id
+                 AND scans.document_id = promotions.document_id
+                 AND scans.object_version_id = promotions.object_version_id
+                WHERE promotions.organization_id = ?
+                  AND promotions.document_id = ?
+                  AND promotions.object_version_id = ?
+                """,
+                PostgresDocumentEvidenceAdapter::mapPromotion,
+                document.organizationId(),
+                document.documentId(),
+                document.objectVersionId());
+        return rows.stream().findFirst();
+    }
+
     private void requireContext(
             AuthorizedTenantContext context, DocumentObjectReference document) {
         if (!initialized) {
@@ -381,6 +536,17 @@ public final class PostgresDocumentEvidenceAdapter implements DocumentEvidenceOp
                 && evidence.declaredBytes() == request.declaredBytes()
                 && evidence.mediaType().equals(request.mediaType())
                 && evidence.sha256().equals(request.sha256());
+    }
+
+    private static boolean matches(
+            DocumentPromotionEvidence evidence,
+            DocumentScanAttestation scanAttestation,
+            DocumentPromotionPolicy policy) {
+        return evidence.scanAttestation().equals(scanAttestation)
+                && evidence.policyKey().equals(policy.policyKey())
+                && evidence.acceptedScannerKeys().equals(policy.acceptedScannerKeys())
+                && evidence.maximumScanAge().equals(policy.maximumScanAge())
+                && evidence.maximumFutureSkew().equals(policy.maximumFutureSkew());
     }
 
     private static DocumentQuarantineEvidence mapQuarantine(ResultSet rows, int rowNumber)
@@ -414,5 +580,18 @@ public final class PostgresDocumentEvidenceAdapter implements DocumentEvidenceOp
                 rows.getObject("attestation_id", UUID.class),
                 result,
                 rows.getTimestamp("recorded_at").toInstant());
+    }
+
+    private static DocumentPromotionEvidence mapPromotion(ResultSet rows, int rowNumber)
+            throws SQLException {
+        var attestation = mapAttestation(rows, rowNumber);
+        return new DocumentPromotionEvidence(
+                attestation,
+                rows.getString("promotion_policy_key"),
+                Set.copyOf(java.util.Arrays.asList(
+                        rows.getString("accepted_scanner_keys").split(","))),
+                Duration.ofSeconds(rows.getInt("maximum_scan_age_seconds")),
+                Duration.ofSeconds(rows.getInt("maximum_future_skew_seconds")),
+                rows.getTimestamp("promoted_at").toInstant());
     }
 }

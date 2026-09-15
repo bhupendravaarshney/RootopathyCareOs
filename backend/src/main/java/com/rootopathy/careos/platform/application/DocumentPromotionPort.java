@@ -1,11 +1,11 @@
 package com.rootopathy.careos.platform.application;
 
 import com.rootopathy.careos.platform.domain.DocumentObjectReference;
-import com.rootopathy.careos.platform.domain.MalwareScanResult;
+import com.rootopathy.careos.platform.domain.DocumentPromotionAuthorization;
 import com.rootopathy.careos.tenancy.domain.AuthorizedTenantContext;
 
-/** Promotion implementations must accept only matching, current CLEAN scan evidence. */
+/** Low-level storage promotion accepts only a validated clean-scan authorization snapshot. */
 public interface DocumentPromotionPort {
     DocumentObjectReference promote(
-            AuthorizedTenantContext context, MalwareScanResult cleanScanEvidence);
+            AuthorizedTenantContext context, DocumentPromotionAuthorization authorization);
 }

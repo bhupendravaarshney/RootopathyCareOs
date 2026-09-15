@@ -10,8 +10,10 @@ import com.rootopathy.careos.platform.application.PlatformCapabilityRegistry;
 import com.rootopathy.careos.platform.application.PlatformCapabilityUnavailableException;
 import com.rootopathy.careos.platform.domain.CapabilityAvailability;
 import com.rootopathy.careos.platform.domain.DocumentObjectReference;
+import com.rootopathy.careos.platform.domain.DocumentPromotionAuthorization;
 import com.rootopathy.careos.platform.domain.DocumentQuarantineRequest;
 import com.rootopathy.careos.platform.domain.DocumentRetentionDirective;
+import com.rootopathy.careos.platform.domain.DocumentScanAttestation;
 import com.rootopathy.careos.platform.domain.DurableJob;
 import com.rootopathy.careos.platform.domain.DurableJobClaim;
 import com.rootopathy.careos.platform.domain.DurableNotification;
@@ -73,6 +75,13 @@ class PlatformCapabilityContractTest {
                 new DocumentQuarantineRequest(DOCUMENT_ID, OBJECT_VERSION_ID, 128, "application/pdf", SHA_256);
         var scan = new MalwareScanResult(
                 reference, MalwareScanVerdict.CLEAN, "scanner", "20260913.1", SHA_256, NOW);
+        var promotionAuthorization = new DocumentPromotionAuthorization(
+                new DocumentScanAttestation(UUID.randomUUID(), scan, NOW),
+                "foundation.synthetic",
+                java.util.Set.of("scanner"),
+                Duration.ofMinutes(5),
+                Duration.ZERO,
+                NOW);
         var contentRead = new AtomicBoolean();
         var content = new InputStream() {
             @Override
@@ -91,7 +100,7 @@ class PlatformCapabilityContractTest {
                 () -> adapters.scanner.scan(context, reference));
         assertUnavailable(
                 PlatformCapability.DOCUMENT_PROMOTION,
-                () -> adapters.promotion.promote(context, scan));
+                () -> adapters.promotion.promote(context, promotionAuthorization));
         assertUnavailable(
                 PlatformCapability.SIGNED_DOCUMENT_ACCESS,
                 () -> adapters.signedAccess.createReadUrl(context, reference, Duration.ofMinutes(5)));

@@ -33,7 +33,8 @@ The startup guard also rejects:
 - a trivial repeated-byte MFA key;
 - duplicate or non-canonical browser origins;
 - an S3 HTTP override or runtime bucket creation;
-- local S3 credentials when quarantine is enabled; and
+- local S3 credentials when document storage is enabled;
+- document promotion without enabled private S3 storage, an explicit policy key, scanner allow-list, and maximum scan age; and
 - a non-HTTPS or credential-bearing OTLP endpoint when trace export is explicitly enabled.
 
 Errors identify the failed control but never include the supplied secret. Environment-variable names are an injection interface only: production values must come from an approved secret manager with access audit, rotation, revocation, separation of duties, and recovery procedures. They must not be committed to an env file, image, deployment manifest, log, support bundle, or CI artifact.

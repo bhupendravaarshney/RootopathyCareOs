@@ -3,6 +3,9 @@ package com.rootopathy.careos.tenancy.infrastructure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.rootopathy.careos.governance.application.ConsumerInboxException;
+import com.rootopathy.careos.governance.application.ConsumerInboxExecutor;
+import com.rootopathy.careos.governance.application.ConsumerInboxOperations;
 import com.rootopathy.careos.governance.application.GovernedMutationExecutor;
 import com.rootopathy.careos.governance.application.IdempotencyException;
 import com.rootopathy.careos.governance.application.OutboxDeliveryOperations;
@@ -13,6 +16,7 @@ import com.rootopathy.careos.governance.domain.GovernanceEvidence;
 import com.rootopathy.careos.governance.domain.GovernedMutation;
 import com.rootopathy.careos.governance.domain.IdempotencyCommand;
 import com.rootopathy.careos.governance.domain.IdempotentResponse;
+import com.rootopathy.careos.governance.domain.InboundOutboxEvent;
 import com.rootopathy.careos.governance.domain.OutboxPublicationPolicy;
 import com.rootopathy.careos.governance.domain.OutboxRecord;
 import com.rootopathy.careos.tenancy.application.ActorTransactionOperations;
@@ -24,6 +28,7 @@ import com.rootopathy.careos.tenancy.domain.PermissionKey;
 import com.rootopathy.careos.tenancy.domain.TenantAuthorizationRequest;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -64,6 +69,8 @@ class TenantRlsIntegrationTest {
     private static final UUID INVITATION_ONE = UUID.fromString("01900000-0000-7000-8000-000000000401");
     private static final UUID INVITATION_TWO = UUID.fromString("01900000-0000-7000-8000-000000000402");
     private static final String TEST_EVENT = "test.entity.changed";
+    private static final String TEST_CONSUMER = "test.projection";
+    private static final Instant SOURCE_OCCURRED_AT = Instant.parse("2026-09-15T08:30:00.123456Z");
     private static final String REQUEST_HASH_A = "a".repeat(64);
     private static final String REQUEST_HASH_B = "b".repeat(64);
 
@@ -109,6 +116,12 @@ class TenantRlsIntegrationTest {
 
     @Autowired
     private OutboxDeliveryOperations outboxDelivery;
+
+    @Autowired
+    private ConsumerInboxExecutor consumerInboxExecutor;
+
+    @Autowired
+    private ConsumerInboxOperations consumerInboxOperations;
 
     @BeforeEach
     void seedSecondTenantAndActor() throws SQLException {
@@ -175,6 +188,13 @@ class TenantRlsIntegrationTest {
                             ARRAY['change'], ARRAY['change'],
                             '{"type":"object"}'::jsonb, 'test-v1')
                     ON CONFLICT (event_name, schema_version) DO NOTHING
+                    """);
+            statement.executeUpdate("""
+                    INSERT INTO outbox_consumer_definitions
+                        (consumer_key, event_name, schema_version, description, registry_version)
+                    VALUES ('test.projection', 'test.entity.changed', 1,
+                            'Synthetic test-only consumer definition', 'test-v1')
+                    ON CONFLICT (consumer_key, event_name, schema_version) DO NOTHING
                     """);
             statement.executeUpdate("""
                     INSERT INTO invitations
@@ -701,6 +721,284 @@ class TenantRlsIntegrationTest {
     }
 
     @Test
+    void consumesAnEventOnceAndDeduplicatesItsCanonicalPayload() {
+        var sourceEventId = UUID.randomUUID();
+        var aggregateId = UUID.randomUUID();
+        var authorizationRequest = request(ORG_ONE, "event-consumption", "consumer-once-42");
+        var event = inboundEvent(
+                ORG_ONE, sourceEventId, aggregateId, "{\"change\":\"consumed\"}");
+        var executions = new AtomicInteger();
+
+        var first = consumerInboxExecutor.execute(
+                authorizationRequest, event, context -> executions.incrementAndGet());
+        var canonicalReplay = inboundEvent(
+                ORG_ONE,
+                sourceEventId,
+                aggregateId,
+                "{  \"change\" : \"consumed\"  }");
+        var replay = consumerInboxExecutor.execute(authorizationRequest, canonicalReplay, context -> {
+            executions.incrementAndGet();
+            throw new AssertionError("duplicate consumer work must not execute");
+        });
+
+        assertThat(first.replayed()).isFalse();
+        assertThat(replay.replayed()).isTrue();
+        assertThat(replay.receivedAt()).isEqualTo(first.receivedAt());
+        assertThat(executions).hasValue(1);
+        assertThat(inboxCount(authorizationRequest, sourceEventId)).isEqualTo(1);
+    }
+
+    @Test
+    void rollsBackAConsumerReceiptAndItsEffectBeforeAValidRetry() {
+        var sourceEventId = UUID.randomUUID();
+        var aggregateId = UUID.randomUUID();
+        var facilityCode = "ROLLIN-" + aggregateId.toString().substring(0, 8);
+        var authorizationRequest = request(ORG_ONE, "event-consumption", "consumer-rollback-42");
+        var event = inboundEvent(
+                ORG_ONE, sourceEventId, aggregateId, "{\"change\":\"rollback\"}");
+
+        assertThatThrownBy(() -> consumerInboxExecutor.execute(authorizationRequest, event, context -> {
+                    jdbcTemplate.update(
+                            "insert into facilities (organization_id, name, code) values (?, ?, ?)",
+                            context.organizationId(),
+                            "Rolled-back inbox facility",
+                            facilityCode);
+                    throw new IllegalStateException("synthetic consumer failure");
+                }))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("synthetic consumer failure");
+
+        assertThat(inboxCount(authorizationRequest, sourceEventId)).isZero();
+        assertThat(tenantAuthorization.execute(authorizationRequest, () -> jdbcTemplate.queryForObject(
+                        "select count(*) from facilities where code = ?",
+                        Integer.class,
+                        facilityCode)))
+                .isZero();
+
+        var retry = consumerInboxExecutor.execute(authorizationRequest, event, context -> {});
+        assertThat(retry.replayed()).isFalse();
+        assertThat(inboxCount(authorizationRequest, sourceEventId)).isEqualTo(1);
+    }
+
+    @Test
+    void serializesConcurrentConsumerDeliveriesWithoutRepeatingTheEffect() throws Exception {
+        var sourceEventId = UUID.randomUUID();
+        var aggregateId = UUID.randomUUID();
+        var authorizationRequest = request(ORG_ONE, "event-consumption", "consumer-concurrent-42");
+        var event = inboundEvent(
+                ORG_ONE, sourceEventId, aggregateId, "{\"change\":\"concurrent\"}");
+        var executions = new AtomicInteger();
+        var workEntered = new CountDownLatch(1);
+        var secondStarted = new CountDownLatch(1);
+        var releaseWork = new CountDownLatch(1);
+
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            var first = executor.submit(() -> consumerInboxExecutor.execute(
+                    authorizationRequest,
+                    event,
+                    context -> {
+                        executions.incrementAndGet();
+                        workEntered.countDown();
+                        await(releaseWork);
+                    }));
+            assertThat(workEntered.await(10, TimeUnit.SECONDS)).isTrue();
+            var second = executor.submit(() -> {
+                secondStarted.countDown();
+                return consumerInboxExecutor.execute(
+                        authorizationRequest, event, context -> executions.incrementAndGet());
+            });
+            assertThat(secondStarted.await(10, TimeUnit.SECONDS)).isTrue();
+            releaseWork.countDown();
+
+            assertThat(List.of(
+                            first.get(10, TimeUnit.SECONDS).replayed(),
+                            second.get(10, TimeUnit.SECONDS).replayed()))
+                    .containsExactlyInAnyOrder(false, true);
+        }
+
+        assertThat(executions).hasValue(1);
+        assertThat(inboxCount(authorizationRequest, sourceEventId)).isEqualTo(1);
+    }
+
+    @Test
+    void rejectsChangedOrUnapprovedConsumerDeliveriesBeforeTheirEffects() {
+        var sourceEventId = UUID.randomUUID();
+        var aggregateId = UUID.randomUUID();
+        var authorizationRequest = request(ORG_ONE, "event-consumption", "consumer-conflict-42");
+        var event = inboundEvent(
+                ORG_ONE, sourceEventId, aggregateId, "{\"change\":\"original\"}");
+        consumerInboxExecutor.execute(authorizationRequest, event, context -> {});
+
+        var changed = inboundEvent(
+                ORG_ONE, sourceEventId, aggregateId, "{\"change\":\"changed\"}");
+        assertThatThrownBy(() -> consumerInboxExecutor.execute(
+                        authorizationRequest,
+                        changed,
+                        context -> {
+                            throw new AssertionError("conflicting consumer work must not execute");
+                        }))
+                .isInstanceOf(ConsumerInboxException.class)
+                .extracting(exception -> ((ConsumerInboxException) exception).reason())
+                .isEqualTo(ConsumerInboxException.Reason.CONTENT_CONFLICT);
+
+        var unknownConsumer = new InboundOutboxEvent(
+                ORG_ONE,
+                "test.unapproved-consumer",
+                UUID.randomUUID(),
+                TEST_EVENT,
+                1,
+                "test_entity",
+                UUID.randomUUID(),
+                "{\"change\":\"blocked\"}",
+                "source-unapproved-42",
+                SOURCE_OCCURRED_AT);
+        assertThatThrownBy(() -> consumerInboxExecutor.execute(
+                        authorizationRequest,
+                        unknownConsumer,
+                        context -> {
+                            throw new AssertionError("unapproved consumer work must not execute");
+                        }))
+                .isInstanceOf(ConsumerInboxException.class)
+                .extracting(exception -> ((ConsumerInboxException) exception).reason())
+                .isEqualTo(ConsumerInboxException.Reason.STORE_REJECTED);
+
+        var invalidPayload = inboundEvent(
+                ORG_ONE,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "{\"unexpected\":true}");
+        assertThatThrownBy(() -> consumerInboxExecutor.execute(
+                        authorizationRequest, invalidPayload, context -> {}))
+                .isInstanceOf(ConsumerInboxException.class)
+                .extracting(exception -> ((ConsumerInboxException) exception).reason())
+                .isEqualTo(ConsumerInboxException.Reason.STORE_REJECTED);
+    }
+
+    @Test
+    void requiresTheAuthorizedTenantTransactionAndIsolatesConsumerReceipts() {
+        var sourceEventId = UUID.randomUUID();
+        var event = inboundEvent(
+                ORG_TWO,
+                sourceEventId,
+                UUID.randomUUID(),
+                "{\"change\":\"tenant-two\"}");
+        var organizationTwoRequest = request(
+                ORG_TWO, "event-consumption", "consumer-isolation-two-42");
+        consumerInboxExecutor.execute(organizationTwoRequest, event, context -> {});
+
+        assertThat(jdbcTemplate.queryForList(
+                        "select source_event_id from consumer_inbox_records", UUID.class))
+                .isEmpty();
+        assertThat(inboxCount(
+                        request(ORG_ONE, "event-consumption", "consumer-isolation-one-42"),
+                        sourceEventId))
+                .isZero();
+        assertThat(inboxCount(organizationTwoRequest, sourceEventId)).isEqualTo(1);
+
+        var forgedContext = new AuthorizedTenantContext(
+                ORG_TWO, ACTOR, "event-consumption", "consumer-outside-transaction-42");
+        assertThatThrownBy(() -> consumerInboxOperations.execute(forgedContext, event, () -> {}))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("An active writable tenant transaction is required");
+
+        var crossTenantEvent = inboundEvent(
+                ORG_TWO,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "{\"change\":\"forged\"}");
+        assertThatThrownBy(() -> consumerInboxExecutor.execute(
+                        request(ORG_ONE, "event-consumption", "consumer-tenant-mismatch-42"),
+                        crossTenantEvent,
+                        context -> {}))
+                .isInstanceOf(ConsumerInboxException.class)
+                .extracting(exception -> ((ConsumerInboxException) exception).reason())
+                .isEqualTo(ConsumerInboxException.Reason.TENANT_MISMATCH);
+
+        var forgedRequest = request(
+                ORG_ONE, "event-consumption", "consumer-forged-insert-42");
+        assertThatThrownBy(() -> tenantAuthorization.execute(
+                        forgedRequest,
+                        (Runnable) () -> jdbcTemplate.update(
+                                """
+                                INSERT INTO consumer_inbox_records
+                                    (organization_id, consumer_key, source_event_id,
+                                     event_name, schema_version, aggregate_type, aggregate_id,
+                                     payload_sha256, source_correlation_id, occurred_at,
+                                     received_by_actor_id, purpose, correlation_id)
+                                VALUES (?, ?, ?, ?, 1, 'test_entity', ?, ?, ?, ?, ?, ?, ?)
+                                """,
+                                ORG_TWO,
+                                TEST_CONSUMER,
+                                UUID.randomUUID(),
+                                TEST_EVENT,
+                                UUID.randomUUID(),
+                                "a".repeat(64),
+                                "source-forged-42",
+                                Timestamp.from(SOURCE_OCCURRED_AT),
+                                ACTOR,
+                                forgedRequest.actor().purpose(),
+                                forgedRequest.actor().correlationId())))
+                .hasRootCauseInstanceOf(PSQLException.class);
+    }
+
+    @Test
+    void protectsConsumerDefinitionsAndReceiptsFromRuntimeAndOwnerMutation()
+            throws SQLException {
+        assertThatThrownBy(() -> jdbcTemplate.update("""
+                        INSERT INTO outbox_consumer_definitions
+                            (consumer_key, event_name, schema_version, description, registry_version)
+                        VALUES ('forged.consumer', 'test.entity.changed', 1,
+                                'Runtime policy attack', 'forged')
+                        """))
+                .hasRootCauseInstanceOf(PSQLException.class);
+
+        var sourceEventId = UUID.randomUUID();
+        var authorizationRequest = request(
+                ORG_ONE, "event-consumption", "consumer-immutable-42");
+        consumerInboxExecutor.execute(
+                authorizationRequest,
+                inboundEvent(
+                        ORG_ONE,
+                        sourceEventId,
+                        UUID.randomUUID(),
+                        "{\"change\":\"immutable\"}"),
+                context -> {});
+
+        var privileges = jdbcTemplate.queryForMap("""
+                SELECT has_table_privilege('outbox_consumer_definitions', 'SELECT') AS registry_select,
+                       has_table_privilege('outbox_consumer_definitions', 'INSERT') AS registry_insert,
+                       has_table_privilege('consumer_inbox_records', 'SELECT') AS inbox_select,
+                       has_table_privilege('consumer_inbox_records', 'INSERT') AS inbox_insert,
+                       has_table_privilege('consumer_inbox_records', 'UPDATE') AS inbox_update,
+                       has_table_privilege('consumer_inbox_records', 'DELETE') AS inbox_delete
+                """);
+        assertThat(privileges)
+                .containsEntry("registry_select", true)
+                .containsEntry("registry_insert", false)
+                .containsEntry("inbox_select", true)
+                .containsEntry("inbox_insert", true)
+                .containsEntry("inbox_update", false)
+                .containsEntry("inbox_delete", false);
+
+        assertThatThrownBy(() -> executeAsMigratorInTenant(
+                        "update consumer_inbox_records set payload_sha256 = '"
+                                + "f".repeat(64)
+                                + "' where source_event_id = '"
+                                + sourceEventId
+                                + "'",
+                        authorizationRequest))
+                .isInstanceOf(PSQLException.class)
+                .hasMessageContaining("consumer inbox receipts are append-only");
+        assertThatThrownBy(() -> executeAsMigratorInTenant(
+                        "delete from consumer_inbox_records where source_event_id = '"
+                                + sourceEventId
+                                + "'",
+                        authorizationRequest))
+                .isInstanceOf(PSQLException.class)
+                .hasMessageContaining("consumer inbox receipts are append-only");
+    }
+
+    @Test
     void isolatesInvitationsAndRejectsCrossTenantInvitationWrites() {
         assertThat(jdbcTemplate.queryForList("select id from invitations", UUID.class)).isEmpty();
         assertThat(tenantAuthorization.execute(
@@ -796,6 +1094,29 @@ class TenantRlsIntegrationTest {
                 authorizationRequest,
                 command("test-" + UUID.randomUUID(), REQUEST_HASH_A),
                 context -> mutation(aggregateId, change));
+    }
+
+    private InboundOutboxEvent inboundEvent(
+            UUID organizationId, UUID sourceEventId, UUID aggregateId, String payloadJson) {
+        return new InboundOutboxEvent(
+                organizationId,
+                TEST_CONSUMER,
+                sourceEventId,
+                TEST_EVENT,
+                1,
+                "test_entity",
+                aggregateId,
+                payloadJson,
+                "source-event-42",
+                SOURCE_OCCURRED_AT);
+    }
+
+    private int inboxCount(
+            TenantAuthorizationRequest authorizationRequest, UUID sourceEventId) {
+        return tenantAuthorization.execute(authorizationRequest, () -> jdbcTemplate.queryForObject(
+                "select count(*) from consumer_inbox_records where source_event_id = ?",
+                Integer.class,
+                sourceEventId));
     }
 
     private List<Integer> evidenceCounts(

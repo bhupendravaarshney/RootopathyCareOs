@@ -1,6 +1,8 @@
 package com.rootopathy.careos.platform.application;
 
 import com.rootopathy.careos.platform.domain.DocumentObjectReference;
+import com.rootopathy.careos.platform.domain.DocumentPromotionEvidence;
+import com.rootopathy.careos.platform.domain.DocumentPromotionPolicy;
 import com.rootopathy.careos.platform.domain.DocumentQuarantineEvidence;
 import com.rootopathy.careos.platform.domain.DocumentQuarantineRequest;
 import com.rootopathy.careos.platform.domain.DocumentScanAttestation;
@@ -21,9 +23,17 @@ public interface DocumentEvidenceOperations {
     DocumentScanAttestation recordScan(
             AuthorizedTenantContext context, MalwareScanResult result);
 
+    DocumentPromotionEvidence recordPromotion(
+            AuthorizedTenantContext context,
+            DocumentScanAttestation scanAttestation,
+            DocumentPromotionPolicy policy);
+
     Optional<DocumentQuarantineEvidence> findQuarantine(
             AuthorizedTenantContext context, DocumentObjectReference document);
 
     Optional<DocumentScanAttestation> findLatestScan(
+            AuthorizedTenantContext context, DocumentObjectReference document);
+
+    Optional<DocumentPromotionEvidence> findPromotion(
             AuthorizedTenantContext context, DocumentObjectReference document);
 }

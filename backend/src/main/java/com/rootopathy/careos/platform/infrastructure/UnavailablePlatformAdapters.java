@@ -14,6 +14,7 @@ import com.rootopathy.careos.platform.application.WorkerExecutionPort;
 import com.rootopathy.careos.platform.domain.CapabilityAvailability;
 import com.rootopathy.careos.platform.domain.CapabilityStatus;
 import com.rootopathy.careos.platform.domain.DocumentObjectReference;
+import com.rootopathy.careos.platform.domain.DocumentPromotionAuthorization;
 import com.rootopathy.careos.platform.domain.DocumentQuarantineRequest;
 import com.rootopathy.careos.platform.domain.DocumentRetentionDirective;
 import com.rootopathy.careos.platform.domain.DurableJob;
@@ -78,7 +79,7 @@ public final class UnavailablePlatformAdapters {
 
         @Override
         public DocumentObjectReference promote(
-                AuthorizedTenantContext context, MalwareScanResult cleanScanEvidence) {
+                AuthorizedTenantContext context, DocumentPromotionAuthorization authorization) {
             throw unavailable();
         }
     }

@@ -4,7 +4,9 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
+import com.rootopathy.careos.governance.application.ConsumerInboxOperations;
 import com.rootopathy.careos.platform.application.DocumentEvidenceOperations;
+import com.rootopathy.careos.platform.application.DocumentPromotionPort;
 import com.rootopathy.careos.platform.application.DurableNotificationPort;
 import com.rootopathy.careos.platform.application.JobQueuePort;
 import com.rootopathy.careos.platform.application.MalwareScannerPort;
@@ -120,6 +122,13 @@ class ArchitectureRulesTest {
                 .dependOnClassesThat()
                 .areAssignableTo(DocumentEvidenceOperations.class)
                 .check(productionClasses);
+        noClasses()
+                .that()
+                .resideInAPackage("..api..")
+                .should()
+                .dependOnClassesThat()
+                .areAssignableTo(DocumentPromotionPort.class)
+                .check(productionClasses);
     }
 
     @Test
@@ -155,6 +164,17 @@ class ArchitectureRulesTest {
                 .should()
                 .dependOnClassesThat()
                 .areAssignableTo(DurableNotificationClaim.class)
+                .check(productionClasses);
+    }
+
+    @Test
+    void deliveryLayerCannotBypassTransactionalConsumerInboxExecution() {
+        noClasses()
+                .that()
+                .resideInAPackage("..api..")
+                .should()
+                .dependOnClassesThat()
+                .areAssignableTo(ConsumerInboxOperations.class)
                 .check(productionClasses);
     }
 }

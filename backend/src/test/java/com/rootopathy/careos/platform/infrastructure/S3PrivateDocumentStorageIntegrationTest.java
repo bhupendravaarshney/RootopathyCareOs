@@ -5,11 +5,19 @@ import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.rootopathy.careos.platform.application.DocumentStorageException;
+import com.rootopathy.careos.platform.application.DocumentEvidenceOperations;
+import com.rootopathy.careos.platform.application.DocumentPromotionOperations;
+import com.rootopathy.careos.platform.application.DocumentPromotionPort;
 import com.rootopathy.careos.platform.application.PlatformCapabilityRegistry;
 import com.rootopathy.careos.platform.application.PrivateDocumentStoragePort;
 import com.rootopathy.careos.platform.domain.CapabilityAvailability;
 import com.rootopathy.careos.platform.domain.DocumentObjectReference;
+import com.rootopathy.careos.platform.domain.DocumentPromotionAuthorization;
+import com.rootopathy.careos.platform.domain.DocumentPromotionPolicy;
 import com.rootopathy.careos.platform.domain.DocumentQuarantineRequest;
+import com.rootopathy.careos.platform.domain.DocumentScanAttestation;
+import com.rootopathy.careos.platform.domain.MalwareScanResult;
+import com.rootopathy.careos.platform.domain.MalwareScanVerdict;
 import com.rootopathy.careos.platform.domain.PlatformCapability;
 import com.rootopathy.careos.tenancy.domain.AuthorizedTenantContext;
 import io.minio.GetObjectArgs;
@@ -27,11 +35,15 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.Clock;
+import java.util.Set;
 import java.util.HexFormat;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
@@ -275,6 +287,219 @@ class S3PrivateDocumentStorageIntegrationTest {
     }
 
     @Test
+    void promotesOnlyTheExactQuarantinedObjectIntoASeparatePrivateCleanBucket()
+            throws Exception {
+        var quarantineBucket = uniqueBucket();
+        var cleanBucket = uniqueCleanBucket();
+        var content = "synthetic clean document".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        var request = request(content, "application/pdf");
+        var context = context(ORGANIZATION_ONE, "promotion-clean-1");
+
+        try (var quarantine = adapter(quarantineBucket, 1024);
+                var promotion = promotionAdapter(quarantineBucket, cleanBucket, 1024)) {
+            var reference = quarantine.quarantine(
+                    context, request, new ByteArrayInputStream(content));
+            var authorization = promotionAuthorization(reference, request.sha256());
+
+            assertThat(promotion.promote(context, authorization)).isEqualTo(reference);
+            assertThat(promotion.promote(context, authorization)).isEqualTo(reference);
+            assertThat(promotion.status().availability()).isEqualTo(CapabilityAvailability.AVAILABLE);
+
+            var cleanKey = S3DocumentPromotionAdapter.objectKey(reference);
+            try (var verifier = client()) {
+                assertThat(objectCount(verifier, quarantineBucket)).isEqualTo(1);
+                assertThat(objectCount(verifier, cleanBucket)).isEqualTo(1);
+                var clean = verifier.statObject(StatObjectArgs.builder()
+                        .bucket(cleanBucket)
+                        .object(cleanKey)
+                        .build());
+                assertThat(clean.contentType()).isEqualTo("application/pdf");
+                assertThat(clean.userMetadata().get("careos-state")).containsExactly("clean");
+                assertThat(clean.userMetadata().get("careos-sha256"))
+                        .containsExactly(request.sha256());
+                try (var stored = verifier.getObject(GetObjectArgs.builder()
+                        .bucket(cleanBucket)
+                        .object(cleanKey)
+                        .build())) {
+                    assertThat(stored.readAllBytes()).isEqualTo(content);
+                }
+            }
+
+            var anonymousResponse = HttpClient.newHttpClient()
+                    .send(
+                            HttpRequest.newBuilder(URI.create(
+                                            endpoint() + "/" + cleanBucket + "/" + cleanKey))
+                                    .GET()
+                                    .build(),
+                            HttpResponse.BodyHandlers.discarding());
+            assertThat(anonymousResponse.statusCode()).isIn(401, 403);
+        }
+    }
+
+    @Test
+    void promotionRejectsCrossTenantInvalidSourceAndConflictingCleanObjects()
+            throws Exception {
+        var quarantineBucket = uniqueBucket();
+        var cleanBucket = uniqueCleanBucket();
+        var content = new byte[] {7, 8, 9};
+        var request = request(content, "application/octet-stream");
+        var context = context(ORGANIZATION_ONE, "promotion-reject-1");
+
+        try (var quarantine = adapter(quarantineBucket, 1024);
+                var promotion = promotionAdapter(quarantineBucket, cleanBucket, 1024)) {
+            var reference = quarantine.quarantine(
+                    context, request, new ByteArrayInputStream(content));
+            var authorization = promotionAuthorization(reference, request.sha256());
+
+            assertStorageError(
+                    "document-promotion-tenant-mismatch",
+                    () -> promotion.promote(
+                            context(ORGANIZATION_TWO, "promotion-cross-tenant"), authorization));
+
+            var changedPolicy = new DocumentPromotionAuthorization(
+                    authorization.scanAttestation(),
+                    "foundation.changed",
+                    Set.of("clamav"),
+                    Duration.ofMinutes(5),
+                    Duration.ofSeconds(2),
+                    authorization.authorizedAt());
+            assertStorageError(
+                    "document-promotion-policy-mismatch",
+                    () -> promotion.promote(context, changedPolicy));
+
+            var oldScanAt = Instant.now().minus(Duration.ofMinutes(10));
+            var oldScan = new MalwareScanResult(
+                    reference,
+                    MalwareScanVerdict.CLEAN,
+                    "clamav",
+                    "20260915.0",
+                    request.sha256(),
+                    oldScanAt);
+            var expired = new DocumentPromotionAuthorization(
+                    new DocumentScanAttestation(
+                            UUID.randomUUID(), oldScan, oldScanAt.plusMillis(1)),
+                    "foundation.synthetic",
+                    Set.of("clamav"),
+                    Duration.ofMinutes(5),
+                    Duration.ofSeconds(2),
+                    oldScanAt.plusSeconds(1));
+            assertStorageError(
+                    "document-promotion-authorization-expired",
+                    () -> promotion.promote(context, expired));
+
+            var mismatchedAuthorization = promotionAuthorization(reference, "b".repeat(64));
+            assertStorageError(
+                    "document-promotion-source-invalid",
+                    () -> promotion.promote(context, mismatchedAuthorization));
+
+            var corruptReference = new DocumentObjectReference(
+                    ORGANIZATION_ONE, UUID.randomUUID(), UUID.randomUUID());
+            var claimedDigest = "c".repeat(64);
+            try (var administrator = client()) {
+                administrator.putObject(PutObjectArgs.builder()
+                        .bucket(quarantineBucket)
+                        .object(S3PrivateDocumentStorageAdapter.objectKey(corruptReference))
+                        .stream(new ByteArrayInputStream(content), (long) content.length, -1L)
+                        .contentType("application/octet-stream")
+                        .userMetadata(java.util.Map.of(
+                                "careos-state", "quarantine",
+                                "careos-sha256", claimedDigest))
+                        .build());
+            }
+            assertStorageError(
+                    "document-promotion-copy-mismatch",
+                    () -> promotion.promote(
+                            context, promotionAuthorization(corruptReference, claimedDigest)));
+            try (var verifier = client()) {
+                assertThat(objectCount(verifier, cleanBucket)).isZero();
+            }
+
+            var conflicting = "different clean content"
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            try (var administrator = client()) {
+                administrator.putObject(PutObjectArgs.builder()
+                        .bucket(cleanBucket)
+                        .object(S3DocumentPromotionAdapter.objectKey(reference))
+                        .stream(
+                                new ByteArrayInputStream(conflicting),
+                                (long) conflicting.length,
+                                -1L)
+                        .contentType("application/octet-stream")
+                        .userMetadata(java.util.Map.of(
+                                "careos-state", "clean",
+                                "careos-sha256", sha256(conflicting)))
+                        .build());
+            }
+            assertStorageError(
+                    "document-promotion-object-conflict",
+                    () -> promotion.promote(context, authorization));
+        }
+    }
+
+    @Test
+    void promotionActivationRequiresExplicitPolicyAndReplacesOnlyItsFailClosedPort() {
+        var quarantineBucket = uniqueBucket();
+        var cleanBucket = uniqueCleanBucket();
+        new ApplicationContextRunner()
+                .withUserConfiguration(
+                        PlatformCapabilityConfiguration.class,
+                        S3DocumentStorageConfiguration.class)
+                .withBean(
+                        DocumentEvidenceOperations.class,
+                        () -> Mockito.mock(DocumentEvidenceOperations.class))
+                .withPropertyValues(
+                        "careos.storage.s3.enabled=true",
+                        "careos.storage.s3.endpoint=" + endpoint(),
+                        "careos.storage.s3.access-key=" + ACCESS_KEY,
+                        "careos.storage.s3.secret-key=" + SECRET_KEY,
+                        "careos.storage.s3.quarantine-bucket=" + quarantineBucket,
+                        "careos.storage.s3.clean-bucket=" + cleanBucket,
+                        "careos.storage.s3.maximum-upload-bytes=1024",
+                        "careos.storage.s3.allow-http=true",
+                        "careos.storage.s3.create-bucket-if-missing=true",
+                        "careos.documents.promotion.enabled=true",
+                        "careos.documents.promotion.policy-key=foundation.synthetic",
+                        "careos.documents.promotion.accepted-scanner-keys=clamav",
+                        "careos.documents.promotion.maximum-scan-age=5m",
+                        "careos.documents.promotion.maximum-future-skew=2s")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).hasSingleBean(DocumentPromotionPort.class);
+                    assertThat(context).hasSingleBean(S3DocumentPromotionAdapter.class);
+                    assertThat(context).hasSingleBean(DocumentPromotionOperations.class);
+                    var registry = context.getBean(PlatformCapabilityRegistry.class);
+                    assertThat(registry.status(PlatformCapability.DOCUMENT_PROMOTION)
+                                    .availability())
+                            .isEqualTo(CapabilityAvailability.AVAILABLE);
+                    assertThat(registry.statuses())
+                            .filteredOn(status -> status.availability()
+                                    == CapabilityAvailability.UNAVAILABLE)
+                            .hasSize(7);
+                });
+
+        new ApplicationContextRunner()
+                .withUserConfiguration(S3DocumentStorageConfiguration.class)
+                .withBean(
+                        DocumentEvidenceOperations.class,
+                        () -> Mockito.mock(DocumentEvidenceOperations.class))
+                .withPropertyValues(
+                        "careos.documents.promotion.enabled=true",
+                        "careos.storage.s3.enabled=true",
+                        "careos.storage.s3.endpoint=" + endpoint(),
+                        "careos.storage.s3.access-key=" + ACCESS_KEY,
+                        "careos.storage.s3.secret-key=" + SECRET_KEY,
+                        "careos.storage.s3.quarantine-bucket=" + uniqueBucket(),
+                        "careos.storage.s3.clean-bucket=" + uniqueCleanBucket(),
+                        "careos.storage.s3.allow-http=true",
+                        "careos.storage.s3.create-bucket-if-missing=true")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .hasStackTraceContaining("Document promotion policy is invalid");
+                });
+    }
+
+    @Test
     void springActivationReplacesOnlyTheQuarantineFailClosedAdapter() {
         var bucket = uniqueBucket();
         new ApplicationContextRunner()
@@ -330,6 +555,20 @@ class S3PrivateDocumentStorageIntegrationTest {
         return adapter;
     }
 
+    private static S3DocumentPromotionAdapter promotionAdapter(
+            String quarantineBucket, String cleanBucket, long maximumBytes) {
+        var adapter = new S3DocumentPromotionAdapter(
+                client(),
+                quarantineBucket,
+                cleanBucket,
+                maximumBytes,
+                true,
+                promotionPolicy(),
+                Clock.systemUTC());
+        adapter.initialize();
+        return adapter;
+    }
+
     private static MinioClient client() {
         return MinioClient.builder()
                 .endpoint(endpoint())
@@ -371,6 +610,37 @@ class S3PrivateDocumentStorageIntegrationTest {
 
     private static String uniqueBucket() {
         return "careos-q-" + UUID.randomUUID().toString().replace("-", "");
+    }
+
+    private static String uniqueCleanBucket() {
+        return "careos-c-" + UUID.randomUUID().toString().replace("-", "");
+    }
+
+    private static DocumentPromotionAuthorization promotionAuthorization(
+            DocumentObjectReference reference, String sha256) {
+        var scannedAt = Instant.now().minusSeconds(5);
+        var scan = new MalwareScanResult(
+                reference,
+                MalwareScanVerdict.CLEAN,
+                "clamav",
+                "20260915.1",
+                sha256,
+                scannedAt);
+        return new DocumentPromotionAuthorization(
+                new DocumentScanAttestation(UUID.randomUUID(), scan, scannedAt.plusMillis(1)),
+                "foundation.synthetic",
+                java.util.Set.of("clamav"),
+                Duration.ofMinutes(5),
+                Duration.ofSeconds(2),
+                Instant.now());
+    }
+
+    private static DocumentPromotionPolicy promotionPolicy() {
+        return new DocumentPromotionPolicy(
+                "foundation.synthetic",
+                Set.of("clamav"),
+                Duration.ofMinutes(5),
+                Duration.ofSeconds(2));
     }
 
     private static void assertStorageError(String errorCode, org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {

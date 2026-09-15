@@ -111,17 +111,39 @@ final class ProductionConfigurationGuard {
         }
 
         if (environment.getProperty("careos.storage.s3.allow-http", Boolean.class, false)) {
-            violations.add("the S3 quarantine HTTP override must be disabled");
+            violations.add("the S3 document-storage HTTP override must be disabled");
         }
         if (environment.getProperty(
                 "careos.storage.s3.create-bucket-if-missing", Boolean.class, false)) {
-            violations.add("production must not create its quarantine bucket at runtime");
+            violations.add("production must not create document buckets at runtime");
         }
-        if (environment.getProperty("careos.storage.s3.enabled", Boolean.class, false)) {
+        var s3Enabled = environment.getProperty("careos.storage.s3.enabled", Boolean.class, false);
+        if (s3Enabled) {
             requireNonProductionSecretAbsent(
                     environment, "careos.storage.s3.access-key", "S3 access key", violations);
             requireNonProductionSecretAbsent(
                     environment, "careos.storage.s3.secret-key", "S3 secret key", violations);
+        }
+        if (environment.getProperty(
+                "careos.documents.promotion.enabled", Boolean.class, false)) {
+            if (!s3Enabled) {
+                violations.add("document promotion requires private S3 document storage");
+            }
+            requireText(
+                    environment,
+                    "careos.documents.promotion.policy-key",
+                    "document promotion policy key",
+                    violations);
+            requireText(
+                    environment,
+                    "careos.documents.promotion.accepted-scanner-keys",
+                    "document promotion scanner allow-list",
+                    violations);
+            requireText(
+                    environment,
+                    "careos.documents.promotion.maximum-scan-age",
+                    "document promotion maximum scan age",
+                    violations);
         }
 
         if (environment.getProperty("management.tracing.export.otlp.enabled", Boolean.class, false)) {

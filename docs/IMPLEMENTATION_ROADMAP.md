@@ -86,7 +86,7 @@ Local evidence: a clean Java 25 build compiled 61 production sources, applied al
 
 Local evidence: a clean Java 25 build compiled 85 production sources and 5 test sources, applied all six migrations to fresh PostgreSQL 18 databases, passed all 36 backend tests against PostgreSQL 18 and Redis 8, and packaged the bootable JAR. The focused tenant/governance suite passes all 19 scenarios. A rebuilt backend image reached health `UP` against isolated PostgreSQL 18/Redis 8/Mailpit, applied Flyway v6, kept both event registries empty, seeded one synthetic local membership, and ran as non-root user `careos`.
 
-Production event entries are deliberately not populated. The outbox coordinator is deliberately not scheduled or connected to a placeholder destination: activation requires the approved event registries, non-interactive service identity, tenant job-dispatch path, destination adapter, and consumer deduplication described in `GOVERNANCE_EVIDENCE.md`.
+Production event entries are deliberately not populated. The outbox coordinator is deliberately not scheduled or connected to a placeholder destination: activation requires the approved event and consumer registries, non-interactive service identity, tenant job-dispatch path, destination/subscription adapters, and operational procedures described in `GOVERNANCE_EVIDENCE.md`. Phase 0S later supplies the reusable consumer deduplication transaction boundary without activating it.
 
 ### Phase 0F - fail-closed platform capability boundaries (completed 13 September 2026)
 
@@ -277,6 +277,37 @@ Local evidence: a clean Java 25 build compiled 146 production sources and 14 tes
 
 This completes durable quarantine/scan evidence mechanics, not the M7 document workflow. Storage and scanning remain opt-in and disabled by default; promotion, signed access, and retention stay explicitly unavailable. Approved permissions/events, a business document/provenance model, governed upload/finalization, scan freshness, provider IAM/KMS/operations, and protected API/browser coverage remain required. See `PLATFORM_CAPABILITIES.md`.
 
+### Phase 0S - durable consumer inbox and deduplication mechanics (completed 15 September 2026)
+
+- [x] Add Flyway V9 with a migration-owned, runtime-read-only consumer/event-version allow-list that remains empty until reviewed production entries are approved.
+- [x] Add tenant-scoped consumer receipts keyed by organization, consumer, and stable source event ID, with forced RLS, `SELECT`/`INSERT`-only runtime grants, transaction-context/server-time insertion, and owner-level append-only enforcement.
+- [x] Link every consumer definition to an existing outbox event definition and every receipt to the exact consumer/event version through checked composite foreign keys.
+- [x] Validate active definitions, aggregate type, and required/allowed top-level payload keys before processing; hash PostgreSQL-canonical JSON and retain only the digest rather than copying payload content into inbox evidence.
+- [x] Add `ConsumerInboxExecutor` so tenant authorization, unique receipt acquisition, and the first consumer effect commit or roll back in one transaction.
+- [x] Treat exact canonical redelivery as replay without invoking the effect, reject changed envelope content under the same source event ID, and serialize simultaneous delivery through PostgreSQL uniqueness.
+- [x] Fail startup for an unsafe runtime role, ownership/grant/RLS/policy/trigger/key-shape drift, unavailable database time, or receipt visibility without tenant context.
+- [x] Prevent API packages from bypassing the transactional executor through the low-level inbox port with a tenth ArchUnit rule.
+- [x] Cover exact replay, changed content, unknown consumers, payload drift, callback rollback/retry, concurrent delivery, missing transaction, tenant mismatch, cross-tenant SQL, restricted grants, and migration-owner mutation attacks.
+
+Local evidence: a clean Java 25 build compiled 153 production sources and 14 test sources, applied all nine migrations to disposable PostgreSQL 18, passed all 106 backend tests across PostgreSQL, Redis, pinned object storage, and deterministic ClamD fixtures, and packaged the bootable JAR. The focused tenant/governance and architecture run passed all 35 tests. The unchanged 15-operation/seven-convention API passes its verifier and all seven negative tests; the 79-screen and CI-security contracts/all ten negative tests also pass. Frontend source is unchanged at its latest verified 29 unit tests and 18 desktop/mobile Playwright/Axe tests.
+
+This completes the reusable consumer inbox/deduplication transaction boundary, not a running integration consumer. Production consumer definitions, non-interactive service identity, tenant dispatch, authenticated destination/subscription adapters, broker acknowledgement, real governed effects, monitoring, replay, retention, and dead-letter procedures remain unavailable or unapproved. See `GOVERNANCE_EVIDENCE.md`.
+
+### Phase 0T - evidence-gated clean document promotion mechanics (completed 15 September 2026)
+
+- [x] Add Flyway V10 with one append-only promotion-evidence row per tenant/document/object version, linked to the exact scan attestation through organization/document/version keys.
+- [x] Snapshot the policy key, canonical accepted-scanner allow-list, maximum scan age, maximum future skew, actor, purpose, correlation, and PostgreSQL promotion time.
+- [x] Apply forced RLS, `SELECT`/`INSERT`-only runtime grants, transaction-context/server-time insertion, and owner-level update/delete rejection; fail startup on role, ownership, grant, policy, trigger, composite-link, or missing-context drift.
+- [x] Independently require the latest scan attestation, `CLEAN`, an accepted scanner, and database-time freshness in the insert trigger.
+- [x] Add `DocumentPromotionOperations` so callers provide only an opaque reference and cannot supply raw scan evidence; verify quarantine/latest-scan reference, digest, scanner, freshness, storage response, and persisted policy snapshot.
+- [x] Add an opt-in S3-compatible adapter that requires distinct private quarantine/clean buckets, tenant-derived keys, current matching policy authorization, conditional creation, streaming SHA-256 verification, bad-copy cleanup, and full-content verification for exact replay without deleting quarantine.
+- [x] Keep promotion disabled unless `careos.documents.promotion.enabled=true` and an explicit bounded policy is configured; extend production preflight and the API architecture boundary accordingly.
+- [x] Cover ordering, replay, reference/policy/evidence drift, missing/non-clean/unapproved/stale/future scans, latest-scan enforcement, forced RLS, direct SQL, owner mutation, private buckets, corrupt source/copy cleanup, tenant isolation, and conflicting destinations.
+
+Local evidence: a clean Java 25 build compiled 161 production sources and 15 test sources, applied all ten migrations to disposable PostgreSQL 18, passed all 119 backend tests across PostgreSQL, Redis, pinned object storage, and deterministic ClamD fixtures, and packaged the bootable JAR. Both Compose models resolve. The unchanged 15-operation/seven-convention API and all seven negative tests, 79-screen register, and CI-security verifier/all ten negative tests were rerun and pass. Frontend source is unchanged at its latest verified 29 unit tests and 18 desktop/mobile Playwright/Axe tests.
+
+This completes only disabled-by-default clean-promotion mechanics. It does not approve a promotion policy or production provider, expose an upload/read route, add an M7 document/provenance state machine or governed permission/event transition, sign access, execute retention/legal hold, or complete IAM/KMS/versioning/backup/monitoring acceptance. A clean private copy without committed V10 evidence is not deliverable content. See `PLATFORM_CAPABILITIES.md`.
+
 ### Next Phase 0 slice
 
 - [ ] Approve and add the canonical permission/role/operation registry, then bind protected routes, delegation ceilings, final-owner safeguards, and maker-checker rules to the implemented authorization boundary.
@@ -288,6 +319,8 @@ This completes durable quarantine/scan evidence mechanics, not the M7 document w
 - [x] Implement and integration-test policy-neutral Redis durable-job transport mechanics behind the Phase 0F boundary, disabled by default.
 - [x] Implement and integration-test policy-neutral encrypted notification persistence/lease mechanics behind the Phase 0F boundary, disabled by default.
 - [x] Persist transaction-bound, append-only quarantine metadata and scan attestations under forced RLS without activating promotion or document delivery.
+- [x] Add a migration-owned consumer allow-list and transaction-bound, forced-RLS append-only inbox receipts with concurrent exact-delivery deduplication, without activating a transport or worker.
+- [x] Add disabled-by-default, evidence-gated clean-promotion mechanics with an explicit policy snapshot, a distinct private clean bucket, and append-only forced-RLS proof without exposing document delivery.
 - [x] Add immutable CI dependencies, dependency/SAST/secret/configuration/container gates, update automation, SBOM generation, digest-pinned images, and unprivileged application runtimes.
 - [x] Establish protected tenant-route, pagination/filter, concurrency, idempotency/retry conventions plus generated frontend API types and a checked browser client.
 - [x] Connect the checked identity/organization client to a fail-closed frontend session gate, real login/pending-MFA/selection/switch/logout states, and an enforced session feature boundary.
@@ -296,6 +329,6 @@ This completes durable quarantine/scan evidence mechanics, not the M7 document w
 - [x] Add structured safe request telemetry, bounded disabled-by-default trace export, authenticated Prometheus format, dependency-correct probes, an outage drill, and the repository operational runbook.
 - [x] Add explicit backend/frontend response headers, strict same-origin CSP, bounded proxy behavior, and a fail-closed production configuration preflight profile.
 - [ ] Approve a production object-store/IAM/KMS design and complete its deployment, recovery, monitoring, and acceptance controls.
-- [ ] Implement and integration-test the remaining approved promotion, signed-access, retention, notification consent/destination/provider, worker, and scheduler adapters; keep each unavailable until its checklist passes.
+- [ ] Bind clean promotion to an approved permission/event/document-state workflow and production provider controls; implement and integration-test the remaining signed-access, retention, notification consent/destination/provider, worker, and scheduler adapters, keeping each unavailable until its checklist passes.
 
 Phase 0 remains incomplete until every foundation exit condition in `IMPLEMENTATION_GAPS.md` is satisfied and CI passes.

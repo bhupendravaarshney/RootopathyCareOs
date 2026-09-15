@@ -52,6 +52,11 @@ public class PlatformCapabilityConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(DocumentPromotionPort.class)
+    @ConditionalOnProperty(
+            prefix = "careos.documents.promotion",
+            name = "enabled",
+            havingValue = "false",
+            matchIfMissing = true)
     DocumentPromotion unavailableDocumentPromotion() {
         return new DocumentPromotion();
     }
