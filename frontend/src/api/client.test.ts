@@ -294,7 +294,7 @@ describe('CareOsApiClient', () => {
         {
           expiresAt: '2026-09-16T12:00:00Z',
           invitationId: '77777777-7777-4777-8777-777777777777',
-          roleKey: 'organization_member',
+          roleKey: 'organization_viewer',
           status: 'pending',
         },
         { status: 201 },
@@ -312,7 +312,7 @@ describe('CareOsApiClient', () => {
         displayName: 'Invited User',
         email: 'invited@example.test',
         reason: 'Approved access request CARE-42',
-        roleKey: 'organization_member',
+        roleKey: 'organization_viewer',
       },
       'invite:11111111-1111-4111-8111-111111111111',
     );
@@ -326,6 +326,91 @@ describe('CareOsApiClient', () => {
     expect(headers.get('X-XSRF-TOKEN')).toBe('valid-csrf-token-123456');
   });
 
+  it('reads and conditionally updates the organization profile with exact transport evidence', async () => {
+    const organizationId = '22222222-2222-4222-8222-222222222222';
+    const profile = {
+      countryCode: 'IN',
+      displayName: 'North Clinic',
+      legalName: 'North Clinic Private Limited',
+      lifecycleStatus: 'draft',
+      lockVersion: 4,
+      organizationId,
+      timezone: 'Asia/Kolkata',
+      updatedAt: '2026-09-16T08:00:00Z',
+    };
+    const fetcher = mockFetch(
+      jsonResponse(profile, { headers: { ETag: '"organization-profile:4"' } }),
+      jsonResponse({
+        headerName: 'X-XSRF-TOKEN',
+        parameterName: '_csrf',
+        token: 'valid-csrf-token-123456',
+      }),
+      jsonResponse(
+        { ...profile, displayName: 'North Care Network', lockVersion: 5 },
+        { headers: { ETag: '"organization-profile:5"' } },
+      ),
+    );
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+
+    await expect(client.getOrganizationProfile(organizationId)).resolves.toMatchObject({
+      etag: '"organization-profile:4"',
+      ok: true,
+    });
+    await expect(
+      client.updateOrganizationProfile(
+        organizationId,
+        {
+          countryCode: 'IN',
+          displayName: 'North Care Network',
+          legalName: 'North Clinic Private Limited',
+          reason: 'Approved legal identity review CARE-42',
+          timezone: 'Asia/Kolkata',
+        },
+        '"organization-profile:4"',
+        'profile:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ etag: '"organization-profile:5"', ok: true, status: 200 });
+
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    const [readUrl, readInit] = fetcher.mock.calls[0]!;
+    const [updateUrl, updateInit] = fetcher.mock.calls[2]!;
+    const updateHeaders = new Headers(updateInit?.headers);
+    expect(readUrl).toBe(`/api/v1/organizations/${organizationId}/profile`);
+    expect(readInit?.method).toBe('GET');
+    expect(updateUrl).toBe(`/api/v1/organizations/${organizationId}/profile`);
+    expect(updateInit?.method).toBe('PUT');
+    expect(updateHeaders.get('If-Match')).toBe('"organization-profile:4"');
+    expect(updateHeaders.get('Idempotency-Key')).toBe(
+      'profile:11111111-1111-4111-8111-111111111111',
+    );
+    expect(updateHeaders.get('X-XSRF-TOKEN')).toBe('valid-csrf-token-123456');
+  });
+
+  it('rejects a weak or malformed profile precondition before CSRF bootstrap', () => {
+    const fetcher = mockFetch();
+    const client = createCareOsApiClient({ baseUrl: '/api', fetch: fetcher });
+
+    expect(() =>
+      client.updateOrganizationProfile(
+        '22222222-2222-4222-8222-222222222222',
+        {
+          countryCode: 'IN',
+          displayName: 'North Clinic',
+          legalName: 'North Clinic Private Limited',
+          reason: 'Approved identity review',
+          timezone: 'Asia/Kolkata',
+        },
+        'W/"organization-profile:4"',
+        'profile:11111111-1111-4111-8111-111111111111',
+      ),
+    ).toThrow(/strong entity tag/);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it('rejects malformed invitation route identifiers and idempotency keys before fetching', () => {
     const fetcher = mockFetch();
     const client = createCareOsApiClient({ baseUrl: '/api', fetch: fetcher });
@@ -333,7 +418,7 @@ describe('CareOsApiClient', () => {
       displayName: 'Invited User',
       email: 'invited@example.test',
       reason: 'Approved access request',
-      roleKey: 'organization_member',
+      roleKey: 'organization_viewer',
     };
 
     expect(() => client.issueInvitation('not-a-uuid', request, 'valid-key-value-1234')).toThrow(

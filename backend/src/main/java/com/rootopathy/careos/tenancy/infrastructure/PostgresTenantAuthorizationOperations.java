@@ -4,6 +4,7 @@ import static com.rootopathy.careos.tenancy.application.TenantAuthorizationExcep
 import static com.rootopathy.careos.tenancy.application.TenantAuthorizationException.Reason.PERMISSION_DENIED;
 import static com.rootopathy.careos.tenancy.application.TenantAuthorizationException.Reason.REASON_REQUIRED;
 import static com.rootopathy.careos.tenancy.application.TenantAuthorizationException.Reason.RECENT_AUTHENTICATION_REQUIRED;
+import static com.rootopathy.careos.tenancy.application.TenantAuthorizationException.Reason.MFA_REQUIRED;
 import static com.rootopathy.careos.tenancy.application.TenantAuthorizationException.Reason.INDEPENDENT_APPROVAL_REQUIRED;
 
 import com.rootopathy.careos.tenancy.application.TenantAuthorizationException;
@@ -136,6 +137,7 @@ public final class PostgresTenantAuthorizationOperations implements TenantAuthor
                        operations.recent_authentication_required,
                        operations.recent_authentication_max_age_seconds,
                        operations.maximum_future_skew_seconds,
+                       operations.mfa_required,
                        operations.maker_checker_required,
                        operations.registry_version
                 FROM authorization_operations operations
@@ -153,6 +155,7 @@ public final class PostgresTenantAuthorizationOperations implements TenantAuthor
                         result.getBoolean("recent_authentication_required"),
                         result.getObject("recent_authentication_max_age_seconds", Integer.class),
                         result.getObject("maximum_future_skew_seconds", Integer.class),
+                        result.getBoolean("mfa_required"),
                         result.getBoolean("maker_checker_required"),
                         result.getString("registry_version")),
                 request.requiredOperation().value(),
@@ -194,6 +197,18 @@ public final class PostgresTenantAuthorizationOperations implements TenantAuthor
                 throw new TenantAuthorizationException(
                         RECENT_AUTHENTICATION_REQUIRED,
                         "Recent authentication is required to perform this operation.");
+            }
+        }
+        if (operation.mfaRequired()) {
+            var mfaAuthenticatedAt = request.mfaAuthenticatedAt();
+            if (mfaAuthenticatedAt == null
+                    || mfaAuthenticatedAt.isBefore(
+                            now.minusSeconds(operation.recentAuthenticationMaximumAgeSeconds()))
+                    || mfaAuthenticatedAt.isAfter(
+                            now.plusSeconds(operation.maximumFutureSkewSeconds()))) {
+                throw new TenantAuthorizationException(
+                        MFA_REQUIRED,
+                        "A recent multi-factor authentication is required to perform this operation.");
             }
         }
         if (operation.makerCheckerRequired()) {
@@ -317,6 +332,7 @@ public final class PostgresTenantAuthorizationOperations implements TenantAuthor
             boolean recentAuthenticationRequired,
             Integer recentAuthenticationMaximumAgeSeconds,
             Integer maximumFutureSkewSeconds,
+            boolean mfaRequired,
             boolean makerCheckerRequired,
             String registryVersion) {}
 }

@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "ROOTOPATHY CareOS Foundation API",
-    "version": "0.8.0",
-    "description": "Checked contract for the currently implemented public foundation, browser identity, governed invitations, maker-checker MFA administration, and membership-backed organization-selection endpoints. Unsafe browser operations require an approved Origin or Referer plus the double-submit CSRF cookie/header pair."
+    "version": "0.9.0",
+    "description": "Checked contract for the currently implemented public foundation, browser identity, approved-registry governed invitations, maker-checker MFA administration, membership-backed organization selection, and bounded organization-core administration endpoints. Unsafe browser operations require an approved Origin or Referer plus the double-submit CSRF cookie/header pair."
   },
   "servers": [
     {
@@ -745,7 +745,7 @@
     "/api/v1/organizations/{organizationId}/invitations": {
       "post": {
         "operationId": "issueInvitation",
-        "description": "Issues and delivers one bounded invitation only after permission, delegation, reason, and recent-authentication checks; business state and governance evidence commit atomically.",
+        "description": "Issues and delivers one bounded invitation only after permission, delegation, reason, recent-authentication, and recent-MFA checks; business state and governance evidence commit atomically.",
         "parameters": [
           {
             "$ref": "#/components/parameters/OrganizationId"
@@ -820,7 +820,7 @@
     "/api/v1/organizations/{organizationId}/invitations/{invitationId}/revocations": {
       "post": {
         "operationId": "revokeInvitation",
-        "description": "Revokes one pending invitation with caller-controlled idempotency and atomically records audit/outbox evidence.",
+        "description": "Revokes one pending invitation after recent-authentication and recent-MFA checks, with caller-controlled idempotency and atomic audit/outbox evidence.",
         "parameters": [
           {
             "$ref": "#/components/parameters/OrganizationId"
@@ -898,7 +898,7 @@
     "/api/v1/organizations/{organizationId}/users/{targetUserId}/mfa-reset-requests": {
       "post": {
         "operationId": "requestMfaAdministrativeReset",
-        "description": "Creates a time-bounded MFA reset request for an MFA-enabled active organization member after permission, reason, and recent-authentication checks.",
+        "description": "Creates a time-bounded MFA reset request for an MFA-enabled active organization member after permission, reason, recent-authentication, and recent-MFA checks.",
         "parameters": [
           {
             "$ref": "#/components/parameters/OrganizationId"
@@ -976,7 +976,7 @@
     "/api/v1/organizations/{organizationId}/users/{targetUserId}/mfa-reset-requests/{approvalId}/approvals": {
       "post": {
         "operationId": "approveMfaAdministrativeReset",
-        "description": "Records an independent decision by an authorized account other than the original requester; approval does not reset MFA.",
+        "description": "Records a recent-MFA-authenticated independent decision by an authorized account other than the original requester; approval does not reset MFA.",
         "parameters": [
           {
             "$ref": "#/components/parameters/OrganizationId"
@@ -1057,7 +1057,7 @@
     "/api/v1/organizations/{organizationId}/users/{targetUserId}/mfa-reset-requests/{approvalId}/executions": {
       "post": {
         "operationId": "executeMfaAdministrativeReset",
-        "description": "Consumes the exact independent approval only for its original requester and atomically revokes the target MFA material and sessions with governance evidence.",
+        "description": "Consumes the exact independent approval only for its recent-MFA-authenticated original requester and atomically revokes the target MFA material and sessions with governance evidence.",
         "parameters": [
           {
             "$ref": "#/components/parameters/OrganizationId"
@@ -1128,6 +1128,187 @@
           },
           "503": {
             "$ref": "#/components/responses/ServiceUnavailable"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/setup-readiness": {
+      "get": {
+        "operationId": "getAdministrationReadiness",
+        "description": "Returns the bounded server-calculated Module 1 setup gates and administration counts. Not-yet-implemented approved gates remain explicit and cannot be treated as activation approval.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current organization setup readiness",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdministrationReadiness"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/profile": {
+      "get": {
+        "operationId": "getOrganizationProfile",
+        "description": "Returns the bounded organization identity and international baseline after tenant authorization.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current organization profile",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationProfile"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateOrganizationProfile",
+        "description": "Updates the bounded approved organization profile using a strong entity tag, caller-retained idempotency key, explicit reason, atomic governance evidence, and tenant authorization.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          },
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationProfileUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Organization profile updated or an exact idempotent response replayed",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationProfile"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
@@ -1445,7 +1626,7 @@
         }
       },
       "Conflict": {
-        "description": "The requested MFA transition conflicts with current state",
+        "description": "The requested transition, idempotency key, or current resource state conflicts with the operation",
         "headers": {
           "X-Correlation-Id": {
             "$ref": "#/components/headers/CorrelationId"
@@ -1460,7 +1641,7 @@
         }
       },
       "PreconditionRequired": {
-        "description": "A required precondition is missing, such as recent authentication or If-Match",
+        "description": "A required precondition is missing, such as recent authentication, recent MFA, or If-Match",
         "headers": {
           "X-Correlation-Id": {
             "$ref": "#/components/headers/CorrelationId"
@@ -1833,6 +2014,169 @@
         "additionalProperties": false,
         "required": ["reason"],
         "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      },
+      "AdministrationReadiness": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "organizationId",
+          "lifecycleStatus",
+          "completedGates",
+          "totalGates",
+          "activeMemberships",
+          "facilityCount",
+          "draftFacilityCount",
+          "gates"
+        ],
+        "properties": {
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lifecycleStatus": {
+            "type": "string",
+            "enum": ["draft", "active", "suspended", "disabled"]
+          },
+          "completedGates": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalGates": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "activeMemberships": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "facilityCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "draftFacilityCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "gates": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/ReadinessGate"
+            }
+          }
+        }
+      },
+      "ReadinessGate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "label", "status", "detail", "href"],
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{0,79}$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "status": {
+            "type": "string",
+            "enum": ["complete", "in_progress", "not_started", "blocked"]
+          },
+          "detail": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "href": {
+            "type": "string",
+            "pattern": "^#/M1-[0-9]{2}$"
+          }
+        }
+      },
+      "OrganizationProfile": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "organizationId",
+          "legalName",
+          "displayName",
+          "countryCode",
+          "timezone",
+          "lifecycleStatus",
+          "lockVersion",
+          "updatedAt"
+        ],
+        "properties": {
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "legalName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "countryCode": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$"
+          },
+          "timezone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "lifecycleStatus": {
+            "type": "string",
+            "enum": ["draft", "active", "suspended", "disabled"]
+          },
+          "lockVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "OrganizationProfileUpdateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["legalName", "displayName", "countryCode", "timezone", "reason"],
+        "properties": {
+          "legalName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "countryCode": {
+            "type": "string",
+            "pattern": "^[A-Za-z]{2}$"
+          },
+          "timezone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
           "reason": {
             "type": "string",
             "minLength": 1,

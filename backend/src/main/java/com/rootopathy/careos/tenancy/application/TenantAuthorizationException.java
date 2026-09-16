@@ -6,6 +6,7 @@ public final class TenantAuthorizationException extends RuntimeException {
         PERMISSION_DENIED,
         REASON_REQUIRED,
         RECENT_AUTHENTICATION_REQUIRED,
+        MFA_REQUIRED,
         INDEPENDENT_APPROVAL_REQUIRED
     }
 

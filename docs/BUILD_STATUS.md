@@ -327,15 +327,155 @@ This closes current identifier-generation consistency, not identifier-based trus
 
 This is the repository-complete Phase 0 reference checkpoint. Production still requires owner approval/replacement of the provisional policy, a decision on MFA enforcement/self-disable, service-credential provisioning/rotation and worker activation, target-environment security/operations evidence, and business-module implementation.
 
+## Reviewed during Phase 1A preimplementation (16 September 2026)
+
+- The complete specification's Module 1 screens, entity families, API routes, lifecycle rules, frontend requirements, security rules, test architecture, and acceptance gate were reconciled with the current repository.
+- All 23 M1 routes were reviewed: M1-01 through M1-04 reuse Phase 0 reference identity/selection mechanics, while M1-05 through M1-23 remain generic synthetic templates without production business persistence or APIs.
+- The required approved M1 high-fidelity mockups, CareOS Design System 1.0 assets, final policy/registry decisions, and versioned owner approval are absent from the workspace.
+- `MODULE_1_IMPLEMENTATION_PLAN.md` now records the screen-by-screen traceability ledger, administration module/data/API/frontend/test boundaries, dependency-ordered M1B-M1G slices, and exact approval checklist.
+- Stale architecture/API documentation was reconciled to the actual OpenAPI 3.1 version 0.8.0 and all 21 implemented foundation operations.
+
+Phase 1A changed documentation and delivery control only; no executable source, migration, contract, or dependency changed, so the previously recorded Phase 0X evidence was that checkpoint's executable baseline. Module 1 production implementation is `BLOCKED_INPUT` until the approval checklist is supplied; this status prevents generic prototype behavior from being misrepresented as a product workflow.
+
+## Verified during Phase 1R provisional organization core (16 September 2026)
+
+- Flyway V18 extends the existing organization aggregate with bounded profile validation, updater evidence, monotonic lock revision, and a runtime trigger that permits only the exact tenant/actor/reason-bound reference update operation and mutable field set
+- The reference registry adds profile management plus readiness-read/profile-update operations and one versioned profile-updated audit/outbox pair; every entry remains migration-owned, explicitly opt-in outside production, and rejected by production preflight
+- The new administration module supplies protected tenant readiness/profile reads and a governed profile update with strong ETag/`If-Match`, caller-owned idempotency, explicit reason, exact replay, stale/conflict handling, and atomic business/audit/outbox/idempotency commit
+- M1-05 and M1-06 now render the same server-calculated provisional gates and bounded counts; M1-07 reads and updates the real organization aggregate through the checked client with runtime validation and accessible loading, failure/retry, validation, success, and stale-edit states
+- Direct PostgreSQL attacks prove read operations cannot write, profile updates cannot alter lifecycle fields, and exact authorized revisions succeed; HTTP coverage proves missing precondition, success, exact replay, changed-payload conflict, stale ETag rejection, final persisted state, and exactly one audit/outbox pair
+- A clean Maven 3.9.11/Java 25 build compiles 219 production sources and 18 test sources, applies Flyway through V18, passes all 164 tests with zero failures/errors/skips, enforces all 11 ArchUnit rules, packages the bootable JAR, and both current application images build
+- OpenAPI 3.1 version 0.9.0 checks all 24 operations/seven conventions and all seven negative tests; frontend generation, its 20-source/45-import two-feature architecture boundary/four negative tests, strict typecheck, lint, formatting, all 40 unit tests, production build, and all 22 desktop/mobile Playwright/Axe tests pass
+- The 79-screen registry, both Compose models, and the CI-security verifier/all ten negative tests pass
+
+This checkpoint completes a provisional engineering slice only. It does not approve the organization profile dictionary, readiness/activation catalogue, reference permissions/events, final content/designs, or production activation. M1-08 through M1-23 remain synthetic, M1C is not accepted, and the Module 1 production slices remain `BLOCKED_INPUT` until the documented approval package is supplied.
+
+## Verified during Phase 1S current-image assurance (16 September 2026)
+
+- A fresh six-service deployment exposed and then verified the fix for the official PostgreSQL 18 image's required major-version parent mount: Compose now mounts the named volume at `/var/lib/postgresql`, not the rejected legacy `/var/lib/postgresql/data` target
+- The dependency-free Compose security verifier now rejects that legacy PostgreSQL 18 target; all ten existing positive/negative CI-security tests and both default/scanner-overlay Compose models pass
+- Fresh isolated volumes reach Flyway V18 and seed exactly one synthetic organization; backend liveness/readiness and frontend health pass, the same-origin proxy returns all 79 screens, required frontend security headers are present, and anonymous metrics return `401`
+- The backend runs as `65532:65532` and the frontend as `nginx`; both reject root writes, accept writes only through their declared `/tmp` mounts, drop every capability, and retain no-new-privileges
+- Trivy 0.74 reports zero fixed HIGH/CRITICAL findings across the Maven/npm manifests, Debian 13.6 backend OS, packaged JAR, and Alpine 3.24.1 frontend OS; both Dockerfiles have zero detected misconfigurations and no secret finding is emitted
+- Both current images generate parseable CycloneDX 1.7 SBOMs, containing 199 backend and 22 frontend components in this local run; all temporary containers, networks, volumes, images, and scanner caches were removed
+
+This is repository-local assurance, not hosted or production acceptance. The target environment must still retain its own workflow logs/SBOMs, sign and admit exact artifacts, verify them at deployment, and satisfy the outstanding production control and product-approval gates.
+
+## Verified during Phase 1T executable Module 1 input gate (16 September 2026)
+
+- A checked JSON Schema and state manifest define eight canonical input bundles and retain the honest `BLOCKED_INPUT` state with zero supplied artifacts and no approval
+- The dependency-free verifier accepts partial evidence only while blocked, hashes each repository-contained regular file, rejects path escape, missing/non-file/symbolic inputs, checksum drift, duplicate categories or paths, schema/catalogue drift, and incomplete approved claims
+- Approved state requires every category, a deterministic exact-package SHA-256, ordered M1-01 through M1-23 scope, a bounded record identifier, a real non-placeholder approver, a valid non-future UTC timestamp, and a distinct checksum-matched approval-evidence file
+- Normal consistency verification reports all eight missing categories and `implementationAuthorized: false`; `--require-approved` exits nonzero for the checked state
+- All fourteen focused gate tests pass, including a fully checksum-bound synthetic approval fixture, and the quality workflow runs both the verifier and its tests
+- The CI-security contract now requires those quality-workflow commands; its eleven positive/negative tests pass
+
+This checkpoint automates the approval boundary but does not satisfy it. No mockup, Design System, policy, data, lifecycle, event, export, or owner-approval artifact has been supplied or inferred.
+
+## Verified during Phase 1U environment-scoped foundation seed strategy (16 September 2026)
+
+- Flyway V19 compensates for the immutable historical V1 fixture by removing the exact reserved organization and facility in base/production mode while retaining them only under hard-coded local/test configuration
+- Cleanup first verifies the untouched organization profile/revision and exact sole facility; changed or additional facility state aborts transactionally
+- Any dependent tenant row raises an explicit foreign-key remediation failure rather than cascading, deleting history, or guessing that data is disposable
+- A dedicated PostgreSQL 18 test proves changed-fixture rollback with no successful V19 history record, row preservation, explicit remediation, successful retry, and a zero-tenant final production/default state
+- The existing tenant-RLS integration suite reaches V19 with the test fixture retained, proving the non-production path remains usable
+- The dependency-free security verifier now protects all four profile values plus the V19 opt-in, cleanup, and foreign-key safeguards; all twelve positive/negative contract tests pass
+- A clean Maven 3.9.11/Java 25 build compiles 219 production and 19 test sources, validates/applies all 19 migrations, passes all 165 backend tests without failures, errors, or skips, and packages the bootable JAR
+
+This resolves environment scoping for the legacy fixture only. Production tenant provisioning, initial-owner ceremony, migration/import procedures, and approval of organization activation behavior remain open.
+
+## Verified during Phase 1V fail-closed protected route resolution (16 September 2026)
+
+- The checked 79-screen registry now rejects unknown identifiers instead of silently returning M1-05
+- The root route boundary renders protected content only for a registered ID after the existing authentication and organization gates have succeeded
+- An authenticated unknown route retains safe organization and sign-out controls but has no active screen link, loads no business page, and never reflects the untrusted route text
+- The dedicated not-found state focuses its heading and offers one explicit recovery link to the administration dashboard
+- Generated API drift, the 21-source/48-import frontend architecture boundary and four negative fixtures, strict typecheck, lint, formatting, all 42 unit tests, and the production build pass
+- All 24 desktop/mobile Playwright cases pass, including the complete 79-route Axe matrix and unknown-route accessibility/focus/recovery on desktop and the 320px viewport
+
+This is a frontend routing safety checkpoint, not approval of the hash router or any product screen. The backend is unchanged from the Phase 1U 165-test/Flyway V19 baseline, and production Module 1 remains `BLOCKED_INPUT`.
+
+## Verified during Phase 1W exact responsive-breakpoint assurance (16 September 2026)
+
+- Playwright now declares exact 1440, 1024, 768, 390, and 320 pixel projects instead of relying on one implicit desktop width and one 320px project
+- Every registered route rejects body or document horizontal overflow and retains its route-specific serious/critical Axe check at every required width
+- The expanded matrix exposed list-table page overflow at 768, 390, and 320 pixels because an absolutely positioned screen-reader-only header escaped the horizontal scroll wrapper
+- The table wrapper now establishes a positioned, zero-minimum-width, 100%-bounded containing block; all six originally failing M1/M2 module/viewport cases pass
+- Responsive navigation coverage proves persistent navigation at 1440/1024/768 and drawer opening, workspace navigation, and automatic closing at 390/320
+- The dependency-free repository verifier requires all five exact projects and the document/body, registered-route, identity-route, exact-width, and drawer-boundary assertions; its new mutation test rejects missing 768 coverage and weakened overflow checks, bringing that suite to thirteen tests
+- Generated API drift, the 21-source/48-import architecture boundary and four negative fixtures, strict typecheck, lint, formatting, all 42 unit tests, and the production build pass
+- All 60 Playwright cases pass across the five projects, including 395 registered-route viewport renders and the complete identity, recovery, invitation, MFA, profile, session, navigation, and unknown-route workflow set
+
+This verifies the current reference layout only. Production responsive designs, table/card alternatives, keyboard/dialog focus acceptance, and formal WCAG 2.2 AA evidence remain approval-dependent. Backend behavior remains at the Phase 1U 165-test/Flyway V19 baseline.
+
+## Verified during Phase 1X honest synthetic-interaction containment (16 September 2026)
+
+- Every generic dashboard/list/form/clinical route now shows a named synthetic-only boundary, tells users not to enter real personal or clinical information, uses unmistakably synthetic sample identities and records, and keeps generic form/clinical fields read-only
+- Unapproved `Review`, `Open`, save, and clinical confirmation actions are natively disabled with accessible explanations; the former browser-local save and confirmation success simulations no longer exist
+- Generic row links no longer route synthetic records to unrelated screens, while list search/status/scope and `Clear filters` now perform their stated local behavior and expose a polite bounded result count
+- A terminal pagination destination renders as disabled text instead of an activatable `aria-disabled` anchor
+- The first expanded Axe run detected that removing fake row links left overflowing tables without a keyboard target; table scrollers are now named focusable regions with a visible focus ring
+- Generated API drift, the 21-source/48-import architecture boundary and four negative fixtures, strict typecheck, lint, formatting, all 45 unit tests, and the production build pass
+- All 65 Playwright cases pass across the five exact projects, including 395 registered-route renders and five new action/filter/pagination boundary cases with Axe and overflow checks
+
+This makes the generic reference UI honest and keyboard-reachable; it does not implement the disabled workflows or approve any product content. Backend and migration behavior remain unchanged from the Phase 1U baseline.
+
+## Verified during Phase 1Y Module 1 owner-review draft preparation (16 September 2026)
+
+- Eight review briefs now cover the exact Module 1 input categories: screen mockups, Design System, data dictionary/validation, lifecycle/transitions, authorization, audit/events, readiness/activation, and history/export
+- The packet is isolated under `docs/module-1-review-drafts/`; every brief and its manifest are explicitly `DRAFT_NOT_APPROVED`, list unresolved owner decisions, and provide acceptance criteria
+- The draft verifier requires all eight canonical entries, safe repository-contained regular files, exact draft metadata/sections, and every M1-01 through M1-23 identifier while always returning `implementationAuthorized: false`
+- The verifier reports all 8 drafts present with package digest `bee95ca0ddb74d14256d2dd80fe9565021e64a9f6feb6124b7a1110335a3fe63`; all seven focused tests pass
+- Both draft checks are required by local/CI verification, and all thirteen repository security tests pass with removal coverage
+- The independent production gate remains unchanged and correctly fails approval mode with `BLOCKED_INPUT`, zero of eight approved artifacts, no approval, and no implementation authority
+
+This is a checked decision-preparation package, not approved product evidence. It gives owners concrete material to revise and accept while preserving the production stop condition.
+
+## Verified during Phase 1Z Module 1 candidate input preparation (16 September 2026)
+
+- `candidate-inputs/module-1/` contains all eight concrete `m1-candidate-1` artifacts and is isolated from the production approval directory
+- The visual artifact is a self-contained, keyboard-operable M1-01 through M1-23 review application with state switching, responsive table/card behavior, dialogs, focus recovery, and operation/permission/assurance annotations
+- Seven companion artifacts freeze proposed Design System, data/validation, lifecycle, authorization, event, readiness/activation, and history/export contracts
+- The candidate verifier reports 8/8 artifacts, digest `c2087548aacd35eb4927532d63b844851c6fe9c56cccb56e46596d707d7a1a53`, `CANDIDATE_FOR_APPROVAL`, and `implementationAuthorized: false`; all eight tests pass
+- All thirteen repository-security tests require the production, draft, and candidate checks in quality CI
+- Generated API drift, the 21-source/48-import architecture boundary and four negative fixtures, typecheck, lint, formatting, 45 unit tests, and production build pass
+- All 70 browser tests pass across 1440/1024/768/390/320, including five new candidate navigation/state/focus/Axe/overflow cases and the unchanged 65 application cases
+- The production verifier still reports `BLOCKED_INPUT`, zero of eight approved artifacts, no approval, and no implementation authority
+
+This was the final candidate checkpoint. The exact digest was subsequently accepted unchanged in Phase 1AA; the candidate package itself remains non-authorizing provenance.
+
+## Verified during Phase 1AA Module 1 input approval (16 September 2026)
+
+- All eight accepted `m1-candidate-1` artifacts were copied byte-for-byte to `approved-inputs/module-1/`
+- Approval record `M1-APPROVAL-20260916-01` binds approver **bhupendra, developer**, the exact package, all M1-01 through M1-23 screens, decision time, candidate digest, and distinct approval-evidence checksum
+- The production manifest reports `APPROVED`, eight of eight artifacts, no missing categories, and `implementationAuthorized: true`
+- Normal and `--require-approved` verification both pass at package digest `19aff5ce30516b7ee2101c093a8429d8a74394995ca90d486790bcc18a392946`
+- All fourteen production input-gate tests pass, including the checked approved state and isolated blocked/partial/tampered/placeholder/future fixtures
+
+This authorizes Module 1 implementation against the exact approved bytes. It does not mark any implementation slice or target environment complete, and any artifact drift requires new approval evidence.
+
+## Verified during Phase 1AB approved authorization and first M1B increment (16 September 2026)
+
+- Flyway V20 creates immutable checksum-bound `authorization_registry_releases` evidence and activates the approved interactive permission, role, grant, and delegation catalogue
+- `local_bootstrap`, obsolete member policy, and non-interactive service identities remain reference-only; production continues to reject the reference-policy flag
+- Existing organization profile/readiness operations are promoted, invitation operation/event names are rebound to approved `identity.*`/`access.*` keys, and the administrative MFA execution workflow uses its exact approved target operation
+- Tenant authorization now enforces a separate recent MFA timestamp for invitation issue/revoke and MFA reset request/approve/execute and maps missing evidence to `428 mfa-required`
+- PostgreSQL retains final-owner, delegation, invitation, maker/checker/target, approval-consumption, append-only evidence, and profile-update boundary checks
+- Production invitation/MFA activation remains disabled by default and is permitted only for exact registry `m1-candidate-1` and the approved package digest; digest drift fails the startup guard
+- The invitation UI defaults to `organization_viewer`, offers the approved non-owner roles, and retains server-authoritative delegation enforcement
+- Checked OpenAPI descriptions and generated TypeScript now expose the approved-registry and recent-MFA contract
+- Verification passes: fresh V20 migration; 14 identity HTTP cases; 33 tenant/RLS cases; 10 production-guard cases; a clean 166-test Maven/Java 25 build and packaged JAR; both production input-verifier modes/all 14 tests; frontend API drift/architecture/format/typecheck/lint; all 45 unit tests; the production build; and all 70 five-viewport Playwright/Axe cases
+
+This is the first M1B increment, not M1B completion. Membership listing, maker-checker role/scope change and revocation, owner transfer, permission-projected actions, final visual/browser acceptance, and target-environment evidence remain open.
+
 ## Configured but not yet fully integration-verified
 
-- Complete six-service Docker Compose startup on the default host ports
 - Remote GitHub Actions execution of both updated workflows, including dependency-graph access, CodeQL result upload, required-check/repository-rule enforcement, and SBOM artifact retention
 - Signed image provenance, production-registry admission policy, and deployment-time SBOM/signature verification
 - Production object-store/IAM/KMS/versioning/Object-Lock, scanner/network/signature operations, Redis ACL/TLS/HA/persistence/restore acceptance, and notification key-management/backup/restore acceptance; governed promotion/signed-access/retention activation, hold release/disposal, notification consent/destination/provider delivery, worker, and scheduler behavior
 - Production service-credential provisioning/rotation, metric/log/trace collection, scraper/worker activation or private management boundary, service objectives, dashboards, alert delivery/on-call escalation, encrypted backups, and timed restore evidence
 
-The current Phase 0 repository work is complete at the provisional reference-policy checkpoint. In addition to the earlier foundation, it now verifies reference authorization/operation/event policy, delegation and final-owner enforcement, governed invitations/account linkage, disjoint service-identity authorization, maker-checker administrator MFA reset, all 21 checked HTTP operations, and the real M1-02/M1-03 identity-administration states. Production acceptance remains incomplete: owners must approve or replace the reference policy and MFA rules, provision and rotate service credentials, activate and operate real workers/providers, enforce hosted CI/registry controls, accept production TLS/secrets/edge/storage/scanner/Redis/key management, deploy telemetry/alerting and backup/restore, and implement all business modules and governed provider workflows.
+The current Phase 0 repository work is complete mechanically. Phases 1R through 1Z established the organization-core boundary and exact candidate; Phase 1AA records unchanged approval, and Phase 1AB promotes the checksum-bound interactive registry and begins M1B. Production remains fail-closed for unimplemented operations and unaccepted target infrastructure. Teams must define tenant provisioning, activate accepted providers/workers and target controls, capture hosted operational evidence, complete M1B-M1G, and obtain slice/module acceptance before production release.
 
 ## Production status
 

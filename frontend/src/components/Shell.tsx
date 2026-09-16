@@ -1,6 +1,6 @@
 import { LogOut, Menu, Search, X } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
-import { findScreen, screens, type ModuleKey } from '../data/screens';
+import { screens, type ModuleKey } from '../data/screens';
 
 export type ShellSessionProps = {
   actorDisplayName: string;
@@ -13,7 +13,7 @@ export type ShellSessionProps = {
   signingOut: boolean;
 };
 
-type ShellProps = ShellSessionProps & { currentId: string; children: ReactNode };
+type ShellProps = ShellSessionProps & { currentId?: string; children: ReactNode };
 
 const workspaceLabels: Record<ModuleKey, string> = {
   M1: 'Administration',
@@ -33,17 +33,18 @@ export function Shell({
   sessionNotice,
   signingOut,
 }: ShellProps) {
-  const current = findScreen(currentId);
+  const current = screens.find((screen) => screen.id === currentId);
+  const currentModule = current?.module ?? 'M1';
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const moduleScreens = useMemo(
     () =>
       screens.filter(
         (screen) =>
-          screen.module === current.module &&
+          screen.module === currentModule &&
           `${screen.id} ${screen.title}`.toLowerCase().includes(query.toLowerCase()),
       ),
-    [current.module, query],
+    [currentModule, query],
   );
   const groups = [...new Set(moduleScreens.map((screen) => screen.group))];
 
@@ -59,7 +60,7 @@ export function Shell({
         </button>
         <a className="brand" href="#/M1-05" aria-label="ROOTOPATHY CareOS home">
           <strong>ROOTOPATHY</strong>
-          <span>CareOS · {workspaceLabels[current.module]}</span>
+          <span>CareOS · {workspaceLabels[currentModule]}</span>
         </a>
         <div className="topbar-actions">
           <label className="organization-switch">
@@ -91,7 +92,7 @@ export function Shell({
       </header>
       <aside
         className={`sidebar ${open ? 'is-open' : ''}`}
-        aria-label={`${workspaceLabels[current.module]} navigation`}
+        aria-label={`${workspaceLabels[currentModule]} navigation`}
       >
         <div className="sidebar-mobile-head">
           <span>Navigation</span>
@@ -116,7 +117,7 @@ export function Shell({
           {(['M1', 'M2', 'COS'] as const).map((module) => (
             <a
               key={module}
-              className={current.module === module ? 'active' : ''}
+              className={currentModule === module ? 'active' : ''}
               href={`#/${module}-01`}
             >
               {module}
@@ -158,7 +159,7 @@ export function Shell({
                   <a
                     key={screen.id}
                     href={`#/${screen.id}`}
-                    className={screen.id === current.id ? 'active' : ''}
+                    className={screen.id === current?.id ? 'active' : ''}
                     onClick={() => setOpen(false)}
                   >
                     <span>{screen.id}</span>

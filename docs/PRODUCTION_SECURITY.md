@@ -14,7 +14,7 @@ Activate `production` without `local` or `test`:
 SPRING_PROFILES_ACTIVE=production
 ```
 
-The base configuration now requires explicit database, Redis, SMTP, browser-origin/base-URL, mail, token-pepper, and MFA-key values. All synthetic successful fallbacks and the bootstrap identity live only in profile-gated `application-local.yml`; test values live only in test resources. `application-production.yml` additionally fixes secure production transport defaults and requires the deployment system to supply:
+The base configuration now requires explicit database, Redis, SMTP, browser-origin/base-URL, mail, token-pepper, and MFA-key values. All synthetic successful fallbacks and the bootstrap identity live only in profile-gated `application-local.yml`; test values live only in test resources. The Flyway synthetic-foundation-data placeholder is hard-disabled in base/production and enabled only in local/test, so V19 removes the historical untouched fixture from production/default state and aborts if that reserved tenant has changed or acquired dependencies. `application-production.yml` additionally fixes secure production transport defaults and requires the deployment system to supply:
 
 | Boundary | Required external values | Enforced transport behavior |
 | --- | --- | --- |
@@ -23,11 +23,12 @@ The base configuration now requires explicit database, Redis, SMTP, browser-orig
 | Redis sessions and throttles | `REDIS_HOST`, optional `REDIS_PORT`, `REDIS_USERNAME`, `REDIS_PASSWORD` | TLS is enabled and the startup guard rejects an override that disables it. |
 | Security email | `SMTP_HOST`, optional `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` | Authentication, STARTTLS, mandatory upgrade, certificate identity checking, and bounded socket timeouts are enabled. |
 | Browser identity | `CAREOS_ALLOWED_ORIGINS`, `CAREOS_BASE_URL`, `CAREOS_SECURITY_MAIL_FROM`, `CAREOS_TOKEN_PEPPER`, `CAREOS_MFA_ENCRYPTION_KEY` | Origins and the application base URL must be canonical HTTPS origins; the base URL must be on the allow-list. |
+| Approved Module 1 identity administration | Optional `CAREOS_INVITATIONS_ENABLED`, `CAREOS_MFA_ADMINISTRATION_ENABLED`; registry/digest overrides only for an explicitly replaced approved release | Both capabilities default to disabled. Enabling either requires active registry `m1-candidate-1` and package digest `19aff5ce30516b7ee2101c093a8429d8a74394995ca90d486790bcc18a392946`; mismatches abort startup. |
 
 The startup guard also rejects:
 
 - a mixed `production,local` or `production,test` profile;
-- activation of the provisional reference authorization policy, governed invitations, service identities, or MFA administration;
+- activation of the provisional reference authorization policy or reference service identities, and invitation/MFA-administration activation without the exact approved registry/package digest;
 - an insecure session cookie override;
 - missing dependency identities or passwords;
 - the documented local/test database, token, MFA, service-credential, or object-store material;

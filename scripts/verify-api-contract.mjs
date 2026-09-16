@@ -20,6 +20,21 @@ export const expectedOperations = [
   ["get", "/api/v1/organizations", "listSelectableOrganizations"],
   ["post", "/api/v1/auth/organization-selections", "selectOrganization"],
   [
+    "get",
+    "/api/v1/organizations/{organizationId}/setup-readiness",
+    "getAdministrationReadiness",
+  ],
+  [
+    "get",
+    "/api/v1/organizations/{organizationId}/profile",
+    "getOrganizationProfile",
+  ],
+  [
+    "put",
+    "/api/v1/organizations/{organizationId}/profile",
+    "updateOrganizationProfile",
+  ],
+  [
     "post",
     "/api/v1/organizations/{organizationId}/invitations",
     "issueInvitation",
@@ -55,6 +70,9 @@ const sessionProtectedOperations = new Set([
   "regenerateRecoveryCodes",
   "listSelectableOrganizations",
   "selectOrganization",
+  "getAdministrationReadiness",
+  "getOrganizationProfile",
+  "updateOrganizationProfile",
   "issueInvitation",
   "revokeInvitation",
   "requestMfaAdministrativeReset",
@@ -63,6 +81,7 @@ const sessionProtectedOperations = new Set([
 ]);
 
 const idempotentOperations = new Set([
+  "updateOrganizationProfile",
   "issueInvitation",
   "revokeInvitation",
   "requestMfaAdministrativeReset",
@@ -138,7 +157,10 @@ export function verifyApiContract(contract) {
       );
     }
 
-    if (method === "post" && path.startsWith("/api/v1/")) {
+    if (
+      ["post", "put", "patch", "delete"].includes(method) &&
+      path.startsWith("/api/v1/")
+    ) {
       const origin = operation.parameters
         ?.map(resolved)
         .find((parameter) => parameter.name === "Origin");

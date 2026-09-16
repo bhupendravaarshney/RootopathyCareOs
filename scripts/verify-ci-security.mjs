@@ -54,6 +54,26 @@ export function validateWorkflowText(name, text) {
     );
   }
 
+  if (name === "quality.yml") {
+    const requiredModuleInputCommands = [
+      "node scripts/verify-module-1-inputs.mjs --require-approved",
+      "node --test scripts/tests/verify-module-1-inputs.test.mjs",
+      "node scripts/verify-module-1-review-drafts.mjs",
+      "node --test scripts/tests/verify-module-1-review-drafts.test.mjs",
+      "node scripts/verify-module-1-candidate-inputs.mjs",
+      "node --test scripts/tests/verify-module-1-candidate-inputs.test.mjs",
+    ];
+    for (const command of requiredModuleInputCommands) {
+      if (
+        !text.split(/\r?\n/).some((line) => line.trim() === `- run: ${command}`)
+      ) {
+        errors.push(
+          `${name}: contracts job must run the Module 1 input/review/candidate command: ${command}`,
+        );
+      }
+    }
+  }
+
   const lines = text.split(/\r?\n/);
   for (let index = 0; index < lines.length; index += 1) {
     const match = lines[index].match(
@@ -206,15 +226,22 @@ export function validateNginxText(name, text) {
   ) {
     errors.push(`${name}: CSP must retain the strict same-origin directives`);
   }
-  if (/\bunsafe-(?:eval|inline)\b|(?:^|[ ;])\*/.test(contentSecurityPolicy ?? "")) {
-    errors.push(`${name}: CSP must not allow unsafe script/style or wildcard sources`);
+  if (
+    /\bunsafe-(?:eval|inline)\b|(?:^|[ ;])\*/.test(contentSecurityPolicy ?? "")
+  ) {
+    errors.push(
+      `${name}: CSP must not allow unsafe script/style or wildcard sources`,
+    );
   }
 
   for (const [pattern, description] of [
     [/^\s*proxy_connect_timeout\s+3s;\s*$/m, "a bounded proxy connect timeout"],
     [/^\s*proxy_send_timeout\s+30s;\s*$/m, "a bounded proxy send timeout"],
     [/^\s*proxy_read_timeout\s+30s;\s*$/m, "a bounded proxy read timeout"],
-    [/^\s*proxy_set_header\s+Connection\s+"";\s*$/m, "hop-by-hop header removal"],
+    [
+      /^\s*proxy_set_header\s+Connection\s+"";\s*$/m,
+      "hop-by-hop header removal",
+    ],
   ]) {
     if (!pattern.test(text)) {
       errors.push(`${name}: API proxy must declare ${description}`);
@@ -282,7 +309,9 @@ export function validateProductionConfigText(name, text) {
       text,
     )
   ) {
-    errors.push(`${name}: production configuration contains local-only material`);
+    errors.push(
+      `${name}: production configuration contains local-only material`,
+    );
   }
   return errors;
 }
@@ -319,7 +348,75 @@ export function validateBaseConfigText(name, text) {
       text,
     )
   ) {
-    errors.push(`${name}: local-only defaults must live in application-local.yml`);
+    errors.push(
+      `${name}: local-only defaults must live in application-local.yml`,
+    );
+  }
+  return errors;
+}
+
+export function validateFoundationDataScopeTexts({
+  base,
+  local,
+  production,
+  test,
+  migration,
+}) {
+  const errors = [];
+  const requirements = [
+    [
+      base,
+      /^\s*foundationSyntheticDataEnabled:\s*false\s*$/m,
+      "application.yml must hard-disable synthetic foundation data",
+    ],
+    [
+      local,
+      /^\s*foundationSyntheticDataEnabled:\s*true\s*$/m,
+      "application-local.yml must explicitly scope synthetic foundation data to local use",
+    ],
+    [
+      production,
+      /^\s*foundationSyntheticDataEnabled:\s*false\s*$/m,
+      "application-production.yml must hard-disable synthetic foundation data",
+    ],
+    [
+      test,
+      /^\s*foundationSyntheticDataEnabled:\s*true\s*$/m,
+      "application-test.yml must explicitly retain isolated test fixtures",
+    ],
+  ];
+  for (const [text, pattern, message] of requirements) {
+    if (!pattern.test(text)) {
+      errors.push(message);
+    }
+  }
+
+  const migrationControls = [
+    [
+      /\$\{foundationSyntheticDataEnabled\}/,
+      "V19 must consume the scoped Flyway placeholder",
+    ],
+    [
+      /IF\s+synthetic_data_enabled\s+THEN/i,
+      "V19 must retain fixtures only through the explicit opt-in",
+    ],
+    [
+      /DELETE\s+FROM\s+facilities/i,
+      "V19 must remove the legacy synthetic facility when disabled",
+    ],
+    [
+      /DELETE\s+FROM\s+organizations/i,
+      "V19 must remove the legacy synthetic organization when disabled",
+    ],
+    [
+      /WHEN\s+foreign_key_violation\s+THEN/i,
+      "V19 must fail closed instead of cascading dependent tenant data",
+    ],
+  ];
+  for (const [pattern, message] of migrationControls) {
+    if (!pattern.test(migration)) {
+      errors.push(message);
+    }
   }
   return errors;
 }
@@ -340,6 +437,28 @@ export function validateComposeText(name, text) {
   }
 
   const serviceMatches = [...text.matchAll(/^  ([a-zA-Z0-9_-]+):\s*$/gm)];
+  const postgresIndex = serviceMatches.findIndex(
+    (match) => match[1] === "postgres",
+  );
+  if (postgresIndex >= 0) {
+    const start = serviceMatches[postgresIndex].index;
+    const end = serviceMatches[postgresIndex + 1]?.index ?? text.length;
+    const postgres = text.slice(start, end);
+    const isPostgres18 =
+      /^    image:\s*["']?postgres:18[^\s"']*@sha256:[0-9a-f]{64}["']?\s*(?:#.*)?$/im.test(
+        postgres,
+      );
+    const mountsPostgres18Parent =
+      /^      -\s*["']?[^"'\r\n:]+:\/var\/lib\/postgresql["']?\s*(?:#.*)?$/m.test(
+        postgres,
+      );
+    if (isPostgres18 && !mountsPostgres18Parent) {
+      errors.push(
+        `${name}: PostgreSQL 18 must mount its data volume at /var/lib/postgresql`,
+      );
+    }
+  }
+
   for (const serviceName of ["backend", "frontend"]) {
     const serviceIndex = serviceMatches.findIndex(
       (match) => match[1] === serviceName,
@@ -402,6 +521,80 @@ export function validateDependabotText(text) {
       errors.push(
         `dependabot.yml: missing ${ecosystem} updates for ${directory}`,
       );
+    }
+  }
+  return errors;
+}
+
+export function validateResponsiveBrowserTexts({ config, suite }) {
+  const errors = [];
+  const projects = [
+    { height: 900, mobile: false, name: "desktop-1440", width: 1440 },
+    { height: 900, mobile: false, name: "compact-1024", width: 1024 },
+    { height: 1024, mobile: false, name: "tablet-768", width: 768 },
+    { height: 844, mobile: true, name: "mobile-390", width: 390 },
+    { height: 800, mobile: true, name: "mobile-320", width: 320 },
+  ];
+  const namedProjects = [...config.matchAll(/\bname:\s*["']([^"']+)["']/g)];
+
+  for (const project of projects) {
+    const matches = namedProjects.filter((match) => match[1] === project.name);
+    if (matches.length !== 1) {
+      errors.push(
+        `frontend/playwright.config.ts: requires exactly one ${project.name} responsive project`,
+      );
+      continue;
+    }
+    const start = matches[0].index ?? 0;
+    const next = namedProjects.find((match) => (match.index ?? 0) > start);
+    const block = config.slice(start, next?.index ?? config.length);
+    const viewport = new RegExp(
+      `viewport:\\s*\\{\\s*width:\\s*${project.width}\\s*,\\s*height:\\s*${project.height}\\s*\\}`,
+    );
+    if (!viewport.test(block)) {
+      errors.push(
+        `frontend/playwright.config.ts: ${project.name} must use the exact ${project.width}x${project.height} viewport`,
+      );
+    }
+    if (project.mobile) {
+      if (
+        !/\bisMobile:\s*true\b/.test(block) ||
+        !/\bhasTouch:\s*true\b/.test(block)
+      ) {
+        errors.push(
+          `frontend/playwright.config.ts: ${project.name} must retain mobile and touch semantics`,
+        );
+      }
+    } else if (!/\.\.\.devices\[["']Desktop Chrome["']\]/.test(block)) {
+      errors.push(
+        `frontend/playwright.config.ts: ${project.name} must retain the desktop Chromium device contract`,
+      );
+    }
+  }
+
+  const suiteRequirements = [
+    [
+      "document.documentElement.scrollWidth",
+      "document-width overflow assertion",
+    ],
+    ["document.body.scrollWidth", "body-width overflow assertion"],
+    [
+      "await expectNoDocumentHorizontalOverflow(page, id);",
+      "registered-route overflow check",
+    ],
+    [
+      "await expectNoDocumentHorizontalOverflow(page, 'M1-04 organization selection');",
+      "identity-route overflow check",
+    ],
+    [
+      "expect([1440, 1024, 768, 390, 320]).toContain(viewport.width);",
+      "exact responsive width assertion",
+    ],
+    ["const usesDrawer = viewport.width <= 760;", "drawer boundary assertion"],
+  ];
+  for (const [fragment, label] of suiteRequirements) {
+    if (!suite.includes(fragment)) {
+      errors.push(`frontend/tests/e2e/prototypes.spec.ts: missing ${label}`);
     }
   }
   return errors;
@@ -484,7 +677,10 @@ export function validateRepository(rootDirectory) {
       ),
     );
   }
-  for (const nginxConfig of ["frontend/nginx-main.conf", "frontend/nginx.conf"]) {
+  for (const nginxConfig of [
+    "frontend/nginx-main.conf",
+    "frontend/nginx.conf",
+  ]) {
     errors.push(
       ...validateNginxText(
         nginxConfig,
@@ -492,7 +688,8 @@ export function validateRepository(rootDirectory) {
       ),
     );
   }
-  const productionConfig = "backend/src/main/resources/application-production.yml";
+  const productionConfig =
+    "backend/src/main/resources/application-production.yml";
   errors.push(
     ...validateProductionConfigText(
       productionConfig,
@@ -500,11 +697,28 @@ export function validateRepository(rootDirectory) {
     ),
   );
   const baseConfig = "backend/src/main/resources/application.yml";
+  const baseConfigText = requiredFile(root, baseConfig, errors);
+  errors.push(...validateBaseConfigText(baseConfig, baseConfigText));
   errors.push(
-    ...validateBaseConfigText(
-      baseConfig,
-      requiredFile(root, baseConfig, errors),
-    ),
+    ...validateFoundationDataScopeTexts({
+      base: baseConfigText,
+      local: requiredFile(
+        root,
+        "backend/src/main/resources/application-local.yml",
+        errors,
+      ),
+      production: requiredFile(root, productionConfig, errors),
+      test: requiredFile(
+        root,
+        "backend/src/test/resources/application-test.yml",
+        errors,
+      ),
+      migration: requiredFile(
+        root,
+        "backend/src/main/resources/db/migration/V19__scope_synthetic_foundation_data.sql",
+        errors,
+      ),
+    }),
   );
   for (const compose of ["compose.yaml", "compose.scanner.yaml"]) {
     errors.push(
@@ -515,6 +729,16 @@ export function validateRepository(rootDirectory) {
     ...validateDependabotText(
       requiredFile(root, ".github/dependabot.yml", errors),
     ),
+  );
+  errors.push(
+    ...validateResponsiveBrowserTexts({
+      config: requiredFile(root, "frontend/playwright.config.ts", errors),
+      suite: requiredFile(
+        root,
+        "frontend/tests/e2e/prototypes.spec.ts",
+        errors,
+      ),
+    }),
   );
 
   const testRoot = join(root, "backend", "src", "test", "java");

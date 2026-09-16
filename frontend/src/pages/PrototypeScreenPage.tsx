@@ -57,6 +57,44 @@ const formIds = new Set([
   'M2-24',
 ]);
 const dashboardIds = new Set(['M1-05', 'M1-06', 'M1-21', 'M2-01', 'M2-20', 'M2-21', 'M2-29']);
+const prototypeActionDescriptionId = 'prototype-action-description';
+
+function UnavailableAction({
+  className,
+  label,
+}: {
+  className: 'primary-button' | 'secondary-button' | 'text-action';
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      className={className}
+      disabled
+      aria-describedby={prototypeActionDescriptionId}
+      aria-label={`${label} — unavailable in the synthetic prototype`}
+      title="Unavailable until the production workflow is approved and server-backed"
+    >
+      {label}
+    </button>
+  );
+}
+
+function PrototypeBoundary() {
+  return (
+    <aside className="prototype-boundary" aria-labelledby="prototype-boundary-title">
+      <CircleAlert aria-hidden="true" size={20} />
+      <div>
+        <strong id="prototype-boundary-title">Synthetic prototype only</strong>
+        <p id={prototypeActionDescriptionId}>
+          Records and values on this screen are illustrative. Production review, open, save and
+          confirmation actions are unavailable until their approved server workflows exist. Do not
+          enter real personal or clinical information.
+        </p>
+      </div>
+    </aside>
+  );
+}
 
 function StatCard({ label, value, note }: { label: string; value: string; note: string }) {
   return (
@@ -72,16 +110,16 @@ function Dashboard({ screen }: { screen: Screen }) {
   return (
     <>
       <div className="stats-grid">
-        <StatCard label="Ready" value="12" note="Server-calculated" />
-        <StatCard label="Needs review" value="3" note="Action required" />
-        <StatCard label="In progress" value="7" note="Saved drafts" />
-        <StatCard label="Overdue" value="1" note="Escalated safely" />
+        <StatCard label="Ready" value="12" note="Synthetic sample" />
+        <StatCard label="Needs review" value="3" note="Synthetic sample" />
+        <StatCard label="In progress" value="7" note="Synthetic sample" />
+        <StatCard label="Overdue" value="1" note="Synthetic sample" />
       </div>
       <section className="panel">
         <div className="panel-heading">
           <div>
             <h2>{screen.module === 'COS' ? 'Consultation readiness' : 'Setup readiness'}</h2>
-            <p>Each gate is independently calculated and linked to its source evidence.</p>
+            <p>This illustrative readiness layout does not load production state or evidence.</p>
           </div>
           <span className="badge success">
             <Check size={14} /> 82% complete
@@ -101,12 +139,10 @@ function Dashboard({ screen }: { screen: Screen }) {
               <span>
                 <strong>{item}</strong>
                 <small>
-                  {index === 3
-                    ? 'Awaiting authorized reviewer'
-                    : 'Complete with traceable evidence'}
+                  {index === 3 ? 'Illustrative pending state' : 'Illustrative complete state'}
                 </small>
               </span>
-              <button className="text-action">Review</button>
+              <UnavailableAction className="text-action" label="Review" />
             </div>
           ))}
         </div>
@@ -118,33 +154,80 @@ function Dashboard({ screen }: { screen: Screen }) {
 function DataList({ screen }: { screen: Screen }) {
   const names =
     screen.module === 'M2'
-      ? ['Dr Ananya Mehra', 'Dr Karan Malhotra', 'Rhea Kapoor', 'Amit Singh']
-      : ['ROOTOPATHY Greater Noida', 'Healing Lounge', 'Clinical Governance', 'Configuration v1.2'];
+      ? [
+          'Synthetic practitioner A',
+          'Synthetic practitioner B',
+          'Synthetic workforce record C',
+          'Synthetic workforce record D',
+        ]
+      : [
+          'Synthetic facility A',
+          'Synthetic facility B',
+          'Synthetic governance group',
+          'Synthetic configuration',
+        ];
+  const records = names.map((name, index) => ({
+    name,
+    scope: index % 2 === 0 ? 'greater-noida' : 'network',
+    status: index === 2 ? 'review' : 'active',
+    type: index % 2 ? 'Secondary' : 'Primary',
+    updated: `${index + 2} days ago`,
+  }));
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState('all');
+  const [scope, setScope] = useState('all');
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const filteredRecords = records.filter(
+    (record) =>
+      (!normalizedQuery || record.name.toLocaleLowerCase().includes(normalizedQuery)) &&
+      (status === 'all' || record.status === status) &&
+      (scope === 'all' || record.scope === scope),
+  );
+  const hasFilters = query !== '' || status !== 'all' || scope !== 'all';
+
   return (
     <section className="panel">
       <div className="filter-grid">
         <label>
           Search
-          <input placeholder={`Search ${screen.title.toLowerCase()}`} />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={`Search ${screen.title.toLowerCase()}`}
+          />
         </label>
         <label>
           Status
-          <select defaultValue="all">
+          <select value={status} onChange={(event) => setStatus(event.target.value)}>
             <option value="all">All statuses</option>
-            <option>Active</option>
-            <option>Draft</option>
+            <option value="active">Active</option>
+            <option value="review">Review</option>
           </select>
         </label>
         <label>
           Scope
-          <select defaultValue="all">
+          <select value={scope} onChange={(event) => setScope(event.target.value)}>
             <option value="all">All locations</option>
-            <option>Greater Noida</option>
+            <option value="greater-noida">Greater Noida</option>
           </select>
         </label>
-        <button className="secondary-button">Clear filters</button>
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={!hasFilters}
+          onClick={() => {
+            setQuery('');
+            setStatus('all');
+            setScope('all');
+          }}
+        >
+          Clear filters
+        </button>
       </div>
-      <div className="table-wrap">
+      <p className="filter-summary" aria-live="polite">
+        Showing {filteredRecords.length} of {records.length} synthetic records
+      </p>
+      <div className="table-wrap" role="region" aria-label={`${screen.title} records`} tabIndex={0}>
         <table>
           <caption className="sr-only">{screen.title} records</caption>
           <thead>
@@ -159,20 +242,20 @@ function DataList({ screen }: { screen: Screen }) {
             </tr>
           </thead>
           <tbody>
-            {names.map((name, index) => (
-              <tr key={name}>
+            {filteredRecords.map((record) => (
+              <tr key={record.name}>
                 <td>
-                  <a href={screen.module === 'M2' ? '#/M2-21' : '#/M1-07'}>{name}</a>
+                  <strong>{record.name}</strong>
                 </td>
-                <td>{index % 2 ? 'Secondary' : 'Primary'}</td>
+                <td>{record.type}</td>
                 <td>
-                  <span className={`badge ${index === 2 ? 'warning' : 'success'}`}>
-                    {index === 2 ? 'Review' : 'Active'}
+                  <span className={`badge ${record.status === 'review' ? 'warning' : 'success'}`}>
+                    {record.status === 'review' ? 'Review' : 'Active'}
                   </span>
                 </td>
-                <td>{index + 2} days ago</td>
+                <td>{record.updated}</td>
                 <td>
-                  <button className="text-action">Open</button>
+                  <UnavailableAction className="text-action" label="Open" />
                 </td>
               </tr>
             ))}
@@ -184,7 +267,6 @@ function DataList({ screen }: { screen: Screen }) {
 }
 
 function FormScreen({ screen }: { screen: Screen }) {
-  const [saved, setSaved] = useState(false);
   return (
     <section className="panel">
       <div className="panel-heading">
@@ -194,76 +276,76 @@ function FormScreen({ screen }: { screen: Screen }) {
         </div>
         <span className="badge neutral">Draft</span>
       </div>
-      {saved && (
-        <div className="alert success-alert" role="status">
-          <Check size={18} /> Prototype interaction saved locally. Production persistence is a later
-          module phase.
-        </div>
-      )}
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          setSaved(true);
-        }}
-      >
+      <div aria-label="Read-only synthetic form preview">
         <div className="form-grid">
           <label>
             Record name
             <input
-              required
-              defaultValue={screen.module === 'M2' ? 'Dr Ananya Mehra' : 'ROOTOPATHY Care Network'}
+              readOnly
+              aria-describedby={prototypeActionDescriptionId}
+              defaultValue={
+                screen.module === 'M2'
+                  ? 'Synthetic practitioner record'
+                  : 'Synthetic organization record'
+              }
             />
           </label>
           <label>
             Type
-            <select defaultValue="primary">
+            <select disabled aria-describedby={prototypeActionDescriptionId} defaultValue="primary">
               <option value="primary">Primary</option>
               <option value="secondary">Secondary</option>
             </select>
           </label>
           <label>
             Effective from
-            <input type="date" defaultValue="2026-09-13" />
+            <input
+              readOnly
+              type="date"
+              aria-describedby={prototypeActionDescriptionId}
+              defaultValue="2026-09-13"
+            />
           </label>
           <label>
             Status
-            <select defaultValue="draft">
+            <select disabled aria-describedby={prototypeActionDescriptionId} defaultValue="draft">
               <option value="draft">Draft</option>
               <option value="review">Ready for review</option>
             </select>
           </label>
           <label className="full-width">
             Reason for change
-            <textarea required defaultValue="Initial synthetic prototype record" />
+            <textarea
+              readOnly
+              aria-describedby={prototypeActionDescriptionId}
+              defaultValue="Initial synthetic prototype record"
+            />
           </label>
         </div>
         <div className="form-actions">
-          <button type="button" className="secondary-button">
-            Save draft
-          </button>
-          <button className="primary-button">Save and continue</button>
+          <UnavailableAction className="secondary-button" label="Save draft" />
+          <UnavailableAction className="primary-button" label="Save and continue" />
         </div>
-      </form>
+      </div>
     </section>
   );
 }
 
 function ClinicalScreen({ screen }: { screen: Screen }) {
-  const [confirmed, setConfirmed] = useState(false);
   return (
     <div className="clinical-layout">
       <section className="patient-strip">
         <div>
           <span>Patient</span>
-          <strong>Rahul Sharma</strong>
+          <strong>Synthetic patient</strong>
         </div>
         <div>
           <span>Encounter</span>
-          <strong>Draft consultation</strong>
+          <strong>Synthetic draft consultation</strong>
         </div>
         <div>
           <span>Responsible clinician</span>
-          <strong>Dr Prashant Gupta</strong>
+          <strong>Synthetic clinician</strong>
         </div>
       </section>
       <section className="panel clinical-panel">
@@ -295,13 +377,15 @@ function ClinicalScreen({ screen }: { screen: Screen }) {
         </div>
         <label className="full-width clinical-note">
           Clinical note
-          <textarea defaultValue="Synthetic prototype note — no real patient information." />
+          <textarea
+            readOnly
+            aria-describedby={prototypeActionDescriptionId}
+            defaultValue="Synthetic prototype note — no real patient information."
+          />
         </label>
         <div className="form-actions">
-          <button className="secondary-button">Save draft</button>
-          <button className="primary-button" onClick={() => setConfirmed(true)}>
-            {confirmed ? 'Confirmed' : 'Confirm and continue'}
-          </button>
+          <UnavailableAction className="secondary-button" label="Save draft" />
+          <UnavailableAction className="primary-button" label="Confirm and continue" />
         </div>
       </section>
     </div>
@@ -330,20 +414,36 @@ export function PrototypeScreenPage({ id, shell }: { id: string; shell: ShellSes
           <p>{screen.purpose}</p>
         </div>
         <span className="badge prototype">
-          <CircleAlert size={14} /> Clickable prototype
+          <CircleAlert size={14} /> Synthetic prototype
         </span>
       </div>
+      <PrototypeBoundary />
       {body}
       <nav className="page-pagination" aria-label="Prototype pagination">
-        <a href={`#/${previous.id}`} aria-disabled={index === 0}>
-          <ArrowLeft /> {previous.id}
-        </a>
-        <span>
+        {index === 0 ? (
+          <span className="pagination-link pagination-disabled" aria-disabled="true">
+            <ArrowLeft /> {previous.id}
+          </span>
+        ) : (
+          <a className="pagination-link" href={`#/${previous.id}`}>
+            <ArrowLeft /> {previous.id}
+          </a>
+        )}
+        <span className="pagination-status">
           {index + 1} of {screens.length}
         </span>
-        <a href={`#/${next.id}`} aria-disabled={index === screens.length - 1}>
-          {next.id} <ArrowRight />
-        </a>
+        {index === screens.length - 1 ? (
+          <span
+            className="pagination-link pagination-next pagination-disabled"
+            aria-disabled="true"
+          >
+            {next.id} <ArrowRight />
+          </span>
+        ) : (
+          <a className="pagination-link pagination-next" href={`#/${next.id}`}>
+            {next.id} <ArrowRight />
+          </a>
+        )}
       </nav>
     </Shell>
   );

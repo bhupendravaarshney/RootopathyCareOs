@@ -129,15 +129,26 @@ class SecurityConfigTest {
     }
 
     @Test
-    void rejectsProvisionalInvitationAndMfaAdministrationActivationInProduction() {
+    void acceptsApprovedIdentityAdministrationAndRejectsApprovalDigestDriftInProduction() {
         var environment = productionEnvironment();
         environment.setProperty("careos.invitations.enabled", "true");
         environment.setProperty("careos.mfa-administration.enabled", "true");
+        environment.setProperty(
+                "careos.authorization.active-registry-version", "m1-candidate-1");
+        environment.setProperty(
+                "careos.authorization.approval-package-sha256",
+                "19aff5ce30516b7ee2101c093a8429d8a74394995ca90d486790bcc18a392946");
+
+        assertThatCode(() -> ProductionConfigurationGuard.validate(properties(), environment))
+                .doesNotThrowAnyException();
+
+        environment.setProperty(
+                "careos.authorization.approval-package-sha256", "0".repeat(64));
 
         assertThatThrownBy(() -> ProductionConfigurationGuard.validate(properties(), environment))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("governed invitations must remain disabled")
-                .hasMessageContaining("MFA administration must remain disabled");
+                .hasMessageContaining(
+                        "authorization approval package digest must match the checksum-bound approved Module 1 release");
     }
 
     @Test

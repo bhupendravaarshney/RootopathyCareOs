@@ -15,9 +15,15 @@ import type {
   ExecuteMfaAdministrativeResetData,
   ExecuteMfaAdministrativeResetResponse,
   ExecuteMfaAdministrativeResetResponses,
+  GetAdministrationReadinessData,
+  GetAdministrationReadinessResponse,
+  GetAdministrationReadinessResponses,
   GetAuthenticationSessionData,
   GetAuthenticationSessionResponse,
   GetAuthenticationSessionResponses,
+  GetOrganizationProfileData,
+  GetOrganizationProfileResponse,
+  GetOrganizationProfileResponses,
   GetSystemSummaryData,
   GetSystemSummaryResponse,
   GetSystemSummaryResponses,
@@ -57,6 +63,9 @@ import type {
   StartMfaEnrollmentData,
   StartMfaEnrollmentResponse,
   StartMfaEnrollmentResponses,
+  UpdateOrganizationProfileData,
+  UpdateOrganizationProfileResponse,
+  UpdateOrganizationProfileResponses,
   VerifyMfaEnrollmentData,
   VerifyMfaEnrollmentResponse,
   VerifyMfaEnrollmentResponses,
@@ -101,9 +110,17 @@ const endpoints = {
       200,
     ] satisfies readonly ResponseStatus<ExecuteMfaAdministrativeResetResponses>[],
   },
+  getAdministrationReadiness: {
+    path: '/api/v1/organizations/{organizationId}/setup-readiness' satisfies GetAdministrationReadinessData['url'],
+    successStatuses: [200] satisfies readonly ResponseStatus<GetAdministrationReadinessResponses>[],
+  },
   getAuthenticationSession: {
     path: '/api/v1/auth/session' satisfies GetAuthenticationSessionData['url'],
     successStatuses: [200] satisfies readonly ResponseStatus<GetAuthenticationSessionResponses>[],
+  },
+  getOrganizationProfile: {
+    path: '/api/v1/organizations/{organizationId}/profile' satisfies GetOrganizationProfileData['url'],
+    successStatuses: [200] satisfies readonly ResponseStatus<GetOrganizationProfileResponses>[],
   },
   getSystemSummary: {
     path: '/api/public/system-summary' satisfies GetSystemSummaryData['url'],
@@ -169,6 +186,10 @@ const endpoints = {
     path: '/api/v1/auth/recent-authentications' satisfies VerifyRecentAuthenticationData['url'],
     successStatuses: [204] satisfies readonly ResponseStatus<VerifyRecentAuthenticationResponses>[],
   },
+  updateOrganizationProfile: {
+    path: '/api/v1/organizations/{organizationId}/profile' satisfies UpdateOrganizationProfileData['url'],
+    successStatuses: [200] satisfies readonly ResponseStatus<UpdateOrganizationProfileResponses>[],
+  },
 } as const;
 
 function relativeEndpointPath(path: `/api/${string}`): string {
@@ -217,7 +238,8 @@ export type CareOsApiClientOptions = {
 type RequestDescriptor = {
   body?: unknown;
   idempotencyKey?: string;
-  method: 'GET' | 'POST';
+  ifMatch?: string;
+  method: 'GET' | 'POST' | 'PUT';
   path: string;
   responseBody: 'empty' | 'json';
   signal?: AbortSignal;
@@ -236,6 +258,13 @@ function requireIdempotencyKey(value: string): string {
     throw new Error(
       'The idempotency key must contain 16 to 128 letters, digits, periods, underscores, colons, or hyphens.',
     );
+  }
+  return value;
+}
+
+function requireStrongEtag(value: string): string {
+  if (!STRONG_ETAG_PATTERN.test(value)) {
+    throw new Error('If-Match must contain a strong entity tag from the latest response.');
   }
   return value;
 }
@@ -438,6 +467,9 @@ export class CareOsApiClient {
     }
     if (descriptor.idempotencyKey !== undefined) {
       headers.set('Idempotency-Key', descriptor.idempotencyKey);
+    }
+    if (descriptor.ifMatch !== undefined) {
+      headers.set('If-Match', descriptor.ifMatch);
     }
 
     try {
@@ -648,7 +680,9 @@ export class CareOsApiClient {
     };
   }
 
-  async #mutation<T>(descriptor: Omit<RequestDescriptor, 'method'>): Promise<ApiResult<T>> {
+  async #mutation<T>(
+    descriptor: Omit<RequestDescriptor, 'method'> & { method?: 'POST' | 'PUT' },
+  ): Promise<ApiResult<T>> {
     const csrf = await this.issueCsrfToken({ signal: descriptor.signal });
     if (!csrf.ok) {
       return csrf;
@@ -678,19 +712,23 @@ export class CareOsApiClient {
     if (descriptor.idempotencyKey !== undefined) {
       headers.set('Idempotency-Key', descriptor.idempotencyKey);
     }
+    if (descriptor.ifMatch !== undefined) {
+      headers.set('If-Match', descriptor.ifMatch);
+    }
 
     try {
+      const method = descriptor.method ?? 'POST';
       const requestStartedAt = this.#now();
       const response = await this.#fetch(`${this.#baseUrl}${descriptor.path}`, {
         body: descriptor.body === undefined ? undefined : JSON.stringify(descriptor.body),
         credentials: 'include',
         headers,
-        method: 'POST',
+        method,
         signal: descriptor.signal,
       });
       return await this.#resultFromResponse<T>(
         response,
-        { ...descriptor, method: 'POST' },
+        { ...descriptor, method },
         correlationId,
         requestStartedAt,
       );
@@ -979,6 +1017,57 @@ export class CareOsApiClient {
       responseBody: 'json',
       signal: options.signal,
       successStatuses: endpoints.listSelectableOrganizations.successStatuses,
+    });
+  }
+
+  getAdministrationReadiness(organizationId: string, options: ApiRequestOptions = {}) {
+    const path = endpoints.getAdministrationReadiness.path.replace(
+      '{organizationId}',
+      requireUuid(organizationId, 'organizationId'),
+    ) as `/api/v1/organizations/${string}/setup-readiness`;
+    return this.#request<GetAdministrationReadinessResponse>({
+      method: 'GET',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.getAdministrationReadiness.successStatuses,
+    });
+  }
+
+  getOrganizationProfile(organizationId: string, options: ApiRequestOptions = {}) {
+    const path = endpoints.getOrganizationProfile.path.replace(
+      '{organizationId}',
+      requireUuid(organizationId, 'organizationId'),
+    ) as `/api/v1/organizations/${string}/profile`;
+    return this.#request<GetOrganizationProfileResponse>({
+      method: 'GET',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.getOrganizationProfile.successStatuses,
+    });
+  }
+
+  updateOrganizationProfile(
+    organizationId: string,
+    body: UpdateOrganizationProfileData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.updateOrganizationProfile.path.replace(
+      '{organizationId}',
+      requireUuid(organizationId, 'organizationId'),
+    ) as `/api/v1/organizations/${string}/profile`;
+    return this.#mutation<UpdateOrganizationProfileResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'PUT',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.updateOrganizationProfile.successStatuses,
     });
   }
 

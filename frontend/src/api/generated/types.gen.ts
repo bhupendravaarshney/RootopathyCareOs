@@ -90,6 +90,44 @@ export type MfaAdministrationReasonRequest = {
   reason: string;
 };
 
+export type AdministrationReadiness = {
+  organizationId: string;
+  lifecycleStatus: 'draft' | 'active' | 'suspended' | 'disabled';
+  completedGates: number;
+  totalGates: number;
+  activeMemberships: number;
+  facilityCount: number;
+  draftFacilityCount: number;
+  gates: Array<ReadinessGate>;
+};
+
+export type ReadinessGate = {
+  key: string;
+  label: string;
+  status: 'complete' | 'in_progress' | 'not_started' | 'blocked';
+  detail: string;
+  href: string;
+};
+
+export type OrganizationProfile = {
+  organizationId: string;
+  legalName: string;
+  displayName: string;
+  countryCode: string;
+  timezone: string;
+  lifecycleStatus: 'draft' | 'active' | 'suspended' | 'disabled';
+  lockVersion: number;
+  updatedAt: string;
+};
+
+export type OrganizationProfileUpdateRequest = {
+  legalName: string;
+  displayName: string;
+  countryCode: string;
+  timezone: string;
+  reason: string;
+};
+
 export type MfaResetMutation = {
   approvalId: string;
   targetUserId: string;
@@ -503,11 +541,11 @@ export type StartMfaEnrollmentErrors = {
    */
   403: Problem;
   /**
-   * The requested MFA transition conflicts with current state
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
    */
   409: Problem;
   /**
-   * A required precondition is missing, such as recent authentication or If-Match
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
    */
   428: Problem;
   /**
@@ -555,11 +593,11 @@ export type VerifyMfaEnrollmentErrors = {
    */
   403: Problem;
   /**
-   * The requested MFA transition conflicts with current state
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
    */
   409: Problem;
   /**
-   * A required precondition is missing, such as recent authentication or If-Match
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
    */
   428: Problem;
   /**
@@ -607,7 +645,7 @@ export type CompleteMfaChallengeErrors = {
    */
   403: Problem;
   /**
-   * The requested MFA transition conflicts with current state
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
    */
   409: Problem;
   /**
@@ -705,7 +743,7 @@ export type RegenerateRecoveryCodesErrors = {
    */
   403: Problem;
   /**
-   * A required precondition is missing, such as recent authentication or If-Match
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
    */
   428: Problem;
   /**
@@ -833,7 +871,7 @@ export type AcceptInvitationErrors = {
    */
   403: Problem;
   /**
-   * The requested MFA transition conflicts with current state
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
    */
   409: Problem;
   /**
@@ -905,11 +943,11 @@ export type IssueInvitationErrors = {
    */
   404: Problem;
   /**
-   * The requested MFA transition conflicts with current state
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
    */
   409: Problem;
   /**
-   * A required precondition is missing, such as recent authentication or If-Match
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
    */
   428: Problem;
   /**
@@ -977,11 +1015,11 @@ export type RevokeInvitationErrors = {
    */
   404: Problem;
   /**
-   * The requested MFA transition conflicts with current state
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
    */
   409: Problem;
   /**
-   * A required precondition is missing, such as recent authentication or If-Match
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
    */
   428: Problem;
   /**
@@ -1049,11 +1087,11 @@ export type RequestMfaAdministrativeResetErrors = {
    */
   404: Problem;
   /**
-   * The requested MFA transition conflicts with current state
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
    */
   409: Problem;
   /**
-   * A required precondition is missing, such as recent authentication or If-Match
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
    */
   428: Problem;
   /**
@@ -1127,11 +1165,11 @@ export type ApproveMfaAdministrativeResetErrors = {
    */
   404: Problem;
   /**
-   * The requested MFA transition conflicts with current state
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
    */
   409: Problem;
   /**
-   * A required precondition is missing, such as recent authentication or If-Match
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
    */
   428: Problem;
   /**
@@ -1205,11 +1243,11 @@ export type ExecuteMfaAdministrativeResetErrors = {
    */
   404: Problem;
   /**
-   * The requested MFA transition conflicts with current state
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
    */
   409: Problem;
   /**
-   * A required precondition is missing, such as recent authentication or If-Match
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
    */
   428: Problem;
   /**
@@ -1234,3 +1272,165 @@ export type ExecuteMfaAdministrativeResetResponses = {
 
 export type ExecuteMfaAdministrativeResetResponse =
   ExecuteMfaAdministrativeResetResponses[keyof ExecuteMfaAdministrativeResetResponses];
+
+export type GetAdministrationReadinessData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/setup-readiness';
+};
+
+export type GetAdministrationReadinessErrors = {
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type GetAdministrationReadinessError =
+  GetAdministrationReadinessErrors[keyof GetAdministrationReadinessErrors];
+
+export type GetAdministrationReadinessResponses = {
+  /**
+   * Current organization setup readiness
+   */
+  200: AdministrationReadiness;
+};
+
+export type GetAdministrationReadinessResponse =
+  GetAdministrationReadinessResponses[keyof GetAdministrationReadinessResponses];
+
+export type GetOrganizationProfileData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/profile';
+};
+
+export type GetOrganizationProfileErrors = {
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type GetOrganizationProfileError =
+  GetOrganizationProfileErrors[keyof GetOrganizationProfileErrors];
+
+export type GetOrganizationProfileResponses = {
+  /**
+   * Current organization profile
+   */
+  200: OrganizationProfile;
+};
+
+export type GetOrganizationProfileResponse =
+  GetOrganizationProfileResponses[keyof GetOrganizationProfileResponses];
+
+export type UpdateOrganizationProfileData = {
+  body: OrganizationProfileUpdateRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/profile';
+};
+
+export type UpdateOrganizationProfileErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type UpdateOrganizationProfileError =
+  UpdateOrganizationProfileErrors[keyof UpdateOrganizationProfileErrors];
+
+export type UpdateOrganizationProfileResponses = {
+  /**
+   * Organization profile updated or an exact idempotent response replayed
+   */
+  200: OrganizationProfile;
+};
+
+export type UpdateOrganizationProfileResponse =
+  UpdateOrganizationProfileResponses[keyof UpdateOrganizationProfileResponses];

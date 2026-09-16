@@ -10,7 +10,10 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - careos-postgres:/var/lib/postgresql/data
+      # PostgreSQL 18 stores clusters below a major-version-specific directory.
+      # Mount the parent so fresh initialization and future pg_upgrade --link
+      # workflows do not cross a mount-point boundary.
+      - careos-postgres:/var/lib/postgresql
       - ./deploy/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test:
@@ -171,14 +174,7 @@ services:
       minio:
         condition: service_started
     healthcheck:
-      test:
-        [
-          "CMD",
-          "/busybox",
-          "wget",
-          "-qO-",
-          "http://localhost:8080/readyz",
-        ]
+      test: ["CMD", "/busybox", "wget", "-qO-", "http://localhost:8080/readyz"]
       interval: 10s
       timeout: 5s
       retries: 30

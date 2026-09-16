@@ -13,6 +13,48 @@ const organization = {
   selected: true,
   status: 'active',
 };
+const organizationReadiness = {
+  activeMemberships: 2,
+  completedGates: 2,
+  draftFacilityCount: 1,
+  facilityCount: 1,
+  gates: [
+    {
+      detail: 'Legal and display identity are recorded.',
+      href: '#/M1-07',
+      key: 'organization-profile',
+      label: 'Organization profile',
+      status: 'complete',
+    },
+    {
+      detail: 'An effective owner is present.',
+      href: '#/M1-20',
+      key: 'administrator-access',
+      label: 'Administrator access',
+      status: 'complete',
+    },
+    {
+      detail: 'Activation policy is not approved.',
+      href: '#/M1-21',
+      key: 'activation',
+      label: 'Review and activate',
+      status: 'blocked',
+    },
+  ],
+  lifecycleStatus: 'active',
+  organizationId: organization.id,
+  totalGates: 3,
+};
+const organizationProfile = {
+  countryCode: 'IN',
+  displayName: 'North Clinic',
+  legalName: 'North Clinic Private Limited',
+  lifecycleStatus: 'active',
+  lockVersion: 4,
+  organizationId: organization.id,
+  timezone: 'Asia/Kolkata',
+  updatedAt: '2026-09-16T08:00:00Z',
+};
 const authenticatedSession = {
   mfaEnabled: false,
   recentAuthentication: true,
@@ -24,9 +66,15 @@ const routeGroups = [
   { count: 29, module: 'M2', start: 1 },
   { count: 27, module: 'COS', start: 1 },
 ];
-const routeSweepTimeout = 60_000;
+const routeSweepTimeout = 120_000;
 
-async function jsonResponse(route: Route, data: unknown, status = 200, sessionExpiresIn?: string) {
+async function jsonResponse(
+  route: Route,
+  data: unknown,
+  status = 200,
+  sessionExpiresIn?: string,
+  responseHeaders: Record<string, string> = {},
+) {
   const correlationId = route.request().headers()['x-correlation-id'] ?? 'playwright-session';
   const authenticatedState =
     typeof data === 'object' &&
@@ -42,6 +90,7 @@ async function jsonResponse(route: Route, data: unknown, status = 200, sessionEx
       ...(sessionExpiresIn || authenticatedState
         ? { 'X-CareOS-Session-Expires-In': sessionExpiresIn ?? '1800' }
         : {}),
+      ...responseHeaders,
     },
     status,
   });
@@ -55,6 +104,14 @@ async function emptyResponse(route: Route, status = 204) {
 async function mockAuthenticatedSession(page: Page) {
   await page.route('**/api/v1/auth/session', (route) => jsonResponse(route, authenticatedSession));
   await page.route('**/api/v1/organizations', (route) => jsonResponse(route, [organization]));
+  await page.route(`**/api/v1/organizations/${organization.id}/setup-readiness`, (route) =>
+    jsonResponse(route, organizationReadiness),
+  );
+  await page.route(`**/api/v1/organizations/${organization.id}/profile`, (route) =>
+    jsonResponse(route, organizationProfile, 200, undefined, {
+      ETag: '"organization-profile:4"',
+    }),
+  );
 }
 
 async function expectNoSeriousViolations(page: Page, label: string) {
@@ -65,8 +122,38 @@ async function expectNoSeriousViolations(page: Page, label: string) {
   expect(seriousViolations, `${label} has critical or serious Axe violations`).toEqual([]);
 }
 
+async function expectNoDocumentHorizontalOverflow(page: Page, label: string) {
+  const widths = await page.evaluate(() => {
+    const viewport = document.documentElement.clientWidth;
+    const offenders = Array.from(document.querySelectorAll<HTMLElement>('body *'))
+      .map((element) => {
+        const bounds = element.getBoundingClientRect();
+        return {
+          bounds: [Math.round(bounds.left), Math.round(bounds.right)],
+          className: element.className,
+          clientWidth: element.clientWidth,
+          scrollWidth: element.scrollWidth,
+          tagName: element.tagName,
+        };
+      })
+      .filter(({ bounds }) => (bounds[1] ?? 0) > viewport + 1)
+      .slice(0, 8);
+    return {
+      body: document.body.scrollWidth,
+      viewport,
+      document: document.documentElement.scrollWidth,
+      offenders,
+    };
+  });
+  expect(
+    widths.document,
+    `${label} overflows the document viewport: ${JSON.stringify(widths.offenders)}`,
+  ).toBeLessThanOrEqual(widths.viewport);
+  expect(widths.body, `${label} overflows the body viewport`).toBeLessThanOrEqual(widths.viewport);
+}
+
 for (const { module, count, start } of routeGroups) {
-  test(`${module} protected prototype routes render without serious accessibility violations`, async ({
+  test(`${module} protected prototype routes render without serious accessibility violations or document overflow`, async ({
     page,
   }) => {
     test.setTimeout(routeSweepTimeout);
@@ -80,10 +167,87 @@ for (const { module, count, start } of routeGroups) {
       await page.goto(`/#/${id}`);
       await expect(page.getByText(id).first()).toBeVisible();
       await expect(page.locator('main h1')).toBeVisible();
+      await expectNoDocumentHorizontalOverflow(page, id);
       await expectNoSeriousViolations(page, id);
     }
   });
 }
+
+test('synthetic screens expose honest action boundaries and usable local filters', async ({
+  page,
+}) => {
+  await mockAuthenticatedSession(page);
+
+  await page.goto('/#/M1-12');
+  await expect(page.getByRole('complementary', { name: 'Synthetic prototype only' })).toContainText(
+    'Do not enter real personal or clinical information',
+  );
+  await expect(page.getByRole('button', { name: /Open.*unavailable/ })).toHaveCount(4);
+  for (const action of await page.getByRole('button', { name: /Open.*unavailable/ }).all()) {
+    await expect(action).toBeDisabled();
+  }
+  await expect(page.getByRole('link', { name: 'Synthetic facility A' })).toHaveCount(0);
+  const recordsRegion = page.getByRole('region', { name: 'Facilities records' });
+  await recordsRegion.focus();
+  await expect(recordsRegion).toBeFocused();
+
+  const clearFilters = page.getByRole('button', { name: 'Clear filters' });
+  await expect(clearFilters).toBeDisabled();
+  await page.getByLabel('Search', { exact: true }).fill('governance');
+  await expect(clearFilters).toBeEnabled();
+  await expect(page.getByText('Showing 1 of 4 synthetic records')).toBeVisible();
+  await expect(page.getByText('Synthetic governance group')).toBeVisible();
+  await clearFilters.click();
+  await expect(page.getByLabel('Search', { exact: true })).toHaveValue('');
+  await expect(page.getByText('Showing 4 of 4 synthetic records')).toBeVisible();
+
+  await page.goto('/#/M1-08');
+  await expect(page.getByLabel('Record name')).toHaveAttribute('readonly', '');
+  await expect(page.getByRole('combobox', { name: 'Type' })).toBeDisabled();
+  await expect(page.getByLabel('Reason for change')).toHaveAttribute('readonly', '');
+  await expect(page.getByRole('button', { name: /Save draft.*unavailable/ })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /Save and continue.*unavailable/ })).toBeDisabled();
+  await expect(page.getByText(/Prototype interaction saved locally/)).toHaveCount(0);
+
+  await page.goto('/#/M1-21');
+  await expect(page.getByRole('button', { name: /Review.*unavailable/ })).toHaveCount(4);
+  for (const action of await page.getByRole('button', { name: /Review.*unavailable/ }).all()) {
+    await expect(action).toBeDisabled();
+  }
+
+  await page.goto('/#/COS-27');
+  await expect(page.getByText('Synthetic patient')).toBeVisible();
+  await expect(page.getByLabel('Clinical note')).toHaveAttribute('readonly', '');
+  await expect(page.getByRole('button', { name: /Save draft.*unavailable/ })).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: /Confirm and continue.*unavailable/ }),
+  ).toBeDisabled();
+  const pagination = page.getByRole('navigation', { name: 'Prototype pagination' });
+  await expect(pagination.getByRole('link', { name: /COS-27/ })).toHaveCount(0);
+  await expect(pagination.getByText('COS-27')).toHaveAttribute('aria-disabled', 'true');
+  await expectNoDocumentHorizontalOverflow(page, 'honest synthetic prototype boundary');
+  await expectNoSeriousViolations(page, 'honest synthetic prototype boundary');
+});
+
+test('an unknown protected route fails closed and offers a safe recovery path', async ({
+  page,
+}) => {
+  await mockAuthenticatedSession(page);
+
+  await page.goto('/#/M1-99/forged?return=M1-05');
+
+  const heading = page.getByRole('heading', { name: 'Page not found' });
+  await expect(heading).toBeVisible();
+  await expect(heading).toBeFocused();
+  await expect(page.getByText(/No business screen was loaded/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Administration dashboard' })).toHaveCount(0);
+  await expectNoDocumentHorizontalOverflow(page, 'unknown protected route');
+  await expectNoSeriousViolations(page, 'unknown protected route');
+
+  await page.getByRole('link', { name: 'Return to administration dashboard' }).click();
+  await expect(page).toHaveURL(/#\/M1-05$/);
+  await expect(page.getByRole('heading', { name: 'Administration dashboard' })).toBeVisible();
+});
 
 test('identity and governed invitation states are accessible', async ({ page }) => {
   test.setTimeout(routeSweepTimeout);
@@ -103,38 +267,46 @@ test('identity and governed invitation states are accessible', async ({ page }) 
 
   await page.goto('/#/M1-01');
   await expect(page.getByRole('heading', { name: 'Sign in to CareOS' })).toBeVisible();
+  await expectNoDocumentHorizontalOverflow(page, 'M1-01 anonymous login');
   await expectNoSeriousViolations(page, 'M1-01 anonymous login');
 
   await page.goto('/#/forgot-password');
   await expect(page.getByRole('heading', { name: 'Reset your password' })).toBeVisible();
+  await expectNoDocumentHorizontalOverflow(page, 'password-reset request');
   await expectNoSeriousViolations(page, 'password-reset request');
 
   await page.goto('/#/reset-password?token=Case_Sensitive-Token');
   await expect(page.getByRole('heading', { name: 'Choose a new password' })).toBeVisible();
+  await expectNoDocumentHorizontalOverflow(page, 'password-reset completion');
   await expectNoSeriousViolations(page, 'password-reset completion');
 
   await page.goto('/#/accept-invitation?token=Case_Sensitive-Invitation-Token-1234567890');
   await expect(page.getByRole('heading', { name: 'Accept your CareOS invitation' })).toBeVisible();
+  await expectNoDocumentHorizontalOverflow(page, 'M1-02 invitation acceptance');
   await expectNoSeriousViolations(page, 'M1-02 invitation acceptance');
 
   state = 'mfa_required';
   await page.goto('/?identity=mfa#/M1-03');
   await expect(page.getByRole('heading', { name: 'Verify your identity' })).toBeVisible();
+  await expectNoDocumentHorizontalOverflow(page, 'M1-03 MFA challenge');
   await expectNoSeriousViolations(page, 'M1-03 MFA challenge');
 
   state = 'authenticated';
   selected = false;
   await page.goto('/?identity=organization#/M1-04');
   await expect(page.getByRole('heading', { name: 'Choose an organization' })).toBeVisible();
+  await expectNoDocumentHorizontalOverflow(page, 'M1-04 organization selection');
   await expectNoSeriousViolations(page, 'M1-04 organization selection');
 
   selected = true;
   await page.goto('/?identity=invitations#/M1-02');
   await expect(page.getByRole('heading', { name: 'Organization invitations' })).toBeVisible();
+  await expectNoDocumentHorizontalOverflow(page, 'M1-02 invitation administration');
   await expectNoSeriousViolations(page, 'M1-02 invitation administration');
 
   await page.goto('/?identity=mfa-administration#/M1-03');
   await expect(page.getByRole('heading', { name: 'Multi-factor authentication' })).toBeVisible();
+  await expectNoDocumentHorizontalOverflow(page, 'M1-03 MFA administration');
   await expectNoSeriousViolations(page, 'M1-03 MFA administration');
 });
 
@@ -334,6 +506,67 @@ test('administrator MFA reset uses the checked maker-checker transition client',
   await expectNoSeriousViolations(page, 'M1-03 administrative MFA reset');
 });
 
+test('organization profile update preserves CSRF, idempotency, and strong revision evidence', async ({
+  page,
+}) => {
+  await page.route('**/api/v1/**', async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    const method = request.method();
+    if (method === 'GET' && path === '/api/v1/auth/session') {
+      await jsonResponse(route, authenticatedSession);
+      return;
+    }
+    if (method === 'GET' && path === '/api/v1/organizations') {
+      await jsonResponse(route, [organization]);
+      return;
+    }
+    if (method === 'GET' && path === `/api/v1/organizations/${organization.id}/profile`) {
+      await jsonResponse(route, organizationProfile, 200, undefined, {
+        ETag: '"organization-profile:4"',
+      });
+      return;
+    }
+    if (method === 'GET' && path === '/api/v1/auth/csrf') {
+      await jsonResponse(route, {
+        headerName: 'X-XSRF-TOKEN',
+        parameterName: '_csrf',
+        token: 'organization-profile-csrf-token',
+      });
+      return;
+    }
+    if (method === 'PUT' && path === `/api/v1/organizations/${organization.id}/profile`) {
+      expect(request.headers()['x-xsrf-token']).toBe('organization-profile-csrf-token');
+      expect(request.headers()['if-match']).toBe('"organization-profile:4"');
+      expect(request.headers()['idempotency-key']).toMatch(/^organization-profile:[0-9a-f-]{36}$/);
+      expect(request.postDataJSON()).toEqual({
+        countryCode: 'IN',
+        displayName: 'North Care Network',
+        legalName: 'North Clinic Private Limited',
+        reason: 'Approved identity review CARE-42',
+        timezone: 'Asia/Kolkata',
+      });
+      await jsonResponse(
+        route,
+        { ...organizationProfile, displayName: 'North Care Network', lockVersion: 5 },
+        200,
+        undefined,
+        { ETag: '"organization-profile:5"' },
+      );
+      return;
+    }
+    await route.abort('failed');
+  });
+
+  await page.goto('/#/M1-07');
+  await page.getByLabel('Display name').fill('North Care Network');
+  await page.getByLabel('Reason for change').fill('Approved identity review CARE-42');
+  await page.getByRole('button', { name: 'Save organization profile' }).click();
+  await expect(page.getByRole('status')).toContainText('Organization profile saved');
+  await expect(page.getByText(/Revision 5/)).toBeVisible();
+  await expectNoSeriousViolations(page, 'M1-07 organization profile update');
+});
+
 test('anonymous login, organization selection, and logout use the checked browser client', async ({
   page,
 }) => {
@@ -376,6 +609,10 @@ test('anonymous login, organization selection, and logout use the checked browse
       await jsonResponse(route, [{ ...organization, selected: organizationSelected }]);
       return;
     }
+    if (method === 'GET' && path === `/api/v1/organizations/${organization.id}/setup-readiness`) {
+      await jsonResponse(route, organizationReadiness);
+      return;
+    }
     if (method === 'POST' && path === '/api/v1/auth/organization-selections') {
       expect(request.postDataJSON()).toEqual({ organizationId: organization.id });
       organizationSelected = true;
@@ -407,12 +644,28 @@ test('anonymous login, organization selection, and logout use the checked browse
 test('workspace navigation and mobile menu are usable', async ({ page, isMobile }) => {
   await mockAuthenticatedSession(page);
   await page.goto('/#/M1-05');
-  if (isMobile) {
+  const viewport = page.viewportSize();
+  if (!viewport) {
+    throw new Error('The responsive browser project must declare a viewport.');
+  }
+  expect([1440, 1024, 768, 390, 320]).toContain(viewport.width);
+  const usesDrawer = viewport.width <= 760;
+  expect(isMobile).toBe(usesDrawer);
+  if (usesDrawer) {
+    await expect(page.getByRole('button', { name: 'Open navigation' })).toBeVisible();
     await page.getByRole('button', { name: 'Open navigation' }).click();
+    await expect(page.locator('.sidebar')).toHaveClass(/is-open/);
+  } else {
+    await expect(page.getByRole('button', { name: 'Open navigation' })).toBeHidden();
+    await expect(page.locator('.sidebar')).toBeVisible();
   }
   await page.getByRole('link', { name: 'M2', exact: true }).click();
   await expect(page).toHaveURL(/M2-01/);
   await expect(page.locator('main h1')).toHaveText('Workforce dashboard');
+  if (usesDrawer) {
+    await expect(page.locator('.sidebar')).not.toHaveClass(/is-open/);
+  }
+  await expectNoDocumentHorizontalOverflow(page, `workspace navigation at ${viewport.width}px`);
 });
 
 test('an idle workspace locks at the server deadline without polling', async ({ page }) => {
@@ -422,6 +675,9 @@ test('an idle workspace locks at the server deadline without polling', async ({ 
     await jsonResponse(route, authenticatedSession, 200, '1');
   });
   await page.route('**/api/v1/organizations', (route) => jsonResponse(route, [organization]));
+  await page.route(`**/api/v1/organizations/${organization.id}/setup-readiness`, (route) =>
+    jsonResponse(route, organizationReadiness),
+  );
 
   await page.goto('/#/M1-05');
   await expect(page.getByRole('heading', { name: 'Administration dashboard' })).toBeVisible();

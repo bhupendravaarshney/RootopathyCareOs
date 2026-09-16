@@ -5,6 +5,12 @@ root_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 
 node "$root_dir/scripts/verify-prototype-register.mjs"
 node "$root_dir/scripts/verify-api-contract.mjs"
+node "$root_dir/scripts/verify-module-1-inputs.mjs"
+node --test "$root_dir/scripts/tests/verify-module-1-inputs.test.mjs"
+node "$root_dir/scripts/verify-module-1-review-drafts.mjs"
+node --test "$root_dir/scripts/tests/verify-module-1-review-drafts.test.mjs"
+node "$root_dir/scripts/verify-module-1-candidate-inputs.mjs"
+node --test "$root_dir/scripts/tests/verify-module-1-candidate-inputs.test.mjs"
 
 cd "$root_dir/frontend"
 npm ci

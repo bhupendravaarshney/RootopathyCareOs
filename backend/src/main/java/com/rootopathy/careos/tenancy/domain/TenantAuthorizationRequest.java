@@ -14,12 +14,13 @@ public record TenantAuthorizationRequest(
         OperationKey requiredOperation,
         String reason,
         Instant recentAuthenticationAt,
+        Instant mfaAuthenticatedAt,
         IndependentApproval independentApproval) {
     public TenantAuthorizationRequest(
             UUID organizationId,
             AuthenticatedActorContext actor,
             OperationKey requiredOperation) {
-        this(organizationId, actor, requiredOperation, null, null, null);
+        this(organizationId, actor, requiredOperation, null, null, null, null);
     }
 
     public TenantAuthorizationRequest(
@@ -34,7 +35,25 @@ public record TenantAuthorizationRequest(
                 requiredOperation,
                 reason,
                 recentAuthenticationAt,
+                null,
                 null);
+    }
+
+    public TenantAuthorizationRequest(
+            UUID organizationId,
+            AuthenticatedActorContext actor,
+            OperationKey requiredOperation,
+            String reason,
+            Instant recentAuthenticationAt,
+            IndependentApproval independentApproval) {
+        this(
+                organizationId,
+                actor,
+                requiredOperation,
+                reason,
+                recentAuthenticationAt,
+                null,
+                independentApproval);
     }
 
     public TenantAuthorizationRequest {

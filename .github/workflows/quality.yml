@@ -95,5 +95,11 @@ jobs:
       - run: node scripts/verify-prototype-register.mjs
       - run: node scripts/verify-api-contract.mjs
       - run: node --test scripts/tests/verify-api-contract.test.mjs
+      - run: node scripts/verify-module-1-inputs.mjs --require-approved
+      - run: node --test scripts/tests/verify-module-1-inputs.test.mjs
+      - run: node scripts/verify-module-1-review-drafts.mjs
+      - run: node --test scripts/tests/verify-module-1-review-drafts.test.mjs
+      - run: node scripts/verify-module-1-candidate-inputs.mjs
+      - run: node --test scripts/tests/verify-module-1-candidate-inputs.test.mjs
       - run: node scripts/verify-ci-security.mjs
       - run: node --test scripts/tests/verify-ci-security.test.mjs

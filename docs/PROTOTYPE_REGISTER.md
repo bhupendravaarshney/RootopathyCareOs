@@ -6,7 +6,7 @@ The frontend exposes a session-gated shell with server-backed organization switc
 
 `M1-01` Login; `M1-02` Invitation; `M1-03` MFA; `M1-04` Organization selector; `M1-05` Administration dashboard; `M1-06` Setup checklist; `M1-07` Organization profile; `M1-08` Registration and identifiers; `M1-09` Addresses and contacts; `M1-10` International settings; `M1-11` Governance contacts; `M1-12` Facilities; `M1-13` Facility wizard; `M1-14` Departments and units; `M1-15` Locations; `M1-16` Operating hours; `M1-17` Service catalogue; `M1-18` Facility services; `M1-19` Identifier schemes; `M1-20` Administrator access; `M1-21` Review and activate; `M1-22` Configuration history; `M1-23` Audit log.
 
-M1-01; governed M1-02 invitation issue/revocation; pending-challenge, authenticated self-service, and organization-scoped maker-checker variants of M1-03; and M1-04 call the checked server identity/organization client. Public `#/forgot-password`, token-bearing `#/reset-password`, and token-bearing `#/accept-invitation` routes support the backend's recovery/account-link flows without adding registered module screens. These are disabled-in-production Phase 0 reference identity states, not completion of the M1 administration module or approval of its final policy/design.
+M1-01; governed M1-02 invitation issue/revocation; pending-challenge, authenticated self-service, and organization-scoped maker-checker variants of M1-03; and M1-04 call the checked server identity/organization client. Public `#/forgot-password`, token-bearing `#/reset-password`, and token-bearing `#/accept-invitation` routes support the backend's recovery/account-link flows without adding registered module screens. V20 binds the high-risk invitation and administrative-reset operations to the approved registry and recent-MFA rules, but M1B still lacks complete M1-20 membership/owner administration and final UI acceptance.
 
 ## Workforce workspace
 
@@ -19,3 +19,5 @@ M1-01; governed M1-02 invitation issue/revocation; pending-challenge, authentica
 ## Prototype limitation
 
 Login, session-expiry convergence, password recovery, governed invitations/account linking, MFA challenge/enrollment/recovery-code self-service, maker-checker administrative reset, recent authentication, organization selection/switching, and logout use foundation APIs. Other buttons demonstrate navigation, validation, and local interaction states only; they do not claim production persistence. The Spring Boot registry API independently verifies the 79-screen contract.
+
+The approved Module 1 inputs, per-screen implementation gap, architecture, and delivery slices are recorded in `MODULE_1_IMPLEMENTATION_PLAN.md`. Generic M1 templates are not implementations of the approved mockups and must be replaced screen-by-screen through the defined slices.

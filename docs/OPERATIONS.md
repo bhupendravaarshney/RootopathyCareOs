@@ -108,6 +108,19 @@ The repository emits the source signals but does not configure a monitoring vend
 
 Thresholds are deliberately not invented here. They require load evidence, service objectives, monitoring budget, and an approved response owner.
 
+## V19 synthetic-fixture migration response
+
+V19 removes the historical reserved organization `01900000-0000-7000-8000-000000000001` and facility `01900000-0000-7000-8000-000000000101` from base and production migration state. The hard-coded local/test profile values retain them. Do not enable the synthetic-data Flyway placeholder in production.
+
+The migration deliberately aborts if either reserved row changed, another facility was added to that organization, or any tenant row still references it. On that failure:
+
+1. Keep the application stopped and preserve the failed migration output; PostgreSQL rolls V19 back and Flyway records no successful V19 entry.
+2. Back up and inventory the reserved tenant through approved privileged tooling. Do not disable foreign keys, alter Flyway history, use a cascade, or treat an unknown tenant as disposable.
+3. Decide with the data owner whether the tenant is synthetic and removable or must be migrated to an approved production identity and onboarding record.
+4. Perform that reviewed remediation separately, retain its evidence, then rerun Flyway. V19 is idempotent when the reserved organization is already absent.
+
+This is an upgrade safeguard, not a production tenant-provisioning procedure.
+
 ## Deployment and recovery acceptance checklist
 
 Before calling any environment production-ready:

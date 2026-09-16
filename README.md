@@ -2,7 +2,15 @@
 
 This repository is the verified **from-scratch engineering foundation** for CareOS. It combines a Java Spring Boot modular monolith, a session-aware React/TypeScript frontend built with Node, a checked OpenAPI/generated-client boundary, PostgreSQL, Redis, opt-in private-quarantine, malware-scanner, clean-promotion, signed-access, immutable-retention, durable-job, and encrypted durable-notification adapters, Mailpit and 79 CareOS route states.
 
-> Phase 0 repository implementation is complete at a disabled-in-production reference-policy checkpoint. This is not production acceptance or a claim that clinical modules are complete; owner policy, target-environment controls, and production workflows must still be approved and delivered module-by-module against the accompanying specification.
+> Phase 0 repository mechanics are complete, and Flyway V20 now carries a checksum-bound approved Module 1 authorization release. This is not target-environment production acceptance or a claim that clinical modules are complete; infrastructure controls, operational evidence, and product workflows still must be delivered module-by-module against the accompanying specification.
+>
+> `m1-candidate-1` was approved unchanged by **bhupendra, developer** on 16 September 2026. The exact eight-artifact package, M1-01 through M1-23 scope, and separate approval evidence are recorded as `M1-APPROVAL-20260916-01`. The first M1B increment promotes the approved interactive RBAC/event registry, separately enforces recent MFA on invitation and administrative-reset operations, and updates the invitation role selector. M1B and Module 1 as a whole remain incomplete.
+>
+> The Module 1 input boundary is machine-verifiable: `contracts/module-1-input-gate.json` reports `APPROVED`, eight of eight required bundles, package digest `19aff5ce30516b7ee2101c093a8429d8a74394995ca90d486790bcc18a392946`, and `implementationAuthorized: true`. Both normal and `--require-approved` verification pass.
+>
+> A separate eight-part owner-review packet is available under `docs/module-1-review-drafts/`. It is source-grounded and machine-checked, but every file is `DRAFT_NOT_APPROVED`; it gives decision owners a starting point and never authorizes implementation.
+>
+> The original proposal remains under `candidate-inputs/module-1/` as non-authorizing provenance. Its exact accepted bytes were promoted to `approved-inputs/module-1/`; authority comes only from the production manifest and approval record, never from the candidate verifier.
 
 ## Runtime stack
 
@@ -42,7 +50,7 @@ Node.js is the frontend toolchain; the CareOS business backend is Java/Spring Bo
 - MinIO console: `http://localhost:9001`
 - Mailpit: `http://localhost:8025`
 
-Protected prototype records remain synthetic. Once signed in, the shell's actor and organization labels come from the server session and membership APIs.
+Protected prototype records remain synthetic. Generic pages say so explicitly, warn against entering real personal or clinical information, keep form/clinical previews read-only, and keep unimplemented workflow actions disabled; only local filtering and valid prototype navigation are interactive. Once signed in, the shell's actor and organization labels come from the server session and membership APIs.
 
 ## Quick start — recommended
 
@@ -74,7 +82,7 @@ Stop without deleting data:
 docker compose down
 ```
 
-The migration/runtime database-role split is created when PostgreSQL initializes a new local volume. If this repository was previously started before that split was introduced, either provision the two roles manually or intentionally reset the synthetic local volume with the command below. Never reset a volume containing data you need to retain.
+The migration/runtime database-role split is created when PostgreSQL initializes a new local volume. The official PostgreSQL 18 image requires the named volume to be mounted at `/var/lib/postgresql`, allowing its major-version-specific cluster directory below that parent; the repository security contract protects this layout. If this repository was previously started before the role split or with an older PostgreSQL volume layout, back up retained data and perform an explicit supported database upgrade. Reset only disposable synthetic data with the command below, and never reset a volume containing data you need to retain.
 
 Private quarantine, malware scanning, clean promotion, signed access, and immutable retention remain disabled by default. Set `CAREOS_STORAGE_S3_ENABLED=true` only to exercise quarantine with the synthetic `.env.example` settings. This activates quarantine storage only; scanning, promotion, signed access, and retention have separate switches.
 
@@ -157,15 +165,23 @@ Repository and supply-chain contracts can be run without installing extra Node p
 node scripts/verify-prototype-register.mjs
 node scripts/verify-api-contract.mjs
 node --test scripts/tests/verify-api-contract.test.mjs
+node scripts/verify-module-1-inputs.mjs --require-approved
+node --test scripts/tests/verify-module-1-inputs.test.mjs
+node scripts/verify-module-1-review-drafts.mjs
+node --test scripts/tests/verify-module-1-review-drafts.test.mjs
+node scripts/verify-module-1-candidate-inputs.mjs
+node --test scripts/tests/verify-module-1-candidate-inputs.test.mjs
 node scripts/verify-ci-security.mjs
 node --test scripts/tests/verify-ci-security.test.mjs
 ```
 
-Backend tests require Docker because Testcontainers creates and removes isolated PostgreSQL 18 `careos_test`, Redis 8, and pinned object-storage instances. UUID tests verify RFC 9562 layout and process-local monotonic behavior, while PostgreSQL catalog tests verify all 15 native `uuidv7()` defaults. The suite also attacks reference authorization/delegation/final-owner controls, governed invitation/linkage transitions, service-identity separation and exact authorization, and the complete MFA maker-checker lifecycle. Redis queue tests exercise atomic scripts, retry/dead-letter state, lease recovery, application restart, and a real paused-dependency timeout/recovery. PostgreSQL notification tests exercise encrypted storage, tenant isolation, concurrent deduplication, lease/retry/dead-letter transitions, ciphertext corruption, and key rotation. Document-evidence tests exercise authorized-transaction ordering, exact replay, rollback, forced RLS, composite tenant linkage, append-only metadata/attestations, digest mismatch, retention/predecessor monotonicity, and cross-tenant attacks. Object-storage tests additionally exercise exact-version Object Lock `COMPLIANCE`, legal holds, delete rejection, and provider-state drift. Consumer-inbox tests exercise canonical replay, changed-content rejection, callback rollback/retry, simultaneous delivery, registry/grant enforcement, forced RLS, and owner-level immutability. Scanner protocol tests use an in-process deterministic ClamD server rather than downloading live definitions. Tests do not use development infrastructure. Never point automated tests at development or production services.
+The checked Module 1 production command verifies all eight approved artifacts plus approval record `M1-APPROVAL-20260916-01`; add `--require-approved` when authorizing implementation or release work. The review-draft and candidate commands remain non-authorizing provenance and always report `implementationAuthorized: false`. Any change to an approved artifact changes its checksum and must fail the production gate until a new accountable approval binds the replacement package, all 23 screen IDs, and distinct approval evidence.
+
+Backend tests require Docker because Testcontainers creates and removes isolated PostgreSQL 18 `careos_test`, Redis 8, and pinned object-storage instances. UUID tests verify RFC 9562 layout and process-local monotonic behavior, while PostgreSQL catalog tests verify all 15 native `uuidv7()` defaults. The suite attacks active approved and retained reference authorization, delegation/final-owner controls, immutable checksum-bound release evidence, governed invitation/linkage transitions, separate recent-MFA enforcement, service-identity separation, the complete MFA maker-checker lifecycle, and organization-profile authorization/trigger/concurrency/idempotency/evidence boundaries. Redis queue, PostgreSQL notification, document evidence, Object Lock, consumer inbox, and deterministic ClamD tests cover their respective integrity, isolation, replay, retry, and fail-closed contracts. Tests do not use development infrastructure. Never point automated tests at development or production services.
 
 ## Security baseline already represented
 
-- Persisted users and password credentials with a synthetic local-profile bootstrap administrator
+- Persisted users and password credentials with a synthetic local-profile bootstrap administrator; the paired organization/facility fixture is retained only in local/test and removed by V19 from base/production state
 - JSON login with generic credential failures; HTTP Basic and default form login are disabled
 - Redis-backed indexed sessions with an HttpOnly `SameSite=Strict` cookie, idle and absolute expiry, ID rotation, and security-version revocation
 - Origin/Referer validation plus double-submit CSRF protection for browser mutations
@@ -175,13 +191,17 @@ Backend tests require Docker because Testcontainers creates and removes isolated
 - Actor-bound organization discovery and server-side organization selection with live-membership revalidation
 - Separate Flyway migration and restricted application database roles
 - Transaction-bound membership/permission authorization with organization, actor, purpose, and correlation context
-- Migration-owned, runtime-read-only authorization catalogs that deny every unapproved role/permission mapping
+- Migration-owned, runtime-read-only authorization catalogs with an immutable checksum-bound `m1-candidate-1` release; unknown, retired, reference-only, cross-version, or ungranted entries deny access
 - PostgreSQL forced RLS on all current tenant-owned foundation tables
 - Disposable PostgreSQL 18 migration and cross-tenant attack tests
-- RFC 9457 problem responses and a checked OpenAPI 3.1 contract for all 21 implemented operations
+- RFC 9457 problem responses and a checked OpenAPI 3.1 contract for all 24 implemented operations
 - Checked protected tenant-route, opaque cursor/filter, strong ETag/If-Match, scoped idempotency, and bounded caller-controlled retry conventions
-- Exact TypeScript-only OpenAPI generation with CI drift detection and a credentialed, correlation/CSRF-aware native browser client for all 15 current operations
-- Memory-only frontend session gating with runtime response validation, server-derived idle/absolute deadline locking, event-driven resume revalidation without background polling, real login/password-recovery/MFA challenge and self-service/organization selection and switching/logout states, accessible fail-closed errors, and a CI-enforced feature dependency direction
+- Exact TypeScript-only OpenAPI generation with CI drift detection and a credentialed, correlation/CSRF-aware native browser client for all 24 current operations
+- Memory-only frontend session gating with runtime response validation, server-derived idle/absolute deadline locking, event-driven resume revalidation without background polling, real login/password-recovery/MFA challenge and self-service/organization selection and switching/logout states, accessible fail-closed errors, strict rejection and focused recovery for unregistered protected hashes, exact 1440/1024/768/390/320 route containment and Axe coverage, and a CI-enforced feature dependency direction
+- Approved-registry organization readiness/profile APIs and M1-05 through M1-07 states with tenant authorization, server-calculated gates, runtime response validation, strong ETag/If-Match, caller-owned idempotency, explicit reason, and atomic audit/outbox evidence
+- Checksum-bound Module 1 input-package verification in `APPROVED` state with eight exact bundles, one all-screen approval record, and a required-approval mode used by implementation gates
+- A separate checked eight-part Module 1 owner-review packet that is structurally complete but explicitly non-authorizing
+- A retained checksum-identified candidate provenance package plus its byte-identical approved eight-artifact promotion, offline responsive 23-screen review application, eight contract tests, and five viewport/Axe/overflow tests
 - Shared RFC 9562 UUIDv7 generation for new application identifiers, process-local monotonic behavior, native PostgreSQL 18 defaults, and compatibility with historical/reference UUIDs
 - Optimistic-lock columns
 - Migration-owned, fail-closed audit/outbox event-version registries
@@ -206,18 +226,21 @@ Backend tests require Docker because Testcontainers creates and removes isolated
 - Full-SHA GitHub Actions, explicit least-privilege/time/concurrency bounds, dependency review, Java/JavaScript CodeQL, Trivy dependency/secret/configuration/image gates, and weekly dependency updates
 - CycloneDX SBOM artifacts plus fixed HIGH/CRITICAL image rejection in CI
 - Digest-pinned Dockerfile, Compose, scanner, and PostgreSQL/Redis test images; final application stages declare non-root users
+- PostgreSQL 18 parent-volume layout plus fresh six-service Flyway V18 deployment evidence and a separately verified Flyway V19 environment-scoped seed boundary
 - Pinned object-storage service in the local topology for synthetic compatibility only
 - Synthetic credentials only
 
-The `local` profile seeds a synthetic account and membership into the persisted identity model. The frontend calls the checked client for session bootstrap, login, generic password recovery, governed invitation issue/revocation/acceptance and account linking, pending MFA, recent-authenticated MFA enrollment/recovery-code replacement, organization-scoped maker-checker administrative reset, organization selection/switching, and logout. It consumes the server's effective session deadline, locks without polling when it passes, and performs checked revalidation only when an unexpired browser view returns to use. Reset and invitation tokens are removed from browser history after capture, and credential/MFA material is held only in the active React view. Organization selection is only a server-side navigation preference and never authorization evidence. V14-V17 provide a least-privilege reference authorization/event policy, governed invitations, a disjoint non-interactive service-identity authorization path, and database-enforced MFA-reset approvals. Those entries are explicitly opt-in for local/test and rejected by production preflight until owner approval; canonical registries remain migration-owned and runtime-read-only. There is still no protected tenant business API or production business-record UI/cache. Platform capabilities are explicitly unavailable by default until tested adapters are intentionally configured; quarantine is not clean content, a raw scanner return must pass through V8 evidence and the Phase 0T coordinator/V10 policy-evidence boundary before a private clean copy, Phase 0U then requires committed promotion plus URL-free V11 grant evidence before its internal coordinator returns an opt-in signed read, and Phase 0V applies only monotonic COMPLIANCE retention/hold enablement with V12 evidence. A queued job is not authority to execute its effect, and a persisted notification is not permission or ability to contact its recipient. V9 supplies only the transaction-bound inbox/deduplication mechanic; no worker, subscription, authenticated transport, broker acknowledgement, or production consumer is active. Owner-approved scoped RBAC/event/consumer/job/template/promotion/access/retention policy, service credential provisioning/rotation and worker wiring, self-service MFA disable, production storage/scanner/Redis/key-management/Object-Lock acceptance, governed document state/read/hold-release/disposal workflows, consent/destination/provider, and real producer/consumer wiring still need to be completed before production.
+The `local` profile retains the synthetic organization/facility fixture and seeds a synthetic account and membership into the persisted identity model; the test profile retains the same isolated tenant fixture. Base and production configuration hard-disable that Flyway placeholder, so V19 removes an untouched legacy fixture and refuses to proceed if it was changed or acquired referenced tenant data. The frontend calls the checked client for session bootstrap, login, generic password recovery, governed invitation issue/revocation/acceptance and account linking, pending MFA, recent-authenticated MFA enrollment/recovery-code replacement, organization-scoped maker-checker administrative reset, organization selection/switching, logout, organization readiness, and bounded profile read/update. It consumes the server's effective session deadline, locks without polling when it passes, and performs checked revalidation only when an unexpired browser view returns to use. Reset and invitation tokens are removed from browser history after capture, and credential/MFA material is held only in the active React view. Organization selection is only a server-side navigation preference and never authorization evidence. V14-V18 retain the original reference mechanics; V20 records the approved package and activates the approved Module 1 interactive roles, grants, delegations, implemented organization-core operations, invitation events, and MFA reset operation workflow. Invitations and MFA administration now require a separately recorded recent MFA assertion and can be enabled in production only with the exact approved registry/package digest; reference service identities remain production-disabled. Canonical registries remain migration-owned and runtime-read-only. M1-05 through M1-07 and the first identity/access increment now use approved policy, but M1B and later Module 1 slices are not complete; the other 72 protected route entries still use synthetic local content under an explicit no-real-data boundary, keep generic form/clinical previews read-only, disable unimplemented workflow actions, and expose only honest local filters and valid prototype pagination. Platform capabilities are explicitly unavailable by default until tested adapters are intentionally configured; quarantine is not clean content, a raw scanner return must pass through V8 evidence and the Phase 0T coordinator/V10 policy-evidence boundary before a private clean copy, Phase 0U then requires committed promotion plus URL-free V11 grant evidence before its internal coordinator returns an opt-in signed read, and Phase 0V applies only monotonic COMPLIANCE retention/hold enablement with V12 evidence. A queued job is not authority to execute its effect, and a persisted notification is not permission or ability to contact its recipient. V9 supplies only the transaction-bound inbox/deduplication mechanic; no worker, subscription, authenticated transport, broker acknowledgement, or production consumer is active. Approved business permissions/events must still be bound to implemented operations slice by slice; production tenant provisioning, service credential provisioning/rotation and worker wiring, production storage/scanner/Redis/key-management/Object-Lock acceptance, governed document state/read/hold-release/disposal workflows, consent/destination/provider, and real producer/consumer wiring remain incomplete.
 
 ## Repository map
 
 ```text
 backend/                 Spring Boot modular-monolith foundation
 frontend/                React/TypeScript session boundary and 79 route states
-contracts/               Checked API contract and shared HTTP conventions
-docs/                    architecture, operations, screen register and delivery status
+candidate-inputs/        Retained non-authorizing source/provenance for the accepted Module 1 package
+approved-inputs/         Checksum-bound approved Module 1 artifacts and approval evidence
+contracts/               Checked API/input contracts plus M1 production/draft/candidate manifests
+docs/                    architecture, operations, screen register, M1 review drafts and delivery status
 scripts/                 verification helpers
 compose.yaml             local PostgreSQL, Redis, MinIO, Mailpit and apps
 compose.scanner.yaml     optional pinned ClamAV/quarantine compatibility overlay

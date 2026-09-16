@@ -55,6 +55,7 @@ public class InvitationController {
                 body.roleKey(),
                 body.reason(),
                 recentAuthenticationAt(request.getSession(false)),
+                mfaAuthenticatedAt(request.getSession(false)),
                 CorrelationIdFilter.from(request),
                 idempotencyKey));
         return ResponseEntity.status(outcome.response().statusCode())
@@ -80,6 +81,7 @@ public class InvitationController {
                 invitationId,
                 body.reason(),
                 recentAuthenticationAt(request.getSession(false)),
+                mfaAuthenticatedAt(request.getSession(false)),
                 CorrelationIdFilter.from(request),
                 idempotencyKey));
         return ResponseEntity.status(outcome.response().statusCode())
@@ -137,6 +139,14 @@ public class InvitationController {
             return null;
         }
         var value = session.getAttribute(AuthenticationSessionState.RECENT_AUTHENTICATION_AT);
+        return value instanceof Long epochMillis ? Instant.ofEpochMilli(epochMillis) : null;
+    }
+
+    private static Instant mfaAuthenticatedAt(HttpSession session) {
+        if (session == null) {
+            return null;
+        }
+        var value = session.getAttribute(AuthenticationSessionState.MFA_AUTHENTICATED_AT);
         return value instanceof Long epochMillis ? Instant.ofEpochMilli(epochMillis) : null;
     }
 

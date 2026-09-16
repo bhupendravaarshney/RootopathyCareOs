@@ -1,8 +1,14 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ApiFailure, ApiResult } from './api/client';
-import type { OrganizationAccess, SessionState } from './api/generated';
+import type {
+  AdministrationReadiness,
+  OrganizationAccess,
+  OrganizationProfile,
+  SessionState,
+} from './api/generated';
 import App from './App';
-import { screens } from './data/screens';
+import { findScreen, screens } from './data/screens';
+import type { AdministrationClient } from './features/administration/administration-types';
 import type { SessionClient } from './features/session/session-types';
 
 const correlationId = 'frontend-session-test';
@@ -43,6 +49,49 @@ const mfaSession: SessionState = {
   state: 'mfa_required',
   user,
 };
+const readiness: AdministrationReadiness = {
+  activeMemberships: 2,
+  completedGates: 2,
+  draftFacilityCount: 1,
+  facilityCount: 1,
+  gates: [
+    {
+      detail: 'Legal and display identity are recorded.',
+      href: '#/M1-07',
+      key: 'organization-profile',
+      label: 'Organization profile',
+      status: 'complete',
+    },
+    {
+      detail: 'An effective owner is present.',
+      href: '#/M1-20',
+      key: 'administrator-access',
+      label: 'Administrator access',
+      status: 'complete',
+    },
+    {
+      detail: 'Activation policy is not approved.',
+      href: '#/M1-21',
+      key: 'activation',
+      label: 'Review and activate',
+      status: 'blocked',
+    },
+  ],
+  lifecycleStatus: 'draft',
+  organizationId: selectedOrganization.id,
+  totalGates: 3,
+};
+const organizationProfile: OrganizationProfile = {
+  countryCode: 'IN',
+  displayName: 'North Clinic',
+  legalName: 'North Clinic Private Limited',
+  lifecycleStatus: 'draft',
+  lockVersion: 4,
+  organizationId: selectedOrganization.id,
+  timezone: 'Asia/Kolkata',
+  updatedAt: '2026-09-16T08:00:00Z',
+};
+type ApplicationClient = SessionClient & AdministrationClient;
 
 function success<T>(data: T, status = 200): ApiResult<T> {
   return {
@@ -73,7 +122,7 @@ function failure(status = 503): ApiFailure {
   };
 }
 
-function sessionClient(overrides: Partial<SessionClient> = {}): SessionClient {
+function sessionClient(overrides: Partial<ApplicationClient> = {}): ApplicationClient {
   return {
     acceptInvitation: async () =>
       success(
@@ -81,7 +130,7 @@ function sessionClient(overrides: Partial<SessionClient> = {}): SessionClient {
           accountLink: 'created',
           invitationId: '77777777-7777-4777-8777-777777777777',
           organizationId: selectedOrganization.id,
-          roleKey: 'organization_member',
+          roleKey: 'organization_viewer',
           userId: '88888888-8888-4888-8888-888888888888',
         },
         201,
@@ -102,13 +151,18 @@ function sessionClient(overrides: Partial<SessionClient> = {}): SessionClient {
         status: 'reset',
         targetUserId,
       }),
+    getAdministrationReadiness: async () => success(readiness),
     getAuthenticationSession: async () => success(authenticatedSession),
+    getOrganizationProfile: async () => ({
+      ...success(organizationProfile),
+      etag: '"organization-profile:4"',
+    }),
     issueInvitation: async () =>
       success(
         {
           expiresAt: '2026-09-16T12:00:00Z',
           invitationId: '77777777-7777-4777-8777-777777777777',
-          roleKey: 'organization_member',
+          roleKey: 'organization_viewer',
           status: 'pending',
         },
         201,
@@ -133,7 +187,7 @@ function sessionClient(overrides: Partial<SessionClient> = {}): SessionClient {
       success({
         expiresAt: '2026-09-16T12:00:00Z',
         invitationId: '77777777-7777-4777-8777-777777777777',
-        roleKey: 'organization_member',
+        roleKey: 'organization_viewer',
         status: 'revoked',
       }),
     selectOrganization: async ({ organizationId }) =>
@@ -148,11 +202,23 @@ function sessionClient(overrides: Partial<SessionClient> = {}): SessionClient {
         secret: 'ABCDEFGHIJKLMNOP',
       }),
     subscribeSessionLifecycle: () => () => undefined,
+    updateOrganizationProfile: async (_organizationId, body) => {
+      const updated = {
+        ...organizationProfile,
+        ...body,
+        lockVersion: organizationProfile.lockVersion + 1,
+        updatedAt: '2026-09-16T09:00:00Z',
+      };
+      return {
+        ...success(updated),
+        etag: '"organization-profile:5"',
+      };
+    },
     verifyMfaEnrollment: async () =>
       success({ recoveryCodes: ['2345-6789-ABCD', 'EFGH-JKLM-NPQR'] }),
     verifyRecentAuthentication: async () => success(undefined, 204),
     ...overrides,
-  } as SessionClient;
+  } as ApplicationClient;
 }
 
 describe('CareOS frontend session boundary', () => {
@@ -163,6 +229,108 @@ describe('CareOS frontend session boundary', () => {
   it('registers all M1, M2 and COS screens', () => {
     expect(screens).toHaveLength(79);
     expect(new Set(screens.map((item) => item.id)).size).toBe(79);
+    expect(() => findScreen('M1-99')).toThrow('does not contain M1-99');
+  });
+
+  it('labels synthetic list data and limits interaction to honest local filtering', async () => {
+    window.location.hash = '#/M1-12';
+    render(<App client={sessionClient()} />);
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Facilities' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('complementary', { name: 'Synthetic prototype only' }),
+    ).toHaveTextContent('Do not enter real personal or clinical information');
+    expect(screen.getAllByRole('button', { name: /Open.*unavailable/ })).toHaveLength(4);
+    screen.getAllByRole('button', { name: /Open.*unavailable/ }).forEach((button) => {
+      expect(button).toBeDisabled();
+    });
+    expect(screen.queryByRole('link', { name: 'Synthetic facility A' })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Facilities records' })).toHaveAttribute(
+      'tabindex',
+      '0',
+    );
+
+    const clearFilters = screen.getByRole('button', { name: 'Clear filters' });
+    expect(clearFilters).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Search'), { target: { value: 'governance' } });
+    expect(clearFilters).toBeEnabled();
+    expect(screen.getByText('Showing 1 of 4 synthetic records')).toBeInTheDocument();
+    expect(screen.getByText('Synthetic governance group')).toBeInTheDocument();
+    expect(screen.queryByText('Synthetic facility A')).not.toBeInTheDocument();
+
+    fireEvent.click(clearFilters);
+    expect(screen.getByLabelText('Search')).toHaveValue('');
+    expect(screen.getByLabelText('Status')).toHaveValue('all');
+    expect(screen.getByLabelText('Scope')).toHaveValue('all');
+    expect(screen.getByText('Showing 4 of 4 synthetic records')).toBeInTheDocument();
+  });
+
+  it('does not simulate persistence for an unapproved generic form', async () => {
+    window.location.hash = '#/M1-08';
+    render(<App client={sessionClient()} />);
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Registration and identifiers' }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Record name')).toHaveAttribute('readonly');
+    expect(screen.getByLabelText('Type')).toBeDisabled();
+    expect(screen.getByLabelText('Reason for change')).toHaveAttribute('readonly');
+    expect(screen.getByRole('button', { name: /Save draft.*unavailable/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Save and continue.*unavailable/ })).toBeDisabled();
+    expect(screen.queryByText(/Prototype interaction saved locally/)).not.toBeInTheDocument();
+  });
+
+  it('keeps synthetic clinical actions and terminal pagination non-activatable', async () => {
+    window.location.hash = '#/COS-27';
+    render(<App client={sessionClient()} />);
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: findScreen('COS-27').title }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Synthetic patient')).toBeInTheDocument();
+    expect(screen.getByLabelText('Clinical note')).toHaveAttribute('readonly');
+    expect(screen.getByRole('button', { name: /Save draft.*unavailable/ })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /Confirm and continue.*unavailable/ }),
+    ).toBeDisabled();
+
+    const pagination = screen.getByRole('navigation', { name: 'Prototype pagination' });
+    expect(within(pagination).queryByRole('link', { name: /COS-27/ })).not.toBeInTheDocument();
+    expect(within(pagination).getByText('COS-27')).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('fails closed after authentication when a hash route is not registered', async () => {
+    window.location.hash = '#/M1-99/forged?return=M1-05';
+
+    render(<App client={sessionClient()} />);
+
+    const heading = await screen.findByRole('heading', { name: 'Page not found' });
+    expect(heading).toHaveFocus();
+    expect(screen.getByText(/No business screen was loaded/)).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Return to administration dashboard' }),
+    ).toHaveAttribute('href', '#/M1-05');
+    expect(
+      screen.queryByRole('heading', { name: 'Administration dashboard' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('M1-99/forged')).not.toBeInTheDocument();
+  });
+
+  it('keeps an unknown protected route behind the anonymous session gate', async () => {
+    window.location.hash = '#/not-a-careos-route';
+
+    render(
+      <App
+        client={sessionClient({
+          getAuthenticationSession: async () => success(anonymousSession),
+        })}
+      />,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Sign in to CareOS' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Page not found' })).not.toBeInTheDocument();
   });
 
   it('renders the protected workspace from validated server identity and organization state', async () => {
@@ -173,6 +341,94 @@ describe('CareOS frontend session boundary', () => {
     ).toBeInTheDocument();
     expect(screen.getAllByText('Asha Verma')).toHaveLength(2);
     expect(screen.getByLabelText('Current organization')).toHaveValue(selectedOrganization.id);
+  });
+
+  it('renders setup readiness only from the selected organization response', async () => {
+    window.location.hash = '#/M1-06';
+    const getAdministrationReadiness = vi.fn<AdministrationClient['getAdministrationReadiness']>(
+      async () => success(readiness),
+    );
+
+    render(<App client={sessionClient({ getAdministrationReadiness })} />);
+
+    expect(await screen.findByRole('heading', { name: 'Setup checklist' })).toBeInTheDocument();
+    expect(await screen.findByText('2/3')).toBeInTheDocument();
+    expect(screen.getByText('Activation policy is not approved.')).toBeInTheDocument();
+    expect(getAdministrationReadiness).toHaveBeenCalledWith(
+      selectedOrganization.id,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  it('updates an organization profile with its strong revision and a caller-owned retry key', async () => {
+    window.location.hash = '#/M1-07';
+    const updateOrganizationProfile = vi.fn<AdministrationClient['updateOrganizationProfile']>(
+      async (_organizationId, body) => ({
+        ...success({
+          ...organizationProfile,
+          countryCode: body.countryCode,
+          displayName: body.displayName,
+          legalName: body.legalName,
+          lockVersion: 5,
+          timezone: body.timezone,
+          updatedAt: '2026-09-16T09:00:00Z',
+        }),
+        etag: '"organization-profile:5"',
+      }),
+    );
+
+    render(<App client={sessionClient({ updateOrganizationProfile })} />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Organization profile' }),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Display name'), {
+      target: { value: 'North Care Network' },
+    });
+    fireEvent.change(screen.getByLabelText('Reason for change'), {
+      target: { value: 'Approved identity review CARE-42' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save organization profile' }));
+
+    await waitFor(() => expect(updateOrganizationProfile).toHaveBeenCalledOnce());
+    expect(updateOrganizationProfile.mock.calls[0]).toEqual([
+      selectedOrganization.id,
+      {
+        countryCode: 'IN',
+        displayName: 'North Care Network',
+        legalName: 'North Clinic Private Limited',
+        reason: 'Approved identity review CARE-42',
+        timezone: 'Asia/Kolkata',
+      },
+      '"organization-profile:4"',
+      expect.stringMatching(/^organization-profile:[0-9a-f-]{36}$/),
+    ]);
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Organization profile saved with audit and outbox evidence',
+    );
+    expect(screen.getByText(/Revision 5/)).toBeInTheDocument();
+  });
+
+  it('blocks a stale organization profile result until the latest revision is reloaded', async () => {
+    window.location.hash = '#/M1-07';
+    const updateOrganizationProfile = vi.fn<AdministrationClient['updateOrganizationProfile']>(
+      async () => failure(412),
+    );
+    render(<App client={sessionClient({ updateOrganizationProfile })} />);
+
+    await screen.findByRole('heading', { name: 'Organization profile' });
+    fireEvent.change(screen.getByLabelText('Display name'), {
+      target: { value: 'A stale change' },
+    });
+    fireEvent.change(screen.getByLabelText('Reason for change'), {
+      target: { value: 'Concurrent update test' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save organization profile' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'This profile changed after it was loaded',
+    );
+    expect(screen.getByRole('button', { name: 'Reload latest' })).toBeEnabled();
   });
 
   it('keeps a protected route locked until real credentials establish a server session', async () => {
@@ -416,7 +672,7 @@ describe('CareOS frontend session boundary', () => {
         {
           expiresAt: '2026-09-16T12:00:00Z',
           invitationId: '77777777-7777-4777-8777-777777777777',
-          roleKey: 'organization_member',
+          roleKey: 'organization_viewer',
           status: 'pending',
         },
         201,
@@ -426,7 +682,7 @@ describe('CareOS frontend session boundary', () => {
       success({
         expiresAt: '2026-09-16T12:00:00Z',
         invitationId: '77777777-7777-4777-8777-777777777777',
-        roleKey: 'organization_member',
+        roleKey: 'organization_viewer',
         status: 'revoked',
       }),
     );
@@ -450,7 +706,7 @@ describe('CareOS frontend session boundary', () => {
       displayName: 'New User',
       email: 'new.user@example.test',
       reason: 'Approved onboarding request CARE-42',
-      roleKey: 'organization_member',
+      roleKey: 'organization_viewer',
     });
     expect(issueInvitation.mock.calls[0]?.[2]).toMatch(/^invite:[0-9a-f-]{36}$/);
     expect(await screen.findByText(/one-time link was sent/)).toBeVisible();
@@ -479,7 +735,7 @@ describe('CareOS frontend session boundary', () => {
           accountLink: 'created',
           invitationId: '77777777-7777-4777-8777-777777777777',
           organizationId: selectedOrganization.id,
-          roleKey: 'organization_member',
+          roleKey: 'organization_viewer',
           userId: '88888888-8888-4888-8888-888888888888',
         },
         201,

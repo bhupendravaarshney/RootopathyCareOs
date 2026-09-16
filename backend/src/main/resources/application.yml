@@ -16,6 +16,7 @@ spring:
     password: ${DB_MIGRATION_PASSWORD}
     placeholders:
       applicationRole: ${DB_APP_ROLE:${DB_APP_USERNAME}}
+      foundationSyntheticDataEnabled: false
   data:
     redis:
       host: ${REDIS_HOST}
@@ -102,6 +103,8 @@ logging:
 careos:
   authorization:
     reference-policy-enabled: ${CAREOS_AUTHORIZATION_REFERENCE_POLICY_ENABLED:false}
+    active-registry-version: ${CAREOS_AUTHORIZATION_ACTIVE_REGISTRY_VERSION:m1-candidate-1}
+    approval-package-sha256: ${CAREOS_AUTHORIZATION_APPROVAL_PACKAGE_SHA256:19aff5ce30516b7ee2101c093a8429d8a74394995ca90d486790bcc18a392946}
   invitations:
     enabled: ${CAREOS_INVITATIONS_ENABLED:false}
     token-ttl: ${CAREOS_INVITATION_TOKEN_TTL:24h}

@@ -52,6 +52,7 @@ public class MfaAdministrationController {
                 targetUserId,
                 body.reason(),
                 recentAuthenticationAt(request.getSession(false)),
+                mfaAuthenticatedAt(request.getSession(false)),
                 CorrelationIdFilter.from(request),
                 idempotencyKey));
         return response(outcome.response());
@@ -77,6 +78,7 @@ public class MfaAdministrationController {
                 approvalId,
                 body.reason(),
                 recentAuthenticationAt(request.getSession(false)),
+                mfaAuthenticatedAt(request.getSession(false)),
                 CorrelationIdFilter.from(request),
                 idempotencyKey));
         return response(outcome.response());
@@ -102,6 +104,7 @@ public class MfaAdministrationController {
                 approvalId,
                 body.reason(),
                 recentAuthenticationAt(request.getSession(false)),
+                mfaAuthenticatedAt(request.getSession(false)),
                 CorrelationIdFilter.from(request),
                 idempotencyKey,
                 request.getRemoteAddr()));
@@ -133,6 +136,14 @@ public class MfaAdministrationController {
             return null;
         }
         var value = session.getAttribute(AuthenticationSessionState.RECENT_AUTHENTICATION_AT);
+        return value instanceof Long epochMillis ? Instant.ofEpochMilli(epochMillis) : null;
+    }
+
+    private static Instant mfaAuthenticatedAt(HttpSession session) {
+        if (session == null) {
+            return null;
+        }
+        var value = session.getAttribute(AuthenticationSessionState.MFA_AUTHENTICATED_AT);
         return value instanceof Long epochMillis ? Instant.ofEpochMilli(epochMillis) : null;
     }
 

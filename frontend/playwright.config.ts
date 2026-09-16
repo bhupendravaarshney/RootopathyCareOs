@@ -13,7 +13,22 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   projects: [
-    { name: 'desktop', use: { ...devices['Desktop Chrome'] } },
+    {
+      name: 'desktop-1440',
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } },
+    },
+    {
+      name: 'compact-1024',
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1024, height: 900 } },
+    },
+    {
+      name: 'tablet-768',
+      use: { ...devices['Desktop Chrome'], viewport: { width: 768, height: 1024 } },
+    },
+    {
+      name: 'mobile-390',
+      use: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
+    },
     {
       name: 'mobile-320',
       use: { viewport: { width: 320, height: 800 }, isMobile: true, hasTouch: true },

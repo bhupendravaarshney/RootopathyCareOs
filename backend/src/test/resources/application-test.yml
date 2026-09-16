@@ -9,6 +9,7 @@ spring:
     password: ${TEST_DB_MIGRATION_PASSWORD:careos-migrator-test-only}
     placeholders:
       applicationRole: ${TEST_DB_APP_USERNAME:careos_app}
+      foundationSyntheticDataEnabled: true
   data:
     redis:
       host: localhost

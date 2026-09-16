@@ -17,7 +17,7 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public class JdbcMfaResetApprovalStore implements MfaResetApprovalStore {
-    private static final String TARGET_OPERATION = "identity.mfa.admin-reset";
+    private static final String TARGET_OPERATION = "identity.mfa.admin-reset.execute";
 
     private final JdbcTemplate jdbcTemplate;
 

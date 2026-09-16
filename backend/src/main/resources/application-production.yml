@@ -12,6 +12,7 @@ spring:
     password: ${DB_MIGRATION_PASSWORD}
     placeholders:
       applicationRole: ${DB_APP_ROLE:${DB_APP_USERNAME}}
+      foundationSyntheticDataEnabled: false
   data:
     redis:
       host: ${REDIS_HOST}
@@ -45,13 +46,15 @@ server:
 careos:
   authorization:
     reference-policy-enabled: false
+    active-registry-version: ${CAREOS_AUTHORIZATION_ACTIVE_REGISTRY_VERSION:m1-candidate-1}
+    approval-package-sha256: ${CAREOS_AUTHORIZATION_APPROVAL_PACKAGE_SHA256:19aff5ce30516b7ee2101c093a8429d8a74394995ca90d486790bcc18a392946}
   invitations:
-    enabled: false
+    enabled: ${CAREOS_INVITATIONS_ENABLED:false}
   service-identities:
     enabled: false
     credential-pepper: ${CAREOS_SERVICE_IDENTITY_CREDENTIAL_PEPPER:}
   mfa-administration:
-    enabled: false
+    enabled: ${CAREOS_MFA_ADMINISTRATION_ENABLED:false}
   security:
     allowed-origins: ${CAREOS_ALLOWED_ORIGINS}
     application-base-url: ${CAREOS_BASE_URL}

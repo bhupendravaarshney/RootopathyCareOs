@@ -16,6 +16,9 @@ import org.springframework.stereotype.Component;
 @Component
 @Profile("production")
 final class ProductionConfigurationGuard {
+    private static final String APPROVED_AUTHORIZATION_REGISTRY = "m1-candidate-1";
+    private static final String APPROVED_MODULE_1_PACKAGE_SHA256 =
+            "19aff5ce30516b7ee2101c093a8429d8a74394995ca90d486790bcc18a392946";
     private static final Set<String> NON_PRODUCTION_PROFILES = Set.of("local", "test");
     private static final Set<String> DOCUMENTED_NON_PRODUCTION_SECRETS = Set.of(
             "careos-app-local-only",
@@ -123,9 +126,23 @@ final class ProductionConfigurationGuard {
                 "careos.authorization.reference-policy-enabled", Boolean.class, false)) {
             violations.add("the provisional reference authorization policy must be disabled");
         }
-        if (environment.getProperty("careos.invitations.enabled", Boolean.class, false)) {
-            violations.add(
-                    "governed invitations must remain disabled until the reference policy is owner-approved");
+        var approvedIdentityAdministrationEnabled =
+                environment.getProperty("careos.invitations.enabled", Boolean.class, false)
+                        || environment.getProperty(
+                                "careos.mfa-administration.enabled", Boolean.class, false);
+        if (approvedIdentityAdministrationEnabled) {
+            requireExactValue(
+                    environment,
+                    "careos.authorization.active-registry-version",
+                    APPROVED_AUTHORIZATION_REGISTRY,
+                    "active authorization registry version",
+                    violations);
+            requireExactValue(
+                    environment,
+                    "careos.authorization.approval-package-sha256",
+                    APPROVED_MODULE_1_PACKAGE_SHA256,
+                    "authorization approval package digest",
+                    violations);
         }
         if (environment.getProperty("careos.service-identities.enabled", Boolean.class, false)) {
             requireNonProductionSecretAbsent(
@@ -133,10 +150,6 @@ final class ProductionConfigurationGuard {
                     "careos.service-identities.credential-pepper",
                     "service identity credential pepper",
                     violations);
-        }
-        if (environment.getProperty("careos.mfa-administration.enabled", Boolean.class, false)) {
-            violations.add(
-                    "MFA administration must remain disabled until the reference maker-checker policy is owner-approved");
         }
         var s3Enabled = environment.getProperty("careos.storage.s3.enabled", Boolean.class, false);
         if (s3Enabled) {
@@ -301,6 +314,17 @@ final class ProductionConfigurationGuard {
         var value = environment.getProperty(property);
         if (value == null || value.isBlank()) {
             violations.add(description + " is required");
+        }
+    }
+
+    private static void requireExactValue(
+            Environment environment,
+            String property,
+            String expected,
+            String description,
+            ArrayList<String> violations) {
+        if (!expected.equals(environment.getProperty(property))) {
+            violations.add(description + " must match the checksum-bound approved Module 1 release");
         }
     }
 

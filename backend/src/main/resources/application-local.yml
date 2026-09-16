@@ -12,6 +12,7 @@ spring:
     password: ${DB_MIGRATION_PASSWORD:careos-migrator-local-only}
     placeholders:
       applicationRole: ${DB_APP_ROLE:${DB_APP_USERNAME:careos_app}}
+      foundationSyntheticDataEnabled: true
   data:
     redis:
       host: ${REDIS_HOST:localhost}

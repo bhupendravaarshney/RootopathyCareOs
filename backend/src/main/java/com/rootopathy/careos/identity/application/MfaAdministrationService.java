@@ -26,7 +26,7 @@ import tools.jackson.databind.ObjectMapper;
 public final class MfaAdministrationService {
     public static final String REQUEST_OPERATION = "identity.mfa.admin-reset.request";
     public static final String APPROVE_OPERATION = "identity.mfa.admin-reset.approve";
-    public static final String EXECUTE_OPERATION = "identity.mfa.admin-reset";
+    public static final String EXECUTE_OPERATION = "identity.mfa.admin-reset.execute";
     private static final String PURPOSE = "identity-administration";
     private static final String JSON = "application/json";
 
@@ -67,6 +67,7 @@ public final class MfaAdministrationService {
                 REQUEST_OPERATION,
                 reason,
                 command.recentAuthenticationAt(),
+                command.mfaAuthenticatedAt(),
                 null);
         var idempotency = idempotency(
                 REQUEST_OPERATION,
@@ -104,6 +105,7 @@ public final class MfaAdministrationService {
                 APPROVE_OPERATION,
                 reason,
                 command.recentAuthenticationAt(),
+                command.mfaAuthenticatedAt(),
                 null);
         var idempotency = idempotency(
                 APPROVE_OPERATION,
@@ -147,6 +149,7 @@ public final class MfaAdministrationService {
                 EXECUTE_OPERATION,
                 reason,
                 command.recentAuthenticationAt(),
+                command.mfaAuthenticatedAt(),
                 independentApproval);
         var idempotency = idempotency(
                 EXECUTE_OPERATION,
@@ -230,6 +233,7 @@ public final class MfaAdministrationService {
             String operation,
             String reason,
             Instant recentAuthenticationAt,
+            Instant mfaAuthenticatedAt,
             IndependentApproval approval) {
         return new TenantAuthorizationRequest(
                 Objects.requireNonNull(organizationId, "organizationId"),
@@ -238,6 +242,7 @@ public final class MfaAdministrationService {
                 new OperationKey(operation),
                 reason,
                 recentAuthenticationAt,
+                mfaAuthenticatedAt,
                 approval);
     }
 
@@ -296,6 +301,7 @@ public final class MfaAdministrationService {
             UUID targetUserId,
             String reason,
             Instant recentAuthenticationAt,
+            Instant mfaAuthenticatedAt,
             String correlationId,
             String idempotencyKey) {
         public RequestCommand {
@@ -310,6 +316,7 @@ public final class MfaAdministrationService {
             UUID approvalId,
             String reason,
             Instant recentAuthenticationAt,
+            Instant mfaAuthenticatedAt,
             String correlationId,
             String idempotencyKey) {
         public ApproveCommand {
@@ -325,6 +332,7 @@ public final class MfaAdministrationService {
             UUID approvalId,
             String reason,
             Instant recentAuthenticationAt,
+            Instant mfaAuthenticatedAt,
             String correlationId,
             String idempotencyKey,
             String remoteAddress) {

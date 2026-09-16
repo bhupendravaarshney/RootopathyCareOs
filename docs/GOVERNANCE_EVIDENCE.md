@@ -12,7 +12,7 @@ Flyway `V6__governance_evidence_and_delivery.sql` and the `governance` backend m
 
 `GovernedMutationExecutor` is the application entry point for this transaction shape. Calling the evidence, idempotency, or delivery adapters without a live writable `AuthorizedTenantContext` transaction fails closed.
 
-Flyway V15 and V17 are the first HTTP workflows bound to this executor. Invitation issue/revocation and MFA reset request/approval/execution use migration-owned operation-to-event mappings and commit their state change, exact replay response, audit row, and outbox row atomically. Every supplied event is `reference` and remains ignored unless the non-production reference policy is explicitly enabled.
+Flyway V15, V17, and V18 establish the first HTTP workflow mechanics. V20 promotes the bounded organization-profile event and rebinds invitation issue/revocation/acceptance plus MFA reset request/approval/execution to active, approved `m1-candidate-1` operation/event mappings. Each governed mutation commits its state change, exact replay response, audit row, and outbox row atomically. Retained reference entries remain ignored unless non-production reference policy is explicitly enabled.
 
 Flyway `V9__consumer_inbox_deduplication.sql` adds the complementary policy-neutral transaction shape for at-least-once consumption:
 
@@ -26,7 +26,7 @@ This executor is a reusable boundary only. No message subscription, worker, tran
 
 ## Database invariants
 
-- `audit_event_definitions` and `outbox_event_definitions` are migration-owned and runtime-read-only. V15/V17 contain bounded `reference` entries for invitation and MFA-administration verification; production preflight prevents their activation until an owner-approved migration promotes or replaces them.
+- `audit_event_definitions` and `outbox_event_definitions` are migration-owned and runtime-read-only. V20 activates the approved invitation, MFA-administration, and organization-profile mappings while retaining obsolete reference history. Future approved catalogue entries grant no event authority until an exact operation mapping is implemented.
 - Unknown or retired event/version pairs, incorrect subject/aggregate types, missing required payload keys, unapproved extra payload keys, and mismatched actor/organization/purpose/correlation metadata are rejected by PostgreSQL.
 - The `payload_schema` document is stored with every event definition. V6 enforces object size and top-level required/allowed keys; a full JSON Schema validator must be selected before nested schema rules are claimed as enforced.
 - General audit records are append-only, including for the table owner.
@@ -60,4 +60,4 @@ Registry content must be added only through a reviewed Flyway migration. Applica
 
 ## Verified failure paths
 
-The disposable PostgreSQL 18 suite covers atomic commit and rollback, replay, conflicting request hashes, concurrent identical requests, expired-key reuse, unknown events, payload drift, calls outside an authorized transaction, runtime registry mutation, owner-level audit/outbox/idempotency tampering, successful publication, retry, permanent failure, retry exhaustion, and dead-lettering. V9 coverage additionally proves consumer replay/deduplication and tenant isolation. V15/V17 coverage proves exact mapped evidence for invitation and MFA maker-checker transitions, including rollback, idempotent replay, expiry, wrong actor/subject/reason, cross-tenant access, and evidence-tampering attacks.
+The disposable PostgreSQL 18 suite covers atomic commit and rollback, replay, conflicting request hashes, concurrent identical requests, expired-key reuse, unknown events, payload drift, calls outside an authorized transaction, runtime registry mutation, owner-level audit/outbox/idempotency tampering, successful publication, retry, permanent failure, retry exhaustion, and dead-lettering. V9 coverage additionally proves consumer replay/deduplication and tenant isolation. V15/V17 coverage proves exact mapped evidence for invitation and MFA maker-checker transitions, including rollback, idempotent replay, expiry, wrong actor/subject/reason, cross-tenant access, and evidence-tampering attacks. V18 coverage proves one profile revision produces exactly one audit/outbox pair, exact replay produces no duplicate evidence, conflicting replay and stale ETags fail, and direct SQL cannot bypass the authorized operation context.

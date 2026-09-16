@@ -1,8 +1,8 @@
 # CareOS HTTP and frontend API conventions
 
-Status: checked Phase 0 foundation convention. This document governs every future protected business endpoint but does not authorize or implement one.
+Status: checked foundation convention with approved-registry identity administration and a bounded organization-core starting slice. This document governs every protected business endpoint; it does not turn an approved catalogue entry into an implemented operation or production acceptance.
 
-The machine-readable source is `contracts/openapi/careos-foundation.json`, currently version `0.6.0`. Its `x-careos-conventions` object and reusable components are enforced by `scripts/verify-api-contract.mjs` and negative tests. If this document and the checked contract disagree, stop and reconcile them before adding an endpoint.
+The machine-readable source is `contracts/openapi/careos-foundation.json`, currently version `0.9.0`. Its `x-careos-conventions` object and reusable components are enforced by `scripts/verify-api-contract.mjs` and negative tests. If this document and the checked contract disagree, stop and reconcile them before adding an endpoint.
 
 ## Route and tenant boundary
 
@@ -10,7 +10,7 @@ The machine-readable source is `contracts/openapi/careos-foundation.json`, curre
 - Every protected business resource must be nested under `/api/v1/organizations/{organizationId}/...` and declare the shared required UUID `OrganizationId` path parameter.
 - The path organization is only an authorization input. The backend must revalidate the authenticated actor's live membership and operation permission inside `TenantAuthorizationOperations` before starting business work.
 - The stored organization selection is navigation state only. `X-Organization-Id` is not an accepted tenant selector and is deliberately absent from the CORS allowlist.
-- Hidden-resource policy remains operation-specific. Until owner-approved policy says otherwise, authorization stays fail closed and no protected business route may be published.
+- Hidden-resource policy remains operation-specific. The three organization-core routes now bind to active approved operations. Reference entries still require explicit local/test opt-in and remain rejected in production. Every unimplemented approved business operation remains fail closed until its exact handler, persistence, evidence, and tests exist.
 
 ## Lists, filters, and cursors
 
@@ -64,7 +64,7 @@ npm run api:check
 
 Generated files live in `frontend/src/api/generated/` and must not be hand-edited. `api:check` regenerates into an isolated directory and compares both the file set and normalized contents. CI runs this before typecheck.
 
-`frontend/src/api/client.ts` wraps all 15 currently implemented operations with generated request/response types, credential inclusion, per-mutation CSRF bootstrap, correlation handling, safe Problem parsing, abort/network outcomes, strict status/body checks, session-lifecycle publication, ETag exposure, and bounded `Retry-After` parsing. The session feature calls the identity/session/organization subset for login, public password recovery, pending MFA, recent authentication, MFA enrollment/recovery-code replacement, selection/switching, and logout. Protected business integration must still happen as approved screen-specific vertical slices replace placeholder behavior. See `FRONTEND_SESSION.md`.
+`frontend/src/api/client.ts` wraps all 24 currently implemented operations with generated request/response types, credential inclusion, per-mutation CSRF bootstrap, correlation handling, safe Problem parsing, abort/network outcomes, strict status/body checks, session-lifecycle publication, ETag exposure, and bounded `Retry-After` parsing. The session feature calls the identity/session/organization subset for login, public password recovery, pending MFA, recent authentication, MFA enrollment/recovery-code replacement, governed invitation issue/revoke/acceptance, maker-checker administrative MFA reset, selection/switching, and logout. The administration feature calls the provisional M1-05/M1-06 readiness projection and M1-07 organization-profile read/update routes, including strong ETag and caller-owned idempotency handling. The remaining protected business integration must happen as approved screen-specific vertical slices replace placeholder behavior. See `FRONTEND_SESSION.md` and `MODULE_1_IMPLEMENTATION_PLAN.md`.
 
 ## Endpoint review checklist
 

@@ -400,7 +400,7 @@ export function InvitationAdministrationScreen({
 }: InvitationAdministrationScreenProps) {
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [roleKey, setRoleKey] = useState('organization_member');
+  const [roleKey, setRoleKey] = useState('organization_viewer');
   const [reason, setReason] = useState('');
   const [revocationReason, setRevocationReason] = useState('');
   const [invitation, setInvitation] = useState<InvitationMutation | null>(null);
@@ -578,8 +578,13 @@ export function InvitationAdministrationScreen({
                 onChange={(event) => setRoleKey(event.target.value)}
                 disabled={busy}
               >
-                <option value="organization_member">Organization member</option>
+                <option value="organization_viewer">Organization viewer</option>
+                <option value="configuration_editor">Configuration editor</option>
+                <option value="configuration_approver">Configuration approver</option>
                 <option value="organization_administrator">Organization administrator</option>
+                <option value="security_administrator">Security administrator</option>
+                <option value="auditor">Auditor</option>
+                <option value="export_approver">Export approver</option>
               </select>
             </label>
             <label htmlFor="invitation-reason">

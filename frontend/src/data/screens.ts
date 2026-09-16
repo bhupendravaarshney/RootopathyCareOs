@@ -182,10 +182,10 @@ export const screens: Screen[] = [
   })),
 ];
 
-const defaultScreen = screens[4];
-if (!defaultScreen) {
-  throw new Error('The CareOS prototype screen registry must not be empty.');
-}
-
-export const findScreen = (id: string): Screen =>
-  screens.find((screen) => screen.id === id) ?? defaultScreen;
+export const findScreen = (id: string): Screen => {
+  const screen = screens.find((candidate) => candidate.id === id);
+  if (!screen) {
+    throw new Error(`The CareOS screen registry does not contain ${id}.`);
+  }
+  return screen;
+};

@@ -25,7 +25,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 public final class PostgresInvitationAcceptanceOperations
         implements InvitationAcceptanceOperations {
     private static final String PURPOSE = "invitation-acceptance";
-    private static final String OPERATION = "organization.invitation.accept";
+    private static final String OPERATION = "identity.invitation.accept";
 
     private final JdbcTemplate jdbcTemplate;
     private final TransactionTemplate transactionTemplate;

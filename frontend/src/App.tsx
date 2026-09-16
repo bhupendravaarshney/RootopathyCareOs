@@ -1,4 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { careOsApi } from './api/client';
+import { screens } from './data/screens';
+import { AdministrationScreen } from './features/administration/AdministrationScreens';
+import type { AdministrationClient } from './features/administration/administration-types';
 import type { SessionClient } from './features/session/session-types';
 import { SessionProvider } from './features/session/SessionProvider';
 import { useSession } from './features/session/session-context';
@@ -19,6 +23,7 @@ import {
 } from './features/session/SessionScreens';
 import { SessionIssueAlert } from './features/session/SessionIssueAlert';
 import { PrototypeScreenPage } from './pages/PrototypeScreenPage';
+import { RouteNotFoundPage } from './pages/RouteNotFoundPage';
 
 type HashRoute = { id: string; invitationToken?: string; resetToken?: string };
 
@@ -38,8 +43,10 @@ function readHashRoute(hash = window.location.hash): HashRoute {
 }
 
 const identityRoutes = new Set(['M1-01', 'M1-02', 'M1-03', 'M1-04']);
+const registeredScreenIds = new Set(screens.map((screen) => screen.id));
+type ApplicationClient = SessionClient & AdministrationClient;
 
-function RoutedApp() {
+function RoutedApp({ administrationClient }: { administrationClient: AdministrationClient }) {
   const [route, setRoute] = useState<HashRoute>(readHashRoute);
   const invitationTokenRetired = useRef(false);
   const resetTokenRetired = useRef(false);
@@ -240,30 +247,41 @@ function RoutedApp() {
   const sessionNotice = actionIssue ? (
     <SessionIssueAlert issue={actionIssue} onDismiss={dismissActionIssue} />
   ) : undefined;
-  return (
-    <PrototypeScreenPage
-      id={screenId}
-      shell={{
-        actorDisplayName: machine.user.displayName,
-        organizations: machine.organizations.map((organization) => ({
-          id: organization.id,
-          label: organization.displayName,
-        })),
-        onLogout: logout,
-        onSelectOrganization: selectOrganization,
-        selectedOrganizationId: machine.selectedOrganization.id,
-        sessionBusy: pendingAction !== null,
-        sessionNotice,
-        signingOut: pendingAction === 'logout',
-      }}
-    />
-  );
+  const shell = {
+    actorDisplayName: machine.user.displayName,
+    organizations: machine.organizations.map((organization) => ({
+      id: organization.id,
+      label: organization.displayName,
+    })),
+    onLogout: logout,
+    onSelectOrganization: selectOrganization,
+    selectedOrganizationId: machine.selectedOrganization.id,
+    sessionBusy: pendingAction !== null,
+    sessionNotice,
+    signingOut: pendingAction === 'logout',
+  };
+  if (!registeredScreenIds.has(screenId)) {
+    return <RouteNotFoundPage shell={shell} />;
+  }
+  if (screenId === 'M1-05' || screenId === 'M1-06' || screenId === 'M1-07') {
+    return (
+      <AdministrationScreen
+        key={machine.selectedOrganization.id}
+        client={administrationClient}
+        id={screenId}
+        organizationId={machine.selectedOrganization.id}
+        shell={shell}
+      />
+    );
+  }
+  return <PrototypeScreenPage id={screenId} shell={shell} />;
 }
 
-export default function App({ client }: { client?: SessionClient }) {
+export default function App({ client }: { client?: ApplicationClient }) {
+  const resolvedClient = client ?? careOsApi;
   return (
-    <SessionProvider client={client}>
-      <RoutedApp />
+    <SessionProvider client={resolvedClient}>
+      <RoutedApp administrationClient={resolvedClient} />
     </SessionProvider>
   );
 }

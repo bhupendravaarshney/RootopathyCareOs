@@ -6,8 +6,10 @@ import {
   validateComposeText,
   validateDependabotText,
   validateDockerfileText,
+  validateFoundationDataScopeTexts,
   validateNginxText,
   validateProductionConfigText,
+  validateResponsiveBrowserTexts,
   validateWorkflowText,
 } from "../verify-ci-security.mjs";
 
@@ -31,6 +33,44 @@ jobs:
           persist-credentials: false
 `;
   assert.deepEqual(validateWorkflowText("secure.yml", workflow), []);
+});
+
+test("requires the Module 1 production, review-draft, and candidate checks in the quality workflow", () => {
+  const workflow = `name: quality
+on: push
+permissions:
+  contents: read
+concurrency:
+  group: quality
+  cancel-in-progress: true
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - run: node scripts/verify-module-1-inputs.mjs --require-approved
+      - run: node --test scripts/tests/verify-module-1-inputs.test.mjs
+      - run: node scripts/verify-module-1-review-drafts.mjs
+      - run: node --test scripts/tests/verify-module-1-review-drafts.test.mjs
+      - run: node scripts/verify-module-1-candidate-inputs.mjs
+      - run: node --test scripts/tests/verify-module-1-candidate-inputs.test.mjs
+`;
+  assert.deepEqual(validateWorkflowText("quality.yml", workflow), []);
+
+  const weakened = workflow.replace(
+    "      - run: node --test scripts/tests/verify-module-1-candidate-inputs.test.mjs\n",
+    "",
+  );
+  assert.match(
+    validateWorkflowText("quality.yml", weakened).join("\n"),
+    /contracts job must run the Module 1 input\/review\/candidate command/,
+  );
+
+  const approvalWeakened = workflow.replace(" --require-approved", "");
+  assert.match(
+    validateWorkflowText("quality.yml", approvalWeakened).join("\n"),
+    /contracts job must run the Module 1 input\/review\/candidate command/,
+  );
 });
 
 test("rejects mutable action references", () => {
@@ -221,8 +261,47 @@ test("rejects unsafe CSP and local production configuration fallbacks", () => {
   assert.match(baseErrors, /local-only defaults/);
 });
 
+test("requires synthetic foundation data to remain local or test only", () => {
+  const secure = {
+    base: "foundationSyntheticDataEnabled: false",
+    local: "foundationSyntheticDataEnabled: true",
+    production: "foundationSyntheticDataEnabled: false",
+    test: "foundationSyntheticDataEnabled: true",
+    migration: `
+      '\${foundationSyntheticDataEnabled}'::boolean;
+      IF synthetic_data_enabled THEN
+        RETURN;
+      END IF;
+      DELETE FROM facilities WHERE id = reference_facility_id;
+      BEGIN
+        DELETE FROM organizations WHERE id = reference_organization_id;
+      EXCEPTION
+        WHEN foreign_key_violation THEN RAISE;
+      END;
+    `,
+  };
+  assert.deepEqual(validateFoundationDataScopeTexts(secure), []);
+
+  const unsafe = {
+    ...secure,
+    production:
+      "foundationSyntheticDataEnabled: ${CAREOS_FOUNDATION_SYNTHETIC_DATA_ENABLED:true}",
+    migration: secure.migration.replace(
+      "WHEN foreign_key_violation THEN RAISE;",
+      "WHEN OTHERS THEN NULL;",
+    ),
+  };
+  const errors = validateFoundationDataScopeTexts(unsafe).join("\n");
+  assert.match(errors, /production.*hard-disable/);
+  assert.match(errors, /fail closed/);
+});
+
 test("rejects mutable images and under-hardened Compose application services", () => {
   const compose = `services:
+  postgres:
+    image: postgres:18-alpine@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    volumes:
+      - careos-postgres:/var/lib/postgresql/data
   backend:
     image: example/backend:latest
 `;
@@ -230,8 +309,13 @@ test("rejects mutable images and under-hardened Compose application services", (
   assert.match(errors, /sha256 digest/);
   assert.match(errors, /read-only root filesystem/);
   assert.match(errors, /all capabilities dropped/);
+  assert.match(errors, /PostgreSQL 18 must mount its data volume/);
 
   const hardened = `services:
+  postgres:
+    image: postgres:18-alpine@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    volumes:
+      - careos-postgres:/var/lib/postgresql
   frontend:
     build:
       context: ./frontend
@@ -269,4 +353,35 @@ updates:
       (error) => error === "dependabot.yml: missing docker updates for /",
     ),
   );
+});
+
+test("requires every responsive browser project and its overflow assertions", () => {
+  const config = `projects: [
+    { name: 'desktop-1440', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
+    { name: 'compact-1024', use: { ...devices['Desktop Chrome'], viewport: { width: 1024, height: 900 } } },
+    { name: 'tablet-768', use: { ...devices['Desktop Chrome'], viewport: { width: 768, height: 1024 } } },
+    { name: 'mobile-390', use: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } },
+    { name: 'mobile-320', use: { viewport: { width: 320, height: 800 }, isMobile: true, hasTouch: true } },
+  ]`;
+  const suite = `
+    document.documentElement.scrollWidth;
+    document.body.scrollWidth;
+    await expectNoDocumentHorizontalOverflow(page, id);
+    await expectNoDocumentHorizontalOverflow(page, 'M1-04 organization selection');
+    expect([1440, 1024, 768, 390, 320]).toContain(viewport.width);
+    const usesDrawer = viewport.width <= 760;
+  `;
+  assert.deepEqual(validateResponsiveBrowserTexts({ config, suite }), []);
+
+  const missingProject = validateResponsiveBrowserTexts({
+    config: config.replace(/\s*\{ name: 'tablet-768'[^\n]+\n/, "\n"),
+    suite,
+  }).join("\n");
+  assert.match(missingProject, /exactly one tablet-768 responsive project/);
+
+  const weakenedSuite = validateResponsiveBrowserTexts({
+    config,
+    suite: suite.replace("document.body.scrollWidth;", ""),
+  }).join("\n");
+  assert.match(weakenedSuite, /body-width overflow assertion/);
 });

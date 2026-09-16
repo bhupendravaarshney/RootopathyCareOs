@@ -26,8 +26,8 @@ import tools.jackson.databind.ObjectMapper;
 
 @Service
 public final class InvitationService {
-    public static final String ISSUE_OPERATION = "organization.invitation.issue";
-    public static final String REVOKE_OPERATION = "organization.invitation.revoke";
+    public static final String ISSUE_OPERATION = "identity.invitation.issue";
+    public static final String REVOKE_OPERATION = "identity.invitation.revoke";
     private static final String PURPOSE = "organization-administration";
     private static final String JSON = "application/json";
     private static final Pattern EMAIL = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
@@ -85,7 +85,8 @@ public final class InvitationService {
                 command.correlationId(),
                 ISSUE_OPERATION,
                 reason,
-                command.recentAuthenticationAt());
+                command.recentAuthenticationAt(),
+                command.mfaAuthenticatedAt());
         var idempotency = new IdempotencyCommand(
                 ISSUE_OPERATION,
                 command.idempotencyKey(),
@@ -126,7 +127,8 @@ public final class InvitationService {
                 command.correlationId(),
                 REVOKE_OPERATION,
                 reason,
-                command.recentAuthenticationAt());
+                command.recentAuthenticationAt(),
+                command.mfaAuthenticatedAt());
         var idempotency = new IdempotencyCommand(
                 REVOKE_OPERATION,
                 command.idempotencyKey(),
@@ -202,14 +204,14 @@ public final class InvitationService {
                     var payloadJson = json(payload);
                     return new GovernanceEvidence(
                             new AuditRecord(
-                                    "organization.invitation.accepted",
+                                    "identity.invitation.accepted",
                                     1,
                                     "invitation",
                                     accepted.invitationId(),
                                     null,
                                     payloadJson),
                             new OutboxRecord(
-                                    "organization.invitation.accepted",
+                                    "identity.invitation.accepted",
                                     1,
                                     "invitation",
                                     accepted.invitationId(),
@@ -233,7 +235,7 @@ public final class InvitationService {
         }
         payload.put("roleKey", invitation.roleKey());
         var payloadJson = json(payload);
-        var eventName = "organization.invitation." + transition;
+        var eventName = "identity.invitation." + transition;
         return new GovernedMutation(
                 new IdempotentResponse(statusCode, JSON, json(response)),
                 new GovernanceEvidence(
@@ -258,14 +260,17 @@ public final class InvitationService {
             String correlationId,
             String operation,
             String reason,
-            Instant recentAuthenticationAt) {
+            Instant recentAuthenticationAt,
+            Instant mfaAuthenticatedAt) {
         return new TenantAuthorizationRequest(
                 Objects.requireNonNull(organizationId, "organizationId"),
                 new AuthenticatedActorContext(
                         Objects.requireNonNull(actorId, "actorId"), PURPOSE, correlationId),
                 new OperationKey(operation),
                 reason,
-                recentAuthenticationAt);
+                recentAuthenticationAt,
+                mfaAuthenticatedAt,
+                null);
     }
 
     private String requestHash(String... values) {
@@ -354,6 +359,7 @@ public final class InvitationService {
             String roleKey,
             String reason,
             Instant recentAuthenticationAt,
+            Instant mfaAuthenticatedAt,
             String correlationId,
             String idempotencyKey) {}
 
@@ -363,6 +369,7 @@ public final class InvitationService {
             UUID invitationId,
             String reason,
             Instant recentAuthenticationAt,
+            Instant mfaAuthenticatedAt,
             String correlationId,
             String idempotencyKey) {
         public RevokeCommand {

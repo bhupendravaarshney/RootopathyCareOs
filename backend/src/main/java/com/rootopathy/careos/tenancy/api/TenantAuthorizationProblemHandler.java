@@ -43,6 +43,10 @@ public final class TenantAuthorizationProblemHandler {
                     HttpStatus.PRECONDITION_REQUIRED,
                     "recent-authentication-required",
                     "Recent authentication required");
+            case MFA_REQUIRED -> new ProblemMapping(
+                    HttpStatus.PRECONDITION_REQUIRED,
+                    "mfa-required",
+                    "Multi-factor authentication required");
             case INDEPENDENT_APPROVAL_REQUIRED -> new ProblemMapping(
                     HttpStatus.CONFLICT,
                     "independent-approval-required",
