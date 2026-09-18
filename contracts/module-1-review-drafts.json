@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "module": "M1",
+  "status": "DRAFT_NOT_APPROVED",
+  "draftVersion": "review-draft-1",
+  "artifacts": [
+    {
+      "kind": "screen-mockups",
+      "version": "review-draft-1",
+      "path": "docs/module-1-review-drafts/01-screen-mockups.md"
+    },
+    {
+      "kind": "design-system",
+      "version": "review-draft-1",
+      "path": "docs/module-1-review-drafts/02-design-system.md"
+    },
+    {
+      "kind": "data-dictionary-and-validation",
+      "version": "review-draft-1",
+      "path": "docs/module-1-review-drafts/03-data-dictionary-and-validation.md"
+    },
+    {
+      "kind": "lifecycle-and-transition-matrix",
+      "version": "review-draft-1",
+      "path": "docs/module-1-review-drafts/04-lifecycle-and-transition-matrix.md"
+    },
+    {
+      "kind": "authorization-policy",
+      "version": "review-draft-1",
+      "path": "docs/module-1-review-drafts/05-authorization-policy.md"
+    },
+    {
+      "kind": "audit-and-event-registry",
+      "version": "review-draft-1",
+      "path": "docs/module-1-review-drafts/06-audit-and-event-registry.md"
+    },
+    {
+      "kind": "readiness-and-activation-policy",
+      "version": "review-draft-1",
+      "path": "docs/module-1-review-drafts/07-readiness-and-activation-policy.md"
+    },
+    {
+      "kind": "history-and-export-policy",
+      "version": "review-draft-1",
+      "path": "docs/module-1-review-drafts/08-history-and-export-policy.md"
+    }
+  ]
+}

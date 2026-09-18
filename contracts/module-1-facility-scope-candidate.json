@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "module": "M1",
+  "slice": "M1B",
+  "status": "CANDIDATE_FOR_APPROVAL",
+  "candidateVersion": "m1-facility-scope-candidate-1",
+  "basis": {
+    "registryVersion": "m1-candidate-1",
+    "approvalRecordId": "M1-APPROVAL-20260916-01",
+    "approvedPackageSha256": "19aff5ce30516b7ee2101c093a8429d8a74394995ca90d486790bcc18a392946"
+  },
+  "artifacts": [
+    {
+      "kind": "facility-scope-contract",
+      "version": "m1-facility-scope-candidate-1",
+      "path": "candidate-inputs/module-1-facility-scope/01-facility-scope-contract.md"
+    }
+  ]
+}

@@ -1,0 +1,100 @@
+{
+  "$schema": "./module-1-input-gate.schema.json",
+  "schemaVersion": 1,
+  "module": "M1",
+  "status": "APPROVED",
+  "requiredArtifacts": [
+    "screen-mockups",
+    "design-system",
+    "data-dictionary-and-validation",
+    "lifecycle-and-transition-matrix",
+    "authorization-policy",
+    "audit-and-event-registry",
+    "readiness-and-activation-policy",
+    "history-and-export-policy"
+  ],
+  "artifacts": [
+    {
+      "kind": "screen-mockups",
+      "version": "m1-candidate-1",
+      "path": "approved-inputs/module-1/01-screen-mockups.html",
+      "sha256": "4c141f7d123ff61888dab80ac75bdc80635142ccad2aaef8ed9e78fe445a8696"
+    },
+    {
+      "kind": "design-system",
+      "version": "m1-candidate-1",
+      "path": "approved-inputs/module-1/02-design-system.md",
+      "sha256": "f250ec3121d7dbef1e2f6f7eb1085b601ca8613bd53c21baafeda89bdae8bce0"
+    },
+    {
+      "kind": "data-dictionary-and-validation",
+      "version": "m1-candidate-1",
+      "path": "approved-inputs/module-1/03-data-dictionary-and-validation.md",
+      "sha256": "c2882eab21119736838093912fe5c9aad7cba88abac91574a58e2399d97b8adb"
+    },
+    {
+      "kind": "lifecycle-and-transition-matrix",
+      "version": "m1-candidate-1",
+      "path": "approved-inputs/module-1/04-lifecycle-and-transition-matrix.md",
+      "sha256": "07200a51d23278697bd83c60ef79a039eae2a65331ea6fbd50583d3fdf8ae43a"
+    },
+    {
+      "kind": "authorization-policy",
+      "version": "m1-candidate-1",
+      "path": "approved-inputs/module-1/05-authorization-policy.md",
+      "sha256": "3d65f85fc39d2ddcca0bcdce4fb43c1c8f4ff55902fbfc1a455669671e2c308b"
+    },
+    {
+      "kind": "audit-and-event-registry",
+      "version": "m1-candidate-1",
+      "path": "approved-inputs/module-1/06-audit-and-event-registry.md",
+      "sha256": "88b6217a4b35517c3b4ce17e8ec86f8faea97e26dcac4d2ad6f147dca375bbad"
+    },
+    {
+      "kind": "readiness-and-activation-policy",
+      "version": "m1-candidate-1",
+      "path": "approved-inputs/module-1/07-readiness-and-activation-policy.md",
+      "sha256": "120645c7bf4990b38a5eedb253044e945953dcf8ce4dc9146af60b8662b40122"
+    },
+    {
+      "kind": "history-and-export-policy",
+      "version": "m1-candidate-1",
+      "path": "approved-inputs/module-1/08-history-and-export-policy.md",
+      "sha256": "9a0de3cf0389b578bf1f68ea06aa63fadfe774ef529689bc029c8a71e3e947de"
+    }
+  ],
+  "approval": {
+    "decision": "APPROVED",
+    "recordId": "M1-APPROVAL-20260916-01",
+    "approvedBy": "bhupendra, developer",
+    "approvedAt": "2026-09-16T15:52:55.639Z",
+    "screens": [
+      "M1-01",
+      "M1-02",
+      "M1-03",
+      "M1-04",
+      "M1-05",
+      "M1-06",
+      "M1-07",
+      "M1-08",
+      "M1-09",
+      "M1-10",
+      "M1-11",
+      "M1-12",
+      "M1-13",
+      "M1-14",
+      "M1-15",
+      "M1-16",
+      "M1-17",
+      "M1-18",
+      "M1-19",
+      "M1-20",
+      "M1-21",
+      "M1-22",
+      "M1-23"
+    ],
+    "packageSha256": "19aff5ce30516b7ee2101c093a8429d8a74394995ca90d486790bcc18a392946",
+    "evidencePath": "approved-inputs/module-1/approval-record-m1-candidate-1.md",
+    "evidenceSha256": "8a9e69692adebaccc738d51df225d2cf4ed98579b5451fca2c12a03131122735"
+  }
+}

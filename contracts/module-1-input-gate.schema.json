@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://careos.rootopathy.com/contracts/module-1-input-gate.schema.json",
+  "title": "CareOS Module 1 implementation input gate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "module",
+    "status",
+    "requiredArtifacts",
+    "artifacts",
+    "approval"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "./module-1-input-gate.schema.json"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "module": {
+      "const": "M1"
+    },
+    "status": {
+      "enum": ["BLOCKED_INPUT", "APPROVED"]
+    },
+    "requiredArtifacts": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "prefixItems": [
+        { "const": "screen-mockups" },
+        { "const": "design-system" },
+        { "const": "data-dictionary-and-validation" },
+        { "const": "lifecycle-and-transition-matrix" },
+        { "const": "authorization-policy" },
+        { "const": "audit-and-event-registry" },
+        { "const": "readiness-and-activation-policy" },
+        { "const": "history-and-export-policy" }
+      ],
+      "items": false
+    },
+    "artifacts": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "$ref": "#/$defs/artifact"
+      }
+    },
+    "approval": {
+      "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/approval" }]
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "version", "path", "sha256"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "screen-mockups",
+            "design-system",
+            "data-dictionary-and-validation",
+            "lifecycle-and-transition-matrix",
+            "authorization-policy",
+            "audit-and-event-registry",
+            "readiness-and-activation-policy",
+            "history-and-export-policy"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$"
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^approved-inputs/module-1/[A-Za-z0-9][A-Za-z0-9._/-]{0,479}$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision",
+        "recordId",
+        "approvedBy",
+        "approvedAt",
+        "screens",
+        "packageSha256",
+        "evidencePath",
+        "evidenceSha256"
+      ],
+      "properties": {
+        "decision": {
+          "const": "APPROVED"
+        },
+        "recordId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"
+        },
+        "approvedBy": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 200
+        },
+        "approvedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "screens": {
+          "type": "array",
+          "minItems": 23,
+          "maxItems": 23,
+          "prefixItems": [
+            { "const": "M1-01" },
+            { "const": "M1-02" },
+            { "const": "M1-03" },
+            { "const": "M1-04" },
+            { "const": "M1-05" },
+            { "const": "M1-06" },
+            { "const": "M1-07" },
+            { "const": "M1-08" },
+            { "const": "M1-09" },
+            { "const": "M1-10" },
+            { "const": "M1-11" },
+            { "const": "M1-12" },
+            { "const": "M1-13" },
+            { "const": "M1-14" },
+            { "const": "M1-15" },
+            { "const": "M1-16" },
+            { "const": "M1-17" },
+            { "const": "M1-18" },
+            { "const": "M1-19" },
+            { "const": "M1-20" },
+            { "const": "M1-21" },
+            { "const": "M1-22" },
+            { "const": "M1-23" }
+          ],
+          "items": false
+        },
+        "packageSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "evidencePath": {
+          "type": "string",
+          "pattern": "^approved-inputs/module-1/[A-Za-z0-9][A-Za-z0-9._/-]{0,479}$"
+        },
+        "evidenceSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": { "const": "BLOCKED_INPUT" }
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "approval": { "type": "null" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": { "const": "APPROVED" }
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "artifacts": { "minItems": 8 },
+          "approval": { "$ref": "#/$defs/approval" }
+        }
+      }
+    }
+  ]
+}

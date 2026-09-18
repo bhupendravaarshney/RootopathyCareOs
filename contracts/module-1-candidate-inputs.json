@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "module": "M1",
+  "status": "CANDIDATE_FOR_APPROVAL",
+  "candidateVersion": "m1-candidate-1",
+  "basis": "review-draft-1",
+  "artifacts": [
+    {
+      "kind": "screen-mockups",
+      "version": "m1-candidate-1",
+      "path": "candidate-inputs/module-1/01-screen-mockups.html"
+    },
+    {
+      "kind": "design-system",
+      "version": "m1-candidate-1",
+      "path": "candidate-inputs/module-1/02-design-system.md"
+    },
+    {
+      "kind": "data-dictionary-and-validation",
+      "version": "m1-candidate-1",
+      "path": "candidate-inputs/module-1/03-data-dictionary-and-validation.md"
+    },
+    {
+      "kind": "lifecycle-and-transition-matrix",
+      "version": "m1-candidate-1",
+      "path": "candidate-inputs/module-1/04-lifecycle-and-transition-matrix.md"
+    },
+    {
+      "kind": "authorization-policy",
+      "version": "m1-candidate-1",
+      "path": "candidate-inputs/module-1/05-authorization-policy.md"
+    },
+    {
+      "kind": "audit-and-event-registry",
+      "version": "m1-candidate-1",
+      "path": "candidate-inputs/module-1/06-audit-and-event-registry.md"
+    },
+    {
+      "kind": "readiness-and-activation-policy",
+      "version": "m1-candidate-1",
+      "path": "candidate-inputs/module-1/07-readiness-and-activation-policy.md"
+    },
+    {
+      "kind": "history-and-export-policy",
+      "version": "m1-candidate-1",
+      "path": "candidate-inputs/module-1/08-history-and-export-policy.md"
+    }
+  ]
+}
