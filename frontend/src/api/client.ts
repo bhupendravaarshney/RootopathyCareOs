@@ -17,7 +17,34 @@ import type {
   CompletePasswordResetData,
   CompletePasswordResetResponse,
   CompletePasswordResetResponses,
+  CreateFacilityDraftData,
+  CreateFacilityDraftResponse,
+  CreateFacilityDraftResponses,
+  UpdateFacilityDraftData,
+  UpdateFacilityDraftResponse,
+  UpdateFacilityDraftResponses,
+  CreateOrganizationAddressData,
+  CreateOrganizationAddressResponse,
+  CreateOrganizationAddressResponses,
+  CreateOrganizationContactData,
+  CreateOrganizationContactResponse,
+  CreateOrganizationContactResponses,
+  CreateOrganizationIdentifierData,
+  CreateOrganizationIdentifierResponse,
+  CreateOrganizationIdentifierResponses,
+  CreateOrganizationGovernanceResponsibilityData,
+  CreateOrganizationGovernanceResponsibilityResponse,
+  CreateOrganizationGovernanceResponsibilityResponses,
   CsrfToken,
+  EndOrganizationAddressData,
+  EndOrganizationAddressResponse,
+  EndOrganizationAddressResponses,
+  EndOrganizationContactData,
+  EndOrganizationContactResponse,
+  EndOrganizationContactResponses,
+  EndOrganizationGovernanceResponsibilityData,
+  EndOrganizationGovernanceResponsibilityResponse,
+  EndOrganizationGovernanceResponsibilityResponses,
   ExecuteMfaAdministrativeResetData,
   ExecuteMfaAdministrativeResetResponse,
   ExecuteMfaAdministrativeResetResponses,
@@ -33,9 +60,18 @@ import type {
   GetAuthenticationSessionData,
   GetAuthenticationSessionResponse,
   GetAuthenticationSessionResponses,
+  GetFacilityDirectoryData,
+  GetFacilityDirectoryResponse,
+  GetFacilityDirectoryResponses,
   GetOrganizationProfileData,
   GetOrganizationProfileResponse,
   GetOrganizationProfileResponses,
+  GetOrganizationInternationalSettingsData,
+  GetOrganizationInternationalSettingsResponse,
+  GetOrganizationInternationalSettingsResponses,
+  GetOrganizationGovernanceDirectoryData,
+  GetOrganizationGovernanceDirectoryResponse,
+  GetOrganizationGovernanceDirectoryResponses,
   GetSystemSummaryData,
   GetSystemSummaryResponse,
   GetSystemSummaryResponses,
@@ -45,6 +81,12 @@ import type {
   IssueInvitationData,
   IssueInvitationResponse,
   IssueInvitationResponses,
+  ListOrganizationIdentifiersData,
+  ListOrganizationIdentifiersResponse,
+  ListOrganizationIdentifiersResponses,
+  ListOrganizationContactsData,
+  ListOrganizationContactsResponse,
+  ListOrganizationContactsResponses,
   ListPrototypeScreensData,
   ListPrototypeScreensResponse,
   ListPrototypeScreensResponses,
@@ -75,21 +117,48 @@ import type {
   RequestOrganizationOwnerTransferData,
   RequestOrganizationOwnerTransferResponse,
   RequestOrganizationOwnerTransferResponses,
+  RevokeOrganizationIdentifierData,
+  RevokeOrganizationIdentifierResponse,
+  RevokeOrganizationIdentifierResponses,
   RevokeInvitationData,
   RevokeInvitationResponse,
   RevokeInvitationResponses,
   SelectOrganizationData,
   SelectOrganizationResponse,
   SelectOrganizationResponses,
+  ScheduleOrganizationInternationalSettingsData,
+  ScheduleOrganizationInternationalSettingsResponse,
+  ScheduleOrganizationInternationalSettingsResponses,
   StartMfaEnrollmentData,
   StartMfaEnrollmentResponse,
   StartMfaEnrollmentResponses,
+  SupersedeOrganizationIdentifierData,
+  SupersedeOrganizationIdentifierResponse,
+  SupersedeOrganizationIdentifierResponses,
+  SupersedeOrganizationGovernanceResponsibilityData,
+  SupersedeOrganizationGovernanceResponsibilityResponse,
+  SupersedeOrganizationGovernanceResponsibilityResponses,
+  SupersedeOrganizationAddressData,
+  SupersedeOrganizationAddressResponse,
+  SupersedeOrganizationAddressResponses,
+  SupersedeOrganizationContactData,
+  SupersedeOrganizationContactResponse,
+  SupersedeOrganizationContactResponses,
   UpdateOrganizationProfileData,
   UpdateOrganizationProfileResponse,
   UpdateOrganizationProfileResponses,
+  UpdateOrganizationIdentifierData,
+  UpdateOrganizationIdentifierResponse,
+  UpdateOrganizationIdentifierResponses,
   VerifyMfaEnrollmentData,
   VerifyMfaEnrollmentResponse,
   VerifyMfaEnrollmentResponses,
+  VerifyOrganizationIdentifierData,
+  VerifyOrganizationIdentifierResponse,
+  VerifyOrganizationIdentifierResponses,
+  VerifyOrganizationContactData,
+  VerifyOrganizationContactResponse,
+  VerifyOrganizationContactResponses,
   VerifyRecentAuthenticationData,
   VerifyRecentAuthenticationResponse,
   VerifyRecentAuthenticationResponses,
@@ -146,6 +215,28 @@ const endpoints = {
     path: '/api/v1/auth/password-resets' satisfies CompletePasswordResetData['url'],
     successStatuses: [204] satisfies readonly ResponseStatus<CompletePasswordResetResponses>[],
   },
+  createOrganizationAddress: {
+    path: '/api/v1/organizations/{organizationId}/addresses' satisfies CreateOrganizationAddressData['url'],
+    successStatuses: [201] satisfies readonly ResponseStatus<CreateOrganizationAddressResponses>[],
+  },
+  createOrganizationContact: {
+    path: '/api/v1/organizations/{organizationId}/contacts' satisfies CreateOrganizationContactData['url'],
+    successStatuses: [201] satisfies readonly ResponseStatus<CreateOrganizationContactResponses>[],
+  },
+  createOrganizationIdentifier: {
+    path: '/api/v1/organizations/{organizationId}/identifiers' satisfies CreateOrganizationIdentifierData['url'],
+    successStatuses: [
+      201,
+    ] satisfies readonly ResponseStatus<CreateOrganizationIdentifierResponses>[],
+  },
+  endOrganizationAddress: {
+    path: '/api/v1/organizations/{organizationId}/addresses/{addressId}/endings' satisfies EndOrganizationAddressData['url'],
+    successStatuses: [200] satisfies readonly ResponseStatus<EndOrganizationAddressResponses>[],
+  },
+  endOrganizationContact: {
+    path: '/api/v1/organizations/{organizationId}/contacts/{contactId}/endings' satisfies EndOrganizationContactData['url'],
+    successStatuses: [200] satisfies readonly ResponseStatus<EndOrganizationContactResponses>[],
+  },
   executeMfaAdministrativeReset: {
     path: '/api/v1/organizations/{organizationId}/users/{targetUserId}/mfa-reset-requests/{approvalId}/executions' satisfies ExecuteMfaAdministrativeResetData['url'],
     successStatuses: [
@@ -176,6 +267,48 @@ const endpoints = {
     path: '/api/v1/organizations/{organizationId}/profile' satisfies GetOrganizationProfileData['url'],
     successStatuses: [200] satisfies readonly ResponseStatus<GetOrganizationProfileResponses>[],
   },
+  getFacilityDirectory: {
+    path: '/api/v1/organizations/{organizationId}/facilities' satisfies GetFacilityDirectoryData['url'],
+    successStatuses: [200] satisfies readonly ResponseStatus<GetFacilityDirectoryResponses>[],
+  },
+  createFacilityDraft: {
+    path: '/api/v1/organizations/{organizationId}/facilities' satisfies CreateFacilityDraftData['url'],
+    successStatuses: [201] satisfies readonly ResponseStatus<CreateFacilityDraftResponses>[],
+  },
+  updateFacilityDraft: {
+    path: '/api/v1/organizations/{organizationId}/facilities/{facilityId}' satisfies UpdateFacilityDraftData['url'],
+    successStatuses: [200] satisfies readonly ResponseStatus<UpdateFacilityDraftResponses>[],
+  },
+  getOrganizationInternationalSettings: {
+    path: '/api/v1/organizations/{organizationId}/international-settings' satisfies GetOrganizationInternationalSettingsData['url'],
+    successStatuses: [
+      200,
+    ] satisfies readonly ResponseStatus<GetOrganizationInternationalSettingsResponses>[],
+  },
+  getOrganizationGovernanceDirectory: {
+    path: '/api/v1/organizations/{organizationId}/governance-responsibilities' satisfies GetOrganizationGovernanceDirectoryData['url'],
+    successStatuses: [
+      200,
+    ] satisfies readonly ResponseStatus<GetOrganizationGovernanceDirectoryResponses>[],
+  },
+  createOrganizationGovernanceResponsibility: {
+    path: '/api/v1/organizations/{organizationId}/governance-responsibilities' satisfies CreateOrganizationGovernanceResponsibilityData['url'],
+    successStatuses: [
+      201,
+    ] satisfies readonly ResponseStatus<CreateOrganizationGovernanceResponsibilityResponses>[],
+  },
+  supersedeOrganizationGovernanceResponsibility: {
+    path: '/api/v1/organizations/{organizationId}/governance-responsibilities/{responsibilityId}/supersessions' satisfies SupersedeOrganizationGovernanceResponsibilityData['url'],
+    successStatuses: [
+      200,
+    ] satisfies readonly ResponseStatus<SupersedeOrganizationGovernanceResponsibilityResponses>[],
+  },
+  endOrganizationGovernanceResponsibility: {
+    path: '/api/v1/organizations/{organizationId}/governance-responsibilities/{responsibilityId}/endings' satisfies EndOrganizationGovernanceResponsibilityData['url'],
+    successStatuses: [
+      200,
+    ] satisfies readonly ResponseStatus<EndOrganizationGovernanceResponsibilityResponses>[],
+  },
   getSystemSummary: {
     path: '/api/public/system-summary' satisfies GetSystemSummaryData['url'],
     successStatuses: [200] satisfies readonly ResponseStatus<GetSystemSummaryResponses>[],
@@ -197,6 +330,16 @@ const endpoints = {
     successStatuses: [
       200,
     ] satisfies readonly ResponseStatus<ListOrganizationMembershipsResponses>[],
+  },
+  listOrganizationIdentifiers: {
+    path: '/api/v1/organizations/{organizationId}/identifiers' satisfies ListOrganizationIdentifiersData['url'],
+    successStatuses: [
+      200,
+    ] satisfies readonly ResponseStatus<ListOrganizationIdentifiersResponses>[],
+  },
+  listOrganizationContacts: {
+    path: '/api/v1/organizations/{organizationId}/contacts' satisfies ListOrganizationContactsData['url'],
+    successStatuses: [200] satisfies readonly ResponseStatus<ListOrganizationContactsResponses>[],
   },
   listSelectableOrganizations: {
     path: '/api/v1/organizations' satisfies ListSelectableOrganizationsData['url'],
@@ -242,13 +385,43 @@ const endpoints = {
     path: '/api/v1/organizations/{organizationId}/invitations/{invitationId}/revocations' satisfies RevokeInvitationData['url'],
     successStatuses: [200] satisfies readonly ResponseStatus<RevokeInvitationResponses>[],
   },
+  revokeOrganizationIdentifier: {
+    path: '/api/v1/organizations/{organizationId}/identifiers/{identifierId}/revocations' satisfies RevokeOrganizationIdentifierData['url'],
+    successStatuses: [
+      200,
+    ] satisfies readonly ResponseStatus<RevokeOrganizationIdentifierResponses>[],
+  },
   selectOrganization: {
     path: '/api/v1/auth/organization-selections' satisfies SelectOrganizationData['url'],
     successStatuses: [200] satisfies readonly ResponseStatus<SelectOrganizationResponses>[],
   },
+  scheduleOrganizationInternationalSettings: {
+    path: '/api/v1/organizations/{organizationId}/international-settings' satisfies ScheduleOrganizationInternationalSettingsData['url'],
+    successStatuses: [
+      200,
+    ] satisfies readonly ResponseStatus<ScheduleOrganizationInternationalSettingsResponses>[],
+  },
   startMfaEnrollment: {
     path: '/api/v1/auth/mfa/enrollments' satisfies StartMfaEnrollmentData['url'],
     successStatuses: [200] satisfies readonly ResponseStatus<StartMfaEnrollmentResponses>[],
+  },
+  supersedeOrganizationIdentifier: {
+    path: '/api/v1/organizations/{organizationId}/identifiers/{identifierId}/supersessions' satisfies SupersedeOrganizationIdentifierData['url'],
+    successStatuses: [
+      200,
+    ] satisfies readonly ResponseStatus<SupersedeOrganizationIdentifierResponses>[],
+  },
+  supersedeOrganizationAddress: {
+    path: '/api/v1/organizations/{organizationId}/addresses/{addressId}/supersessions' satisfies SupersedeOrganizationAddressData['url'],
+    successStatuses: [
+      201,
+    ] satisfies readonly ResponseStatus<SupersedeOrganizationAddressResponses>[],
+  },
+  supersedeOrganizationContact: {
+    path: '/api/v1/organizations/{organizationId}/contacts/{contactId}/supersessions' satisfies SupersedeOrganizationContactData['url'],
+    successStatuses: [
+      201,
+    ] satisfies readonly ResponseStatus<SupersedeOrganizationContactResponses>[],
   },
   verifyMfaEnrollment: {
     path: '/api/v1/auth/mfa/enrollments/verification' satisfies VerifyMfaEnrollmentData['url'],
@@ -261,6 +434,22 @@ const endpoints = {
   updateOrganizationProfile: {
     path: '/api/v1/organizations/{organizationId}/profile' satisfies UpdateOrganizationProfileData['url'],
     successStatuses: [200] satisfies readonly ResponseStatus<UpdateOrganizationProfileResponses>[],
+  },
+  updateOrganizationIdentifier: {
+    path: '/api/v1/organizations/{organizationId}/identifiers/{identifierId}' satisfies UpdateOrganizationIdentifierData['url'],
+    successStatuses: [
+      200,
+    ] satisfies readonly ResponseStatus<UpdateOrganizationIdentifierResponses>[],
+  },
+  verifyOrganizationIdentifier: {
+    path: '/api/v1/organizations/{organizationId}/identifiers/{identifierId}/verifications' satisfies VerifyOrganizationIdentifierData['url'],
+    successStatuses: [
+      200,
+    ] satisfies readonly ResponseStatus<VerifyOrganizationIdentifierResponses>[],
+  },
+  verifyOrganizationContact: {
+    path: '/api/v1/organizations/{organizationId}/contacts/{contactId}/verifications' satisfies VerifyOrganizationContactData['url'],
+    successStatuses: [200] satisfies readonly ResponseStatus<VerifyOrganizationContactResponses>[],
   },
 } as const;
 
@@ -1339,6 +1528,505 @@ export class CareOsApiClient {
     });
   }
 
+  getOrganizationInternationalSettings(organizationId: string, options: ApiRequestOptions = {}) {
+    const path = endpoints.getOrganizationInternationalSettings.path.replace(
+      '{organizationId}',
+      requireUuid(organizationId, 'organizationId'),
+    ) as `/api/v1/organizations/${string}/international-settings`;
+    return this.#request<GetOrganizationInternationalSettingsResponse>({
+      method: 'GET',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.getOrganizationInternationalSettings.successStatuses,
+    });
+  }
+
+  getFacilityDirectory(
+    organizationId: string,
+    query: NonNullable<GetFacilityDirectoryData['query']> = {},
+    options: ApiRequestOptions = {},
+  ) {
+    const base = endpoints.getFacilityDirectory.path.replace(
+      '{organizationId}',
+      requireUuid(organizationId, 'organizationId'),
+    ) as `/api/v1/organizations/${string}/facilities`;
+    const parameters = new URLSearchParams();
+    if (query.query) parameters.set('query', query.query.trim());
+    if (query.status) parameters.set('status', query.status);
+    const suffix = parameters.toString();
+    return this.#request<GetFacilityDirectoryResponse>({
+      method: 'GET',
+      path: relativeEndpointPath(`${base}${suffix ? `?${suffix}` : ''}`),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.getFacilityDirectory.successStatuses,
+    });
+  }
+
+  createFacilityDraft(
+    organizationId: string,
+    body: CreateFacilityDraftData['body'],
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.createFacilityDraft.path.replace(
+      '{organizationId}',
+      requireUuid(organizationId, 'organizationId'),
+    ) as `/api/v1/organizations/${string}/facilities`;
+    return this.#mutation<CreateFacilityDraftResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      method: 'POST',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.createFacilityDraft.successStatuses,
+    });
+  }
+
+  updateFacilityDraft(
+    organizationId: string,
+    facilityId: string,
+    body: UpdateFacilityDraftData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.updateFacilityDraft.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace(
+        '{facilityId}',
+        requireUuid(facilityId, 'facilityId'),
+      ) as `/api/v1/organizations/${string}/facilities/${string}`;
+    return this.#mutation<UpdateFacilityDraftResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'PUT',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.updateFacilityDraft.successStatuses,
+    });
+  }
+
+  getOrganizationGovernanceDirectory(organizationId: string, options: ApiRequestOptions = {}) {
+    const path = endpoints.getOrganizationGovernanceDirectory.path.replace(
+      '{organizationId}',
+      requireUuid(organizationId, 'organizationId'),
+    ) as `/api/v1/organizations/${string}/governance-responsibilities`;
+    return this.#request<GetOrganizationGovernanceDirectoryResponse>({
+      method: 'GET',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.getOrganizationGovernanceDirectory.successStatuses,
+    });
+  }
+
+  createOrganizationGovernanceResponsibility(
+    organizationId: string,
+    body: CreateOrganizationGovernanceResponsibilityData['body'],
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.createOrganizationGovernanceResponsibility.path.replace(
+      '{organizationId}',
+      requireUuid(organizationId, 'organizationId'),
+    ) as `/api/v1/organizations/${string}/governance-responsibilities`;
+    return this.#mutation<CreateOrganizationGovernanceResponsibilityResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      method: 'POST',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.createOrganizationGovernanceResponsibility.successStatuses,
+    });
+  }
+
+  supersedeOrganizationGovernanceResponsibility(
+    organizationId: string,
+    responsibilityId: string,
+    body: SupersedeOrganizationGovernanceResponsibilityData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.supersedeOrganizationGovernanceResponsibility.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace(
+        '{responsibilityId}',
+        requireUuid(responsibilityId, 'responsibilityId'),
+      ) as `/api/v1/organizations/${string}/governance-responsibilities/${string}/supersessions`;
+    return this.#mutation<SupersedeOrganizationGovernanceResponsibilityResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.supersedeOrganizationGovernanceResponsibility.successStatuses,
+    });
+  }
+
+  endOrganizationGovernanceResponsibility(
+    organizationId: string,
+    responsibilityId: string,
+    body: EndOrganizationGovernanceResponsibilityData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.endOrganizationGovernanceResponsibility.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace(
+        '{responsibilityId}',
+        requireUuid(responsibilityId, 'responsibilityId'),
+      ) as `/api/v1/organizations/${string}/governance-responsibilities/${string}/endings`;
+    return this.#mutation<EndOrganizationGovernanceResponsibilityResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.endOrganizationGovernanceResponsibility.successStatuses,
+    });
+  }
+
+  listOrganizationIdentifiers(organizationId: string, options: ApiRequestOptions = {}) {
+    const path = endpoints.listOrganizationIdentifiers.path.replace(
+      '{organizationId}',
+      requireUuid(organizationId, 'organizationId'),
+    ) as `/api/v1/organizations/${string}/identifiers`;
+    return this.#request<ListOrganizationIdentifiersResponse>({
+      method: 'GET',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.listOrganizationIdentifiers.successStatuses,
+    });
+  }
+
+  createOrganizationIdentifier(
+    organizationId: string,
+    body: CreateOrganizationIdentifierData['body'],
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.createOrganizationIdentifier.path.replace(
+      '{organizationId}',
+      requireUuid(organizationId, 'organizationId'),
+    ) as `/api/v1/organizations/${string}/identifiers`;
+    return this.#mutation<CreateOrganizationIdentifierResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      method: 'POST',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.createOrganizationIdentifier.successStatuses,
+    });
+  }
+
+  updateOrganizationIdentifier(
+    organizationId: string,
+    identifierId: string,
+    body: UpdateOrganizationIdentifierData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.updateOrganizationIdentifier.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace(
+        '{identifierId}',
+        requireUuid(identifierId, 'identifierId'),
+      ) as `/api/v1/organizations/${string}/identifiers/${string}`;
+    return this.#mutation<UpdateOrganizationIdentifierResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'PUT',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.updateOrganizationIdentifier.successStatuses,
+    });
+  }
+
+  verifyOrganizationIdentifier(
+    organizationId: string,
+    identifierId: string,
+    body: VerifyOrganizationIdentifierData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.verifyOrganizationIdentifier.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace(
+        '{identifierId}',
+        requireUuid(identifierId, 'identifierId'),
+      ) as `/api/v1/organizations/${string}/identifiers/${string}/verifications`;
+    return this.#mutation<VerifyOrganizationIdentifierResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.verifyOrganizationIdentifier.successStatuses,
+    });
+  }
+
+  revokeOrganizationIdentifier(
+    organizationId: string,
+    identifierId: string,
+    body: RevokeOrganizationIdentifierData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.revokeOrganizationIdentifier.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace(
+        '{identifierId}',
+        requireUuid(identifierId, 'identifierId'),
+      ) as `/api/v1/organizations/${string}/identifiers/${string}/revocations`;
+    return this.#mutation<RevokeOrganizationIdentifierResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.revokeOrganizationIdentifier.successStatuses,
+    });
+  }
+
+  supersedeOrganizationIdentifier(
+    organizationId: string,
+    identifierId: string,
+    body: SupersedeOrganizationIdentifierData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.supersedeOrganizationIdentifier.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace(
+        '{identifierId}',
+        requireUuid(identifierId, 'identifierId'),
+      ) as `/api/v1/organizations/${string}/identifiers/${string}/supersessions`;
+    return this.#mutation<SupersedeOrganizationIdentifierResponse>({
+      body: {
+        ...body,
+        replacementEtag: requireStrongEtag(body.replacementEtag),
+        replacementId: requireUuid(body.replacementId, 'replacementId'),
+      },
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.supersedeOrganizationIdentifier.successStatuses,
+    });
+  }
+
+  listOrganizationContacts(organizationId: string, options: ApiRequestOptions = {}) {
+    const path = endpoints.listOrganizationContacts.path.replace(
+      '{organizationId}',
+      requireUuid(organizationId, 'organizationId'),
+    ) as `/api/v1/organizations/${string}/contacts`;
+    return this.#request<ListOrganizationContactsResponse>({
+      method: 'GET',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.listOrganizationContacts.successStatuses,
+    });
+  }
+
+  createOrganizationAddress(
+    organizationId: string,
+    body: CreateOrganizationAddressData['body'],
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.createOrganizationAddress.path.replace(
+      '{organizationId}',
+      requireUuid(organizationId, 'organizationId'),
+    ) as `/api/v1/organizations/${string}/addresses`;
+    return this.#mutation<CreateOrganizationAddressResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      method: 'POST',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.createOrganizationAddress.successStatuses,
+    });
+  }
+
+  supersedeOrganizationAddress(
+    organizationId: string,
+    addressId: string,
+    body: SupersedeOrganizationAddressData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.supersedeOrganizationAddress.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace(
+        '{addressId}',
+        requireUuid(addressId, 'addressId'),
+      ) as `/api/v1/organizations/${string}/addresses/${string}/supersessions`;
+    return this.#mutation<SupersedeOrganizationAddressResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.supersedeOrganizationAddress.successStatuses,
+    });
+  }
+
+  endOrganizationAddress(
+    organizationId: string,
+    addressId: string,
+    body: EndOrganizationAddressData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.endOrganizationAddress.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace(
+        '{addressId}',
+        requireUuid(addressId, 'addressId'),
+      ) as `/api/v1/organizations/${string}/addresses/${string}/endings`;
+    return this.#mutation<EndOrganizationAddressResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.endOrganizationAddress.successStatuses,
+    });
+  }
+
+  createOrganizationContact(
+    organizationId: string,
+    body: CreateOrganizationContactData['body'],
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.createOrganizationContact.path.replace(
+      '{organizationId}',
+      requireUuid(organizationId, 'organizationId'),
+    ) as `/api/v1/organizations/${string}/contacts`;
+    return this.#mutation<CreateOrganizationContactResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      method: 'POST',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.createOrganizationContact.successStatuses,
+    });
+  }
+
+  verifyOrganizationContact(
+    organizationId: string,
+    contactId: string,
+    body: VerifyOrganizationContactData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.verifyOrganizationContact.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace(
+        '{contactId}',
+        requireUuid(contactId, 'contactId'),
+      ) as `/api/v1/organizations/${string}/contacts/${string}/verifications`;
+    return this.#mutation<VerifyOrganizationContactResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.verifyOrganizationContact.successStatuses,
+    });
+  }
+
+  supersedeOrganizationContact(
+    organizationId: string,
+    contactId: string,
+    body: SupersedeOrganizationContactData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.supersedeOrganizationContact.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace(
+        '{contactId}',
+        requireUuid(contactId, 'contactId'),
+      ) as `/api/v1/organizations/${string}/contacts/${string}/supersessions`;
+    return this.#mutation<SupersedeOrganizationContactResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.supersedeOrganizationContact.successStatuses,
+    });
+  }
+
+  endOrganizationContact(
+    organizationId: string,
+    contactId: string,
+    body: EndOrganizationContactData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.endOrganizationContact.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace(
+        '{contactId}',
+        requireUuid(contactId, 'contactId'),
+      ) as `/api/v1/organizations/${string}/contacts/${string}/endings`;
+    return this.#mutation<EndOrganizationContactResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.endOrganizationContact.successStatuses,
+    });
+  }
+
   updateOrganizationProfile(
     organizationId: string,
     body: UpdateOrganizationProfileData['body'],
@@ -1359,6 +2047,29 @@ export class CareOsApiClient {
       responseBody: 'json',
       signal: options.signal,
       successStatuses: endpoints.updateOrganizationProfile.successStatuses,
+    });
+  }
+
+  scheduleOrganizationInternationalSettings(
+    organizationId: string,
+    body: ScheduleOrganizationInternationalSettingsData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.scheduleOrganizationInternationalSettings.path.replace(
+      '{organizationId}',
+      requireUuid(organizationId, 'organizationId'),
+    ) as `/api/v1/organizations/${string}/international-settings`;
+    return this.#mutation<ScheduleOrganizationInternationalSettingsResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'PUT',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.scheduleOrganizationInternationalSettings.successStatuses,
     });
   }
 

@@ -189,6 +189,162 @@ export type ReadinessGate = {
   href: string;
 };
 
+export type FacilityType = {
+  key: string;
+  displayName: string;
+};
+
+export type FacilitySummary = {
+  facilityId: string;
+  facilityCode: string;
+  legalName: string;
+  displayName: string;
+  facilityType: string;
+  timezone?: string | null;
+  status: 'draft' | 'under_review' | 'active' | 'suspended' | 'closed';
+  lockVersion: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type FacilityDirectory = {
+  organizationId: string;
+  canCreate: boolean;
+  facilityTypes: Array<FacilityType>;
+  facilities: Array<FacilitySummary>;
+  evaluatedAt: string;
+};
+
+export type FacilityCreateRequest = {
+  facilityCode: string;
+  legalName: string;
+  displayName: string;
+  facilityType: string;
+  addressId?: string | null;
+  contactId?: string | null;
+  timezone?: string | null;
+  reason: string;
+};
+
+export type GovernanceAssignee = {
+  id: string;
+  type: 'membership' | 'external_contact';
+  display: string;
+};
+
+export type GovernanceResponsibility = {
+  responsibilityId: string;
+  responsibilityType: 'clinical' | 'privacy' | 'security' | 'billing';
+  assigneeType: 'membership' | 'external_contact';
+  assigneeId: string;
+  assigneeDisplay: string;
+  escalationEmailMasked: string | null;
+  escalationPhoneMasked: string | null;
+  primary: boolean;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  supersedesId: string | null;
+  status: 'scheduled' | 'active' | 'ended' | 'superseded';
+  availableActions: Array<'supersede' | 'end'>;
+  lockVersion: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type OrganizationGovernanceDirectory = {
+  organizationId: string;
+  canManage: boolean;
+  evaluatedAt: string;
+  responsibilityTypes: ['clinical', 'privacy', 'security', 'billing'];
+  eligibleAssignees: Array<GovernanceAssignee>;
+  responsibilities: Array<GovernanceResponsibility>;
+};
+
+export type GovernanceResponsibilityWriteRequest = {
+  responsibilityType: 'clinical' | 'privacy' | 'security' | 'billing';
+  membershipId: string | null;
+  externalContactId: string | null;
+  escalationEmail: string | null;
+  escalationPhone: string | null;
+  effectiveFrom: string;
+  reason: string;
+};
+
+export type GovernanceResponsibilityEndRequest = {
+  effectiveTo: string;
+  reason: string;
+};
+
+export type InternationalSettingsFormatPreview = {
+  sampleDate: string;
+  sampleTime: string;
+  sampleNumber: string;
+  sampleCurrency: string;
+  localeLibraryDerived: true;
+};
+
+export type InternationalSettingsImpact = {
+  field: 'countryCode' | 'timezone' | 'locale' | 'language' | 'currencyCode' | 'weekStart';
+  code: string;
+  severity: 'information' | 'warning';
+  description: string;
+};
+
+export type InternationalSettingsVersion = {
+  settingsId: string | null;
+  source: 'organization_default' | 'configured';
+  countryCode: string;
+  timezone: string;
+  locale: string;
+  language: string;
+  currencyCode: string;
+  weekStart: 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  lifecycle: 'default' | 'active' | 'scheduled' | 'superseded';
+  supersedesId: string | null;
+  lockVersion: number;
+  updatedAt: string;
+  formatPreview: InternationalSettingsFormatPreview;
+};
+
+export type OrganizationInternationalSettings = {
+  organizationId: string;
+  editable: boolean;
+  canSchedule: boolean;
+  lockVersion: number;
+  evaluatedAt: string;
+  weekStarts: [
+    'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY',
+    'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY',
+    'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY',
+    'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY',
+    'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY',
+    'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY',
+    'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY',
+  ];
+  impactRules: [
+    InternationalSettingsImpact,
+    InternationalSettingsImpact,
+    InternationalSettingsImpact,
+    InternationalSettingsImpact,
+    InternationalSettingsImpact,
+    InternationalSettingsImpact,
+  ];
+  versions: Array<InternationalSettingsVersion>;
+};
+
+export type InternationalSettingsScheduleRequest = {
+  countryCode: string;
+  timezone: string;
+  locale: string;
+  language: string;
+  currencyCode: string;
+  weekStart: 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
+  effectiveFrom: string;
+  reason: string;
+};
+
 export type OrganizationProfile = {
   organizationId: string;
   legalName: string;
@@ -215,6 +371,176 @@ export type OrganizationProfileUpdateRequest = {
   countryCode: string;
   timezone: string;
   locale: string;
+  reason: string;
+};
+
+export type OrganizationIdentifierType = {
+  key: string;
+  displayName: string;
+  jurisdictionCountryCode: string | null;
+  primaryRequired: boolean;
+};
+
+export type OrganizationIdentifier = {
+  identifierId: string;
+  identifierType: string;
+  typeDisplayName: string;
+  assigningAuthority: string;
+  value: string;
+  jurisdictionCountryCode: string | null;
+  verificationStatus: 'unverified' | 'verified';
+  /**
+   * Confidential bounded evidence reference projected only to actors with live verification permission.
+   */
+  evidenceReference: string | null;
+  isPrimary: boolean;
+  issueDate: string | null;
+  expiryDate: string | null;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  /**
+   * The immutable predecessor linked by an atomic supersession, when this identifier is a replacement.
+   */
+  supersedesId: string | null;
+  status: 'draft' | 'verified' | 'active' | 'expired' | 'revoked' | 'superseded';
+  /**
+   * Actions derived from live permission, lifecycle, and primary-replacement policy.
+   */
+  availableActions: Array<'edit' | 'verify' | 'revoke' | 'supersede'>;
+  lockVersion: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type OrganizationIdentifierCollection = {
+  organizationId: string;
+  /**
+   * True only when the actor has live manage permission and an applicable active type exists.
+   */
+  canCreate: boolean;
+  types: Array<OrganizationIdentifierType>;
+  items: Array<OrganizationIdentifier>;
+};
+
+export type OrganizationIdentifierWriteRequest = {
+  identifierType: string;
+  assigningAuthority: string;
+  value: string;
+  jurisdictionCountryCode: string | null;
+  isPrimary: boolean;
+  issueDate: string | null;
+  expiryDate: string | null;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  reason: string;
+};
+
+export type OrganizationIdentifierVerificationRequest = {
+  evidenceReference: string;
+  reason: string;
+};
+
+export type OrganizationIdentifierRevocationRequest = {
+  reason: string;
+};
+
+export type OrganizationIdentifierSupersessionRequest = {
+  replacementId: string;
+  replacementEtag: string;
+  reason: string;
+};
+
+export type OrganizationContactPurpose = {
+  key: string;
+  displayName: string;
+  /**
+   * Migration-owned policy flag. False for the approved operational purpose.
+   */
+  publicProjectionAllowed: boolean;
+};
+
+export type OrganizationAddress = {
+  addressId: string;
+  addressType: 'registered' | 'postal' | 'service' | 'billing';
+  addressLines: Array<string>;
+  locality: string;
+  region: string;
+  postcode: string;
+  countryCode: string;
+  validationStatus: 'unvalidated' | 'validated';
+  validationSource: string | null;
+  isPrimary: boolean;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  supersedesId: string | null;
+  status: 'scheduled' | 'active' | 'ended' | 'superseded';
+  availableActions: Array<'supersede' | 'end'>;
+  lockVersion: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type OrganizationContact = {
+  contactId: string;
+  channel: 'email' | 'phone' | 'web';
+  purpose: string;
+  purposeDisplayName: string;
+  /**
+   * Minimum-necessary masked projection; the confidential normalized value is never returned.
+   */
+  maskedValue: string;
+  verificationStatus: 'unverified' | 'verified';
+  isPrimary: boolean;
+  isPreferred: boolean;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  supersedesId: string | null;
+  status: 'scheduled' | 'active' | 'ended' | 'superseded';
+  availableActions: Array<'verify' | 'supersede' | 'end'>;
+  lockVersion: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type OrganizationContactCollection = {
+  organizationId: string;
+  canCreate: boolean;
+  addressTypes: ['registered', 'postal', 'service', 'billing'];
+  purposes: Array<OrganizationContactPurpose>;
+  addresses: Array<OrganizationAddress>;
+  contacts: Array<OrganizationContact>;
+};
+
+export type OrganizationAddressWriteRequest = {
+  addressType: 'registered' | 'postal' | 'service' | 'billing';
+  addressLines: Array<string>;
+  locality: string;
+  region: string;
+  postcode: string;
+  countryCode: string;
+  validationStatus: 'unvalidated' | 'validated';
+  validationSource: string | null;
+  isPrimary: boolean;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  reason: string;
+};
+
+export type OrganizationContactWriteRequest = {
+  channel: 'email' | 'phone' | 'web';
+  purpose: string;
+  /**
+   * Confidential value normalized and validated according to channel; never projected back.
+   */
+  value: string;
+  isPrimary: boolean;
+  isPreferred: boolean;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  reason: string;
+};
+
+export type OrganizationContactReasonRequest = {
   reason: string;
 };
 
@@ -316,6 +642,26 @@ export type BrowserOrigin = string;
  * Organization boundary for every protected business-resource route.
  */
 export type OrganizationId = string;
+
+/**
+ * Opaque organization identifier UUID.
+ */
+export type IdentifierId = string;
+
+/**
+ * Opaque governance-responsibility UUID.
+ */
+export type ResponsibilityId = string;
+
+/**
+ * Opaque governed organization-address UUID.
+ */
+export type AddressId = string;
+
+/**
+ * Opaque governed organization-contact UUID.
+ */
+export type ContactId = string;
 
 /**
  * Opaque organization invitation identifier.
@@ -1980,6 +2326,564 @@ export type GetAdministrationReadinessResponses = {
 export type GetAdministrationReadinessResponse =
   GetAdministrationReadinessResponses[keyof GetAdministrationReadinessResponses];
 
+export type GetFacilityDirectoryData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: {
+    query?: string;
+    status?: 'draft' | 'under_review' | 'active' | 'suspended' | 'closed';
+  };
+  url: '/api/v1/organizations/{organizationId}/facilities';
+};
+
+export type GetFacilityDirectoryErrors = {
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type GetFacilityDirectoryError =
+  GetFacilityDirectoryErrors[keyof GetFacilityDirectoryErrors];
+
+export type GetFacilityDirectoryResponses = {
+  /**
+   * Authorized facility directory
+   */
+  200: FacilityDirectory;
+};
+
+export type GetFacilityDirectoryResponse =
+  GetFacilityDirectoryResponses[keyof GetFacilityDirectoryResponses];
+
+export type CreateFacilityDraftData = {
+  body: FacilityCreateRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/facilities';
+};
+
+export type CreateFacilityDraftErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type CreateFacilityDraftError = CreateFacilityDraftErrors[keyof CreateFacilityDraftErrors];
+
+export type CreateFacilityDraftResponses = {
+  /**
+   * Facility draft created
+   */
+  201: FacilityDirectory;
+};
+
+export type CreateFacilityDraftResponse =
+  CreateFacilityDraftResponses[keyof CreateFacilityDraftResponses];
+
+export type UpdateFacilityDraftData = {
+  body: FacilityCreateRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    facilityId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/facilities/{facilityId}';
+};
+
+export type UpdateFacilityDraftErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type UpdateFacilityDraftError = UpdateFacilityDraftErrors[keyof UpdateFacilityDraftErrors];
+
+export type UpdateFacilityDraftResponses = {
+  /**
+   * Facility draft updated or exact idempotent response replayed
+   */
+  200: FacilityDirectory;
+};
+
+export type UpdateFacilityDraftResponse =
+  UpdateFacilityDraftResponses[keyof UpdateFacilityDraftResponses];
+
+export type GetOrganizationGovernanceDirectoryData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/governance-responsibilities';
+};
+
+export type GetOrganizationGovernanceDirectoryErrors = {
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type GetOrganizationGovernanceDirectoryError =
+  GetOrganizationGovernanceDirectoryErrors[keyof GetOrganizationGovernanceDirectoryErrors];
+
+export type GetOrganizationGovernanceDirectoryResponses = {
+  /**
+   * Minimum-necessary governance directory
+   */
+  200: OrganizationGovernanceDirectory;
+};
+
+export type GetOrganizationGovernanceDirectoryResponse =
+  GetOrganizationGovernanceDirectoryResponses[keyof GetOrganizationGovernanceDirectoryResponses];
+
+export type CreateOrganizationGovernanceResponsibilityData = {
+  body: GovernanceResponsibilityWriteRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/governance-responsibilities';
+};
+
+export type CreateOrganizationGovernanceResponsibilityErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type CreateOrganizationGovernanceResponsibilityError =
+  CreateOrganizationGovernanceResponsibilityErrors[keyof CreateOrganizationGovernanceResponsibilityErrors];
+
+export type CreateOrganizationGovernanceResponsibilityResponses = {
+  /**
+   * Responsibility created
+   */
+  201: OrganizationGovernanceDirectory;
+};
+
+export type CreateOrganizationGovernanceResponsibilityResponse =
+  CreateOrganizationGovernanceResponsibilityResponses[keyof CreateOrganizationGovernanceResponsibilityResponses];
+
+export type SupersedeOrganizationGovernanceResponsibilityData = {
+  body: GovernanceResponsibilityWriteRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    /**
+     * Opaque governance-responsibility UUID.
+     */
+    responsibilityId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/governance-responsibilities/{responsibilityId}/supersessions';
+};
+
+export type SupersedeOrganizationGovernanceResponsibilityErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type SupersedeOrganizationGovernanceResponsibilityError =
+  SupersedeOrganizationGovernanceResponsibilityErrors[keyof SupersedeOrganizationGovernanceResponsibilityErrors];
+
+export type SupersedeOrganizationGovernanceResponsibilityResponses = {
+  /**
+   * Responsibility superseded
+   */
+  200: OrganizationGovernanceDirectory;
+};
+
+export type SupersedeOrganizationGovernanceResponsibilityResponse =
+  SupersedeOrganizationGovernanceResponsibilityResponses[keyof SupersedeOrganizationGovernanceResponsibilityResponses];
+
+export type EndOrganizationGovernanceResponsibilityData = {
+  body: GovernanceResponsibilityEndRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    /**
+     * Opaque governance-responsibility UUID.
+     */
+    responsibilityId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/governance-responsibilities/{responsibilityId}/endings';
+};
+
+export type EndOrganizationGovernanceResponsibilityErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type EndOrganizationGovernanceResponsibilityError =
+  EndOrganizationGovernanceResponsibilityErrors[keyof EndOrganizationGovernanceResponsibilityErrors];
+
+export type EndOrganizationGovernanceResponsibilityResponses = {
+  /**
+   * Responsibility ended
+   */
+  200: OrganizationGovernanceDirectory;
+};
+
+export type EndOrganizationGovernanceResponsibilityResponse =
+  EndOrganizationGovernanceResponsibilityResponses[keyof EndOrganizationGovernanceResponsibilityResponses];
+
+export type GetOrganizationInternationalSettingsData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/international-settings';
+};
+
+export type GetOrganizationInternationalSettingsErrors = {
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type GetOrganizationInternationalSettingsError =
+  GetOrganizationInternationalSettingsErrors[keyof GetOrganizationInternationalSettingsErrors];
+
+export type GetOrganizationInternationalSettingsResponses = {
+  /**
+   * Current international-settings projection
+   */
+  200: OrganizationInternationalSettings;
+};
+
+export type GetOrganizationInternationalSettingsResponse =
+  GetOrganizationInternationalSettingsResponses[keyof GetOrganizationInternationalSettingsResponses];
+
+export type ScheduleOrganizationInternationalSettingsData = {
+  body: InternationalSettingsScheduleRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/international-settings';
+};
+
+export type ScheduleOrganizationInternationalSettingsErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type ScheduleOrganizationInternationalSettingsError =
+  ScheduleOrganizationInternationalSettingsErrors[keyof ScheduleOrganizationInternationalSettingsErrors];
+
+export type ScheduleOrganizationInternationalSettingsResponses = {
+  /**
+   * Settings version scheduled or exact idempotent response replayed
+   */
+  200: OrganizationInternationalSettings;
+};
+
+export type ScheduleOrganizationInternationalSettingsResponse =
+  ScheduleOrganizationInternationalSettingsResponses[keyof ScheduleOrganizationInternationalSettingsResponses];
+
 export type GetOrganizationProfileData = {
   body?: never;
   path: {
@@ -2097,3 +3001,979 @@ export type UpdateOrganizationProfileResponses = {
 
 export type UpdateOrganizationProfileResponse =
   UpdateOrganizationProfileResponses[keyof UpdateOrganizationProfileResponses];
+
+export type ListOrganizationIdentifiersData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/identifiers';
+};
+
+export type ListOrganizationIdentifiersErrors = {
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type ListOrganizationIdentifiersError =
+  ListOrganizationIdentifiersErrors[keyof ListOrganizationIdentifiersErrors];
+
+export type ListOrganizationIdentifiersResponses = {
+  /**
+   * Current governed organization identifier projection
+   */
+  200: OrganizationIdentifierCollection;
+};
+
+export type ListOrganizationIdentifiersResponse =
+  ListOrganizationIdentifiersResponses[keyof ListOrganizationIdentifiersResponses];
+
+export type CreateOrganizationIdentifierData = {
+  body: OrganizationIdentifierWriteRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/identifiers';
+};
+
+export type CreateOrganizationIdentifierErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type CreateOrganizationIdentifierError =
+  CreateOrganizationIdentifierErrors[keyof CreateOrganizationIdentifierErrors];
+
+export type CreateOrganizationIdentifierResponses = {
+  /**
+   * Identifier draft created or exact response replayed
+   */
+  201: OrganizationIdentifier;
+};
+
+export type CreateOrganizationIdentifierResponse =
+  CreateOrganizationIdentifierResponses[keyof CreateOrganizationIdentifierResponses];
+
+export type UpdateOrganizationIdentifierData = {
+  body: OrganizationIdentifierWriteRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    /**
+     * Opaque organization identifier UUID.
+     */
+    identifierId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/identifiers/{identifierId}';
+};
+
+export type UpdateOrganizationIdentifierErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type UpdateOrganizationIdentifierError =
+  UpdateOrganizationIdentifierErrors[keyof UpdateOrganizationIdentifierErrors];
+
+export type UpdateOrganizationIdentifierResponses = {
+  /**
+   * Identifier draft updated or exact response replayed
+   */
+  200: OrganizationIdentifier;
+};
+
+export type UpdateOrganizationIdentifierResponse =
+  UpdateOrganizationIdentifierResponses[keyof UpdateOrganizationIdentifierResponses];
+
+export type VerifyOrganizationIdentifierData = {
+  body: OrganizationIdentifierVerificationRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    /**
+     * Opaque organization identifier UUID.
+     */
+    identifierId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/identifiers/{identifierId}/verifications';
+};
+
+export type VerifyOrganizationIdentifierErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type VerifyOrganizationIdentifierError =
+  VerifyOrganizationIdentifierErrors[keyof VerifyOrganizationIdentifierErrors];
+
+export type VerifyOrganizationIdentifierResponses = {
+  /**
+   * Identifier verified or exact response replayed
+   */
+  200: OrganizationIdentifier;
+};
+
+export type VerifyOrganizationIdentifierResponse =
+  VerifyOrganizationIdentifierResponses[keyof VerifyOrganizationIdentifierResponses];
+
+export type RevokeOrganizationIdentifierData = {
+  body: OrganizationIdentifierRevocationRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    /**
+     * Opaque organization identifier UUID.
+     */
+    identifierId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/identifiers/{identifierId}/revocations';
+};
+
+export type RevokeOrganizationIdentifierErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type RevokeOrganizationIdentifierError =
+  RevokeOrganizationIdentifierErrors[keyof RevokeOrganizationIdentifierErrors];
+
+export type RevokeOrganizationIdentifierResponses = {
+  /**
+   * Identifier revoked or exact response replayed
+   */
+  200: OrganizationIdentifier;
+};
+
+export type RevokeOrganizationIdentifierResponse =
+  RevokeOrganizationIdentifierResponses[keyof RevokeOrganizationIdentifierResponses];
+
+export type SupersedeOrganizationIdentifierData = {
+  body: OrganizationIdentifierSupersessionRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    /**
+     * Opaque organization identifier UUID.
+     */
+    identifierId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/identifiers/{identifierId}/supersessions';
+};
+
+export type SupersedeOrganizationIdentifierErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type SupersedeOrganizationIdentifierError =
+  SupersedeOrganizationIdentifierErrors[keyof SupersedeOrganizationIdentifierErrors];
+
+export type SupersedeOrganizationIdentifierResponses = {
+  /**
+   * Identifier superseded or exact response replayed
+   */
+  200: OrganizationIdentifier;
+};
+
+export type SupersedeOrganizationIdentifierResponse =
+  SupersedeOrganizationIdentifierResponses[keyof SupersedeOrganizationIdentifierResponses];
+
+export type CreateOrganizationAddressData = {
+  body: OrganizationAddressWriteRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/addresses';
+};
+
+export type CreateOrganizationAddressErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type CreateOrganizationAddressError =
+  CreateOrganizationAddressErrors[keyof CreateOrganizationAddressErrors];
+
+export type CreateOrganizationAddressResponses = {
+  /**
+   * Organization address created or exact response replayed
+   */
+  201: OrganizationAddress;
+};
+
+export type CreateOrganizationAddressResponse =
+  CreateOrganizationAddressResponses[keyof CreateOrganizationAddressResponses];
+
+export type SupersedeOrganizationAddressData = {
+  body: OrganizationAddressWriteRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    /**
+     * Opaque governed organization-address UUID.
+     */
+    addressId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/addresses/{addressId}/supersessions';
+};
+
+export type SupersedeOrganizationAddressErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type SupersedeOrganizationAddressError =
+  SupersedeOrganizationAddressErrors[keyof SupersedeOrganizationAddressErrors];
+
+export type SupersedeOrganizationAddressResponses = {
+  /**
+   * Replacement address created or exact response replayed
+   */
+  201: OrganizationAddress;
+};
+
+export type SupersedeOrganizationAddressResponse =
+  SupersedeOrganizationAddressResponses[keyof SupersedeOrganizationAddressResponses];
+
+export type EndOrganizationAddressData = {
+  body: OrganizationContactReasonRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    /**
+     * Opaque governed organization-address UUID.
+     */
+    addressId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/addresses/{addressId}/endings';
+};
+
+export type EndOrganizationAddressErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type EndOrganizationAddressError =
+  EndOrganizationAddressErrors[keyof EndOrganizationAddressErrors];
+
+export type EndOrganizationAddressResponses = {
+  /**
+   * Organization address ended or exact response replayed
+   */
+  200: OrganizationAddress;
+};
+
+export type EndOrganizationAddressResponse =
+  EndOrganizationAddressResponses[keyof EndOrganizationAddressResponses];
+
+export type ListOrganizationContactsData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/contacts';
+};
+
+export type ListOrganizationContactsErrors = {
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type ListOrganizationContactsError =
+  ListOrganizationContactsErrors[keyof ListOrganizationContactsErrors];
+
+export type ListOrganizationContactsResponses = {
+  /**
+   * Current governed organization address and masked-contact projection
+   */
+  200: OrganizationContactCollection;
+};
+
+export type ListOrganizationContactsResponse =
+  ListOrganizationContactsResponses[keyof ListOrganizationContactsResponses];
+
+export type CreateOrganizationContactData = {
+  body: OrganizationContactWriteRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/contacts';
+};
+
+export type CreateOrganizationContactErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type CreateOrganizationContactError =
+  CreateOrganizationContactErrors[keyof CreateOrganizationContactErrors];
+
+export type CreateOrganizationContactResponses = {
+  /**
+   * Organization contact created or exact response replayed
+   */
+  201: OrganizationContact;
+};
+
+export type CreateOrganizationContactResponse =
+  CreateOrganizationContactResponses[keyof CreateOrganizationContactResponses];
+
+export type VerifyOrganizationContactData = {
+  body: OrganizationContactReasonRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    /**
+     * Opaque governed organization-contact UUID.
+     */
+    contactId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/contacts/{contactId}/verifications';
+};
+
+export type VerifyOrganizationContactErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type VerifyOrganizationContactError =
+  VerifyOrganizationContactErrors[keyof VerifyOrganizationContactErrors];
+
+export type VerifyOrganizationContactResponses = {
+  /**
+   * Organization contact verified or exact response replayed
+   */
+  200: OrganizationContact;
+};
+
+export type VerifyOrganizationContactResponse =
+  VerifyOrganizationContactResponses[keyof VerifyOrganizationContactResponses];
+
+export type SupersedeOrganizationContactData = {
+  body: OrganizationContactWriteRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    /**
+     * Opaque governed organization-contact UUID.
+     */
+    contactId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/contacts/{contactId}/supersessions';
+};
+
+export type SupersedeOrganizationContactErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type SupersedeOrganizationContactError =
+  SupersedeOrganizationContactErrors[keyof SupersedeOrganizationContactErrors];
+
+export type SupersedeOrganizationContactResponses = {
+  /**
+   * Replacement contact created or exact response replayed
+   */
+  201: OrganizationContact;
+};
+
+export type SupersedeOrganizationContactResponse =
+  SupersedeOrganizationContactResponses[keyof SupersedeOrganizationContactResponses];
+
+export type EndOrganizationContactData = {
+  body: OrganizationContactReasonRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    /**
+     * Opaque governed organization-contact UUID.
+     */
+    contactId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/contacts/{contactId}/endings';
+};
+
+export type EndOrganizationContactErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type EndOrganizationContactError =
+  EndOrganizationContactErrors[keyof EndOrganizationContactErrors];
+
+export type EndOrganizationContactResponses = {
+  /**
+   * Organization contact ended or exact response replayed
+   */
+  200: OrganizationContact;
+};
+
+export type EndOrganizationContactResponse =
+  EndOrganizationContactResponses[keyof EndOrganizationContactResponses];

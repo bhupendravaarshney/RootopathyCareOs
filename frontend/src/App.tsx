@@ -281,6 +281,11 @@ function RoutedApp({ administrationClient }: { administrationClient: Administrat
     screenId === 'M1-05' ||
     screenId === 'M1-06' ||
     screenId === 'M1-07' ||
+    screenId === 'M1-08' ||
+    screenId === 'M1-09' ||
+    screenId === 'M1-10' ||
+    screenId === 'M1-11' ||
+    screenId === 'M1-12' ||
     screenId === 'M1-20'
   ) {
     return (

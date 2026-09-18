@@ -50,9 +50,13 @@ public class JdbcOrganizationAdministrationStore implements OrganizationAdminist
         var facilityCounts = jdbcTemplate.queryForMap(
                 """
                 SELECT count(*) AS total,
-                       count(*) FILTER (WHERE status = 'draft') AS drafts
-                FROM facilities
-                WHERE organization_id = ?
+                       count(*) FILTER (WHERE f.status = 'draft') AS drafts,
+                       count(*) FILTER (WHERE f.status IN ('under_review','active')
+                         AND f.address_id IS NOT NULL AND (f.timezone IS NOT NULL OR o.timezone IS NOT NULL)
+                         AND a.validation_status='validated') AS eligible
+                FROM facilities f JOIN organizations o ON o.id=f.organization_id
+                LEFT JOIN organization_addresses a ON a.organization_id=f.organization_id AND a.id=f.address_id
+                WHERE f.organization_id = ?
                 """,
                 context.organizationId());
         var activeMemberships = jdbcTemplate.queryForObject(
@@ -140,17 +144,112 @@ public class JdbcOrganizationAdministrationStore implements OrganizationAdminist
                 """,
                 Integer.class,
                 context.organizationId());
+        var identifierReadiness = jdbcTemplate.queryForObject(
+                """
+                SELECT count(*) AS required_types,
+                       count(*) FILTER (WHERE EXISTS (
+                           SELECT 1
+                           FROM organization_identifiers identifiers
+                           WHERE identifiers.organization_id = organizations.id
+                             AND identifiers.identifier_type = types.identifier_type
+                             AND identifiers.is_primary
+                             AND identifiers.verification_status = 'verified'
+                             AND identifiers.status IN ('verified', 'active')
+                             AND identifiers.effective_from <= clock_timestamp()
+                             AND (identifiers.effective_to IS NULL
+                                  OR identifiers.effective_to > clock_timestamp())
+                             AND (identifiers.expiry_date IS NULL
+                                  OR identifiers.expiry_date >=
+                                     (clock_timestamp() AT TIME ZONE organizations.timezone)::date)
+                       )) AS verified_types
+                FROM organizations
+                JOIN organization_identifier_types types
+                  ON types.status = 'active'
+                 AND types.registry_version = 'm1-candidate-1'
+                 AND types.primary_required
+                 AND (types.jurisdiction_country_code IS NULL
+                      OR types.jurisdiction_country_code = organizations.country_code)
+                WHERE organizations.id = ?
+                """,
+                (resultSet, rowNumber) -> new IdentifierReadiness(
+                        resultSet.getInt("required_types"),
+                        resultSet.getInt("verified_types")),
+                context.organizationId());
+        var contactReadiness = jdbcTemplate.queryForObject(
+                """
+                SELECT count(*) FILTER (WHERE EXISTS (
+                           SELECT 1
+                           FROM organization_addresses addresses
+                           WHERE addresses.organization_id = organizations.id
+                             AND addresses.address_type = 'registered'
+                             AND addresses.status = 'active'
+                             AND addresses.effective_from <= clock_timestamp()
+                             AND (addresses.effective_to IS NULL
+                                  OR addresses.effective_to > clock_timestamp())
+                       )) AS registered_addresses,
+                       count(*) FILTER (WHERE EXISTS (
+                           SELECT 1
+                           FROM organization_contacts contacts
+                           WHERE contacts.organization_id = organizations.id
+                             AND contacts.purpose_key = 'operational'
+                             AND contacts.is_primary
+                             AND contacts.status = 'active'
+                             AND contacts.effective_from <= clock_timestamp()
+                             AND (contacts.effective_to IS NULL
+                                  OR contacts.effective_to > clock_timestamp())
+                       )) AS primary_operational_contacts,
+                       count(*) FILTER (WHERE EXISTS (
+                           SELECT 1
+                           FROM organization_contacts contacts
+                           WHERE contacts.organization_id = organizations.id
+                             AND contacts.purpose_key = 'operational'
+                             AND contacts.is_primary
+                             AND contacts.verification_status = 'verified'
+                             AND contacts.status = 'active'
+                             AND contacts.effective_from <= clock_timestamp()
+                             AND (contacts.effective_to IS NULL
+                                  OR contacts.effective_to > clock_timestamp())
+                       )) AS verified_primary_operational_contacts
+                FROM organizations
+                WHERE organizations.id = ?
+                """,
+                (resultSet, rowNumber) -> new ContactReadiness(
+                        resultSet.getInt("registered_addresses"),
+                        resultSet.getInt("primary_operational_contacts"),
+                        resultSet.getInt("verified_primary_operational_contacts")),
+                context.organizationId());
+        var governanceReadiness = jdbcTemplate.queryForObject(
+                """
+                SELECT count(DISTINCT responsibility_type) FILTER (
+                           WHERE is_primary AND status = 'active'
+                             AND effective_from <= clock_timestamp()
+                             AND (effective_to IS NULL OR effective_to > clock_timestamp())
+                             AND (escalation_email IS NOT NULL OR escalation_phone IS NOT NULL)) AS covered_types
+                FROM organization_governance_responsibilities
+                WHERE organization_id = ?
+                """,
+                Integer.class,
+                context.organizationId());
         var facilityCount = ((Number) facilityCounts.get("total")).intValue();
         var draftFacilityCount = ((Number) facilityCounts.get("drafts")).intValue();
+        var eligibleFacilityCount = ((Number) facilityCounts.get("eligible")).intValue();
         var effectivePermissions = effectivePermissions(context);
         var gates = gates(
                 profile,
                 facilityCount,
                 draftFacilityCount,
+                eligibleFacilityCount,
                 effectiveOwners == null ? 0 : effectiveOwners,
                 pendingOwnerDemotions == null ? 0 : pendingOwnerDemotions,
                 missingMandatoryMfa == null ? 0 : missingMandatoryMfa,
                 expiredMfaResetApprovals == null ? 0 : expiredMfaResetApprovals,
+                identifierReadiness == null
+                        ? new IdentifierReadiness(0, 0)
+                        : identifierReadiness,
+                contactReadiness == null
+                        ? new ContactReadiness(0, 0, 0)
+                        : contactReadiness,
+                governanceReadiness == null ? 0 : governanceReadiness,
                 effectivePermissions);
         var evaluatedTimestamp = jdbcTemplate.queryForObject(
                 "SELECT clock_timestamp()", Timestamp.class);
@@ -459,15 +558,34 @@ public class JdbcOrganizationAdministrationStore implements OrganizationAdminist
             OrganizationProfile profile,
             int facilities,
             int draftFacilities,
+            int eligibleFacilities,
             int effectiveOwners,
             int pendingOwnerDemotions,
             int missingMandatoryMfa,
             int expiredMfaResetApprovals,
+            IdentifierReadiness identifierReadiness,
+            ContactReadiness contactReadiness,
+            int governanceCoveredTypes,
             Set<String> effectivePermissions) {
         var ownerReady = effectiveOwners > pendingOwnerDemotions;
         var mfaReady = missingMandatoryMfa == 0 && expiredMfaResetApprovals == 0;
         var profileGaps = profile.readinessGaps();
         var profileReady = profileGaps.isEmpty();
+        var identifierPolicyConfigured = identifierReadiness.requiredTypes() > 0;
+        var identifierReady = identifierPolicyConfigured
+                && identifierReadiness.verifiedTypes() == identifierReadiness.requiredTypes();
+        var identifierOutcome = identifierReady
+                ? "complete"
+                : identifierPolicyConfigured ? "blocked" : "warning";
+        var registeredAddressReady = contactReadiness.registeredAddresses() > 0;
+        var verifiedContactReady =
+                contactReadiness.verifiedPrimaryOperationalContacts() > 0;
+        var contactReady = registeredAddressReady && verifiedContactReady;
+        var contactOutcome = contactReady
+                ? "complete"
+                : !registeredAddressReady || !"draft".equals(profile.lifecycleStatus())
+                        ? "blocked"
+                        : "warning";
         return List.of(
                 gate(
                         "organization.profile.complete",
@@ -487,29 +605,71 @@ public class JdbcOrganizationAdministrationStore implements OrganizationAdminist
                 gate(
                         "organization.identifier.primary_verified",
                         "Primary registration identifier",
-                        "blocked",
-                        "m1.readiness.primary_identifier_missing",
-                        "m1.remediation.verify_primary_identifier",
-                        "No approved primary registration identifier can be verified from persisted organization state.",
-                        List.of(),
+                        identifierOutcome,
+                        identifierReady
+                                ? "m1.readiness.primary_identifier_verified"
+                                : identifierPolicyConfigured
+                                        ? "m1.readiness.primary_identifier_missing"
+                                        : "m1.readiness.primary_identifier_policy_optional",
+                        identifierReady
+                                ? "m1.remediation.none"
+                                : identifierPolicyConfigured
+                                        ? "m1.remediation.verify_primary_identifier"
+                                        : "m1.remediation.review_identifier_policy",
+                        identifierReady
+                                ? "Every jurisdiction-required identifier type has a current verified primary registration identifier."
+                                : identifierPolicyConfigured
+                                        ? "A current verified primary registration identifier is missing for one or more required types."
+                                        : "No jurisdiction policy currently requires a primary registration identifier.",
+                        List.of(
+                                "required-identifier-type-count:"
+                                        + identifierReadiness.requiredTypes(),
+                                "verified-primary-identifier-count:"
+                                        + identifierReadiness.verifiedTypes()),
                         deepLink(effectivePermissions, "organization.identifier.read", "#/M1-08")),
                 gate(
                         "organization.contact.coverage",
                         "Address and contact coverage",
-                        "blocked",
-                        "m1.readiness.contact_coverage_missing",
-                        "m1.remediation.complete_contact_coverage",
-                        "A current registered address and verified primary operational contact are not available.",
-                        List.of(),
+                        contactOutcome,
+                        contactReady
+                                ? "m1.readiness.contact_coverage_complete"
+                                : !registeredAddressReady
+                                        ? "m1.readiness.registered_address_missing"
+                                        : "m1.readiness.operational_contact_unverified",
+                        contactReady
+                                ? "m1.remediation.none"
+                                : !registeredAddressReady
+                                        ? "m1.remediation.add_registered_address"
+                                        : "m1.remediation.verify_operational_contact",
+                        contactReady
+                                ? "A current registered address and verified primary operational contact are available."
+                                : !registeredAddressReady
+                                        ? "A current registered address is required."
+                                        : "Verify a current primary operational contact before activation.",
+                        List.of(
+                                "current-registered-address-count:"
+                                        + contactReadiness.registeredAddresses(),
+                                "current-primary-operational-contact-count:"
+                                        + contactReadiness.primaryOperationalContacts(),
+                                "verified-primary-operational-contact-count:"
+                                        + contactReadiness
+                                                .verifiedPrimaryOperationalContacts()),
                         deepLink(effectivePermissions, "organization.contact.read", "#/M1-09")),
                 gate(
                         "organization.governance.coverage",
                         "Governance responsibility coverage",
-                        "blocked",
-                        "m1.readiness.governance_coverage_missing",
-                        "m1.remediation.assign_governance_responsibilities",
-                        "Clinical, privacy, security and billing responsibilities are not persisted.",
-                        List.of(),
+                        governanceCoveredTypes == 4 ? "complete" : "blocked",
+                        governanceCoveredTypes == 4
+                                ? "m1.readiness.governance_coverage_complete"
+                                : "m1.readiness.governance_coverage_missing",
+                        governanceCoveredTypes == 4
+                                ? "m1.remediation.none"
+                                : "m1.remediation.assign_governance_responsibilities",
+                        governanceCoveredTypes == 4
+                                ? "Clinical, privacy, security and billing responsibilities have effective primary coverage and escalation channels."
+                                : "Assign effective primary clinical, privacy, security and billing responsibilities with escalation channels.",
+                        List.of("covered-governance-responsibility-type-count:"
+                                + governanceCoveredTypes),
                         deepLink(effectivePermissions, "organization.governance.read", "#/M1-11")),
                 gate(
                         "access.final_owner",
@@ -550,15 +710,18 @@ public class JdbcOrganizationAdministrationStore implements OrganizationAdminist
                 gate(
                         "network.facility.minimum",
                         "Minimum eligible facility",
-                        "blocked",
-                        "m1.readiness.eligible_facility_missing",
-                        "m1.remediation.complete_facility",
-                        facilities > 0
+                        eligibleFacilities > 0 ? "complete" : "blocked",
+                        eligibleFacilities > 0 ? "m1.readiness.eligible_facility_present" : "m1.readiness.eligible_facility_missing",
+                        eligibleFacilities > 0 ? "m1.remediation.none" : "m1.remediation.complete_facility",
+                        eligibleFacilities > 0
+                                ? "At least one submitted or active facility has a validated address and effective timezone."
+                                : facilities > 0
                                 ? "Foundation facility records exist, but none can prove the approved address, timezone and lifecycle requirements."
                                 : "At least one submitted or active facility with complete address and timezone is required.",
                         List.of(
                                 "facility-count:" + facilities,
-                                "draft-facility-count:" + draftFacilities),
+                                "draft-facility-count:" + draftFacilities,
+                                "eligible-facility-count:" + eligibleFacilities),
                         deepLink(effectivePermissions, "network.facility.read", "#/M1-12")),
                 gate(
                         "network.hierarchy.valid",
@@ -736,4 +899,11 @@ public class JdbcOrganizationAdministrationStore implements OrganizationAdminist
                 OrganizationAdministrationException.Reason.PROFILE_NOT_FOUND,
                 "The organization profile is unavailable.");
     }
+
+    private record IdentifierReadiness(int requiredTypes, int verifiedTypes) {}
+
+    private record ContactReadiness(
+            int registeredAddresses,
+            int primaryOperationalContacts,
+            int verifiedPrimaryOperationalContacts) {}
 }

@@ -1104,6 +1104,133 @@ select:disabled {
   line-height: 1.5;
 }
 
+.identifier-card-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.identifier-card {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+.identifier-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.identifier-card-heading h3 {
+  margin: 7px 0 4px;
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+.identifier-card-heading p {
+  margin: 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.identifier-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+.identifier-badges .badge {
+  text-transform: capitalize;
+}
+.identifier-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px;
+  margin: 20px 0 0;
+}
+.identifier-details > div {
+  min-width: 0;
+  padding-top: 14px;
+  border-top: 1px solid rgba(142, 177, 162, 0.16);
+}
+.identifier-details dt {
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.identifier-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.identifier-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding-top: 17px;
+  margin-top: 20px;
+  border-top: 1px solid rgba(142, 177, 162, 0.16);
+}
+.identifier-card-actions .text-action {
+  padding: 0;
+}
+.identifier-card-actions .danger-text-action {
+  color: #ffb8b8;
+}
+.identifier-read-only {
+  margin-top: 20px;
+}
+.identifier-action-panel {
+  margin-top: 20px;
+}
+.field-guidance {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.identifier-primary-choice {
+  min-height: 46px;
+  flex-direction: row;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #071712;
+}
+.identifier-primary-choice input {
+  width: 18px;
+  min-height: 18px;
+  margin: 0;
+}
+.contact-directory-heading {
+  align-items: flex-start;
+}
+.contact-directory-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.contact-directory-section {
+  padding-top: 24px;
+  margin-top: 24px;
+  border-top: 1px solid var(--border);
+}
+.contact-directory-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.contact-directory-section-heading h3 {
+  margin: 5px 0 0;
+  font-size: 22px;
+}
+
 .clinical-layout {
   display: grid;
   gap: 20px;
@@ -1261,7 +1388,9 @@ select:disabled {
   .stats-grid,
   .form-grid,
   .filter-grid,
-  .patient-strip {
+  .patient-strip,
+  .identifier-card-list,
+  .identifier-details {
     grid-template-columns: 1fr;
   }
   .panel {
@@ -1290,6 +1419,19 @@ select:disabled {
   }
   .membership-pagination span {
     display: none;
+  }
+  .identifier-card-heading {
+    flex-direction: column;
+  }
+  .identifier-badges {
+    justify-content: flex-start;
+  }
+  .contact-directory-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+  .contact-directory-actions button {
+    flex: 1 1 150px;
   }
   .check-list > div {
     grid-template-columns: 32px 1fr;

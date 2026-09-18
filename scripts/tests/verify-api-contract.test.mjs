@@ -94,6 +94,65 @@ test("rejects organization profile contract drift", () => {
   );
 });
 
+test("rejects organization identifier lifecycle drift", () => {
+  const contract = changed((candidate) => {
+    candidate.components.schemas.OrganizationIdentifier.properties.status.enum =
+      ["draft", "verified", "active", "deleted"];
+  });
+
+  assert.throws(
+    () => verifyApiContract(contract),
+    /exact approved governed fields, lifecycle, and live actions/,
+  );
+});
+
+test("rejects arbitrary international settings format patterns", () => {
+  const contract = changed((candidate) => {
+    candidate.components.schemas.InternationalSettingsScheduleRequest.properties.formatPattern = {
+      type: "string",
+    };
+  });
+
+  assert.throws(
+    () => verifyApiContract(contract),
+    /exact approved future settings contract/,
+  );
+});
+
+test("rejects raw governance escalation values in response projections", () => {
+  const contract = changed((candidate) => {
+    candidate.components.schemas.GovernanceResponsibility.properties.escalationEmail = {
+      type: "string",
+    };
+  });
+  assert.throws(
+    () => verifyApiContract(contract),
+    /approved confidential effective projection/,
+  );
+});
+
+test("rejects organization identifier supersession revision drift", () => {
+  const contract = changed((candidate) => {
+    delete candidate.components.schemas
+      .OrganizationIdentifierSupersessionRequest.properties.replacementEtag;
+  });
+
+  assert.throws(() => verifyApiContract(contract), /replacement revisions/);
+});
+
+test("rejects a raw confidential contact value in the response projection", () => {
+  const contract = changed((candidate) => {
+    candidate.components.schemas.OrganizationContact.properties.value = {
+      type: "string",
+    };
+  });
+
+  assert.throws(
+    () => verifyApiContract(contract),
+    /exact approved masked effective projection/,
+  );
+});
+
 test("rejects dangling local references", () => {
   const contract = changed((candidate) => {
     candidate.components.responses.InternalError.content[

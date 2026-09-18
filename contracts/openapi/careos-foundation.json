@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "ROOTOPATHY CareOS Foundation API",
-    "version": "0.15.0",
-    "description": "Checked contract for the currently implemented public foundation, browser identity with approved role-level MFA enforcement, approved-registry governed invitations, maker-checker MFA and membership administration, membership-backed organization selection and access projection, and bounded organization-core administration endpoints with the exact approved readiness catalogue and organization-profile contract. Unsafe browser operations require an approved Origin or Referer plus the double-submit CSRF cookie/header pair."
+    "version": "0.21.0",
+    "description": "Checked contract for the currently implemented public foundation, browser identity with approved role-level MFA enforcement, approved-registry governed invitations, maker-checker MFA and membership administration, membership-backed organization selection and access projection, and bounded organization-core administration endpoints with the exact approved readiness, organization-profile, registration-identifier, effective address/contact, and versioned international-settings contracts. Unsafe browser operations require an approved Origin or Referer plus the double-submit CSRF cookie/header pair."
   },
   "servers": [
     {
@@ -1664,6 +1664,108 @@
         }
       }
     },
+    "/api/v1/organizations/{organizationId}/facilities": {
+      "get": { "operationId": "getFacilityDirectory", "parameters": [{ "$ref": "#/components/parameters/OrganizationId" }, { "name": "query", "in": "query", "schema": { "type": "string", "maxLength": 120 } }, { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["draft", "under_review", "active", "suspended", "closed"] } }], "security": [{ "sessionCookie": [] }], "responses": { "200": { "description": "Authorized facility directory", "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" }, "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/FacilityDirectory" } } } }, "401": { "$ref": "#/components/responses/Unauthorized" }, "403": { "$ref": "#/components/responses/Forbidden" }, "404": { "$ref": "#/components/responses/NotFound" }, "500": { "$ref": "#/components/responses/InternalError" } } },
+      "post": { "operationId": "createFacilityDraft", "parameters": [{ "$ref": "#/components/parameters/OrganizationId" }, { "$ref": "#/components/parameters/BrowserOrigin" }, { "$ref": "#/components/parameters/IdempotencyKey" }], "security": [{ "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/FacilityCreateRequest" } } } }, "responses": { "201": { "description": "Facility draft created", "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" }, "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/FacilityDirectory" } } } }, "400": { "$ref": "#/components/responses/BadRequest" }, "401": { "$ref": "#/components/responses/Unauthorized" }, "403": { "$ref": "#/components/responses/Forbidden" }, "409": { "$ref": "#/components/responses/Conflict" }, "500": { "$ref": "#/components/responses/InternalError" } } }
+    },
+    "/api/v1/organizations/{organizationId}/facilities/{facilityId}": {
+      "put": { "operationId": "updateFacilityDraft", "parameters": [{ "$ref": "#/components/parameters/OrganizationId" }, { "name": "facilityId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }, { "$ref": "#/components/parameters/BrowserOrigin" }, { "$ref": "#/components/parameters/IfMatch" }, { "$ref": "#/components/parameters/IdempotencyKey" }], "security": [{ "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/FacilityCreateRequest" } } } }, "responses": { "200": { "description": "Facility draft updated or exact idempotent response replayed", "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" }, "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/FacilityDirectory" } } } }, "400": { "$ref": "#/components/responses/BadRequest" }, "401": { "$ref": "#/components/responses/Unauthorized" }, "403": { "$ref": "#/components/responses/Forbidden" }, "404": { "$ref": "#/components/responses/NotFound" }, "409": { "$ref": "#/components/responses/Conflict" }, "412": { "$ref": "#/components/responses/PreconditionFailed" }, "428": { "$ref": "#/components/responses/PreconditionRequired" }, "500": { "$ref": "#/components/responses/InternalError" } } }
+    },
+    "/api/v1/organizations/{organizationId}/governance-responsibilities": {
+      "get": {
+        "operationId": "getOrganizationGovernanceDirectory",
+        "parameters": [{ "$ref": "#/components/parameters/OrganizationId" }],
+        "security": [{ "sessionCookie": [] }],
+        "responses": {
+          "200": { "description": "Minimum-necessary governance directory", "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" }, "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrganizationGovernanceDirectory" } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" }, "403": { "$ref": "#/components/responses/Forbidden" }, "404": { "$ref": "#/components/responses/NotFound" }, "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      },
+      "post": {
+        "operationId": "createOrganizationGovernanceResponsibility",
+        "parameters": [{ "$ref": "#/components/parameters/OrganizationId" }, { "$ref": "#/components/parameters/BrowserOrigin" }, { "$ref": "#/components/parameters/IdempotencyKey" }],
+        "security": [{ "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GovernanceResponsibilityWriteRequest" } } } },
+        "responses": { "201": { "description": "Responsibility created", "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" }, "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrganizationGovernanceDirectory" } } } }, "400": { "$ref": "#/components/responses/BadRequest" }, "401": { "$ref": "#/components/responses/Unauthorized" }, "403": { "$ref": "#/components/responses/Forbidden" }, "404": { "$ref": "#/components/responses/NotFound" }, "409": { "$ref": "#/components/responses/Conflict" }, "500": { "$ref": "#/components/responses/InternalError" } }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/governance-responsibilities/{responsibilityId}/supersessions": {
+      "post": {
+        "operationId": "supersedeOrganizationGovernanceResponsibility",
+        "parameters": [{ "$ref": "#/components/parameters/OrganizationId" }, { "$ref": "#/components/parameters/ResponsibilityId" }, { "$ref": "#/components/parameters/BrowserOrigin" }, { "$ref": "#/components/parameters/IfMatch" }, { "$ref": "#/components/parameters/IdempotencyKey" }],
+        "security": [{ "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GovernanceResponsibilityWriteRequest" } } } },
+        "responses": { "200": { "description": "Responsibility superseded", "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" }, "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrganizationGovernanceDirectory" } } } }, "400": { "$ref": "#/components/responses/BadRequest" }, "401": { "$ref": "#/components/responses/Unauthorized" }, "403": { "$ref": "#/components/responses/Forbidden" }, "404": { "$ref": "#/components/responses/NotFound" }, "409": { "$ref": "#/components/responses/Conflict" }, "412": { "$ref": "#/components/responses/PreconditionFailed" }, "428": { "$ref": "#/components/responses/PreconditionRequired" }, "500": { "$ref": "#/components/responses/InternalError" } }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/governance-responsibilities/{responsibilityId}/endings": {
+      "post": {
+        "operationId": "endOrganizationGovernanceResponsibility",
+        "parameters": [{ "$ref": "#/components/parameters/OrganizationId" }, { "$ref": "#/components/parameters/ResponsibilityId" }, { "$ref": "#/components/parameters/BrowserOrigin" }, { "$ref": "#/components/parameters/IfMatch" }, { "$ref": "#/components/parameters/IdempotencyKey" }],
+        "security": [{ "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GovernanceResponsibilityEndRequest" } } } },
+        "responses": { "200": { "description": "Responsibility ended", "headers": { "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" }, "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrganizationGovernanceDirectory" } } } }, "400": { "$ref": "#/components/responses/BadRequest" }, "401": { "$ref": "#/components/responses/Unauthorized" }, "403": { "$ref": "#/components/responses/Forbidden" }, "404": { "$ref": "#/components/responses/NotFound" }, "409": { "$ref": "#/components/responses/Conflict" }, "412": { "$ref": "#/components/responses/PreconditionFailed" }, "428": { "$ref": "#/components/responses/PreconditionRequired" }, "500": { "$ref": "#/components/responses/InternalError" } }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/international-settings": {
+      "get": {
+        "operationId": "getOrganizationInternationalSettings",
+        "description": "Returns the effective and scheduled international-settings versions, server-owned impact rules, and locale-library format previews after tenant authorization.",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" }
+        ],
+        "security": [ { "sessionCookie": [] } ],
+        "responses": {
+          "200": {
+            "description": "Current international-settings projection",
+            "headers": {
+              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
+              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" },
+              "ETag": { "$ref": "#/components/headers/ETag" }
+            },
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrganizationInternationalSettings" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      },
+      "put": {
+        "operationId": "scheduleOrganizationInternationalSettings",
+        "description": "Schedules one future immutable settings version with a strong entity tag, idempotency, explicit reason, and exact governance evidence.",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          { "$ref": "#/components/parameters/BrowserOrigin" },
+          { "$ref": "#/components/parameters/IfMatch" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "security": [ { "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] } ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/InternationalSettingsScheduleRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Settings version scheduled or exact idempotent response replayed",
+            "headers": {
+              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
+              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" },
+              "ETag": { "$ref": "#/components/headers/ETag" }
+            },
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrganizationInternationalSettings" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "412": { "$ref": "#/components/responses/PreconditionFailed" },
+          "428": { "$ref": "#/components/responses/PreconditionRequired" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
     "/api/v1/organizations/{organizationId}/profile": {
       "get": {
         "operationId": "getOrganizationProfile",
@@ -1796,6 +1898,1131 @@
           }
         }
       }
+    },
+    "/api/v1/organizations/{organizationId}/identifiers": {
+      "get": {
+        "operationId": "listOrganizationIdentifiers",
+        "description": "Returns the minimum-necessary organization identifier projection and live server-authorized actions.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current governed organization identifier projection",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationIdentifierCollection"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createOrganizationIdentifier",
+        "description": "Creates a governed identifier draft with tenant authorization, caller-owned idempotency, an explicit reason, and atomic evidence.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          },
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationIdentifierWriteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Identifier draft created or exact response replayed",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationIdentifier"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/identifiers/{identifierId}": {
+      "put": {
+        "operationId": "updateOrganizationIdentifier",
+        "description": "Updates only an identifier draft using its strong revision, caller-owned idempotency, explicit reason, and atomic evidence.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdentifierId"
+          },
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationIdentifierWriteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Identifier draft updated or exact response replayed",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationIdentifier"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/identifiers/{identifierId}/verifications": {
+      "post": {
+        "operationId": "verifyOrganizationIdentifier",
+        "description": "Verifies the exact draft revision with bounded evidence reference, MFA, recent authentication, caller-owned idempotency, and atomic evidence.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdentifierId"
+          },
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationIdentifierVerificationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Identifier verified or exact response replayed",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationIdentifier"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/identifiers/{identifierId}/revocations": {
+      "post": {
+        "operationId": "revokeOrganizationIdentifier",
+        "description": "Revokes an eligible verified identifier without rewriting history and preserves any required current primary replacement.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdentifierId"
+          },
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationIdentifierRevocationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Identifier revoked or exact response replayed",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationIdentifier"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/identifiers/{identifierId}/supersessions": {
+      "post": {
+        "operationId": "supersedeOrganizationIdentifier",
+        "description": "Atomically supersedes an eligible verified identifier with a separately verified same-type replacement using strong revisions for both records, caller-owned idempotency, and immutable evidence.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          },
+          {
+            "$ref": "#/components/parameters/IdentifierId"
+          },
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationIdentifierSupersessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Identifier superseded or exact response replayed",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationIdentifier"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/addresses": {
+      "post": {
+        "operationId": "createOrganizationAddress",
+        "description": "Creates a governed effective organization address with caller-owned idempotency, an explicit reason, and atomic evidence.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          },
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationAddressWriteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Organization address created or exact response replayed",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationAddress"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/addresses/{addressId}/supersessions": {
+      "post": {
+        "operationId": "supersedeOrganizationAddress",
+        "description": "Atomically supersedes an effective address with an immutable same-type replacement using a strong revision and explicit reason.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          },
+          {
+            "$ref": "#/components/parameters/AddressId"
+          },
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationAddressWriteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Replacement address created or exact response replayed",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationAddress"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/addresses/{addressId}/endings": {
+      "post": {
+        "operationId": "endOrganizationAddress",
+        "description": "Ends an active organization address at database time without deleting or rewriting its history.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          },
+          {
+            "$ref": "#/components/parameters/AddressId"
+          },
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationContactReasonRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Organization address ended or exact response replayed",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationAddress"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/contacts": {
+      "get": {
+        "operationId": "listOrganizationContacts",
+        "description": "Returns governed effective addresses, masked contacts, migration-owned metadata, and live server-authorized actions.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current governed organization address and masked-contact projection",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationContactCollection"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createOrganizationContact",
+        "description": "Creates a governed contact while returning only its masked projection and keeping confidential values out of evidence.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          },
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationContactWriteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Organization contact created or exact response replayed",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationContact"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/contacts/{contactId}/verifications": {
+      "post": {
+        "operationId": "verifyOrganizationContact",
+        "description": "Records verification of the exact current contact revision without exposing its confidential normalized value.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          },
+          {
+            "$ref": "#/components/parameters/ContactId"
+          },
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationContactReasonRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Organization contact verified or exact response replayed",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationContact"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/contacts/{contactId}/supersessions": {
+      "post": {
+        "operationId": "supersedeOrganizationContact",
+        "description": "Atomically supersedes an effective contact with an unverified same-purpose replacement and immutable lineage.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          },
+          {
+            "$ref": "#/components/parameters/ContactId"
+          },
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationContactWriteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Replacement contact created or exact response replayed",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              },
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationContact"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/contacts/{contactId}/endings": {
+      "post": {
+        "operationId": "endOrganizationContact",
+        "description": "Ends an active organization contact at database time without deleting or rewriting its history.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          },
+          {
+            "$ref": "#/components/parameters/ContactId"
+          },
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationContactReasonRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Organization contact ended or exact response replayed",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              },
+              "ETag": {
+                "$ref": "#/components/headers/ETag"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationContact"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1835,6 +3062,43 @@
         "in": "path",
         "required": true,
         "description": "Organization boundary for every protected business-resource route.",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "IdentifierId": {
+        "name": "identifierId",
+        "in": "path",
+        "required": true,
+        "description": "Opaque organization identifier UUID.",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "ResponsibilityId": {
+        "name": "responsibilityId",
+        "in": "path",
+        "required": true,
+        "description": "Opaque governance-responsibility UUID.",
+        "schema": { "type": "string", "format": "uuid" }
+      },
+      "AddressId": {
+        "name": "addressId",
+        "in": "path",
+        "required": true,
+        "description": "Opaque governed organization-address UUID.",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "ContactId": {
+        "name": "contactId",
+        "in": "path",
+        "required": true,
+        "description": "Opaque governed organization-contact UUID.",
         "schema": {
           "type": "string",
           "format": "uuid"
@@ -2840,6 +4104,139 @@
           }
         }
       },
+      "FacilityType": { "type": "object", "additionalProperties": false, "required": ["key", "displayName"], "properties": { "key": { "type": "string" }, "displayName": { "type": "string" } } },
+      "FacilitySummary": { "type": "object", "additionalProperties": false, "required": ["facilityId", "facilityCode", "legalName", "displayName", "facilityType", "status", "lockVersion", "createdAt", "updatedAt"], "properties": { "facilityId": { "type": "string", "format": "uuid" }, "facilityCode": { "type": "string", "pattern": "^[A-Z0-9][A-Z0-9_-]{1,31}$" }, "legalName": { "type": "string" }, "displayName": { "type": "string" }, "facilityType": { "type": "string" }, "timezone": { "type": ["string", "null"] }, "status": { "type": "string", "enum": ["draft", "under_review", "active", "suspended", "closed"] }, "lockVersion": { "type": "integer", "format": "int64", "minimum": 0 }, "createdAt": { "type": "string", "format": "date-time" }, "updatedAt": { "type": "string", "format": "date-time" } } },
+      "FacilityDirectory": { "type": "object", "additionalProperties": false, "required": ["organizationId", "canCreate", "facilityTypes", "facilities", "evaluatedAt"], "properties": { "organizationId": { "type": "string", "format": "uuid" }, "canCreate": { "type": "boolean" }, "facilityTypes": { "type": "array", "items": { "$ref": "#/components/schemas/FacilityType" } }, "facilities": { "type": "array", "items": { "$ref": "#/components/schemas/FacilitySummary" } }, "evaluatedAt": { "type": "string", "format": "date-time" } } },
+      "FacilityCreateRequest": { "type": "object", "additionalProperties": false, "required": ["facilityCode", "legalName", "displayName", "facilityType", "reason"], "properties": { "facilityCode": { "type": "string", "pattern": "^[A-Z0-9][A-Z0-9_-]{1,31}$" }, "legalName": { "type": "string", "minLength": 2, "maxLength": 200 }, "displayName": { "type": "string", "minLength": 2, "maxLength": 120 }, "facilityType": { "type": "string" }, "addressId": { "type": ["string", "null"], "format": "uuid" }, "contactId": { "type": ["string", "null"], "format": "uuid" }, "timezone": { "type": ["string", "null"], "maxLength": 64 }, "reason": { "type": "string", "minLength": 10, "maxLength": 500 } } },
+      "GovernanceAssignee": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "type", "display"],
+        "properties": { "id": { "type": "string", "format": "uuid" }, "type": { "type": "string", "enum": ["membership", "external_contact"] }, "display": { "type": "string", "minLength": 1, "maxLength": 200 } }
+      },
+      "GovernanceResponsibility": {
+        "type": "object", "additionalProperties": false,
+        "required": ["responsibilityId", "responsibilityType", "assigneeType", "assigneeId", "assigneeDisplay", "escalationEmailMasked", "escalationPhoneMasked", "primary", "effectiveFrom", "effectiveTo", "supersedesId", "status", "availableActions", "lockVersion", "createdAt", "updatedAt"],
+        "properties": {
+          "responsibilityId": { "type": "string", "format": "uuid" },
+          "responsibilityType": { "type": "string", "enum": ["clinical", "privacy", "security", "billing"] },
+          "assigneeType": { "type": "string", "enum": ["membership", "external_contact"] },
+          "assigneeId": { "type": "string", "format": "uuid" },
+          "assigneeDisplay": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "escalationEmailMasked": { "type": ["string", "null"], "minLength": 3, "maxLength": 254 },
+          "escalationPhoneMasked": { "type": ["string", "null"], "minLength": 3, "maxLength": 32 },
+          "primary": { "type": "boolean" },
+          "effectiveFrom": { "type": "string", "format": "date-time" }, "effectiveTo": { "type": ["string", "null"], "format": "date-time" },
+          "supersedesId": { "type": ["string", "null"], "format": "uuid" },
+          "status": { "type": "string", "enum": ["scheduled", "active", "ended", "superseded"] },
+          "availableActions": { "type": "array", "uniqueItems": true, "items": { "type": "string", "enum": ["supersede", "end"] } },
+          "lockVersion": { "type": "integer", "format": "int64", "minimum": 0 },
+          "createdAt": { "type": "string", "format": "date-time" }, "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "OrganizationGovernanceDirectory": {
+        "type": "object", "additionalProperties": false,
+        "required": ["organizationId", "canManage", "evaluatedAt", "responsibilityTypes", "eligibleAssignees", "responsibilities"],
+        "properties": {
+          "organizationId": { "type": "string", "format": "uuid" }, "canManage": { "type": "boolean" }, "evaluatedAt": { "type": "string", "format": "date-time" },
+          "responsibilityTypes": { "type": "array", "prefixItems": [{ "const": "clinical" }, { "const": "privacy" }, { "const": "security" }, { "const": "billing" }], "minItems": 4, "maxItems": 4 },
+          "eligibleAssignees": { "type": "array", "items": { "$ref": "#/components/schemas/GovernanceAssignee" } },
+          "responsibilities": { "type": "array", "items": { "$ref": "#/components/schemas/GovernanceResponsibility" } }
+        }
+      },
+      "GovernanceResponsibilityWriteRequest": {
+        "type": "object", "additionalProperties": false,
+        "required": ["responsibilityType", "membershipId", "externalContactId", "escalationEmail", "escalationPhone", "effectiveFrom", "reason"],
+        "properties": {
+          "responsibilityType": { "type": "string", "enum": ["clinical", "privacy", "security", "billing"] },
+          "membershipId": { "type": ["string", "null"], "format": "uuid" }, "externalContactId": { "type": ["string", "null"], "format": "uuid" },
+          "escalationEmail": { "type": ["string", "null"], "maxLength": 254 }, "escalationPhone": { "type": ["string", "null"], "maxLength": 32 },
+          "effectiveFrom": { "type": "string", "format": "date-time" }, "reason": { "type": "string", "minLength": 10, "maxLength": 500 }
+        }
+      },
+      "GovernanceResponsibilityEndRequest": {
+        "type": "object", "additionalProperties": false, "required": ["effectiveTo", "reason"],
+        "properties": { "effectiveTo": { "type": "string", "format": "date-time" }, "reason": { "type": "string", "minLength": 10, "maxLength": 500 } }
+      },
+      "InternationalSettingsFormatPreview": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sampleDate", "sampleTime", "sampleNumber", "sampleCurrency", "localeLibraryDerived"],
+        "properties": {
+          "sampleDate": { "type": "string", "minLength": 1 },
+          "sampleTime": { "type": "string", "minLength": 1 },
+          "sampleNumber": { "type": "string", "minLength": 1 },
+          "sampleCurrency": { "type": "string", "minLength": 1 },
+          "localeLibraryDerived": { "type": "boolean", "const": true }
+        }
+      },
+      "InternationalSettingsImpact": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field", "code", "severity", "description"],
+        "properties": {
+          "field": { "type": "string", "enum": ["countryCode", "timezone", "locale", "language", "currencyCode", "weekStart"] },
+          "code": { "type": "string", "pattern": "^m1\\.settings\\.[a-z_]+$" },
+          "severity": { "type": "string", "enum": ["information", "warning"] },
+          "description": { "type": "string", "minLength": 1 }
+        }
+      },
+      "InternationalSettingsVersion": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["settingsId", "source", "countryCode", "timezone", "locale", "language", "currencyCode", "weekStart", "effectiveFrom", "effectiveTo", "lifecycle", "supersedesId", "lockVersion", "updatedAt", "formatPreview"],
+        "properties": {
+          "settingsId": { "type": ["string", "null"], "format": "uuid" },
+          "source": { "type": "string", "enum": ["organization_default", "configured"] },
+          "countryCode": { "type": "string", "pattern": "^[A-Z]{2}$" },
+          "timezone": { "type": "string", "minLength": 1, "maxLength": 80 },
+          "locale": { "type": "string", "minLength": 2, "maxLength": 100, "pattern": "^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$" },
+          "language": { "type": "string", "minLength": 2, "maxLength": 100, "pattern": "^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$" },
+          "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" },
+          "weekStart": { "type": "string", "enum": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"] },
+          "effectiveFrom": { "type": "string", "format": "date-time" },
+          "effectiveTo": { "type": ["string", "null"], "format": "date-time" },
+          "lifecycle": { "type": "string", "enum": ["default", "active", "scheduled", "superseded"] },
+          "supersedesId": { "type": ["string", "null"], "format": "uuid" },
+          "lockVersion": { "type": "integer", "format": "int64", "minimum": 0 },
+          "updatedAt": { "type": "string", "format": "date-time" },
+          "formatPreview": { "$ref": "#/components/schemas/InternationalSettingsFormatPreview" }
+        }
+      },
+      "OrganizationInternationalSettings": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["organizationId", "editable", "canSchedule", "lockVersion", "evaluatedAt", "weekStarts", "impactRules", "versions"],
+        "properties": {
+          "organizationId": { "type": "string", "format": "uuid" },
+          "editable": { "type": "boolean" },
+          "canSchedule": { "type": "boolean" },
+          "lockVersion": { "type": "integer", "format": "int64", "minimum": 0 },
+          "evaluatedAt": { "type": "string", "format": "date-time" },
+          "weekStarts": {
+            "type": "array",
+            "minItems": 7,
+            "maxItems": 7,
+            "items": { "type": "string", "enum": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"] }
+          },
+          "impactRules": { "type": "array", "minItems": 6, "maxItems": 6, "items": { "$ref": "#/components/schemas/InternationalSettingsImpact" } },
+          "versions": { "type": "array", "minItems": 1, "maxItems": 2, "items": { "$ref": "#/components/schemas/InternationalSettingsVersion" } }
+        }
+      },
+      "InternationalSettingsScheduleRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["countryCode", "timezone", "locale", "language", "currencyCode", "weekStart", "effectiveFrom", "reason"],
+        "properties": {
+          "countryCode": { "type": "string", "pattern": "^[A-Za-z]{2}$" },
+          "timezone": { "type": "string", "minLength": 1, "maxLength": 80 },
+          "locale": { "type": "string", "minLength": 2, "maxLength": 100, "pattern": "^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$" },
+          "language": { "type": "string", "minLength": 2, "maxLength": 100, "pattern": "^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$" },
+          "currencyCode": { "type": "string", "pattern": "^[A-Za-z]{3}$" },
+          "weekStart": { "type": "string", "enum": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"] },
+          "effectiveFrom": { "type": "string", "format": "date-time" },
+          "reason": { "type": "string", "minLength": 10, "maxLength": 500 }
+        }
+      },
       "OrganizationProfile": {
         "type": "object",
         "additionalProperties": false,
@@ -2963,6 +4360,721 @@
             "maxLength": 255,
             "pattern": "^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$"
           },
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 500
+          }
+        }
+      },
+      "OrganizationIdentifierType": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "displayName",
+          "jurisdictionCountryCode",
+          "primaryRequired"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[a-z][a-z0-9]*([._:-][a-z0-9]+)*$"
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 120
+          },
+          "jurisdictionCountryCode": {
+            "type": ["string", "null"],
+            "pattern": "^[A-Z]{2}$"
+          },
+          "primaryRequired": {
+            "type": "boolean"
+          }
+        }
+      },
+      "OrganizationIdentifier": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "identifierId",
+          "identifierType",
+          "typeDisplayName",
+          "assigningAuthority",
+          "value",
+          "jurisdictionCountryCode",
+          "verificationStatus",
+          "evidenceReference",
+          "isPrimary",
+          "issueDate",
+          "expiryDate",
+          "effectiveFrom",
+          "effectiveTo",
+          "supersedesId",
+          "status",
+          "availableActions",
+          "lockVersion",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "identifierId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "identifierType": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[a-z][a-z0-9]*([._:-][a-z0-9]+)*$"
+          },
+          "typeDisplayName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 120
+          },
+          "assigningAuthority": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 160
+          },
+          "value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "jurisdictionCountryCode": {
+            "type": ["string", "null"],
+            "pattern": "^[A-Z]{2}$"
+          },
+          "verificationStatus": {
+            "type": "string",
+            "enum": ["unverified", "verified"]
+          },
+          "evidenceReference": {
+            "type": ["string", "null"],
+            "minLength": 1,
+            "maxLength": 160,
+            "description": "Confidential bounded evidence reference projected only to actors with live verification permission."
+          },
+          "isPrimary": {
+            "type": "boolean"
+          },
+          "issueDate": {
+            "type": ["string", "null"],
+            "format": "date"
+          },
+          "expiryDate": {
+            "type": ["string", "null"],
+            "format": "date"
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "effectiveTo": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "supersedesId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The immutable predecessor linked by an atomic supersession, when this identifier is a replacement."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "verified", "active", "expired", "revoked", "superseded"]
+          },
+          "availableActions": {
+            "type": "array",
+            "maxItems": 4,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": ["edit", "verify", "revoke", "supersede"]
+            },
+            "description": "Actions derived from live permission, lifecycle, and primary-replacement policy."
+          },
+          "lockVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "OrganizationIdentifierCollection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["organizationId", "canCreate", "types", "items"],
+        "properties": {
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "canCreate": {
+            "type": "boolean",
+            "description": "True only when the actor has live manage permission and an applicable active type exists."
+          },
+          "types": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/OrganizationIdentifierType"
+            }
+          },
+          "items": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/OrganizationIdentifier"
+            }
+          }
+        }
+      },
+      "OrganizationIdentifierWriteRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "identifierType",
+          "assigningAuthority",
+          "value",
+          "jurisdictionCountryCode",
+          "isPrimary",
+          "issueDate",
+          "expiryDate",
+          "effectiveFrom",
+          "effectiveTo",
+          "reason"
+        ],
+        "properties": {
+          "identifierType": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[a-z][a-z0-9]*([._:-][a-z0-9]+)*$"
+          },
+          "assigningAuthority": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 160
+          },
+          "value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "jurisdictionCountryCode": {
+            "type": ["string", "null"],
+            "pattern": "^[A-Za-z]{2}$"
+          },
+          "isPrimary": {
+            "type": "boolean"
+          },
+          "issueDate": {
+            "type": ["string", "null"],
+            "format": "date"
+          },
+          "expiryDate": {
+            "type": ["string", "null"],
+            "format": "date"
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "effectiveTo": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 500
+          }
+        }
+      },
+      "OrganizationIdentifierVerificationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["evidenceReference", "reason"],
+        "properties": {
+          "evidenceReference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 500
+          }
+        }
+      },
+      "OrganizationIdentifierRevocationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason"],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 500
+          }
+        }
+      },
+      "OrganizationIdentifierSupersessionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["replacementId", "replacementEtag", "reason"],
+        "properties": {
+          "replacementId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "replacementEtag": {
+            "type": "string",
+            "pattern": "^\\\"organization-identifier:[0-9a-fA-F-]{36}:[0-9]{1,19}\\\"$"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 500
+          }
+        }
+      },
+      "OrganizationContactPurpose": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "displayName", "publicProjectionAllowed"],
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[a-z][a-z0-9]*([._:-][a-z0-9]+)*$"
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 120
+          },
+          "publicProjectionAllowed": {
+            "type": "boolean",
+            "description": "Migration-owned policy flag. False for the approved operational purpose."
+          }
+        }
+      },
+      "OrganizationAddress": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "addressId",
+          "addressType",
+          "addressLines",
+          "locality",
+          "region",
+          "postcode",
+          "countryCode",
+          "validationStatus",
+          "validationSource",
+          "isPrimary",
+          "effectiveFrom",
+          "effectiveTo",
+          "supersedesId",
+          "status",
+          "availableActions",
+          "lockVersion",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "addressId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "addressType": {
+            "type": "string",
+            "enum": ["registered", "postal", "service", "billing"]
+          },
+          "addressLines": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 4,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          },
+          "locality": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "region": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "postcode": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 24
+          },
+          "countryCode": {
+            "type": "string",
+            "pattern": "^[A-Z]{2}$"
+          },
+          "validationStatus": {
+            "type": "string",
+            "enum": ["unvalidated", "validated"]
+          },
+          "validationSource": {
+            "type": ["string", "null"],
+            "minLength": 2,
+            "maxLength": 160
+          },
+          "isPrimary": {
+            "type": "boolean"
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "effectiveTo": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "supersedesId": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["scheduled", "active", "ended", "superseded"]
+          },
+          "availableActions": {
+            "type": "array",
+            "maxItems": 2,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": ["supersede", "end"]
+            }
+          },
+          "lockVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "OrganizationContact": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "contactId",
+          "channel",
+          "purpose",
+          "purposeDisplayName",
+          "maskedValue",
+          "verificationStatus",
+          "isPrimary",
+          "isPreferred",
+          "effectiveFrom",
+          "effectiveTo",
+          "supersedesId",
+          "status",
+          "availableActions",
+          "lockVersion",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "contactId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "channel": {
+            "type": "string",
+            "enum": ["email", "phone", "web"]
+          },
+          "purpose": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[a-z][a-z0-9]*([._:-][a-z0-9]+)*$"
+          },
+          "purposeDisplayName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 120
+          },
+          "maskedValue": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048,
+            "description": "Minimum-necessary masked projection; the confidential normalized value is never returned."
+          },
+          "verificationStatus": {
+            "type": "string",
+            "enum": ["unverified", "verified"]
+          },
+          "isPrimary": {
+            "type": "boolean"
+          },
+          "isPreferred": {
+            "type": "boolean"
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "effectiveTo": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "supersedesId": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["scheduled", "active", "ended", "superseded"]
+          },
+          "availableActions": {
+            "type": "array",
+            "maxItems": 3,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": ["verify", "supersede", "end"]
+            }
+          },
+          "lockVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "OrganizationContactCollection": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "organizationId",
+          "canCreate",
+          "addressTypes",
+          "purposes",
+          "addresses",
+          "contacts"
+        ],
+        "properties": {
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "canCreate": {
+            "type": "boolean"
+          },
+          "addressTypes": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4,
+            "uniqueItems": true,
+            "prefixItems": [
+              { "const": "registered" },
+              { "const": "postal" },
+              { "const": "service" },
+              { "const": "billing" }
+            ],
+            "items": false
+          },
+          "purposes": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/OrganizationContactPurpose"
+            }
+          },
+          "addresses": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/OrganizationAddress"
+            }
+          },
+          "contacts": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/OrganizationContact"
+            }
+          }
+        }
+      },
+      "OrganizationAddressWriteRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "addressType",
+          "addressLines",
+          "locality",
+          "region",
+          "postcode",
+          "countryCode",
+          "validationStatus",
+          "validationSource",
+          "isPrimary",
+          "effectiveFrom",
+          "effectiveTo",
+          "reason"
+        ],
+        "properties": {
+          "addressType": {
+            "type": "string",
+            "enum": ["registered", "postal", "service", "billing"]
+          },
+          "addressLines": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 4,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          },
+          "locality": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "region": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "postcode": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 24
+          },
+          "countryCode": {
+            "type": "string",
+            "pattern": "^[A-Za-z]{2}$"
+          },
+          "validationStatus": {
+            "type": "string",
+            "enum": ["unvalidated", "validated"]
+          },
+          "validationSource": {
+            "type": ["string", "null"],
+            "minLength": 2,
+            "maxLength": 160
+          },
+          "isPrimary": {
+            "type": "boolean"
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "effectiveTo": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 500
+          }
+        }
+      },
+      "OrganizationContactWriteRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "channel",
+          "purpose",
+          "value",
+          "isPrimary",
+          "isPreferred",
+          "effectiveFrom",
+          "effectiveTo",
+          "reason"
+        ],
+        "properties": {
+          "channel": {
+            "type": "string",
+            "enum": ["email", "phone", "web"]
+          },
+          "purpose": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[a-z][a-z0-9]*([._:-][a-z0-9]+)*$"
+          },
+          "value": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 2048,
+            "description": "Confidential value normalized and validated according to channel; never projected back."
+          },
+          "isPrimary": {
+            "type": "boolean"
+          },
+          "isPreferred": {
+            "type": "boolean"
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "effectiveTo": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 500
+          }
+        }
+      },
+      "OrganizationContactReasonRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason"],
+        "properties": {
           "reason": {
             "type": "string",
             "minLength": 10,

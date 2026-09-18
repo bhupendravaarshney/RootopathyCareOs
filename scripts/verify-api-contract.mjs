@@ -39,6 +39,93 @@ export const expectedOperations = [
     "/api/v1/organizations/{organizationId}/profile",
     "updateOrganizationProfile",
   ],
+  ["get", "/api/v1/organizations/{organizationId}/facilities", "getFacilityDirectory"],
+  ["post", "/api/v1/organizations/{organizationId}/facilities", "createFacilityDraft"],
+  ["put", "/api/v1/organizations/{organizationId}/facilities/{facilityId}", "updateFacilityDraft"],
+  ["get", "/api/v1/organizations/{organizationId}/governance-responsibilities", "getOrganizationGovernanceDirectory"],
+  ["post", "/api/v1/organizations/{organizationId}/governance-responsibilities", "createOrganizationGovernanceResponsibility"],
+  ["post", "/api/v1/organizations/{organizationId}/governance-responsibilities/{responsibilityId}/supersessions", "supersedeOrganizationGovernanceResponsibility"],
+  ["post", "/api/v1/organizations/{organizationId}/governance-responsibilities/{responsibilityId}/endings", "endOrganizationGovernanceResponsibility"],
+  [
+    "get",
+    "/api/v1/organizations/{organizationId}/international-settings",
+    "getOrganizationInternationalSettings",
+  ],
+  [
+    "put",
+    "/api/v1/organizations/{organizationId}/international-settings",
+    "scheduleOrganizationInternationalSettings",
+  ],
+  [
+    "get",
+    "/api/v1/organizations/{organizationId}/identifiers",
+    "listOrganizationIdentifiers",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/identifiers",
+    "createOrganizationIdentifier",
+  ],
+  [
+    "put",
+    "/api/v1/organizations/{organizationId}/identifiers/{identifierId}",
+    "updateOrganizationIdentifier",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/identifiers/{identifierId}/verifications",
+    "verifyOrganizationIdentifier",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/identifiers/{identifierId}/revocations",
+    "revokeOrganizationIdentifier",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/identifiers/{identifierId}/supersessions",
+    "supersedeOrganizationIdentifier",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/addresses",
+    "createOrganizationAddress",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/addresses/{addressId}/supersessions",
+    "supersedeOrganizationAddress",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/addresses/{addressId}/endings",
+    "endOrganizationAddress",
+  ],
+  [
+    "get",
+    "/api/v1/organizations/{organizationId}/contacts",
+    "listOrganizationContacts",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/contacts",
+    "createOrganizationContact",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/contacts/{contactId}/verifications",
+    "verifyOrganizationContact",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/contacts/{contactId}/supersessions",
+    "supersedeOrganizationContact",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/contacts/{contactId}/endings",
+    "endOrganizationContact",
+  ],
   [
     "post",
     "/api/v1/organizations/{organizationId}/invitations",
@@ -140,6 +227,28 @@ const sessionProtectedOperations = new Set([
   "getAdministrationReadiness",
   "getOrganizationProfile",
   "updateOrganizationProfile",
+  "getFacilityDirectory",
+  "createFacilityDraft",
+  "getOrganizationInternationalSettings",
+  "scheduleOrganizationInternationalSettings",
+  "getOrganizationGovernanceDirectory",
+  "createOrganizationGovernanceResponsibility",
+  "supersedeOrganizationGovernanceResponsibility",
+  "endOrganizationGovernanceResponsibility",
+  "listOrganizationIdentifiers",
+  "createOrganizationIdentifier",
+  "updateOrganizationIdentifier",
+  "verifyOrganizationIdentifier",
+  "revokeOrganizationIdentifier",
+  "supersedeOrganizationIdentifier",
+  "createOrganizationAddress",
+  "supersedeOrganizationAddress",
+  "endOrganizationAddress",
+  "listOrganizationContacts",
+  "createOrganizationContact",
+  "verifyOrganizationContact",
+  "supersedeOrganizationContact",
+  "endOrganizationContact",
   "issueInvitation",
   "revokeInvitation",
   "requestMfaAdministrativeReset",
@@ -155,6 +264,23 @@ const sessionProtectedOperations = new Set([
 
 const idempotentOperations = new Set([
   "updateOrganizationProfile",
+  "createFacilityDraft",
+  "scheduleOrganizationInternationalSettings",
+  "createOrganizationGovernanceResponsibility",
+  "supersedeOrganizationGovernanceResponsibility",
+  "endOrganizationGovernanceResponsibility",
+  "createOrganizationIdentifier",
+  "updateOrganizationIdentifier",
+  "verifyOrganizationIdentifier",
+  "revokeOrganizationIdentifier",
+  "supersedeOrganizationIdentifier",
+  "createOrganizationAddress",
+  "supersedeOrganizationAddress",
+  "endOrganizationAddress",
+  "createOrganizationContact",
+  "verifyOrganizationContact",
+  "supersedeOrganizationContact",
+  "endOrganizationContact",
   "issueInvitation",
   "revokeInvitation",
   "requestMfaAdministrativeReset",
@@ -524,6 +650,354 @@ export function verifyApiContract(contract) {
       organizationProfileUpdate?.properties?.reason?.minLength === 10 &&
       organizationProfileUpdate?.properties?.reason?.maxLength === 500,
     "OrganizationProfileUpdateRequest must require the exact approved mutable profile contract",
+  );
+
+  const internationalSettings =
+    contract.components?.schemas?.OrganizationInternationalSettings;
+  const internationalVersion =
+    contract.components?.schemas?.InternationalSettingsVersion;
+  const internationalPreview =
+    contract.components?.schemas?.InternationalSettingsFormatPreview;
+  const internationalSchedule =
+    contract.components?.schemas?.InternationalSettingsScheduleRequest;
+  const approvedWeekStarts = [
+    "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY",
+  ];
+  assert(
+    internationalSettings?.additionalProperties === false &&
+      ["organizationId", "editable", "canSchedule", "lockVersion", "evaluatedAt", "weekStarts", "impactRules", "versions"].every(
+        (field) => internationalSettings?.required?.includes(field),
+      ) &&
+      internationalSettings?.properties?.versions?.minItems === 1 &&
+      internationalSettings?.properties?.versions?.maxItems === 2 &&
+      JSON.stringify(internationalSettings?.properties?.weekStarts?.items?.enum) ===
+        JSON.stringify(approvedWeekStarts) &&
+      internationalSettings?.properties?.impactRules?.minItems === 6 &&
+      internationalSettings?.properties?.impactRules?.maxItems === 6,
+    "OrganizationInternationalSettings must preserve the exact versioned settings and impact projection",
+  );
+  assert(
+    internationalVersion?.additionalProperties === false &&
+      internationalVersion?.properties?.formatPattern === undefined &&
+      internationalVersion?.properties?.dateFormat === undefined &&
+      JSON.stringify(internationalVersion?.properties?.lifecycle?.enum) ===
+        JSON.stringify(["default", "active", "scheduled", "superseded"]) &&
+      JSON.stringify(internationalVersion?.properties?.weekStart?.enum) ===
+        JSON.stringify(approvedWeekStarts) &&
+      internationalPreview?.additionalProperties === false &&
+      internationalPreview?.properties?.localeLibraryDerived?.const === true,
+    "International settings versions must use immutable lifecycle values and locale-library formats only",
+  );
+  assert(
+    internationalSchedule?.additionalProperties === false &&
+      ["countryCode", "timezone", "locale", "language", "currencyCode", "weekStart", "effectiveFrom", "reason"].every(
+        (field) => internationalSchedule?.required?.includes(field),
+      ) &&
+      internationalSchedule?.properties?.reason?.minLength === 10 &&
+      internationalSchedule?.properties?.reason?.maxLength === 500 &&
+      internationalSchedule?.properties?.formatPattern === undefined,
+    "InternationalSettingsScheduleRequest must require the exact approved future settings contract",
+  );
+
+  const governance = contract.components?.schemas?.GovernanceResponsibility;
+  const governanceDirectory = contract.components?.schemas?.OrganizationGovernanceDirectory;
+  const governanceWrite = contract.components?.schemas?.GovernanceResponsibilityWriteRequest;
+  assert(
+    governance?.additionalProperties === false &&
+      governance?.properties?.escalationEmail === undefined &&
+      governance?.properties?.escalationPhone === undefined &&
+      JSON.stringify(governance?.properties?.responsibilityType?.enum) ===
+        JSON.stringify(["clinical", "privacy", "security", "billing"]) &&
+      JSON.stringify(governance?.properties?.status?.enum) ===
+        JSON.stringify(["scheduled", "active", "ended", "superseded"]) &&
+      JSON.stringify(governance?.properties?.availableActions?.items?.enum) ===
+        JSON.stringify(["supersede", "end"]),
+    "GovernanceResponsibility must expose only the approved confidential effective projection",
+  );
+  assert(
+    governanceDirectory?.additionalProperties === false &&
+      governanceDirectory?.properties?.responsibilityTypes?.minItems === 4 &&
+      governanceDirectory?.properties?.responsibilityTypes?.maxItems === 4 &&
+      governanceWrite?.additionalProperties === false &&
+      governanceWrite?.required?.includes("membershipId") &&
+      governanceWrite?.required?.includes("externalContactId") &&
+      governanceWrite?.properties?.reason?.minLength === 10,
+    "Governance directory and mutation requests must preserve exact coverage and linkage fields",
+  );
+
+  const identifierId = contract.components?.parameters?.IdentifierId;
+  assert(
+    identifierId?.in === "path" &&
+      identifierId.required === true &&
+      identifierId.schema?.format === "uuid",
+    "IdentifierId must be a required UUID path parameter",
+  );
+
+  const organizationIdentifier =
+    contract.components?.schemas?.OrganizationIdentifier;
+  const organizationIdentifierCollection =
+    contract.components?.schemas?.OrganizationIdentifierCollection;
+  const organizationIdentifierType =
+    contract.components?.schemas?.OrganizationIdentifierType;
+  const organizationIdentifierWrite =
+    contract.components?.schemas?.OrganizationIdentifierWriteRequest;
+  const organizationIdentifierVerification =
+    contract.components?.schemas?.OrganizationIdentifierVerificationRequest;
+  const organizationIdentifierSupersession =
+    contract.components?.schemas?.OrganizationIdentifierSupersessionRequest;
+  const exactIdentifierFields = [
+    "identifierId",
+    "identifierType",
+    "typeDisplayName",
+    "assigningAuthority",
+    "value",
+    "jurisdictionCountryCode",
+    "verificationStatus",
+    "evidenceReference",
+    "isPrimary",
+    "issueDate",
+    "expiryDate",
+    "effectiveFrom",
+    "effectiveTo",
+    "supersedesId",
+    "status",
+    "availableActions",
+    "lockVersion",
+    "createdAt",
+    "updatedAt",
+  ];
+  assert(
+    organizationIdentifier?.additionalProperties === false &&
+      exactIdentifierFields.every((field) =>
+        organizationIdentifier?.required?.includes(field),
+      ) &&
+      organizationIdentifier?.properties?.assigningAuthority?.minLength === 2 &&
+      organizationIdentifier?.properties?.assigningAuthority?.maxLength ===
+        160 &&
+      organizationIdentifier?.properties?.value?.minLength === 1 &&
+      organizationIdentifier?.properties?.value?.maxLength === 128 &&
+      JSON.stringify(organizationIdentifier?.properties?.status?.enum) ===
+        JSON.stringify([
+          "draft",
+          "verified",
+          "active",
+          "expired",
+          "revoked",
+          "superseded",
+        ]) &&
+      JSON.stringify(
+        organizationIdentifier?.properties?.availableActions?.items?.enum,
+      ) === JSON.stringify(["edit", "verify", "revoke", "supersede"]) &&
+      organizationIdentifier?.properties?.availableActions?.uniqueItems ===
+        true,
+    "OrganizationIdentifier must expose the exact approved governed fields, lifecycle, and live actions",
+  );
+  assert(
+    organizationIdentifierCollection?.additionalProperties === false &&
+      ["organizationId", "canCreate", "types", "items"].every((field) =>
+        organizationIdentifierCollection?.required?.includes(field),
+      ) &&
+      organizationIdentifierType?.properties?.key?.pattern ===
+        "^[a-z][a-z0-9]*([._:-][a-z0-9]+)*$" &&
+      organizationIdentifierType?.properties?.primaryRequired?.type ===
+        "boolean",
+    "OrganizationIdentifierCollection must bind live create authority and migration-owned type metadata",
+  );
+  assert(
+    [
+      "identifierType",
+      "assigningAuthority",
+      "value",
+      "jurisdictionCountryCode",
+      "isPrimary",
+      "issueDate",
+      "expiryDate",
+      "effectiveFrom",
+      "effectiveTo",
+      "reason",
+    ].every((field) =>
+      organizationIdentifierWrite?.required?.includes(field),
+    ) &&
+      organizationIdentifierWrite?.additionalProperties === false &&
+      organizationIdentifierWrite?.properties?.reason?.minLength === 10 &&
+      organizationIdentifierWrite?.properties?.reason?.maxLength === 500 &&
+      organizationIdentifierWrite?.properties?.effectiveFrom?.format ===
+        "date-time" &&
+      organizationIdentifierVerification?.additionalProperties === false &&
+      organizationIdentifierVerification?.required?.includes(
+        "evidenceReference",
+      ) &&
+      organizationIdentifierVerification?.properties?.evidenceReference
+        ?.maxLength === 160 &&
+      organizationIdentifierSupersession?.additionalProperties === false &&
+      ["replacementId", "replacementEtag", "reason"].every((field) =>
+        organizationIdentifierSupersession?.required?.includes(field),
+      ) &&
+      organizationIdentifierSupersession?.properties?.replacementId?.format ===
+        "uuid" &&
+      organizationIdentifierSupersession?.properties?.replacementEtag
+        ?.pattern ===
+        '^\\"organization-identifier:[0-9a-fA-F-]{36}:[0-9]{1,19}\\"$',
+    "Organization identifier mutation requests must preserve exact values, ranges, reasons, verification evidence, and replacement revisions",
+  );
+
+  for (const [name, parameter] of [
+    ["AddressId", contract.components?.parameters?.AddressId],
+    ["ContactId", contract.components?.parameters?.ContactId],
+  ]) {
+    assert(
+      parameter?.in === "path" &&
+        parameter.required === true &&
+        parameter.schema?.format === "uuid",
+      `${name} must be a required UUID path parameter`,
+    );
+  }
+
+  const organizationAddress = contract.components?.schemas?.OrganizationAddress;
+  const organizationContact = contract.components?.schemas?.OrganizationContact;
+  const organizationContactPurpose =
+    contract.components?.schemas?.OrganizationContactPurpose;
+  const organizationContactCollection =
+    contract.components?.schemas?.OrganizationContactCollection;
+  const organizationAddressWrite =
+    contract.components?.schemas?.OrganizationAddressWriteRequest;
+  const organizationContactWrite =
+    contract.components?.schemas?.OrganizationContactWriteRequest;
+  const organizationContactReason =
+    contract.components?.schemas?.OrganizationContactReasonRequest;
+  const exactAddressFields = [
+    "addressId",
+    "addressType",
+    "addressLines",
+    "locality",
+    "region",
+    "postcode",
+    "countryCode",
+    "validationStatus",
+    "validationSource",
+    "isPrimary",
+    "effectiveFrom",
+    "effectiveTo",
+    "supersedesId",
+    "status",
+    "availableActions",
+    "lockVersion",
+    "createdAt",
+    "updatedAt",
+  ];
+  const exactContactFields = [
+    "contactId",
+    "channel",
+    "purpose",
+    "purposeDisplayName",
+    "maskedValue",
+    "verificationStatus",
+    "isPrimary",
+    "isPreferred",
+    "effectiveFrom",
+    "effectiveTo",
+    "supersedesId",
+    "status",
+    "availableActions",
+    "lockVersion",
+    "createdAt",
+    "updatedAt",
+  ];
+  assert(
+    organizationAddress?.additionalProperties === false &&
+      exactAddressFields.length === organizationAddress?.required?.length &&
+      exactAddressFields.every((field) =>
+        organizationAddress?.required?.includes(field),
+      ) &&
+      JSON.stringify(organizationAddress?.properties?.addressType?.enum) ===
+        JSON.stringify(["registered", "postal", "service", "billing"]) &&
+      organizationAddress?.properties?.addressLines?.minItems === 1 &&
+      organizationAddress?.properties?.addressLines?.maxItems === 4 &&
+      JSON.stringify(organizationAddress?.properties?.status?.enum) ===
+        JSON.stringify(["scheduled", "active", "ended", "superseded"]) &&
+      JSON.stringify(
+        organizationAddress?.properties?.availableActions?.items?.enum,
+      ) === JSON.stringify(["supersede", "end"]),
+    "OrganizationAddress must expose the exact approved structured, effective, historical projection",
+  );
+  assert(
+    organizationContact?.additionalProperties === false &&
+      exactContactFields.length === organizationContact?.required?.length &&
+      exactContactFields.every((field) =>
+        organizationContact?.required?.includes(field),
+      ) &&
+      organizationContact?.properties?.value === undefined &&
+      organizationContact?.properties?.valueNormalized === undefined &&
+      organizationContact?.properties?.maskedValue?.maxLength === 2048 &&
+      JSON.stringify(organizationContact?.properties?.channel?.enum) ===
+        JSON.stringify(["email", "phone", "web"]) &&
+      JSON.stringify(organizationContact?.properties?.status?.enum) ===
+        JSON.stringify(["scheduled", "active", "ended", "superseded"]) &&
+      JSON.stringify(
+        organizationContact?.properties?.availableActions?.items?.enum,
+      ) === JSON.stringify(["verify", "supersede", "end"]),
+    "OrganizationContact must expose only the exact approved masked effective projection",
+  );
+  assert(
+    organizationContactCollection?.additionalProperties === false &&
+      [
+        "organizationId",
+        "canCreate",
+        "addressTypes",
+        "purposes",
+        "addresses",
+        "contacts",
+      ].every((field) =>
+        organizationContactCollection?.required?.includes(field),
+      ) &&
+      JSON.stringify(
+        organizationContactCollection?.properties?.addressTypes?.prefixItems?.map(
+          (item) => item.const,
+        ),
+      ) === JSON.stringify(["registered", "postal", "service", "billing"]) &&
+      organizationContactPurpose?.properties?.key?.pattern ===
+        "^[a-z][a-z0-9]*([._:-][a-z0-9]+)*$" &&
+      organizationContactPurpose?.properties?.publicProjectionAllowed?.type ===
+        "boolean",
+    "OrganizationContactCollection must bind exact address types, migration-owned purposes, and live create authority",
+  );
+  assert(
+    [
+      "addressType",
+      "addressLines",
+      "locality",
+      "region",
+      "postcode",
+      "countryCode",
+      "validationStatus",
+      "validationSource",
+      "isPrimary",
+      "effectiveFrom",
+      "effectiveTo",
+      "reason",
+    ].every((field) => organizationAddressWrite?.required?.includes(field)) &&
+      organizationAddressWrite?.additionalProperties === false &&
+      organizationAddressWrite?.properties?.addressLines?.maxItems === 4 &&
+      organizationAddressWrite?.properties?.reason?.minLength === 10 &&
+      organizationAddressWrite?.properties?.reason?.maxLength === 500 &&
+      [
+        "channel",
+        "purpose",
+        "value",
+        "isPrimary",
+        "isPreferred",
+        "effectiveFrom",
+        "effectiveTo",
+        "reason",
+      ].every((field) => organizationContactWrite?.required?.includes(field)) &&
+      organizationContactWrite?.additionalProperties === false &&
+      organizationContactWrite?.properties?.value?.maxLength === 2048 &&
+      organizationContactWrite?.properties?.reason?.minLength === 10 &&
+      organizationContactReason?.additionalProperties === false &&
+      organizationContactReason?.required?.length === 1 &&
+      organizationContactReason?.required?.[0] === "reason" &&
+      organizationContactReason?.properties?.reason?.maxLength === 500,
+    "Address and contact mutations must require exact effective values, bounded reasons, and no response-shaped confidential field",
   );
   for (const response of [
     contract.paths?.["/api/v1/auth/session"]?.get?.responses?.["200"],

@@ -2,7 +2,13 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import type { ApiFailure, ApiResult } from './api/client';
 import type {
   AdministrationReadiness,
+  FacilityDirectory,
+  OrganizationAddress,
   OrganizationAccess,
+  OrganizationContact,
+  OrganizationContactCollection,
+  OrganizationIdentifier,
+  OrganizationIdentifierCollection,
   OrganizationMembershipPage,
   OrganizationProfile,
   ReadinessGate,
@@ -25,6 +31,26 @@ const selectedOrganization: OrganizationAccess = {
   roleKeys: ['organization_owner'],
   selected: true,
   status: 'active',
+};
+const facilityDirectory: FacilityDirectory = {
+  organizationId: selectedOrganization.id,
+  canCreate: true,
+  evaluatedAt: '2026-09-18T10:00:00Z',
+  facilityTypes: [{ key: 'care_site', displayName: 'Care site' }],
+  facilities: [
+    {
+      facilityId: '33333333-3333-4333-8333-333333333333',
+      facilityCode: 'NORTH-01',
+      legalName: 'North Clinic Limited',
+      displayName: 'North Clinic',
+      facilityType: 'care_site',
+      timezone: 'Asia/Kolkata',
+      status: 'draft',
+      lockVersion: 0,
+      createdAt: '2026-09-18T10:00:00Z',
+      updatedAt: '2026-09-18T10:00:00Z',
+    },
+  ],
 };
 const otherOrganization: OrganizationAccess = {
   displayName: 'South Clinic',
@@ -222,6 +248,92 @@ const organizationProfile: OrganizationProfile = {
   tradingName: null,
   updatedAt: '2026-09-16T08:00:00Z',
 };
+const organizationIdentifier: OrganizationIdentifier = {
+  assigningAuthority: 'National Provider Registry',
+  availableActions: ['edit', 'verify'],
+  createdAt: '2026-09-16T08:00:00Z',
+  effectiveFrom: '2026-09-16T08:00:00Z',
+  effectiveTo: null,
+  evidenceReference: null,
+  expiryDate: null,
+  identifierId: '44444444-4444-4444-8444-444444444444',
+  identifierType: 'registration',
+  isPrimary: true,
+  issueDate: '2026-09-01',
+  jurisdictionCountryCode: 'IN',
+  lockVersion: 0,
+  status: 'draft',
+  supersedesId: null,
+  typeDisplayName: 'Registration identifier',
+  updatedAt: '2026-09-16T08:00:00Z',
+  value: 'REG-IN-0042',
+  verificationStatus: 'unverified',
+};
+const organizationIdentifiers: OrganizationIdentifierCollection = {
+  canCreate: true,
+  items: [organizationIdentifier],
+  organizationId: selectedOrganization.id,
+  types: [
+    {
+      displayName: 'Registration identifier',
+      jurisdictionCountryCode: null,
+      key: 'registration',
+      primaryRequired: true,
+    },
+  ],
+};
+const organizationAddress: OrganizationAddress = {
+  addressId: '66666666-6666-4666-8666-666666666666',
+  addressLines: ['42 Care Street', 'Andheri East'],
+  addressType: 'registered',
+  availableActions: ['supersede', 'end'],
+  countryCode: 'IN',
+  createdAt: '2026-09-16T08:00:00Z',
+  effectiveFrom: '2026-09-16T08:00:00Z',
+  effectiveTo: null,
+  isPrimary: true,
+  locality: 'Mumbai',
+  lockVersion: 0,
+  postcode: '400069',
+  region: 'Maharashtra',
+  status: 'active',
+  supersedesId: null,
+  updatedAt: '2026-09-16T08:00:00Z',
+  validationSource: 'Approved postal source',
+  validationStatus: 'validated',
+};
+const organizationContact: OrganizationContact = {
+  availableActions: ['verify', 'supersede', 'end'],
+  channel: 'email',
+  contactId: '77777777-7777-4777-8777-777777777770',
+  createdAt: '2026-09-16T08:00:00Z',
+  effectiveFrom: '2026-09-16T08:00:00Z',
+  effectiveTo: null,
+  isPreferred: true,
+  isPrimary: true,
+  lockVersion: 0,
+  maskedValue: 'o***@***.org',
+  purpose: 'operational',
+  purposeDisplayName: 'Operational contact',
+  status: 'active',
+  supersedesId: null,
+  updatedAt: '2026-09-16T08:00:00Z',
+  verificationStatus: 'unverified',
+};
+const organizationContacts: OrganizationContactCollection = {
+  addressTypes: ['registered', 'postal', 'service', 'billing'],
+  addresses: [organizationAddress],
+  canCreate: true,
+  contacts: [organizationContact],
+  organizationId: selectedOrganization.id,
+  purposes: [
+    {
+      displayName: 'Operational contact',
+      key: 'operational',
+      publicProjectionAllowed: false,
+    },
+  ],
+};
 const membershipPage: OrganizationMembershipPage = {
   asOf: '2026-09-17T05:30:00Z',
   availableActions: [
@@ -335,6 +447,68 @@ function sessionClient(overrides: Partial<ApplicationClient> = {}): ApplicationC
       }),
     completeMfaChallenge: async () => success(authenticatedSession),
     completePasswordReset: async () => success(undefined, 204),
+    createOrganizationAddress: async (_organizationId, body) => {
+      const created: OrganizationAddress = {
+        ...organizationAddress,
+        addressId: '66666666-6666-4666-8666-666666666667',
+        addressLines: body.addressLines,
+        addressType: body.addressType,
+        countryCode: body.countryCode.toUpperCase(),
+        effectiveFrom: body.effectiveFrom,
+        effectiveTo: body.effectiveTo,
+        isPrimary: body.isPrimary,
+        locality: body.locality,
+        postcode: body.postcode,
+        region: body.region,
+        validationSource: body.validationSource,
+        validationStatus: body.validationStatus,
+      };
+      return {
+        ...success(created, 201),
+        etag: `"organization-address:${created.addressId}:0"`,
+      };
+    },
+    createOrganizationContact: async (_organizationId, body) => {
+      const created: OrganizationContact = {
+        ...organizationContact,
+        channel: body.channel,
+        contactId: '77777777-7777-4777-8777-777777777771',
+        effectiveFrom: body.effectiveFrom,
+        effectiveTo: body.effectiveTo,
+        isPreferred: body.isPreferred,
+        isPrimary: body.isPrimary,
+        maskedValue:
+          body.channel === 'phone'
+            ? '+***3210'
+            : body.channel === 'web'
+              ? 'https://e***/'
+              : 'n***@***.org',
+        purpose: body.purpose,
+      };
+      return {
+        ...success(created, 201),
+        etag: `"organization-contact:${created.contactId}:0"`,
+      };
+    },
+    createOrganizationIdentifier: async (_organizationId, body) => {
+      const created: OrganizationIdentifier = {
+        ...organizationIdentifier,
+        assigningAuthority: body.assigningAuthority,
+        effectiveFrom: body.effectiveFrom,
+        effectiveTo: body.effectiveTo,
+        expiryDate: body.expiryDate,
+        identifierId: '55555555-5555-4555-8555-555555555555',
+        identifierType: body.identifierType,
+        isPrimary: body.isPrimary,
+        issueDate: body.issueDate,
+        jurisdictionCountryCode: body.jurisdictionCountryCode,
+        value: body.value,
+      };
+      return {
+        ...success(created, 201),
+        etag: `"organization-identifier:${created.identifierId}:0"`,
+      };
+    },
     executeMfaAdministrativeReset: async (_organizationId, targetUserId, approvalId) =>
       success({
         approvalId,
@@ -366,8 +540,38 @@ function sessionClient(overrides: Partial<ApplicationClient> = {}): ApplicationC
         targetUserId: '88888888-8888-4888-8888-888888888888',
         toRoleKey: 'organization_owner',
       }),
+    endOrganizationAddress: async () => {
+      const ended: OrganizationAddress = {
+        ...organizationAddress,
+        availableActions: [],
+        effectiveTo: '2026-09-18T08:00:00Z',
+        lockVersion: 1,
+        status: 'ended',
+        updatedAt: '2026-09-18T08:00:00Z',
+      };
+      return {
+        ...success(ended),
+        etag: `"organization-address:${ended.addressId}:1"`,
+      };
+    },
+    endOrganizationContact: async () => {
+      const ended: OrganizationContact = {
+        ...organizationContact,
+        availableActions: [],
+        effectiveTo: '2026-09-18T08:00:00Z',
+        lockVersion: 1,
+        status: 'ended',
+        updatedAt: '2026-09-18T08:00:00Z',
+      };
+      return {
+        ...success(ended),
+        etag: `"organization-contact:${ended.contactId}:1"`,
+      };
+    },
     getAdministrationReadiness: async () => success(readiness),
     getAuthenticationSession: async () => success(authenticatedSession),
+    getFacilityDirectory: async () => success(facilityDirectory),
+    createFacilityDraft: async () => success(facilityDirectory, 201),
     getOrganizationProfile: async () => ({
       ...success(organizationProfile),
       etag: '"organization-profile:4"',
@@ -382,6 +586,8 @@ function sessionClient(overrides: Partial<ApplicationClient> = {}): ApplicationC
         },
         201,
       ),
+    listOrganizationContacts: async () => success(organizationContacts),
+    listOrganizationIdentifiers: async () => success(organizationIdentifiers),
     listOrganizationMemberships: async () => success(membershipPage),
     listSelectableOrganizations: async () => success([selectedOrganization]),
     login: async () => success(authenticatedSession),
@@ -436,6 +642,19 @@ function sessionClient(overrides: Partial<ApplicationClient> = {}): ApplicationC
         roleKey: 'organization_viewer',
         status: 'revoked',
       }),
+    revokeOrganizationIdentifier: async () => {
+      const revoked: OrganizationIdentifier = {
+        ...organizationIdentifier,
+        availableActions: [],
+        lockVersion: 1,
+        status: 'revoked',
+        updatedAt: '2026-09-16T09:00:00Z',
+      };
+      return {
+        ...success(revoked),
+        etag: `"organization-identifier:${revoked.identifierId}:1"`,
+      };
+    },
     selectOrganization: async ({ organizationId }) =>
       success({
         ...(organizationId === otherOrganization.id ? otherOrganization : selectedOrganization),
@@ -447,6 +666,54 @@ function sessionClient(overrides: Partial<ApplicationClient> = {}): ApplicationC
           'otpauth://totp/ROOTOPATHY%20CareOS:asha@example.test?secret=ABCDEFGHIJKLMNOP',
         secret: 'ABCDEFGHIJKLMNOP',
       }),
+    supersedeOrganizationAddress: async (_organizationId, addressId, body) => {
+      const replacement: OrganizationAddress = {
+        ...organizationAddress,
+        addressId: '66666666-6666-4666-8666-666666666668',
+        addressLines: body.addressLines,
+        countryCode: body.countryCode.toUpperCase(),
+        effectiveFrom: body.effectiveFrom,
+        effectiveTo: body.effectiveTo,
+        locality: body.locality,
+        postcode: body.postcode,
+        region: body.region,
+        supersedesId: addressId,
+        validationSource: body.validationSource,
+        validationStatus: body.validationStatus,
+      };
+      return {
+        ...success(replacement, 201),
+        etag: `"organization-address:${replacement.addressId}:0"`,
+      };
+    },
+    supersedeOrganizationContact: async (_organizationId, contactId, body) => {
+      const replacement: OrganizationContact = {
+        ...organizationContact,
+        contactId: '77777777-7777-4777-8777-777777777772',
+        effectiveFrom: body.effectiveFrom,
+        effectiveTo: body.effectiveTo,
+        maskedValue: 'r***@***.org',
+        supersedesId: contactId,
+      };
+      return {
+        ...success(replacement, 201),
+        etag: `"organization-contact:${replacement.contactId}:0"`,
+      };
+    },
+    supersedeOrganizationIdentifier: async (_organizationId, identifierId) => {
+      const superseded: OrganizationIdentifier = {
+        ...organizationIdentifier,
+        availableActions: [],
+        identifierId,
+        lockVersion: 1,
+        status: 'superseded',
+        updatedAt: '2026-09-16T09:00:00Z',
+      };
+      return {
+        ...success(superseded),
+        etag: `"organization-identifier:${superseded.identifierId}:1"`,
+      };
+    },
     subscribeSessionLifecycle: () => () => undefined,
     updateOrganizationProfile: async (_organizationId, body) => {
       const updated = {
@@ -460,8 +727,56 @@ function sessionClient(overrides: Partial<ApplicationClient> = {}): ApplicationC
         etag: '"organization-profile:5"',
       };
     },
+    updateOrganizationIdentifier: async (_organizationId, _identifierId, body) => {
+      const updated: OrganizationIdentifier = {
+        ...organizationIdentifier,
+        assigningAuthority: body.assigningAuthority,
+        effectiveFrom: body.effectiveFrom,
+        effectiveTo: body.effectiveTo,
+        expiryDate: body.expiryDate,
+        identifierType: body.identifierType,
+        isPrimary: body.isPrimary,
+        issueDate: body.issueDate,
+        jurisdictionCountryCode: body.jurisdictionCountryCode,
+        lockVersion: 1,
+        updatedAt: '2026-09-16T09:00:00Z',
+        value: body.value,
+      };
+      return {
+        ...success(updated),
+        etag: `"organization-identifier:${updated.identifierId}:1"`,
+      };
+    },
     verifyMfaEnrollment: async () =>
       success({ recoveryCodes: ['2345-6789-ABCD', 'EFGH-JKLM-NPQR'] }),
+    verifyOrganizationContact: async () => {
+      const verified: OrganizationContact = {
+        ...organizationContact,
+        availableActions: ['supersede', 'end'],
+        lockVersion: 1,
+        updatedAt: '2026-09-18T08:00:00Z',
+        verificationStatus: 'verified',
+      };
+      return {
+        ...success(verified),
+        etag: `"organization-contact:${verified.contactId}:1"`,
+      };
+    },
+    verifyOrganizationIdentifier: async (_organizationId, _identifierId, body) => {
+      const verified: OrganizationIdentifier = {
+        ...organizationIdentifier,
+        availableActions: [],
+        evidenceReference: body.evidenceReference,
+        lockVersion: 1,
+        status: 'verified',
+        updatedAt: '2026-09-16T09:00:00Z',
+        verificationStatus: 'verified',
+      };
+      return {
+        ...success(verified),
+        etag: `"organization-identifier:${verified.identifierId}:1"`,
+      };
+    },
     verifyRecentAuthentication: async () => success(undefined, 204),
     ...overrides,
   } as ApplicationClient;
@@ -675,54 +990,323 @@ describe('CareOS frontend session boundary', () => {
     expect(screen.getByText(/Access change is/)).toHaveTextContent('pending');
   });
 
-  it('labels synthetic list data and limits interaction to honest local filtering', async () => {
+  it('renders the live facility directory and draft action', async () => {
     window.location.hash = '#/M1-12';
     render(<App client={sessionClient()} />);
 
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Facilities' }),
     ).toBeInTheDocument();
+    expect(screen.getByText('North Clinic Limited')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Add facility draft' })).toBeInTheDocument();
     expect(
-      screen.getByRole('complementary', { name: 'Synthetic prototype only' }),
-    ).toHaveTextContent('Do not enter real personal or clinical information');
-    expect(screen.getAllByRole('button', { name: /Open.*unavailable/ })).toHaveLength(4);
-    screen.getAllByRole('button', { name: /Open.*unavailable/ }).forEach((button) => {
-      expect(button).toBeDisabled();
-    });
-    expect(screen.queryByRole('link', { name: 'Synthetic facility A' })).not.toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Facilities records' })).toHaveAttribute(
-      'tabindex',
-      '0',
-    );
+      screen.queryByRole('complementary', { name: 'Synthetic prototype only' }),
+    ).not.toBeInTheDocument();
 
-    const clearFilters = screen.getByRole('button', { name: 'Clear filters' });
-    expect(clearFilters).toBeDisabled();
-    fireEvent.change(screen.getByLabelText('Search'), { target: { value: 'governance' } });
-    expect(clearFilters).toBeEnabled();
-    expect(screen.getByText('Showing 1 of 4 synthetic records')).toBeInTheDocument();
-    expect(screen.getByText('Synthetic governance group')).toBeInTheDocument();
-    expect(screen.queryByText('Synthetic facility A')).not.toBeInTheDocument();
-
-    fireEvent.click(clearFilters);
-    expect(screen.getByLabelText('Search')).toHaveValue('');
-    expect(screen.getByLabelText('Status')).toHaveValue('all');
-    expect(screen.getByLabelText('Scope')).toHaveValue('all');
-    expect(screen.getByText('Showing 4 of 4 synthetic records')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Search facilities'), { target: { value: 'north' } });
+    await waitFor(() => expect(screen.getByText('North Clinic Limited')).toBeInTheDocument());
   });
 
-  it('does not simulate persistence for an unapproved generic form', async () => {
+  it('creates an organization identifier draft through the governed API', async () => {
     window.location.hash = '#/M1-08';
-    render(<App client={sessionClient()} />);
+    const createOrganizationIdentifier = vi.fn<
+      AdministrationClient['createOrganizationIdentifier']
+    >(async (_organizationId, body) => {
+      const created: OrganizationIdentifier = {
+        ...organizationIdentifier,
+        assigningAuthority: body.assigningAuthority,
+        effectiveFrom: body.effectiveFrom,
+        identifierId: '55555555-5555-4555-8555-555555555555',
+        isPrimary: body.isPrimary,
+        issueDate: body.issueDate,
+        jurisdictionCountryCode: body.jurisdictionCountryCode,
+        value: body.value,
+      };
+      return {
+        ...success(created, 201),
+        etag: `"organization-identifier:${created.identifierId}:0"`,
+      };
+    });
+    render(<App client={sessionClient({ createOrganizationIdentifier })} />);
 
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Registration and identifiers' }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText('Record name')).toHaveAttribute('readonly');
-    expect(screen.getByLabelText('Type')).toBeDisabled();
-    expect(screen.getByLabelText('Reason for change')).toHaveAttribute('readonly');
-    expect(screen.getByRole('button', { name: /Save draft.*unavailable/ })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /Save and continue.*unavailable/ })).toBeDisabled();
-    expect(screen.queryByText(/Prototype interaction saved locally/)).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'REG-IN-0042' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Verify' })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add identifier' }));
+    fireEvent.change(screen.getByLabelText('Assigning authority'), {
+      target: { value: 'State Health Registry' },
+    });
+    fireEvent.change(screen.getByLabelText('Identifier value'), {
+      target: { value: 'STATE-1024' },
+    });
+    fireEvent.change(screen.getByLabelText('Jurisdiction (optional)'), {
+      target: { value: 'in' },
+    });
+    fireEvent.click(screen.getByLabelText(/Use as the primary identifier/));
+    fireEvent.change(screen.getByLabelText('Reason'), {
+      target: { value: 'Approved registration intake CARE-1024' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create draft' }));
+
+    await waitFor(() => expect(createOrganizationIdentifier).toHaveBeenCalledOnce());
+    expect(createOrganizationIdentifier.mock.calls[0]).toEqual([
+      selectedOrganization.id,
+      expect.objectContaining({
+        assigningAuthority: 'State Health Registry',
+        effectiveFrom: expect.stringMatching(/Z$/),
+        identifierType: 'registration',
+        isPrimary: true,
+        jurisdictionCountryCode: 'IN',
+        reason: 'Approved registration intake CARE-1024',
+        value: 'STATE-1024',
+      }),
+      expect.stringMatching(/^organization-identifier:[0-9a-f-]{36}$/),
+    ]);
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Identifier created as a governed draft',
+    );
+    expect(screen.getByRole('heading', { name: 'STATE-1024' })).toBeInTheDocument();
+  });
+
+  it('verifies an identifier with its strong revision, evidence, and retry key', async () => {
+    window.location.hash = '#/M1-08';
+    const verifyOrganizationIdentifier = vi.fn<
+      AdministrationClient['verifyOrganizationIdentifier']
+    >(async (_organizationId, _identifierId, body) => {
+      const verified: OrganizationIdentifier = {
+        ...organizationIdentifier,
+        availableActions: [],
+        evidenceReference: body.evidenceReference,
+        lockVersion: 1,
+        status: 'verified',
+        updatedAt: '2026-09-16T09:00:00Z',
+        verificationStatus: 'verified',
+      };
+      return {
+        ...success(verified),
+        etag: `"organization-identifier:${verified.identifierId}:1"`,
+      };
+    });
+    render(<App client={sessionClient({ verifyOrganizationIdentifier })} />);
+
+    await screen.findByRole('heading', { name: 'REG-IN-0042' });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
+    fireEvent.change(screen.getByLabelText('Verification evidence reference'), {
+      target: { value: 'NPR-CASE-2026-1042' },
+    });
+    fireEvent.change(screen.getByLabelText('Reason'), {
+      target: { value: 'Authority verification completed CARE-1042' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify identifier' }));
+
+    await waitFor(() => expect(verifyOrganizationIdentifier).toHaveBeenCalledOnce());
+    expect(verifyOrganizationIdentifier.mock.calls[0]).toEqual([
+      selectedOrganization.id,
+      organizationIdentifier.identifierId,
+      {
+        evidenceReference: 'NPR-CASE-2026-1042',
+        reason: 'Authority verification completed CARE-1042',
+      },
+      `"organization-identifier:${organizationIdentifier.identifierId}:0"`,
+      expect.stringMatching(/^organization-identifier:[0-9a-f-]{36}$/),
+    ]);
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Identifier verified with authority evidence',
+    );
+    expect(screen.getByText('NPR-CASE-2026-1042')).toBeInTheDocument();
+  });
+
+  it('supersedes an identifier with exact revisions for both verified records', async () => {
+    window.location.hash = '#/M1-08';
+    const target: OrganizationIdentifier = {
+      ...organizationIdentifier,
+      availableActions: ['supersede'],
+      evidenceReference: 'NPR-ORIGINAL-1042',
+      lockVersion: 1,
+      status: 'verified',
+      verificationStatus: 'verified',
+    };
+    const replacement: OrganizationIdentifier = {
+      ...target,
+      availableActions: ['revoke', 'supersede'],
+      evidenceReference: 'NPR-REPLACEMENT-1042',
+      identifierId: '55555555-5555-4555-8555-555555555555',
+      isPrimary: false,
+      value: 'REG-IN-REPLACEMENT',
+    };
+    const finalCollection: OrganizationIdentifierCollection = {
+      ...organizationIdentifiers,
+      items: [
+        {
+          ...replacement,
+          availableActions: ['supersede'],
+          isPrimary: true,
+          lockVersion: 2,
+          supersedesId: target.identifierId,
+        },
+        { ...target, availableActions: [], lockVersion: 2, status: 'superseded' },
+      ],
+    };
+    let reads = 0;
+    const listOrganizationIdentifiers = vi.fn(async () =>
+      success(
+        reads++ === 0
+          ? { ...organizationIdentifiers, items: [target, replacement] }
+          : finalCollection,
+      ),
+    );
+    const supersedeOrganizationIdentifier = vi.fn<
+      AdministrationClient['supersedeOrganizationIdentifier']
+    >(async () => {
+      const superseded = finalCollection.items[1]!;
+      return {
+        ...success(superseded),
+        etag: `"organization-identifier:${superseded.identifierId}:2"`,
+      };
+    });
+    render(
+      <App
+        client={sessionClient({
+          listOrganizationIdentifiers,
+          supersedeOrganizationIdentifier,
+        })}
+      />,
+    );
+
+    const targetHeading = await screen.findByRole('heading', { name: 'REG-IN-0042' });
+    const targetCard = targetHeading.closest('article');
+    expect(targetCard).not.toBeNull();
+    fireEvent.click(within(targetCard as HTMLElement).getByRole('button', { name: 'Supersede' }));
+    expect(screen.getByLabelText('Verified replacement')).toHaveValue(replacement.identifierId);
+    fireEvent.change(screen.getByLabelText('Reason'), {
+      target: { value: 'Verified registry replacement approved CARE-1042' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Supersede identifier' }));
+
+    await waitFor(() => expect(supersedeOrganizationIdentifier).toHaveBeenCalledOnce());
+    expect(supersedeOrganizationIdentifier.mock.calls[0]).toEqual([
+      selectedOrganization.id,
+      target.identifierId,
+      {
+        reason: 'Verified registry replacement approved CARE-1042',
+        replacementEtag: `"organization-identifier:${replacement.identifierId}:1"`,
+        replacementId: replacement.identifierId,
+      },
+      `"organization-identifier:${target.identifierId}:1"`,
+      expect.stringMatching(/^organization-identifier:[0-9a-f-]{36}$/),
+    ]);
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Identifier superseded by the verified replacement',
+    );
+    expect(screen.getByText('Supersedes').nextElementSibling).toHaveTextContent('REG-IN-0042');
+  });
+
+  it('renders M1-09 structured addresses and only masked contact values', async () => {
+    window.location.hash = '#/M1-09';
+    const listOrganizationContacts = vi.fn(async () => success(organizationContacts));
+    render(<App client={sessionClient({ listOrganizationContacts })} />);
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Addresses and contacts' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '42 Care Street, Andheri East' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'o***@***.org' })).toBeVisible();
+    expect(screen.getByText('Confidential · masked projection')).toBeVisible();
+    expect(screen.queryByText('operations@example.org')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add contact' })).toBeEnabled();
+    expect(listOrganizationContacts).toHaveBeenCalledWith(selectedOrganization.id, {
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it('creates a governed contact without projecting its confidential value back', async () => {
+    window.location.hash = '#/M1-09';
+    const created: OrganizationContact = {
+      ...organizationContact,
+      contactId: '77777777-7777-4777-8777-777777777773',
+      isPreferred: false,
+      maskedValue: 'n***@***.org',
+    };
+    let reads = 0;
+    const listOrganizationContacts = vi.fn(async () =>
+      success(
+        reads++ === 0
+          ? organizationContacts
+          : { ...organizationContacts, contacts: [created, organizationContact] },
+      ),
+    );
+    const createOrganizationContact = vi.fn<AdministrationClient['createOrganizationContact']>(
+      async () => ({
+        ...success(created, 201),
+        etag: `"organization-contact:${created.contactId}:0"`,
+      }),
+    );
+    render(<App client={sessionClient({ createOrganizationContact, listOrganizationContacts })} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Add contact' }));
+    const actionPanel = screen.getByRole('heading', { name: 'Add contact' }).closest('section');
+    expect(actionPanel).not.toBeNull();
+    fireEvent.change(within(actionPanel as HTMLElement).getByLabelText('Email address'), {
+      target: { value: 'new.operations@example.org' },
+    });
+    fireEvent.click(
+      within(actionPanel as HTMLElement).getByLabelText(/Primary contact for this purpose/),
+    );
+    fireEvent.change(within(actionPanel as HTMLElement).getByLabelText('Reason'), {
+      target: { value: 'Approved operational contact intake CARE-2001' },
+    });
+    fireEvent.click(
+      within(actionPanel as HTMLElement).getByRole('button', { name: 'Add contact' }),
+    );
+
+    await waitFor(() => expect(createOrganizationContact).toHaveBeenCalledOnce());
+    expect(createOrganizationContact.mock.calls[0]).toEqual([
+      selectedOrganization.id,
+      expect.objectContaining({
+        channel: 'email',
+        effectiveFrom: expect.stringMatching(/Z$/),
+        effectiveTo: null,
+        isPreferred: false,
+        isPrimary: true,
+        purpose: 'operational',
+        reason: 'Approved operational contact intake CARE-2001',
+        value: 'new.operations@example.org',
+      }),
+      expect.stringMatching(/^organization-contact:[0-9a-f-]{36}$/),
+    ]);
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'only its masked projection is displayed',
+    );
+    expect(screen.queryByText('new.operations@example.org')).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'n***@***.org' })).toBeVisible();
+  });
+
+  it('fails closed when an M1-09 projection includes a raw contact value', async () => {
+    window.location.hash = '#/M1-09';
+    const unsafe = {
+      ...organizationContacts,
+      contacts: [
+        {
+          ...organizationContact,
+          value: 'operations@example.org',
+        },
+      ],
+    } as unknown as OrganizationContactCollection;
+    render(
+      <App
+        client={sessionClient({
+          listOrganizationContacts: async () => success(unsafe),
+        })}
+      />,
+    );
+
+    expect(
+      await screen.findByText(/did not contain a valid masked address and contact projection/),
+    ).toBeVisible();
+    expect(screen.queryByText('operations@example.org')).not.toBeInTheDocument();
   });
 
   it('keeps synthetic clinical actions and terminal pagination non-activatable', async () => {

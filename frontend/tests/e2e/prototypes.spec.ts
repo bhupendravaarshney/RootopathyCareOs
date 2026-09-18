@@ -170,6 +170,168 @@ const organizationProfile = {
   tradingName: null,
   updatedAt: '2026-09-16T08:00:00Z',
 };
+const organizationIdentifier = {
+  assigningAuthority: 'National Provider Registry',
+  availableActions: ['edit', 'verify'],
+  createdAt: '2026-09-16T08:00:00Z',
+  effectiveFrom: '2026-09-16T08:00:00Z',
+  effectiveTo: null,
+  evidenceReference: null,
+  expiryDate: null,
+  identifierId: '44444444-4444-4444-8444-444444444444',
+  identifierType: 'registration',
+  isPrimary: true,
+  issueDate: '2026-09-01',
+  jurisdictionCountryCode: 'IN',
+  lockVersion: 0,
+  status: 'draft',
+  supersedesId: null,
+  typeDisplayName: 'Registration identifier',
+  updatedAt: '2026-09-16T08:00:00Z',
+  value: 'REG-IN-0042',
+  verificationStatus: 'unverified',
+};
+const organizationIdentifiers = {
+  canCreate: true,
+  items: [organizationIdentifier],
+  organizationId: organization.id,
+  types: [
+    {
+      displayName: 'Registration identifier',
+      jurisdictionCountryCode: null,
+      key: 'registration',
+      primaryRequired: true,
+    },
+  ],
+};
+const organizationAddress = {
+  addressId: '66666666-6666-4666-8666-666666666666',
+  addressLines: ['42 Care Street', 'Andheri East'],
+  addressType: 'registered',
+  availableActions: ['supersede', 'end'],
+  countryCode: 'IN',
+  createdAt: '2026-09-16T08:00:00Z',
+  effectiveFrom: '2026-09-16T08:00:00Z',
+  effectiveTo: null,
+  isPrimary: true,
+  locality: 'Mumbai',
+  lockVersion: 0,
+  postcode: '400069',
+  region: 'Maharashtra',
+  status: 'active',
+  supersedesId: null,
+  updatedAt: '2026-09-16T08:00:00Z',
+  validationSource: 'Approved postal source',
+  validationStatus: 'validated',
+};
+const organizationContact = {
+  availableActions: ['verify', 'supersede', 'end'],
+  channel: 'email',
+  contactId: '77777777-7777-4777-8777-777777777770',
+  createdAt: '2026-09-16T08:00:00Z',
+  effectiveFrom: '2026-09-16T08:00:00Z',
+  effectiveTo: null,
+  isPreferred: true,
+  isPrimary: true,
+  lockVersion: 0,
+  maskedValue: 'o***@***.org',
+  purpose: 'operational',
+  purposeDisplayName: 'Operational contact',
+  status: 'active',
+  supersedesId: null,
+  updatedAt: '2026-09-16T08:00:00Z',
+  verificationStatus: 'unverified',
+};
+const organizationContacts = {
+  addressTypes: ['registered', 'postal', 'service', 'billing'],
+  addresses: [organizationAddress],
+  canCreate: true,
+  contacts: [organizationContact],
+  organizationId: organization.id,
+  purposes: [
+    {
+      displayName: 'Operational contact',
+      key: 'operational',
+      publicProjectionAllowed: false,
+    },
+  ],
+};
+const organizationInternationalSettings = {
+  canSchedule: true,
+  editable: true,
+  evaluatedAt: '2026-09-18T08:00:00Z',
+  impactRules: [
+    ['countryCode', 'jurisdiction_impact', 'warning'],
+    ['timezone', 'timezone_impact', 'warning'],
+    ['locale', 'locale_format_impact', 'information'],
+    ['language', 'language_impact', 'information'],
+    ['currencyCode', 'currency_impact', 'warning'],
+    ['weekStart', 'week_start_impact', 'information'],
+  ].map(([field, code, severity]) => ({
+    code: `m1.settings.${code}`,
+    description: `${field} uses the approved impact rule.`,
+    field,
+    severity,
+  })),
+  lockVersion: 4,
+  organizationId: organization.id,
+  versions: [
+    {
+      countryCode: 'IN',
+      currencyCode: 'INR',
+      effectiveFrom: '2026-09-16T08:00:00Z',
+      effectiveTo: null,
+      language: 'en',
+      lifecycle: 'default',
+      locale: 'en-IN',
+      lockVersion: 4,
+      settingsId: null,
+      source: 'organization_default',
+      supersedesId: null,
+      timezone: 'Asia/Kolkata',
+      updatedAt: '2026-09-16T08:00:00Z',
+      weekStart: 'SUNDAY',
+      formatPreview: {
+        localeLibraryDerived: true,
+        sampleCurrency: '₹1,234.56',
+        sampleDate: '15 Jun 2030',
+        sampleNumber: '12,34,567.89',
+        sampleTime: '7:15 pm',
+      },
+    },
+  ],
+  weekStarts: ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'],
+};
+const organizationGovernance = {
+  canManage: true,
+  eligibleAssignees: [
+    { id: '77777777-7777-4777-8777-777777777777', type: 'membership', display: 'Ravi Shah' },
+  ],
+  evaluatedAt: '2026-09-18T08:00:00Z',
+  organizationId: organization.id,
+  responsibilities: [],
+  responsibilityTypes: ['clinical', 'privacy', 'security', 'billing'],
+};
+const facilityDirectory = {
+  organizationId: organization.id,
+  canCreate: true,
+  evaluatedAt: '2026-09-18T08:00:00Z',
+  facilityTypes: [{ key: 'care_site', displayName: 'Care site' }],
+  facilities: [
+    {
+      facilityId: '33333333-3333-4333-8333-333333333333',
+      facilityCode: 'CARE-01',
+      legalName: 'Care One Facility Limited',
+      displayName: 'Care One',
+      facilityType: 'care_site',
+      timezone: 'Asia/Kolkata',
+      status: 'draft',
+      lockVersion: 0,
+      createdAt: '2026-09-18T08:00:00Z',
+      updatedAt: '2026-09-18T08:00:00Z',
+    },
+  ],
+};
 const organizationMemberships = {
   asOf: '2026-09-17T05:30:00Z',
   availableActions: [
@@ -266,6 +428,24 @@ async function mockAuthenticatedSession(page: Page) {
       ETag: '"organization-profile:4"',
     }),
   );
+  await page.route(`**/api/v1/organizations/${organization.id}/identifiers**`, (route) =>
+    jsonResponse(route, organizationIdentifiers),
+  );
+  await page.route(`**/api/v1/organizations/${organization.id}/contacts**`, (route) =>
+    jsonResponse(route, organizationContacts),
+  );
+  await page.route(`**/api/v1/organizations/${organization.id}/international-settings`, (route) =>
+    jsonResponse(route, organizationInternationalSettings, 200, undefined, {
+      ETag: '"organization-international-settings:4"',
+    }),
+  );
+  await page.route(
+    `**/api/v1/organizations/${organization.id}/governance-responsibilities**`,
+    (route) => jsonResponse(route, organizationGovernance),
+  );
+  await page.route(`**/api/v1/organizations/${organization.id}/facilities**`, (route) =>
+    jsonResponse(route, facilityDirectory, route.request().method() === 'POST' ? 201 : 200),
+  );
   await page.route(`**/api/v1/organizations/${organization.id}/memberships**`, (route) =>
     jsonResponse(route, organizationMemberships),
   );
@@ -330,41 +510,8 @@ for (const { module, count, start } of routeGroups) {
   });
 }
 
-test('synthetic screens expose honest action boundaries and usable local filters', async ({
-  page,
-}) => {
+test('remaining synthetic screens expose honest action boundaries', async ({ page }) => {
   await mockAuthenticatedSession(page);
-
-  await page.goto('/#/M1-12');
-  await expect(page.getByRole('complementary', { name: 'Synthetic prototype only' })).toContainText(
-    'Do not enter real personal or clinical information',
-  );
-  await expect(page.getByRole('button', { name: /Open.*unavailable/ })).toHaveCount(4);
-  for (const action of await page.getByRole('button', { name: /Open.*unavailable/ }).all()) {
-    await expect(action).toBeDisabled();
-  }
-  await expect(page.getByRole('link', { name: 'Synthetic facility A' })).toHaveCount(0);
-  const recordsRegion = page.getByRole('region', { name: 'Facilities records' });
-  await recordsRegion.focus();
-  await expect(recordsRegion).toBeFocused();
-
-  const clearFilters = page.getByRole('button', { name: 'Clear filters' });
-  await expect(clearFilters).toBeDisabled();
-  await page.getByLabel('Search', { exact: true }).fill('governance');
-  await expect(clearFilters).toBeEnabled();
-  await expect(page.getByText('Showing 1 of 4 synthetic records')).toBeVisible();
-  await expect(page.getByText('Synthetic governance group')).toBeVisible();
-  await clearFilters.click();
-  await expect(page.getByLabel('Search', { exact: true })).toHaveValue('');
-  await expect(page.getByText('Showing 4 of 4 synthetic records')).toBeVisible();
-
-  await page.goto('/#/M1-08');
-  await expect(page.getByLabel('Record name')).toHaveAttribute('readonly', '');
-  await expect(page.getByRole('combobox', { name: 'Type' })).toBeDisabled();
-  await expect(page.getByLabel('Reason for change')).toHaveAttribute('readonly', '');
-  await expect(page.getByRole('button', { name: /Save draft.*unavailable/ })).toBeDisabled();
-  await expect(page.getByRole('button', { name: /Save and continue.*unavailable/ })).toBeDisabled();
-  await expect(page.getByText(/Prototype interaction saved locally/)).toHaveCount(0);
 
   await page.goto('/#/M1-21');
   await expect(page.getByRole('button', { name: /Review.*unavailable/ })).toHaveCount(4);
@@ -384,6 +531,321 @@ test('synthetic screens expose honest action boundaries and usable local filters
   await expect(pagination.getByText('COS-27')).toHaveAttribute('aria-disabled', 'true');
   await expectNoDocumentHorizontalOverflow(page, 'honest synthetic prototype boundary');
   await expectNoSeriousViolations(page, 'honest synthetic prototype boundary');
+});
+
+test('M1-08 verifies and supersedes governed identifiers with exact revision evidence', async ({
+  page,
+}) => {
+  await mockAuthenticatedSession(page);
+  await page.unroute(`**/api/v1/organizations/${organization.id}/identifiers**`);
+  let verificationRequests = 0;
+  let supersessionRequests = 0;
+  let superseded = false;
+  const replacementIdentifier = {
+    ...organizationIdentifier,
+    availableActions: ['revoke', 'supersede'],
+    evidenceReference: 'NPR-REPLACEMENT-2026-1042',
+    identifierId: '55555555-5555-4555-8555-555555555555',
+    isPrimary: false,
+    lockVersion: 2,
+    status: 'verified',
+    value: 'REG-IN-REPLACEMENT',
+    verificationStatus: 'verified',
+  };
+  await page.route('**/api/v1/auth/csrf', (route) =>
+    jsonResponse(route, {
+      headerName: 'X-XSRF-TOKEN',
+      parameterName: '_csrf',
+      token: 'identifier-csrf-token-123456',
+    }),
+  );
+  await page.route(`**/api/v1/organizations/${organization.id}/identifiers**`, async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (request.method() === 'GET') {
+      await jsonResponse(
+        route,
+        superseded
+          ? {
+              ...organizationIdentifiers,
+              items: [
+                {
+                  ...replacementIdentifier,
+                  availableActions: ['supersede'],
+                  isPrimary: true,
+                  lockVersion: 3,
+                  supersedesId: organizationIdentifier.identifierId,
+                },
+                {
+                  ...organizationIdentifier,
+                  availableActions: [],
+                  evidenceReference: 'NPR-CASE-2026-1042',
+                  lockVersion: 2,
+                  status: 'superseded',
+                  verificationStatus: 'verified',
+                },
+              ],
+            }
+          : { ...organizationIdentifiers, items: [organizationIdentifier, replacementIdentifier] },
+      );
+      return;
+    }
+    if (
+      request.method() === 'POST' &&
+      path.endsWith(`/${organizationIdentifier.identifierId}/verifications`)
+    ) {
+      ++verificationRequests;
+      expect(request.headers()['if-match']).toBe(
+        `"organization-identifier:${organizationIdentifier.identifierId}:0"`,
+      );
+      expect(request.headers()['idempotency-key']).toMatch(/^organization-identifier:/);
+      expect(request.headers()['x-xsrf-token']).toBe('identifier-csrf-token-123456');
+      expect(request.postDataJSON()).toEqual({
+        evidenceReference: 'NPR-CASE-2026-1042',
+        reason: 'Authority verification completed CARE-1042',
+      });
+      await jsonResponse(
+        route,
+        {
+          ...organizationIdentifier,
+          availableActions: ['supersede'],
+          evidenceReference: 'NPR-CASE-2026-1042',
+          lockVersion: 1,
+          status: 'verified',
+          updatedAt: '2026-09-16T09:00:00Z',
+          verificationStatus: 'verified',
+        },
+        200,
+        undefined,
+        {
+          ETag: `"organization-identifier:${organizationIdentifier.identifierId}:1"`,
+        },
+      );
+      return;
+    }
+    if (
+      request.method() === 'POST' &&
+      path.endsWith(`/${organizationIdentifier.identifierId}/supersessions`)
+    ) {
+      ++supersessionRequests;
+      expect(request.headers()['if-match']).toBe(
+        `"organization-identifier:${organizationIdentifier.identifierId}:1"`,
+      );
+      expect(request.headers()['idempotency-key']).toMatch(/^organization-identifier:/);
+      expect(request.headers()['x-xsrf-token']).toBe('identifier-csrf-token-123456');
+      expect(request.postDataJSON()).toEqual({
+        reason: 'Verified replacement approved CARE-1042',
+        replacementEtag: `"organization-identifier:${replacementIdentifier.identifierId}:2"`,
+        replacementId: replacementIdentifier.identifierId,
+      });
+      superseded = true;
+      await jsonResponse(
+        route,
+        {
+          ...organizationIdentifier,
+          availableActions: [],
+          evidenceReference: 'NPR-CASE-2026-1042',
+          lockVersion: 2,
+          status: 'superseded',
+          verificationStatus: 'verified',
+        },
+        200,
+        undefined,
+        {
+          ETag: `"organization-identifier:${organizationIdentifier.identifierId}:2"`,
+        },
+      );
+      return;
+    }
+    await route.abort('failed');
+  });
+
+  await page.goto('/#/M1-08');
+  await expect(page.getByRole('heading', { name: 'REG-IN-0042' })).toBeVisible();
+  await page.getByRole('button', { name: 'Verify', exact: true }).click();
+  await page.getByLabel('Verification evidence reference').fill('NPR-CASE-2026-1042');
+  await page
+    .getByLabel('Reason', { exact: true })
+    .fill('Authority verification completed CARE-1042');
+  await page.getByRole('button', { name: 'Verify identifier' }).click();
+
+  await expect(page.getByRole('status')).toContainText(
+    'Identifier verified with authority evidence',
+  );
+  await expect(page.getByText('NPR-CASE-2026-1042')).toBeVisible();
+  expect(verificationRequests).toBe(1);
+
+  const originalCard = page
+    .getByRole('heading', { name: organizationIdentifier.value })
+    .locator('xpath=ancestor::article');
+  await originalCard.getByRole('button', { name: 'Supersede' }).click();
+  await expect(page.getByLabel('Verified replacement')).toHaveValue(
+    replacementIdentifier.identifierId,
+  );
+  await page.getByLabel('Reason', { exact: true }).fill('Verified replacement approved CARE-1042');
+  await page.getByRole('button', { name: 'Supersede identifier' }).click();
+
+  await expect(page.getByRole('status')).toContainText(
+    'Identifier superseded by the verified replacement',
+  );
+  await expect(
+    page
+      .getByRole('heading', { name: replacementIdentifier.value })
+      .locator('xpath=ancestor::article'),
+  ).toContainText(new RegExp(`Supersedes\\s*${organizationIdentifier.value}`));
+  expect(supersessionRequests).toBe(1);
+  await expectNoDocumentHorizontalOverflow(page, 'M1-08 governed identifiers');
+  await expectNoSeriousViolations(page, 'M1-08 governed identifiers');
+});
+
+test('M1-09 verifies masked contacts and supersedes addresses with immutable lineage', async ({
+  page,
+}) => {
+  await mockAuthenticatedSession(page);
+  await page.unroute(`**/api/v1/organizations/${organization.id}/contacts**`);
+  let contactVerified = false;
+  let addressSuperseded = false;
+  let verificationRequests = 0;
+  let supersessionRequests = 0;
+  const replacementAddress = {
+    ...organizationAddress,
+    addressId: '66666666-6666-4666-8666-666666666667',
+    addressLines: ['84 Care Avenue', 'Andheri East'],
+    supersedesId: organizationAddress.addressId,
+  };
+  await page.route('**/api/v1/auth/csrf', (route) =>
+    jsonResponse(route, {
+      headerName: 'X-XSRF-TOKEN',
+      parameterName: '_csrf',
+      token: 'contact-csrf-token-123456',
+    }),
+  );
+  await page.route(`**/api/v1/organizations/${organization.id}/contacts**`, async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (request.method() === 'GET') {
+      await jsonResponse(route, {
+        ...organizationContacts,
+        addresses: addressSuperseded
+          ? [
+              replacementAddress,
+              {
+                ...organizationAddress,
+                availableActions: [],
+                lockVersion: 1,
+                status: 'superseded',
+                updatedAt: '2026-09-18T09:00:00Z',
+              },
+            ]
+          : [organizationAddress],
+        contacts: [
+          contactVerified
+            ? {
+                ...organizationContact,
+                availableActions: ['supersede', 'end'],
+                lockVersion: 1,
+                updatedAt: '2026-09-18T08:30:00Z',
+                verificationStatus: 'verified',
+              }
+            : organizationContact,
+        ],
+      });
+      return;
+    }
+    if (
+      request.method() === 'POST' &&
+      path.endsWith(`/${organizationContact.contactId}/verifications`)
+    ) {
+      ++verificationRequests;
+      expect(request.headers()['if-match']).toBe(
+        `"organization-contact:${organizationContact.contactId}:0"`,
+      );
+      expect(request.headers()['idempotency-key']).toMatch(/^organization-contact:/);
+      expect(request.headers()['x-xsrf-token']).toBe('contact-csrf-token-123456');
+      expect(request.postDataJSON()).toEqual({
+        reason: 'Verified operational mailbox ownership CARE-2002',
+      });
+      contactVerified = true;
+      await jsonResponse(
+        route,
+        {
+          ...organizationContact,
+          availableActions: ['supersede', 'end'],
+          lockVersion: 1,
+          updatedAt: '2026-09-18T08:30:00Z',
+          verificationStatus: 'verified',
+        },
+        200,
+        undefined,
+        { ETag: `"organization-contact:${organizationContact.contactId}:1"` },
+      );
+      return;
+    }
+    await route.abort('failed');
+  });
+  await page.route(`**/api/v1/organizations/${organization.id}/addresses**`, async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (
+      request.method() === 'POST' &&
+      path.endsWith(`/${organizationAddress.addressId}/supersessions`)
+    ) {
+      ++supersessionRequests;
+      expect(request.headers()['if-match']).toBe(
+        `"organization-address:${organizationAddress.addressId}:0"`,
+      );
+      expect(request.headers()['idempotency-key']).toMatch(/^organization-contact:/);
+      expect(request.headers()['x-xsrf-token']).toBe('contact-csrf-token-123456');
+      expect(request.postDataJSON()).toMatchObject({
+        addressLines: ['84 Care Avenue', 'Andheri East'],
+        addressType: 'registered',
+        isPrimary: true,
+        reason: 'Approved registered address replacement CARE-2003',
+      });
+      addressSuperseded = true;
+      await jsonResponse(route, replacementAddress, 201, undefined, {
+        ETag: `"organization-address:${replacementAddress.addressId}:0"`,
+      });
+      return;
+    }
+    await route.abort('failed');
+  });
+
+  await page.goto('/#/M1-09');
+  await expect(
+    page.getByRole('heading', { name: organizationAddress.addressLines.join(', ') }),
+  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: organizationContact.maskedValue })).toBeVisible();
+  await expect(page.getByText('operations@example.org')).toHaveCount(0);
+
+  const contactCard = page
+    .getByRole('heading', { name: organizationContact.maskedValue })
+    .locator('xpath=ancestor::article');
+  await contactCard.getByRole('button', { name: 'Verify' }).click();
+  await page
+    .getByLabel('Reason', { exact: true })
+    .fill('Verified operational mailbox ownership CARE-2002');
+  await page.getByRole('button', { name: 'Verify contact' }).click();
+  await expect(page.getByRole('status')).toContainText('Contact verification recorded');
+  expect(verificationRequests).toBe(1);
+
+  const addressCard = page
+    .getByRole('heading', { name: organizationAddress.addressLines.join(', ') })
+    .locator('xpath=ancestor::article');
+  await addressCard.getByRole('button', { name: 'Supersede' }).click();
+  await page.getByLabel('Address line 1').fill('84 Care Avenue');
+  await page
+    .getByLabel('Reason', { exact: true })
+    .fill('Approved registered address replacement CARE-2003');
+  await page.getByRole('button', { name: 'Supersede address' }).click();
+  await expect(page.getByRole('status')).toContainText('Address superseded with immutable lineage');
+  await expect(
+    page.getByRole('heading', { name: replacementAddress.addressLines.join(', ') }),
+  ).toBeVisible();
+  expect(supersessionRequests).toBe(1);
+  await expect(page.getByText('operations@example.org')).toHaveCount(0);
+  await expectNoDocumentHorizontalOverflow(page, 'M1-09 governed addresses and contacts');
+  await expectNoSeriousViolations(page, 'M1-09 governed addresses and contacts');
 });
 
 test('M1-20 renders authorized membership data and permission-projected actions', async ({

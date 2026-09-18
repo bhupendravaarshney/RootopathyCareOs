@@ -465,6 +465,378 @@ describe('CareOsApiClient', () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it('sends organization identifier reads and governed lifecycle mutations to exact paths', async () => {
+    const organizationId = '22222222-2222-4222-8222-222222222222';
+    const identifierId = '44444444-4444-4444-8444-444444444444';
+    const replacementId = '55555555-5555-4555-8555-555555555555';
+    const identifier = {
+      assigningAuthority: 'National Provider Registry',
+      availableActions: ['edit', 'verify'],
+      createdAt: '2026-09-16T08:00:00Z',
+      effectiveFrom: '2026-09-16T08:00:00Z',
+      effectiveTo: null,
+      evidenceReference: null,
+      expiryDate: null,
+      identifierId,
+      identifierType: 'registration',
+      isPrimary: true,
+      issueDate: '2026-09-01',
+      jurisdictionCountryCode: 'IN',
+      lockVersion: 0,
+      status: 'draft',
+      supersedesId: null,
+      typeDisplayName: 'Registration identifier',
+      updatedAt: '2026-09-16T08:00:00Z',
+      value: 'REG-IN-0042',
+      verificationStatus: 'unverified',
+    };
+    const csrfPayload = {
+      headerName: 'X-XSRF-TOKEN',
+      parameterName: '_csrf',
+      token: 'valid-csrf-token-123456',
+    };
+    const mutationHeaders = {
+      ETag: `"organization-identifier:${identifierId}:0"`,
+    };
+    const fetcher = mockFetch(
+      jsonResponse({
+        canCreate: true,
+        items: [identifier],
+        organizationId,
+        types: [
+          {
+            displayName: 'Registration identifier',
+            jurisdictionCountryCode: null,
+            key: 'registration',
+            primaryRequired: true,
+          },
+        ],
+      }),
+      jsonResponse(csrfPayload),
+      jsonResponse(identifier, { headers: mutationHeaders, status: 201 }),
+      jsonResponse(csrfPayload),
+      jsonResponse(identifier, { headers: mutationHeaders }),
+      jsonResponse(csrfPayload),
+      jsonResponse(identifier, { headers: mutationHeaders }),
+      jsonResponse(csrfPayload),
+      jsonResponse(identifier, { headers: mutationHeaders }),
+      jsonResponse(csrfPayload),
+      jsonResponse(identifier, { headers: mutationHeaders }),
+    );
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+    const write = {
+      assigningAuthority: 'National Provider Registry',
+      effectiveFrom: '2026-09-16T08:00:00Z',
+      effectiveTo: null,
+      expiryDate: null,
+      identifierType: 'registration',
+      isPrimary: true,
+      issueDate: '2026-09-01',
+      jurisdictionCountryCode: 'IN',
+      reason: 'Approved registration intake CARE-42',
+      value: 'REG-IN-0042',
+    };
+    const etag = `"organization-identifier:${identifierId}:0"`;
+    const replacementEtag = `"organization-identifier:${replacementId}:2"`;
+
+    await expect(client.listOrganizationIdentifiers(organizationId)).resolves.toMatchObject({
+      ok: true,
+      status: 200,
+    });
+    await expect(
+      client.createOrganizationIdentifier(
+        organizationId,
+        write,
+        'identifier-create:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ etag, ok: true, status: 201 });
+    await expect(
+      client.updateOrganizationIdentifier(
+        organizationId,
+        identifierId,
+        write,
+        etag,
+        'identifier-update:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ etag, ok: true, status: 200 });
+    await expect(
+      client.verifyOrganizationIdentifier(
+        organizationId,
+        identifierId,
+        {
+          evidenceReference: 'NPR-CASE-2026-1042',
+          reason: 'Authority verification completed CARE-42',
+        },
+        etag,
+        'identifier-verify:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ etag, ok: true, status: 200 });
+    await expect(
+      client.revokeOrganizationIdentifier(
+        organizationId,
+        identifierId,
+        { reason: 'Approved revocation request CARE-42' },
+        etag,
+        'identifier-revoke:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ etag, ok: true, status: 200 });
+    await expect(
+      client.supersedeOrganizationIdentifier(
+        organizationId,
+        identifierId,
+        {
+          reason: 'Approved verified replacement CARE-42',
+          replacementEtag,
+          replacementId,
+        },
+        etag,
+        'identifier-supersede:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ etag, ok: true, status: 200 });
+
+    expect(fetcher).toHaveBeenCalledTimes(11);
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      `/api/v1/organizations/${organizationId}/identifiers`,
+      '/api/v1/auth/csrf',
+      `/api/v1/organizations/${organizationId}/identifiers`,
+      '/api/v1/auth/csrf',
+      `/api/v1/organizations/${organizationId}/identifiers/${identifierId}`,
+      '/api/v1/auth/csrf',
+      `/api/v1/organizations/${organizationId}/identifiers/${identifierId}/verifications`,
+      '/api/v1/auth/csrf',
+      `/api/v1/organizations/${organizationId}/identifiers/${identifierId}/revocations`,
+      '/api/v1/auth/csrf',
+      `/api/v1/organizations/${organizationId}/identifiers/${identifierId}/supersessions`,
+    ]);
+    expect(fetcher.mock.calls.map(([, init]) => init?.method)).toEqual([
+      'GET',
+      'GET',
+      'POST',
+      'GET',
+      'PUT',
+      'GET',
+      'POST',
+      'GET',
+      'POST',
+      'GET',
+      'POST',
+    ]);
+    for (const index of [2, 4, 6, 8, 10]) {
+      const [, init] = fetcher.mock.calls[index]!;
+      const headers = new Headers(init?.headers);
+      expect(headers.get('Idempotency-Key')).toMatch(/^identifier-/);
+      expect(headers.get('X-XSRF-TOKEN')).toBe('valid-csrf-token-123456');
+    }
+    for (const index of [4, 6, 8, 10]) {
+      const [, init] = fetcher.mock.calls[index]!;
+      expect(new Headers(init?.headers).get('If-Match')).toBe(etag);
+    }
+    expect(JSON.parse(fetcher.mock.calls[10]![1]?.body as string)).toEqual({
+      reason: 'Approved verified replacement CARE-42',
+      replacementEtag,
+      replacementId,
+    });
+  });
+
+  it('uses the exact governed address and contact paths with strong revisions', async () => {
+    const organizationId = '22222222-2222-4222-8222-222222222222';
+    const addressId = '66666666-6666-4666-8666-666666666666';
+    const contactId = '77777777-7777-4777-8777-777777777770';
+    const csrfPayload = {
+      headerName: 'X-XSRF-TOKEN',
+      parameterName: '_csrf',
+      token: 'valid-csrf-token-123456',
+    };
+    const address = {
+      addressId,
+      addressLines: ['42 Care Street'],
+      addressType: 'registered',
+      availableActions: ['supersede', 'end'],
+      countryCode: 'IN',
+      createdAt: '2026-09-18T08:00:00Z',
+      effectiveFrom: '2026-09-18T08:00:00Z',
+      effectiveTo: null,
+      isPrimary: true,
+      locality: 'Mumbai',
+      lockVersion: 0,
+      postcode: '400069',
+      region: 'Maharashtra',
+      status: 'active',
+      supersedesId: null,
+      updatedAt: '2026-09-18T08:00:00Z',
+      validationSource: null,
+      validationStatus: 'unvalidated',
+    };
+    const contact = {
+      availableActions: ['verify', 'supersede', 'end'],
+      channel: 'email',
+      contactId,
+      createdAt: '2026-09-18T08:00:00Z',
+      effectiveFrom: '2026-09-18T08:00:00Z',
+      effectiveTo: null,
+      isPreferred: true,
+      isPrimary: true,
+      lockVersion: 0,
+      maskedValue: 'o***@***.org',
+      purpose: 'operational',
+      purposeDisplayName: 'Operational contact',
+      status: 'active',
+      supersedesId: null,
+      updatedAt: '2026-09-18T08:00:00Z',
+      verificationStatus: 'unverified',
+    };
+    const directory = {
+      addressTypes: ['registered', 'postal', 'service', 'billing'],
+      addresses: [address],
+      canCreate: true,
+      contacts: [contact],
+      organizationId,
+      purposes: [
+        {
+          displayName: 'Operational contact',
+          key: 'operational',
+          publicProjectionAllowed: false,
+        },
+      ],
+    };
+    const addressEtag = `"organization-address:${addressId}:0"`;
+    const contactEtag = `"organization-contact:${contactId}:0"`;
+    const fetcher = mockFetch(
+      jsonResponse(directory),
+      jsonResponse(csrfPayload),
+      jsonResponse(address, { headers: { ETag: addressEtag }, status: 201 }),
+      jsonResponse(csrfPayload),
+      jsonResponse(address, { headers: { ETag: addressEtag }, status: 201 }),
+      jsonResponse(csrfPayload),
+      jsonResponse(address, { headers: { ETag: addressEtag } }),
+      jsonResponse(csrfPayload),
+      jsonResponse(contact, { headers: { ETag: contactEtag }, status: 201 }),
+      jsonResponse(csrfPayload),
+      jsonResponse(contact, { headers: { ETag: contactEtag } }),
+      jsonResponse(csrfPayload),
+      jsonResponse(contact, { headers: { ETag: contactEtag }, status: 201 }),
+      jsonResponse(csrfPayload),
+      jsonResponse(contact, { headers: { ETag: contactEtag } }),
+    );
+    const client = createCareOsApiClient({ baseUrl: '/api', fetch: fetcher });
+    const addressWrite = {
+      addressLines: ['42 Care Street'],
+      addressType: 'registered' as const,
+      countryCode: 'IN',
+      effectiveFrom: '2026-09-18T08:00:00Z',
+      effectiveTo: null,
+      isPrimary: true,
+      locality: 'Mumbai',
+      postcode: '400069',
+      reason: 'Approved registered address intake',
+      region: 'Maharashtra',
+      validationSource: null,
+      validationStatus: 'unvalidated' as const,
+    };
+    const contactWrite = {
+      channel: 'email' as const,
+      effectiveFrom: '2026-09-18T08:00:00Z',
+      effectiveTo: null,
+      isPreferred: true,
+      isPrimary: true,
+      purpose: 'operational',
+      reason: 'Approved operational contact intake',
+      value: 'operations@example.org',
+    };
+
+    await expect(client.listOrganizationContacts(organizationId)).resolves.toMatchObject({
+      ok: true,
+      status: 200,
+    });
+    await expect(
+      client.createOrganizationAddress(
+        organizationId,
+        addressWrite,
+        'address-create:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ etag: addressEtag, ok: true, status: 201 });
+    await expect(
+      client.supersedeOrganizationAddress(
+        organizationId,
+        addressId,
+        addressWrite,
+        addressEtag,
+        'address-supersede:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ etag: addressEtag, ok: true, status: 201 });
+    await expect(
+      client.endOrganizationAddress(
+        organizationId,
+        addressId,
+        { reason: 'Approved address ending request' },
+        addressEtag,
+        'address-ending:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ etag: addressEtag, ok: true, status: 200 });
+    await expect(
+      client.createOrganizationContact(
+        organizationId,
+        contactWrite,
+        'contact-create:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ etag: contactEtag, ok: true, status: 201 });
+    await expect(
+      client.verifyOrganizationContact(
+        organizationId,
+        contactId,
+        { reason: 'Approved contact verification' },
+        contactEtag,
+        'contact-verify:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ etag: contactEtag, ok: true, status: 200 });
+    await expect(
+      client.supersedeOrganizationContact(
+        organizationId,
+        contactId,
+        contactWrite,
+        contactEtag,
+        'contact-supersede:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ etag: contactEtag, ok: true, status: 201 });
+    await expect(
+      client.endOrganizationContact(
+        organizationId,
+        contactId,
+        { reason: 'Approved contact ending request' },
+        contactEtag,
+        'contact-ending:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ etag: contactEtag, ok: true, status: 200 });
+
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      `/api/v1/organizations/${organizationId}/contacts`,
+      '/api/v1/auth/csrf',
+      `/api/v1/organizations/${organizationId}/addresses`,
+      '/api/v1/auth/csrf',
+      `/api/v1/organizations/${organizationId}/addresses/${addressId}/supersessions`,
+      '/api/v1/auth/csrf',
+      `/api/v1/organizations/${organizationId}/addresses/${addressId}/endings`,
+      '/api/v1/auth/csrf',
+      `/api/v1/organizations/${organizationId}/contacts`,
+      '/api/v1/auth/csrf',
+      `/api/v1/organizations/${organizationId}/contacts/${contactId}/verifications`,
+      '/api/v1/auth/csrf',
+      `/api/v1/organizations/${organizationId}/contacts/${contactId}/supersessions`,
+      '/api/v1/auth/csrf',
+      `/api/v1/organizations/${organizationId}/contacts/${contactId}/endings`,
+    ]);
+    for (const index of [4, 6, 10, 12, 14]) {
+      expect(new Headers(fetcher.mock.calls[index]![1]?.headers).get('If-Match')).toMatch(
+        /^"organization-(address|contact):/,
+      );
+    }
+    expect(JSON.parse(fetcher.mock.calls[8]![1]?.body as string)).toEqual(contactWrite);
+  });
+
   it('rejects malformed invitation route identifiers and idempotency keys before fetching', () => {
     const fetcher = mockFetch();
     const client = createCareOsApiClient({ baseUrl: '/api', fetch: fetcher });

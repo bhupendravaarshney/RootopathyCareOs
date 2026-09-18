@@ -19,6 +19,7 @@ import jakarta.servlet.http.Cookie;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -1601,6 +1602,952 @@ class IdentitySecurityIntegrationTest {
     }
 
     @Test
+    void governsOrganizationIdentifierDraftVerificationRevocationAndReadinessEvidence()
+            throws Exception {
+        seedApprovedOwner();
+        var session = enrollMfaAndAuthenticate(email, "198.51.100.79");
+        var collectionPath = "/api/v1/organizations/" + ORG_ONE + "/identifiers";
+        var requestCsrf = csrf(session);
+        var primaryValue = "REG-" + userId;
+        var primaryCreateBody = identifierBody(
+                primaryValue,
+                true,
+                "Approved primary registration intake CARE-79");
+
+        mockMvc.perform(get(collectionPath).cookie(session))
+                .andExpect(status().isOk())
+                .andExpect(header().string(
+                        "Cache-Control", org.hamcrest.Matchers.containsString("no-store")))
+                .andExpect(jsonPath("$.organizationId").value(ORG_ONE.toString()))
+                .andExpect(jsonPath("$.canCreate").value(true))
+                .andExpect(jsonPath("$.types[0].key").value("registration"))
+                .andExpect(jsonPath("$.types[0].primaryRequired").value(true));
+
+        var primaryCreateKey = "identifier-create-" + UUID.randomUUID();
+        var created = browserIdempotentPost(
+                        collectionPath,
+                        primaryCreateBody,
+                        primaryCreateKey,
+                        requestCsrf,
+                        "198.51.100.79",
+                        session)
+                .andExpect(status().isCreated())
+                .andExpect(header().exists("Location"))
+                .andExpect(header().exists("ETag"))
+                .andExpect(jsonPath("$.identifierType").value("registration"))
+                .andExpect(jsonPath("$.value").value(primaryValue))
+                .andExpect(jsonPath("$.isPrimary").value(true))
+                .andExpect(jsonPath("$.status").value("draft"))
+                .andExpect(jsonPath("$.verificationStatus").value("unverified"))
+                .andExpect(jsonPath("$.availableActions[0]").value("edit"))
+                .andExpect(jsonPath("$.availableActions[1]").value("verify"))
+                .andReturn();
+        var primaryJson = objectMapper.readTree(created.getResponse().getContentAsString());
+        var primaryId = UUID.fromString(primaryJson.get("identifierId").stringValue());
+        var primaryEtag = created.getResponse().getHeader("ETag");
+        assertThat(primaryEtag).isEqualTo(
+                "\"organization-identifier:" + primaryId + ":0\"");
+
+        browserIdempotentPost(
+                        collectionPath,
+                        primaryCreateBody,
+                        primaryCreateKey,
+                        requestCsrf,
+                        "198.51.100.79",
+                        session)
+                .andExpect(status().isCreated())
+                .andExpect(header().string("ETag", primaryEtag))
+                .andExpect(jsonPath("$.identifierId").value(primaryId.toString()));
+
+        var updatedValue = primaryValue + "-UPDATED";
+        var updateBody = identifierBody(
+                updatedValue,
+                true,
+                "Corrected primary registration after source review CARE-79");
+        browserIdempotentPut(
+                        collectionPath + "/" + primaryId,
+                        updateBody,
+                        null,
+                        "identifier-missing-precondition-" + UUID.randomUUID(),
+                        requestCsrf,
+                        "198.51.100.79",
+                        session)
+                .andExpect(status().isPreconditionRequired())
+                .andExpect(jsonPath("$.code").value("identifier-precondition-required"));
+
+        var updated = browserIdempotentPut(
+                        collectionPath + "/" + primaryId,
+                        updateBody,
+                        primaryEtag,
+                        "identifier-update-" + UUID.randomUUID(),
+                        requestCsrf,
+                        "198.51.100.79",
+                        session)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.value").value(updatedValue))
+                .andExpect(jsonPath("$.lockVersion").value(1))
+                .andReturn();
+        var updatedEtag = updated.getResponse().getHeader("ETag");
+
+        var verificationBody = objectMapper.writeValueAsString(Map.of(
+                "evidenceReference", "NPR-CASE-" + userId,
+                "reason", "Authority verification completed for CARE-79"));
+        var verifyKey = "identifier-verify-" + UUID.randomUUID();
+        var verified = browserConditionalIdempotentPost(
+                        collectionPath + "/" + primaryId + "/verifications",
+                        verificationBody,
+                        updatedEtag,
+                        verifyKey,
+                        requestCsrf,
+                        "198.51.100.79",
+                        session)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("verified"))
+                .andExpect(jsonPath("$.verificationStatus").value("verified"))
+                .andExpect(jsonPath("$.evidenceReference").value("NPR-CASE-" + userId))
+                .andExpect(jsonPath("$.lockVersion").value(2))
+                .andExpect(jsonPath("$.availableActions[0]").value("supersede"))
+                .andReturn();
+        var verifiedEtag = verified.getResponse().getHeader("ETag");
+
+        browserConditionalIdempotentPost(
+                        collectionPath + "/" + primaryId + "/verifications",
+                        verificationBody,
+                        updatedEtag,
+                        verifyKey,
+                        requestCsrf,
+                        "198.51.100.79",
+                        session)
+                .andExpect(status().isOk())
+                .andExpect(header().string("ETag", verifiedEtag))
+                .andExpect(jsonPath("$.lockVersion").value(2));
+
+        browserConditionalIdempotentPost(
+                        collectionPath + "/" + primaryId + "/revocations",
+                        objectMapper.writeValueAsString(Map.of(
+                                "reason", "Attempted primary revocation without replacement")),
+                        verifiedEtag,
+                        "identifier-primary-revoke-" + UUID.randomUUID(),
+                        requestCsrf,
+                        "198.51.100.79",
+                        session)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code")
+                        .value("identifier-primary-replacement-required"));
+
+        browserIdempotentPost(
+                        collectionPath,
+                        identifierBody(
+                                updatedValue,
+                                false,
+                                "Duplicate registration rejection test CARE-79"),
+                        "identifier-duplicate-" + UUID.randomUUID(),
+                        requestCsrf,
+                        "198.51.100.79",
+                        session)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("m1.duplicate"));
+
+        var secondaryValue = "SECONDARY-" + userId;
+        var secondaryCreated = browserIdempotentPost(
+                        collectionPath,
+                        identifierBody(
+                                secondaryValue,
+                                false,
+                                "Approved secondary registration intake CARE-79"),
+                        "identifier-secondary-create-" + UUID.randomUUID(),
+                        requestCsrf,
+                        "198.51.100.79",
+                        session)
+                .andExpect(status().isCreated())
+                .andReturn();
+        var secondaryJson = objectMapper.readTree(
+                secondaryCreated.getResponse().getContentAsString());
+        var secondaryId = UUID.fromString(secondaryJson.get("identifierId").stringValue());
+        var secondaryDraftEtag = secondaryCreated.getResponse().getHeader("ETag");
+        var secondaryVerified = browserConditionalIdempotentPost(
+                        collectionPath + "/" + secondaryId + "/verifications",
+                        objectMapper.writeValueAsString(Map.of(
+                                "evidenceReference", "NPR-SECONDARY-" + userId,
+                                "reason", "Secondary authority verification completed CARE-79")),
+                        secondaryDraftEtag,
+                        "identifier-secondary-verify-" + UUID.randomUUID(),
+                        requestCsrf,
+                        "198.51.100.79",
+                        session)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.availableActions[0]").value("revoke"))
+                .andReturn();
+        var secondaryVerifiedEtag = secondaryVerified.getResponse().getHeader("ETag");
+        browserConditionalIdempotentPost(
+                        collectionPath + "/" + secondaryId + "/revocations",
+                        objectMapper.writeValueAsString(Map.of(
+                                "reason", "Secondary registration retired after review")),
+                        secondaryVerifiedEtag,
+                        "identifier-secondary-revoke-" + UUID.randomUUID(),
+                        requestCsrf,
+                        "198.51.100.79",
+                        session)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("revoked"))
+                .andExpect(jsonPath("$.availableActions.length()").value(0));
+
+        var replacementCreated = browserIdempotentPost(
+                        collectionPath,
+                        identifierBody(
+                                "REPLACEMENT-" + userId,
+                                false,
+                                "Approved replacement registration intake CARE-79"),
+                        "identifier-replacement-create-" + UUID.randomUUID(),
+                        requestCsrf,
+                        "198.51.100.79",
+                        session)
+                .andExpect(status().isCreated())
+                .andReturn();
+        var replacementJson = objectMapper.readTree(
+                replacementCreated.getResponse().getContentAsString());
+        var replacementId = UUID.fromString(replacementJson.get("identifierId").stringValue());
+        var replacementVerified = browserConditionalIdempotentPost(
+                        collectionPath + "/" + replacementId + "/verifications",
+                        objectMapper.writeValueAsString(Map.of(
+                                "evidenceReference", "NPR-REPLACEMENT-" + userId,
+                                "reason", "Replacement authority verification completed CARE-79")),
+                        replacementCreated.getResponse().getHeader("ETag"),
+                        "identifier-replacement-verify-" + UUID.randomUUID(),
+                        requestCsrf,
+                        "198.51.100.79",
+                        session)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isPrimary").value(false))
+                .andReturn();
+        var replacementVerifiedEtag = replacementVerified.getResponse().getHeader("ETag");
+        var supersedeBody = objectMapper.writeValueAsString(Map.of(
+                "replacementId", replacementId,
+                "replacementEtag", replacementVerifiedEtag,
+                "reason", "Superseded registration after verified replacement CARE-79"));
+
+        browserConditionalIdempotentPost(
+                        collectionPath + "/" + primaryId + "/supersessions",
+                        objectMapper.writeValueAsString(Map.of(
+                                "replacementEtag", replacementVerifiedEtag,
+                                "reason", "Rejected supersession without replacement identity CARE-79")),
+                        verifiedEtag,
+                        "identifier-supersede-missing-replacement-" + UUID.randomUUID(),
+                        requestCsrf,
+                        "198.51.100.79",
+                        session)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("organization-identifier-invalid"))
+                .andExpect(jsonPath("$.errors[0].path").value("/replacementId"))
+                .andExpect(jsonPath("$.errors[0].code").value("m1.field.required"));
+
+        browserConditionalIdempotentPost(
+                        collectionPath + "/" + primaryId + "/supersessions",
+                        objectMapper.writeValueAsString(Map.of(
+                                "replacementId", replacementId,
+                                "replacementEtag",
+                                        "\"organization-identifier:" + replacementId + ":0\"",
+                                "reason", "Rejected supersession with stale replacement CARE-79")),
+                        verifiedEtag,
+                        "identifier-supersede-stale-replacement-" + UUID.randomUUID(),
+                        requestCsrf,
+                        "198.51.100.79",
+                        session)
+                .andExpect(status().isPreconditionFailed())
+                .andExpect(jsonPath("$.code").value("identifier-stale-revision"));
+
+        var supersedeKey = "identifier-supersede-" + UUID.randomUUID();
+        var superseded = browserConditionalIdempotentPost(
+                        collectionPath + "/" + primaryId + "/supersessions",
+                        supersedeBody,
+                        verifiedEtag,
+                        supersedeKey,
+                        requestCsrf,
+                        "198.51.100.79",
+                        session)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.identifierId").value(primaryId.toString()))
+                .andExpect(jsonPath("$.status").value("superseded"))
+                .andExpect(jsonPath("$.lockVersion").value(3))
+                .andExpect(jsonPath("$.availableActions.length()").value(0))
+                .andReturn();
+        var supersededEtag = superseded.getResponse().getHeader("ETag");
+
+        browserConditionalIdempotentPost(
+                        collectionPath + "/" + primaryId + "/supersessions",
+                        supersedeBody,
+                        verifiedEtag,
+                        supersedeKey,
+                        requestCsrf,
+                        "198.51.100.79",
+                        session)
+                .andExpect(status().isOk())
+                .andExpect(header().string("ETag", supersededEtag))
+                .andExpect(jsonPath("$.status").value("superseded"));
+        assertThat(supersededEtag)
+                .isEqualTo("\"organization-identifier:" + primaryId + ":3\"");
+
+        mockMvc.perform(get(collectionPath).cookie(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(3))
+                .andExpect(jsonPath("$.items[0].identifierId").value(replacementId.toString()))
+                .andExpect(jsonPath("$.items[0].status").value("verified"))
+                .andExpect(jsonPath("$.items[0].isPrimary").value(true));
+        mockMvc.perform(get("/api/v1/organizations/" + ORG_ONE + "/setup-readiness")
+                        .cookie(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.gates[1].outcome").value("complete"))
+                .andExpect(jsonPath("$.gates[1].reasonCode")
+                        .value("m1.readiness.primary_identifier_verified"))
+                .andExpect(jsonPath("$.gates[1].evidenceReferences[0]")
+                        .value("required-identifier-type-count:1"))
+                .andExpect(jsonPath("$.gates[1].evidenceReferences[1]")
+                        .value("verified-primary-identifier-count:1"));
+
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM audit_events
+                        WHERE organization_id = '%s'
+                          AND subject_id IN ('%s', '%s', '%s')
+                          AND event_name IN (
+                               'organization.identifier.created',
+                               'organization.identifier.updated',
+                               'organization.identifier.verified',
+                               'organization.identifier.revoked',
+                               'organization.identifier.superseded')
+                        """.formatted(ORG_ONE, primaryId, secondaryId, replacementId)))
+                .isEqualTo(9);
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM outbox_events
+                        WHERE organization_id = '%s'
+                          AND aggregate_id IN ('%s', '%s', '%s')
+                          AND event_name IN (
+                               'organization.identifier.created',
+                               'organization.identifier.updated',
+                               'organization.identifier.verified',
+                               'organization.identifier.revoked',
+                               'organization.identifier.superseded')
+                        """.formatted(ORG_ONE, primaryId, secondaryId, replacementId)))
+                .isEqualTo(9);
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM organization_identifiers
+                        WHERE organization_id = '%s' AND id = '%s'
+                          AND supersedes_id = '%s' AND is_primary
+                          AND status = 'verified' AND lock_version = 2
+                        """.formatted(ORG_ONE, replacementId, primaryId)))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void governsMaskedOrganizationContactsEffectiveRangesAndImmutableSupersessions()
+            throws Exception {
+        seedApprovedOwner();
+        var session = enrollMfaAndAuthenticate(email, "198.51.100.80");
+        var directoryPath = "/api/v1/organizations/" + ORG_ONE + "/contacts";
+        var addressPath = "/api/v1/organizations/" + ORG_ONE + "/addresses";
+        var requestCsrf = csrf(session);
+
+        mockMvc.perform(get(directoryPath).cookie(session))
+                .andExpect(status().isOk())
+                .andExpect(header().string(
+                        "Cache-Control", org.hamcrest.Matchers.containsString("no-store")))
+                .andExpect(jsonPath("$.organizationId").value(ORG_ONE.toString()))
+                .andExpect(jsonPath("$.canCreate").value(true))
+                .andExpect(jsonPath("$.addressTypes[0]").value("registered"))
+                .andExpect(jsonPath("$.purposes[0].key").value("operational"))
+                .andExpect(jsonPath("$.purposes[0].publicProjectionAllowed").value(false))
+                .andExpect(jsonPath("$.addresses.length()").value(0))
+                .andExpect(jsonPath("$.contacts.length()").value(0));
+
+        var addressCreateKey = "address-create-" + UUID.randomUUID();
+        var addressRequest = addressBody(
+                "42 Care Street",
+                "Approved registered-address intake for organization coverage");
+        var createdAddress = browserIdempotentPost(
+                        addressPath,
+                        addressRequest,
+                        addressCreateKey,
+                        requestCsrf,
+                        "198.51.100.80",
+                        session)
+                .andExpect(status().isCreated())
+                .andExpect(header().exists("Location"))
+                .andExpect(header().exists("ETag"))
+                .andExpect(jsonPath("$.addressType").value("registered"))
+                .andExpect(jsonPath("$.addressLines[0]").value("42 Care Street"))
+                .andExpect(jsonPath("$.validationStatus").value("validated"))
+                .andExpect(jsonPath("$.isPrimary").value(true))
+                .andExpect(jsonPath("$.status").value("active"))
+                .andExpect(jsonPath("$.lockVersion").value(0))
+                .andReturn();
+        var addressJson = objectMapper.readTree(
+                createdAddress.getResponse().getContentAsString());
+        var addressId = UUID.fromString(addressJson.get("addressId").stringValue());
+        var addressEtag = createdAddress.getResponse().getHeader("ETag");
+        assertThat(addressEtag).isEqualTo("\"organization-address:" + addressId + ":0\"");
+
+        browserIdempotentPost(
+                        addressPath,
+                        addressRequest,
+                        addressCreateKey,
+                        requestCsrf,
+                        "198.51.100.80",
+                        session)
+                .andExpect(status().isCreated())
+                .andExpect(header().string("ETag", addressEtag))
+                .andExpect(jsonPath("$.addressId").value(addressId.toString()));
+
+        mockMvc.perform(get("/api/v1/organizations/" + ORG_ONE + "/setup-readiness")
+                        .cookie(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.gates[2].key")
+                        .value("organization.contact.coverage"))
+                .andExpect(jsonPath("$.gates[2].outcome").value("warning"))
+                .andExpect(jsonPath("$.gates[2].reasonCode")
+                        .value("m1.readiness.operational_contact_unverified"))
+                .andExpect(jsonPath("$.gates[2].evidenceReferences[0]")
+                        .value("current-registered-address-count:1"))
+                .andExpect(jsonPath("$.gates[2].href").value("#/M1-09"));
+
+        browserIdempotentPost(
+                        addressPath,
+                        addressBody(
+                                "84 Overlap Avenue",
+                                "Rejected overlapping primary registered address test"),
+                        "address-overlap-" + UUID.randomUUID(),
+                        requestCsrf,
+                        "198.51.100.80",
+                        session)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("m1.effective.overlap"));
+
+        var rawContact = "CareOps+" + userId + "@Example.COM";
+        var contactCreateKey = "contact-create-" + UUID.randomUUID();
+        var contactRequest = contactBody(
+                rawContact,
+                "Approved primary operational contact intake for organization coverage");
+        var createdContact = browserIdempotentPost(
+                        directoryPath,
+                        contactRequest,
+                        contactCreateKey,
+                        requestCsrf,
+                        "198.51.100.80",
+                        session)
+                .andExpect(status().isCreated())
+                .andExpect(header().exists("Location"))
+                .andExpect(header().exists("ETag"))
+                .andExpect(jsonPath("$.channel").value("email"))
+                .andExpect(jsonPath("$.purpose").value("operational"))
+                .andExpect(jsonPath("$.maskedValue").value("C***@***.com"))
+                .andExpect(jsonPath("$.value").doesNotExist())
+                .andExpect(jsonPath("$.verificationStatus").value("unverified"))
+                .andExpect(jsonPath("$.status").value("active"))
+                .andExpect(jsonPath("$.lockVersion").value(0))
+                .andReturn();
+        assertThat(createdContact.getResponse().getContentAsString())
+                .doesNotContain(rawContact)
+                .doesNotContain("Example.COM");
+        var contactJson = objectMapper.readTree(
+                createdContact.getResponse().getContentAsString());
+        var contactId = UUID.fromString(contactJson.get("contactId").stringValue());
+        var contactEtag = createdContact.getResponse().getHeader("ETag");
+        assertThat(contactEtag).isEqualTo("\"organization-contact:" + contactId + ":0\"");
+
+        browserIdempotentPost(
+                        directoryPath,
+                        contactRequest,
+                        contactCreateKey,
+                        requestCsrf,
+                        "198.51.100.80",
+                        session)
+                .andExpect(status().isCreated())
+                .andExpect(header().string("ETag", contactEtag))
+                .andExpect(jsonPath("$.contactId").value(contactId.toString()))
+                .andExpect(jsonPath("$.value").doesNotExist());
+
+        var verificationBody = objectMapper.writeValueAsString(Map.of(
+                "reason", "Operational contact ownership verified through approved workflow"));
+        browserIdempotentPost(
+                        directoryPath + "/" + contactId + "/verifications",
+                        verificationBody,
+                        "contact-missing-precondition-" + UUID.randomUUID(),
+                        requestCsrf,
+                        "198.51.100.80",
+                        session)
+                .andExpect(status().isPreconditionRequired())
+                .andExpect(jsonPath("$.code").value("contact-precondition-required"));
+
+        var verifyKey = "contact-verify-" + UUID.randomUUID();
+        var verifiedContact = browserConditionalIdempotentPost(
+                        directoryPath + "/" + contactId + "/verifications",
+                        verificationBody,
+                        contactEtag,
+                        verifyKey,
+                        requestCsrf,
+                        "198.51.100.80",
+                        session)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.maskedValue").value("C***@***.com"))
+                .andExpect(jsonPath("$.value").doesNotExist())
+                .andExpect(jsonPath("$.verificationStatus").value("verified"))
+                .andExpect(jsonPath("$.lockVersion").value(1))
+                .andReturn();
+        var verifiedContactEtag = verifiedContact.getResponse().getHeader("ETag");
+
+        browserConditionalIdempotentPost(
+                        directoryPath + "/" + contactId + "/verifications",
+                        verificationBody,
+                        contactEtag,
+                        verifyKey,
+                        requestCsrf,
+                        "198.51.100.80",
+                        session)
+                .andExpect(status().isOk())
+                .andExpect(header().string("ETag", verifiedContactEtag))
+                .andExpect(jsonPath("$.lockVersion").value(1));
+
+        browserConditionalIdempotentPost(
+                        directoryPath + "/" + contactId + "/verifications",
+                        verificationBody,
+                        contactEtag,
+                        "contact-stale-" + UUID.randomUUID(),
+                        requestCsrf,
+                        "198.51.100.80",
+                        session)
+                .andExpect(status().isPreconditionFailed())
+                .andExpect(jsonPath("$.code").value("contact-stale-revision"));
+
+        mockMvc.perform(get("/api/v1/organizations/" + ORG_ONE + "/setup-readiness")
+                        .cookie(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.gates[2].outcome").value("complete"))
+                .andExpect(jsonPath("$.gates[2].reasonCode")
+                        .value("m1.readiness.contact_coverage_complete"))
+                .andExpect(jsonPath("$.gates[2].evidenceReferences[2]")
+                        .value("verified-primary-operational-contact-count:1"));
+
+        browserIdempotentPost(
+                        directoryPath,
+                        contactBody(
+                                "overlap." + userId + "@example.com",
+                                "Rejected overlapping primary operational contact test"),
+                        "contact-overlap-" + UUID.randomUUID(),
+                        requestCsrf,
+                        "198.51.100.80",
+                        session)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("m1.effective.overlap"));
+
+        var replacementAddress = browserConditionalIdempotentPost(
+                        addressPath + "/" + addressId + "/supersessions",
+                        addressBody(
+                                "108 Replacement Road",
+                                "Registered address superseded through approved workflow"),
+                        addressEtag,
+                        "address-supersede-" + UUID.randomUUID(),
+                        requestCsrf,
+                        "198.51.100.80",
+                        session)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.addressLines[0]").value("108 Replacement Road"))
+                .andExpect(jsonPath("$.supersedesId").value(addressId.toString()))
+                .andExpect(jsonPath("$.status").value("active"))
+                .andExpect(jsonPath("$.lockVersion").value(0))
+                .andReturn();
+        var replacementAddressId = UUID.fromString(objectMapper
+                .readTree(replacementAddress.getResponse().getContentAsString())
+                .get("addressId")
+                .stringValue());
+
+        var replacementRawContact = "Replacement+" + userId + "@Example.COM";
+        var replacementContactRequest = contactBody(
+                replacementRawContact,
+                "Operational contact superseded through approved workflow");
+        var replacementContact = browserConditionalIdempotentPost(
+                        directoryPath + "/" + contactId + "/supersessions",
+                        replacementContactRequest,
+                        verifiedContactEtag,
+                        "contact-supersede-" + UUID.randomUUID(),
+                        requestCsrf,
+                        "198.51.100.80",
+                        session)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.maskedValue").value("R***@***.com"))
+                .andExpect(jsonPath("$.value").doesNotExist())
+                .andExpect(jsonPath("$.verificationStatus").value("unverified"))
+                .andExpect(jsonPath("$.supersedesId").value(contactId.toString()))
+                .andExpect(jsonPath("$.status").value("active"))
+                .andExpect(jsonPath("$.lockVersion").value(0))
+                .andReturn();
+        assertThat(replacementContact.getResponse().getContentAsString())
+                .doesNotContain(replacementRawContact);
+        var replacementContactJson = objectMapper.readTree(
+                replacementContact.getResponse().getContentAsString());
+        var replacementContactId = UUID.fromString(
+                replacementContactJson.get("contactId").stringValue());
+        var replacementContactEtag = replacementContact.getResponse().getHeader("ETag");
+
+        browserConditionalIdempotentPost(
+                        directoryPath + "/" + replacementContactId + "/verifications",
+                        verificationBody,
+                        replacementContactEtag,
+                        "replacement-contact-verify-" + UUID.randomUUID(),
+                        requestCsrf,
+                        "198.51.100.80",
+                        session)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.verificationStatus").value("verified"))
+                .andExpect(jsonPath("$.lockVersion").value(1));
+
+        var directory = mockMvc.perform(get(directoryPath).cookie(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.addresses.length()").value(2))
+                .andExpect(jsonPath("$.contacts.length()").value(2))
+                .andExpect(jsonPath("$.addresses[0].addressId")
+                        .value(replacementAddressId.toString()))
+                .andExpect(jsonPath("$.addresses[0].supersedesId")
+                        .value(addressId.toString()))
+                .andExpect(jsonPath("$.contacts[0].contactId")
+                        .value(replacementContactId.toString()))
+                .andExpect(jsonPath("$.contacts[0].maskedValue").value("R***@***.com"))
+                .andExpect(jsonPath("$.contacts[0].value").doesNotExist())
+                .andExpect(jsonPath("$.contacts[1].status").value("superseded"))
+                .andReturn();
+        assertThat(directory.getResponse().getContentAsString())
+                .doesNotContain(rawContact)
+                .doesNotContain(replacementRawContact)
+                .doesNotContain("@example.com");
+
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM organization_addresses
+                        WHERE organization_id = '%s'
+                          AND ((id = '%s' AND status = 'superseded' AND lock_version = 1)
+                            OR (id = '%s' AND supersedes_id = '%s'
+                                AND status = 'active' AND lock_version = 0))
+                        """.formatted(
+                        ORG_ONE, addressId, replacementAddressId, addressId)))
+                .isEqualTo(2);
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM organization_contacts
+                        WHERE organization_id = '%s'
+                          AND ((id = '%s' AND status = 'superseded'
+                                AND verification_status = 'verified' AND lock_version = 2)
+                            OR (id = '%s' AND supersedes_id = '%s'
+                                AND status = 'active'
+                                AND verification_status = 'verified' AND lock_version = 1))
+                        """.formatted(
+                        ORG_ONE, contactId, replacementContactId, contactId)))
+                .isEqualTo(2);
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM audit_events
+                        WHERE organization_id = '%s'
+                          AND subject_id IN ('%s', '%s', '%s', '%s')
+                          AND event_name IN (
+                              'organization.address.changed',
+                              'organization.contact.changed')
+                          AND (SELECT count(*) FROM jsonb_object_keys(payload)) = 4
+                          AND NOT (payload ? 'value')
+                          AND NOT (payload ? 'maskedValue')
+                          AND payload::text NOT LIKE '%%@example.com%%'
+                        """.formatted(
+                        ORG_ONE,
+                        addressId,
+                        replacementAddressId,
+                        contactId,
+                        replacementContactId)))
+                .isEqualTo(6);
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM outbox_events
+                        WHERE organization_id = '%s'
+                          AND aggregate_id IN ('%s', '%s', '%s', '%s')
+                          AND event_name IN (
+                              'organization.address.changed',
+                              'organization.contact.changed')
+                          AND (SELECT count(*) FROM jsonb_object_keys(payload)) = 4
+                          AND NOT (payload ? 'value')
+                          AND NOT (payload ? 'maskedValue')
+                          AND payload::text NOT LIKE '%%@example.com%%'
+                        """.formatted(
+                        ORG_ONE,
+                        addressId,
+                        replacementAddressId,
+                        contactId,
+                        replacementContactId)))
+                .isEqualTo(6);
+    }
+
+    @Test
+    void schedulesVersionedInternationalSettingsWithSafeEvidence() throws Exception {
+        seedApprovedOwner();
+        var session = enrollMfaAndAuthenticate(email, "198.51.100.81");
+        var path = "/api/v1/organizations/" + ORG_ONE + "/international-settings";
+        var initial = mockMvc.perform(get(path).cookie(session))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", containsString("no-store")))
+                .andExpect(header().exists("ETag"))
+                .andExpect(jsonPath("$.organizationId").value(ORG_ONE.toString()))
+                .andExpect(jsonPath("$.editable").value(true))
+                .andExpect(jsonPath("$.canSchedule").value(true))
+                .andExpect(jsonPath("$.weekStarts.length()").value(7))
+                .andExpect(jsonPath("$.impactRules.length()").value(6))
+                .andExpect(jsonPath("$.versions.length()").value(1))
+                .andExpect(jsonPath("$.versions[0].source").value("organization_default"))
+                .andExpect(jsonPath("$.versions[0].countryCode").value("IN"))
+                .andExpect(jsonPath("$.versions[0].timezone").value("Asia/Kolkata"))
+                .andExpect(jsonPath("$.versions[0].locale").value("en-IN"))
+                .andExpect(jsonPath("$.versions[0].currencyCode").value("INR"))
+                .andExpect(jsonPath("$.versions[0].lifecycle").value("default"))
+                .andExpect(jsonPath("$.versions[0].formatPreview.localeLibraryDerived")
+                        .value(true))
+                .andReturn();
+        var initialJson = objectMapper.readTree(initial.getResponse().getContentAsString());
+        var initialEtag = initial.getResponse().getHeader("ETag");
+        var initialRevision = initialJson.get("lockVersion").longValue();
+        var effectiveFrom = Instant.now().plusSeconds(172800).toString();
+        var requestCsrf = csrf(session);
+        var body = objectMapper.writeValueAsString(Map.of(
+                "countryCode", "IN",
+                "timezone", "Asia/Kolkata",
+                "locale", "en-GB",
+                "language", "en",
+                "currencyCode", "GBP",
+                "weekStart", "MONDAY",
+                "effectiveFrom", effectiveFrom,
+                "reason", "Approved international settings change CARE-110"));
+
+        browserIdempotentPut(
+                        path,
+                        body,
+                        null,
+                        "settings-precondition-" + UUID.randomUUID(),
+                        requestCsrf,
+                        "198.51.100.81",
+                        session)
+                .andExpect(status().isPreconditionRequired())
+                .andExpect(jsonPath("$.code").value("settings-precondition-required"));
+
+        var idempotencyKey = "settings-schedule-" + UUID.randomUUID();
+        var scheduled = browserIdempotentPut(
+                        path,
+                        body,
+                        initialEtag,
+                        idempotencyKey,
+                        requestCsrf,
+                        "198.51.100.81",
+                        session)
+                .andExpect(status().isOk())
+                .andExpect(header().exists("ETag"))
+                .andExpect(jsonPath("$.canSchedule").value(false))
+                .andExpect(jsonPath("$.lockVersion").value(initialRevision + 1))
+                .andExpect(jsonPath("$.versions.length()").value(2))
+                .andExpect(jsonPath("$.versions[0].lifecycle").value("scheduled"))
+                .andExpect(jsonPath("$.versions[0].locale").value("en-GB"))
+                .andExpect(jsonPath("$.versions[0].currencyCode").value("GBP"))
+                .andExpect(jsonPath("$.versions[0].weekStart").value("MONDAY"))
+                .andExpect(jsonPath("$.versions[1].lifecycle").value("active"))
+                .andReturn();
+        var scheduledEtag = scheduled.getResponse().getHeader("ETag");
+
+        browserIdempotentPut(
+                        path,
+                        body,
+                        initialEtag,
+                        idempotencyKey,
+                        requestCsrf,
+                        "198.51.100.81",
+                        session)
+                .andExpect(status().isOk())
+                .andExpect(header().string("ETag", scheduledEtag));
+        browserIdempotentPut(
+                        path,
+                        body.replace("GBP", "USD"),
+                        initialEtag,
+                        idempotencyKey,
+                        requestCsrf,
+                        "198.51.100.81",
+                        session)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("idempotency-key-reused"));
+        browserIdempotentPut(
+                        path,
+                        body,
+                        initialEtag,
+                        "settings-stale-" + UUID.randomUUID(),
+                        requestCsrf,
+                        "198.51.100.81",
+                        session)
+                .andExpect(status().isPreconditionFailed())
+                .andExpect(jsonPath("$.code").value("settings-stale-revision"));
+
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM organization_international_settings
+                        WHERE organization_id = '%s' AND lock_version = %d
+                        """.formatted(ORG_ONE, initialRevision + 1)))
+                .isEqualTo(2);
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM audit_events
+                        WHERE organization_id = '%s'
+                          AND event_name = 'organization.settings.changed'
+                          AND (SELECT count(*) FROM jsonb_object_keys(payload)) = 3
+                          AND payload -> 'changedFields' =
+                              '["currencyCode", "locale", "weekStart"]'::jsonb
+                          AND NOT (payload ? 'reason')
+                        """.formatted(ORG_ONE)))
+                .isEqualTo(1);
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM outbox_events
+                        WHERE organization_id = '%s'
+                          AND event_name = 'organization.settings.changed'
+                          AND (SELECT count(*) FROM jsonb_object_keys(payload)) = 3
+                        """.formatted(ORG_ONE)))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void governsConfidentialEffectiveGovernanceCoverage() throws Exception {
+        seedApprovedOwner();
+        var session = enrollMfaAndAuthenticate(email, "198.51.100.82");
+        var path = "/api/v1/organizations/" + ORG_ONE + "/governance-responsibilities";
+        var initial = mockMvc.perform(get(path).cookie(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.canManage").value(true))
+                .andExpect(jsonPath("$.responsibilityTypes.length()").value(4))
+                .andExpect(jsonPath("$.eligibleAssignees.length()")
+                        .value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.responsibilities.length()").value(0))
+                .andReturn();
+        var initialJson = objectMapper.readTree(initial.getResponse().getContentAsString());
+        var membershipId = initialJson.get("eligibleAssignees").get(0).get("id").stringValue();
+        var csrf = csrf(session);
+        for (var type : List.of("clinical", "privacy", "security", "billing")) {
+            var body = objectMapper.writeValueAsString(Map.of(
+                    "responsibilityType", type,
+                    "membershipId", membershipId,
+                    "escalationEmail", type + ".escalation@rootopathy.test",
+                    "effectiveFrom", Instant.now().toString(),
+                    "reason", "Assign approved " + type + " governance responsibility"));
+            browserIdempotentPost(
+                            path,
+                            body,
+                            "governance-create-" + type + "-" + UUID.randomUUID(),
+                            csrf,
+                            "198.51.100.82",
+                            session)
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.responsibilities.length()")
+                            .value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)))
+                    .andExpect(jsonPath("$.responsibilities[0].escalationEmailMasked")
+                            .value(org.hamcrest.Matchers.containsString("***")));
+        }
+        mockMvc.perform(get("/api/v1/organizations/" + ORG_ONE + "/setup-readiness")
+                        .cookie(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.gates[3].outcome").value("complete"))
+                .andExpect(jsonPath("$.gates[3].evidenceReferences[0]")
+                        .value("covered-governance-responsibility-type-count:4"));
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM audit_events
+                        WHERE organization_id='%s'
+                          AND event_name='organization.governance.changed'
+                          AND (SELECT count(*) FROM jsonb_object_keys(payload))=5
+                          AND NOT (payload ? 'escalationEmail')
+                        """.formatted(ORG_ONE)))
+                .isEqualTo(4);
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM outbox_events
+                        WHERE organization_id='%s'
+                          AND event_name='organization.governance.changed'
+                        """.formatted(ORG_ONE)))
+                .isEqualTo(4);
+    }
+
+    @Test
+    void createsAndFiltersGovernedFacilityDraftsWithExactEvidence() throws Exception {
+        seedApprovedOwner();
+        var session = enrollMfaAndAuthenticate(email, "198.51.100.83");
+        var path = "/api/v1/organizations/" + ORG_ONE + "/facilities";
+        mockMvc.perform(get(path).cookie(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.organizationId").value(ORG_ONE.toString()))
+                .andExpect(jsonPath("$.canCreate").value(true))
+                .andExpect(jsonPath("$.facilityTypes[0].key").value("care_site"))
+                .andExpect(jsonPath("$.facilities.length()").value(1))
+                .andExpect(jsonPath("$.facilities[0].legalName").isString())
+                .andExpect(jsonPath("$.facilities[0].facilityType").value("care_site"));
+
+        var csrf = csrf(session);
+        var key = "facility-create-" + UUID.randomUUID();
+        var body = objectMapper.writeValueAsString(Map.of(
+                "facilityCode", "CARE-01",
+                "legalName", "Care One Facility Limited",
+                "displayName", "Care One",
+                "facilityType", "care_site",
+                "timezone", "Asia/Kolkata",
+                "reason", "Create approved facility draft CARE-120"));
+        var created = browserIdempotentPost(path, body, key, csrf, "198.51.100.83", session)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.facilities.length()").value(2))
+                .andExpect(jsonPath("$.facilities[0].facilityCode").value("CARE-01"))
+                .andExpect(jsonPath("$.facilities[0].status").value("draft"))
+                .andReturn();
+        browserIdempotentPost(path, body, key, csrf, "198.51.100.83", session)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.facilities.length()").value(2));
+        mockMvc.perform(get(path).cookie(session).param("query", "care one").param("status", "draft"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.facilities.length()").value(1));
+        mockMvc.perform(get(path).cookie(session).param("query", "missing"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.facilities.length()").value(0));
+        var createdFacility = objectMapper.readTree(created.getResponse().getContentAsString()).path("facilities").get(0);
+        var facilityId = createdFacility.path("facilityId").asText();
+        var etag = "\"facility:" + facilityId + ":0\"";
+        var updateKey = "facility-update-" + UUID.randomUUID();
+        var updateBody = objectMapper.writeValueAsString(Map.of(
+                "facilityCode", "CARE-01",
+                "legalName", "Care One Facility Limited",
+                "displayName", "Care One Updated",
+                "facilityType", "care_site",
+                "timezone", "Asia/Kolkata",
+                "reason", "Correct the approved facility draft display name"));
+        browserIdempotentPut(path + "/" + facilityId, updateBody, etag, updateKey, csrf, "198.51.100.83", session)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.facilities[0].displayName").value("Care One Updated"))
+                .andExpect(jsonPath("$.facilities[0].lockVersion").value(1));
+        browserIdempotentPut(path + "/" + facilityId, updateBody, etag, updateKey, csrf, "198.51.100.83", session)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.facilities[0].lockVersion").value(1));
+        browserIdempotentPut(path + "/" + facilityId, updateBody, etag,
+                        "facility-update-stale-" + UUID.randomUUID(), csrf, "198.51.100.83", session)
+                .andExpect(status().isPreconditionFailed());
+        mockMvc.perform(get("/api/v1/organizations/" + ORG_ONE + "/setup-readiness").cookie(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.gates[6].outcome").value("blocked"))
+                .andExpect(jsonPath("$.gates[6].evidenceReferences[1]").value("draft-facility-count:2"));
+        assertThat(migratorCount("""
+                SELECT count(*) FROM audit_events WHERE organization_id='%s'
+                  AND event_name='facility.created'
+                  AND (SELECT count(*) FROM jsonb_object_keys(payload))=4
+                  AND payload->>'fromState'='none' AND payload->>'toState'='draft'
+                """.formatted(ORG_ONE))).isEqualTo(1);
+        assertThat(migratorCount("""
+                SELECT count(*) FROM outbox_events WHERE organization_id='%s'
+                  AND event_name='facility.created'
+                """.formatted(ORG_ONE))).isEqualTo(1);
+        assertThat(migratorCount("""
+                SELECT count(*) FROM audit_events WHERE organization_id='%s'
+                  AND event_name='facility.updated'
+                  AND (SELECT count(*) FROM jsonb_object_keys(payload))=4
+                  AND payload->>'facilityId'='%s'
+                  AND payload->>'fromState'='draft' AND payload->>'toState'='draft'
+                  AND payload->>'lockVersion'='1'
+                """.formatted(ORG_ONE, facilityId))).isEqualTo(1);
+        assertThat(migratorCount("""
+                SELECT count(*) FROM outbox_events WHERE organization_id='%s'
+                  AND event_name='facility.updated'
+                """.formatted(ORG_ONE))).isEqualTo(1);
+    }
+
+    @Test
     void listsMinimumNecessaryMembershipPagesWithBoundCursorsAndServerActions()
             throws Exception {
         seedApprovedOwner();
@@ -1967,6 +2914,48 @@ class IdentitySecurityIntegrationTest {
 
     private String loginJson(String username, String password) throws Exception {
         return objectMapper.writeValueAsString(new LoginBody(username, password));
+    }
+
+    private String identifierBody(String value, boolean primary, String reason) throws Exception {
+        return objectMapper.writeValueAsString(Map.of(
+                "identifierType", "registration",
+                "assigningAuthority", "National Provider Registry",
+                "value", value,
+                "jurisdictionCountryCode", "IN",
+                "isPrimary", primary,
+                "issueDate", "2026-09-01",
+                "expiryDate", "2036-09-01",
+                "effectiveFrom", Instant.now().minusSeconds(3600).toString(),
+                "effectiveTo", Instant.now().plusSeconds(315_360_000).toString(),
+                "reason", reason));
+    }
+
+    private String addressBody(String firstLine, String reason) throws Exception {
+        return objectMapper.writeValueAsString(Map.ofEntries(
+                Map.entry("addressType", "registered"),
+                Map.entry("addressLines", List.of(firstLine, "Clinical District")),
+                Map.entry("locality", "Pune"),
+                Map.entry("region", "Maharashtra"),
+                Map.entry("postcode", "411001"),
+                Map.entry("countryCode", "IN"),
+                Map.entry("validationStatus", "validated"),
+                Map.entry("validationSource", "National postal registry"),
+                Map.entry("isPrimary", true),
+                Map.entry("effectiveFrom", Instant.now().minusSeconds(3600).toString()),
+                Map.entry("effectiveTo", Instant.now().plusSeconds(315_360_000).toString()),
+                Map.entry("reason", reason)));
+    }
+
+    private String contactBody(String value, String reason) throws Exception {
+        return objectMapper.writeValueAsString(Map.of(
+                "channel", "email",
+                "purpose", "operational",
+                "value", value,
+                "isPrimary", true,
+                "isPreferred", true,
+                "effectiveFrom", Instant.now().minusSeconds(3600).toString(),
+                "effectiveTo", Instant.now().plusSeconds(315_360_000).toString(),
+                "reason", reason));
     }
 
     private String normalizedFailureBody(MvcResult result) throws Exception {

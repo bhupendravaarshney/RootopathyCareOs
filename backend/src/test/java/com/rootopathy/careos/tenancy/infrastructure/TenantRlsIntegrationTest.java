@@ -40,6 +40,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.HexFormat;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -351,6 +352,11 @@ class TenantRlsIntegrationTest {
                         Map.entry("invitations", "uuidv7()"),
                         Map.entry("membership_change_requests", "uuidv7()"),
                         Map.entry("mfa_methods", "uuidv7()"),
+                        Map.entry("organization_addresses", "uuidv7()"),
+                        Map.entry("organization_contacts", "uuidv7()"),
+                        Map.entry("organization_governance_responsibilities", "uuidv7()"),
+                        Map.entry("organization_identifiers", "uuidv7()"),
+                        Map.entry("organization_international_settings", "uuidv7()"),
                         Map.entry("organization_memberships", "uuidv7()"),
                         Map.entry("organizations", "uuidv7()"),
                         Map.entry("outbox_events", "uuidv7()"),
@@ -1336,7 +1342,7 @@ class TenantRlsIntegrationTest {
     void commitsBusinessWorkAuditOutboxAndReplayEvidenceExactlyOnce() {
         var aggregateId = UUID.randomUUID();
         var idempotencyKey = "test-" + UUID.randomUUID();
-        var facilityCode = "GOV-" + aggregateId.toString().substring(0, 8);
+        var facilityCode = "GOV-" + aggregateId.toString().substring(0, 8).toUpperCase(Locale.ROOT);
         var authorizationRequest = request(ORG_ONE, "governed-mutation", "governed-once-42");
         var command = command(idempotencyKey, REQUEST_HASH_A);
         var executions = new AtomicInteger();
@@ -1385,7 +1391,7 @@ class TenantRlsIntegrationTest {
     void rollsBackBusinessWorkAndIdempotencyWhenEvidenceIsNotApproved() {
         var aggregateId = UUID.randomUUID();
         var idempotencyKey = "test-" + UUID.randomUUID();
-        var facilityCode = "ROLL-" + aggregateId.toString().substring(0, 8);
+        var facilityCode = "ROLL-" + aggregateId.toString().substring(0, 8).toUpperCase(Locale.ROOT);
         var authorizationRequest = request(ORG_ONE, "governed-mutation", "governed-rollback-42");
         var command = command(idempotencyKey, REQUEST_HASH_A);
 
@@ -1693,7 +1699,7 @@ class TenantRlsIntegrationTest {
     void rollsBackAConsumerReceiptAndItsEffectBeforeAValidRetry() {
         var sourceEventId = UUID.randomUUID();
         var aggregateId = UUID.randomUUID();
-        var facilityCode = "ROLLIN-" + aggregateId.toString().substring(0, 8);
+        var facilityCode = "ROLLIN-" + aggregateId.toString().substring(0, 8).toUpperCase(Locale.ROOT);
         var authorizationRequest = request(ORG_ONE, "event-consumption", "consumer-rollback-42");
         var event = inboundEvent(
                 ORG_ONE, sourceEventId, aggregateId, "{\"change\":\"rollback\"}");

@@ -594,7 +594,81 @@ This is a bounded M1C live-projection increment. It does not create configuratio
 - A clean Maven 3.9.11/Java 25 verification compiles 232 production and 21 test sources, validates and applies all 25 migrations, passes all 181 backend tests without failure/error/skip, enforces all 11 architecture rules, and packages the bootable JAR
 - The 79-screen, approved-input, review-draft, retained-candidate, facility-scope-candidate, API, and CI-security repository gates pass
 
-This closes the exact M1-07 profile vertical slice. M1C still lacks M1-08 through M1-11 persistence/UI/evaluators, configuration-version invalidation, final visual/owner acceptance, and target-environment evidence; it is not a completed activation workflow.
+This closes the exact M1-07 profile vertical slice. Phase 1AM below resolves M1-08 registration identifiers and Phase 1AN resolves M1-09 addresses/contacts; M1C still lacks M1-10/M1-11, configuration-version invalidation, final visual/owner acceptance, and target-environment evidence, and it is not a completed activation workflow.
+
+## Verified during Phase 1AM governed M1-08 registration identifiers (18 September 2026)
+
+- Flyway V26 adds a migration-owned approved base identifier-type registry and forced-RLS tenant identifier records with UUIDv7 IDs, exact normalization/bounds/status/range constraints, non-revoked identity uniqueness, primary-range exclusion, one-replacement lineage, immutable terminal history, and guarded transitions
+- Exact `organization.identifier.read/manage/verify` operations and all five approved identifier audit/outbox event pairs are active; verification requires owner/admin authority, MFA, authentication no older than ten minutes, reason, and bounded evidence
+- Six checked operations implement list, draft create/edit, verification, revocation, and atomic supersession with scoped idempotency, exact replay, strong predecessor/replacement revisions, safe Problems, current permission projection, and minimum-necessary evidence
+- Supersession locks both rows deterministically, requires a separately verified unused same-type replacement, preserves predecessor history, writes `supersedesId`, promotes a replacement to primary where required, and cannot strand a required current primary
+- The live `organization.identifier.primary_verified` evaluator uses applicable migration-owned type metadata and current verified primary state, returns bounded required/current count evidence, and never claims persisted configuration validation
+- M1-08 now renders responsive server-backed identifier cards and governed create/edit/verify/revoke/supersede forms, rejects response/lifecycle/action/lineage drift, and uses only server-projected actions
+- OpenAPI 3.1 version 0.16.0 verifies 37 operations and seven conventions; all 11 contract tests and generated-client drift pass
+- Frontend architecture, formatting, strict typecheck, lint, all 60 unit tests, the production build, and all 100 five-viewport Playwright/Axe/overflow cases pass
+- A clean Maven 3.9.11/Java 25 verification compiles 241 production and 22 test sources, validates and applies all 26 migrations, passes all 185 backend tests without failure/error/skip, enforces all 11 architecture rules, and packages the bootable JAR
+- The 79-screen, approved-input, review-draft, retained-candidate, facility-scope-candidate, API, and CI-security repository gates pass
+
+This closes the bounded M1-08 screen and live evaluator. Identifier activation remains part of the later configuration-approval slice, allow-listed expiry automation remains future worker/evidence work, and Phase 1AN below resolves M1-09 while M1C remains incomplete.
+
+## Verified during Phase 1AN governed M1-09 effective addresses and masked contacts (18 September 2026)
+
+- Flyway V27 adds migration-owned `operational` purpose metadata and forced-RLS address/contact history with UUIDv7 IDs, exact type/channel/value/range constraints, primary/preferred overlap exclusion, current contact uniqueness, immutable terminal history, and one-replacement lineage
+- Exact `organization.contact.read/manage` bindings and `organization.address.changed`/`organization.contact.changed` audit/outbox pairs are active; event payloads contain only record ID, change type, effective start, and lock version
+- Eight checked operations implement directory read, address create/supersede/end, and contact create/verify/supersede/end with reason, scoped idempotency, strong predecessor revisions, safe Problems, atomic replacement, and current permission projection
+- Contact responses are masked even for managers; raw normalized values are absent from response, audit, and outbox projections, replacement forms start blank, and strict React validation rejects any raw `value` field
+- The live `organization.contact.coverage` evaluator requires a current registered address and verified primary operational contact, reports bounded counts, warns for an unverified contact in draft, and blocks it at activation
+- M1-09 renders responsive server-backed history cards/forms with only server-projected actions and verified create/verify/end/supersede refresh behavior
+- OpenAPI 3.1 version 0.17.0 verifies 45 operations and seven conventions; all 12 contract tests and generated-client drift pass
+- Frontend architecture, formatting, strict typecheck, lint, all 64 unit tests, the production build, and all 105 five-viewport Playwright/Axe/overflow cases pass
+- A clean Maven 3.9.11/Java 25 verification compiles 251 production and 23 test sources, validates and applies all 27 migrations, passes all 189 backend tests without failure/error/skip, and enforces all 11 architecture rules
+- The 79-screen, approved-input, review-draft, retained-candidate, facility-scope-candidate, API, and CI-security repository gates pass
+
+This closes the bounded M1-09 screen and live evaluator. Scheduled address/contact activation and expiry remain future allow-listed worker/evidence work, and M1C still requires M1-10/M1-11, configuration invalidation, final owner/visual acceptance, and target-environment evidence.
+
+## Verified during Phase 1AO governed M1-10 international settings (18 September 2026)
+
+- Flyway V28 adds forced-RLS immutable international-settings versions, UUIDv7 identity, one pending future version, effective-range/lineage/revision guards, and exact read/manage plus `organization.settings.changed` bindings.
+- GET projects a virtual organization-derived baseline until the first change; PUT atomically persists that baseline and its future replacement with strong If-Match, caller-owned idempotency, reason, safe evidence, and no profile mutation.
+- Server-owned impact rules cover country, timezone, locale, language, currency, and week-start changes; all display samples come from locale libraries and arbitrary format strings are excluded.
+- OpenAPI 3.1 version 0.18.0 verifies 47 operations and seven conventions; all 13 contract tests and generated-client drift pass.
+- Strict typecheck, lint, all 64 frontend unit tests, and all 105 five-viewport Playwright/Axe/overflow cases pass.
+- Maven 3.9.11/Java 25 compiles 261 production and 24 test sources, applies all 28 migrations, and all 193 backend tests pass without failure, error, or skip.
+
+This closes the bounded M1-10 slice. M1-11, configuration invalidation, scheduled identifier/address/contact automation, final acceptance, and target-environment evidence remain.
+
+## Verified during Phase 1AP governed M1-11 responsibilities (18 September 2026)
+
+- Flyway V29 adds forced-RLS, UUIDv7, immutable effective governance responsibility history with eligible membership/contact links, confidential escalation data, non-overlapping primary coverage, and deferred gap-free replacement.
+- Exact read/manage policy, MFA plus ten-minute recent authentication, reason, idempotency, strong revision, and five-field `organization.governance.changed` evidence govern mutations.
+- The server-backed M1-11 screen assigns clinical, privacy, security, and billing responsibility, displays masked escalation data/history, and derives actions from the live permission projection.
+- The live readiness evaluator blocks activation until all four current primary responsibilities have an escalation channel.
+- OpenAPI 0.19.0 verifies 51 operations and seven conventions; all 14 contract tests and generated-client drift pass.
+- Maven 3.9.11/Java 25 applies all 29 migrations and reports 194 passing backend tests with zero failures/errors/skips, including 35 RLS and 11 architecture tests.
+- Formatting, strict typecheck, lint, all 64 frontend unit tests, the production build, and all 105 five-viewport Playwright/Axe/overflow cases pass.
+
+This closes the bounded M1-11 screen and live evaluator. M1C still requires scheduled identifier/address/contact automation, configuration invalidation, final acceptance, and target-environment evidence.
+
+## Verified during Phase 1AQ M1-12 facility persistence foundation (18 September 2026)
+
+- Flyway V30 extends the forced-RLS facility aggregate with the approved identity, type, same-tenant references, timezone, lifecycle, actor, revision, and closure constraints.
+- Exact facility read/draft-manage operations and `facility.created` audit/outbox definitions are active; runtime writes require tenant, actor, operation, reason, and draft evidence.
+- Tenant-authorized GET/POST backend operations now provide filtered facility directory reads and governed idempotent draft creation; readiness counts only submitted/active facilities with a validated address and effective timezone.
+- OpenAPI 0.20.0 verifies 53 operations and seven conventions; all 14 contract tests, generated-client drift, strict typecheck, and lint pass with checked facility read/create client methods.
+- M1-12 now renders a strict live facility card directory and permission-gated draft form; all 64 frontend unit tests, formatting, typecheck, lint, and the production build pass.
+- The focused HTTP/security test proves filtering, creation, replay, legacy projection, readiness blocking, and one exact audit/outbox pair; all 105 five-viewport Playwright/Axe/overflow cases pass with M1-12 removed from synthetic assertions.
+- All 30 migrations and all 35 tenant/RLS integration cases pass on fresh PostgreSQL 18.
+
+The bounded M1-12 directory/draft slice is complete. Facility lifecycle submission/activation and complete profile/address orchestration remain M1-13 work.
+
+## Verified during Phase 1AR M1-13 facility draft editing foundation (18 September 2026)
+
+- Flyway V31 adds the exact `facility.updated` governance definitions without broadening the authorized facility operation.
+- Draft-only PUT uses a strong `facility:{id}:{revision}` entity tag, increments the persisted revision, retains forced-RLS and same-tenant references, captures a bounded reason, and returns 412 for a stale write.
+- OpenAPI 0.21.0 verifies 54 operations; generated-client drift, strict typecheck, lint, and all 64 frontend unit tests pass with a checked `updateFacilityDraft` client method.
+- The 35-test RLS suite passes. A focused live PostgreSQL/Redis browser-security test proves create, checked update, idempotent replay, stale rejection, and exactly one four-key `facility.updated` audit/outbox pair.
+
+This is a bounded M1-13 prerequisite, not lifecycle completion. Submission, impact checks, maker-checker approval/activation, suspension, closure, complete address orchestration, browser edit controls, and final M1D/target acceptance remain open.
 
 ## Configured but not yet fully integration-verified
 
@@ -603,7 +677,7 @@ This closes the exact M1-07 profile vertical slice. M1C still lacks M1-08 throug
 - Production object-store/IAM/KMS/versioning/Object-Lock, scanner/network/signature operations, Redis ACL/TLS/HA/persistence/restore acceptance, and notification key-management/backup/restore acceptance; governed promotion/signed-access/retention activation, hold release/disposal, notification consent/destination/provider delivery, worker, and scheduler behavior
 - Production service-credential provisioning/rotation, metric/log/trace collection, scraper/worker activation or private management boundary, service objectives, dashboards, alert delivery/on-call escalation, encrypted backups, and timed restore evidence
 
-The current Phase 0 repository work is complete mechanically. Phases 1R through 1Z established the organization-core boundary and exact candidate; Phase 1AA records unchanged approval, Phase 1AB promotes the checksum-bound interactive registry, Phase 1AC delivers the bounded M1-20 membership read, Phase 1AD delivers governed organization-wide non-owner role changes and revocation, Phase 1AE delivers final-owner-safe owner transfer, Phase 1AF freezes the non-authorizing facility-scope candidate, Phase 1AG enforces approved mandatory-role MFA, Phase 1AH supplies the approved M1-20 wide-table/drawer-card projection, Phase 1AI aligns the shared approved identity/access frame, Phase 1AJ supplies focused field-associated identity validation plus the exact M1-03 action, Phase 1AK starts M1C with the exact fail-closed readiness catalogue projection, and Phase 1AL completes the exact M1-07 profile vertical slice and evaluator. Production remains fail-closed for unimplemented operations and unaccepted target infrastructure. Teams must define tenant provisioning, activate accepted providers/workers and target controls, capture hosted operational evidence, approve and implement the facility-scoped grant contract, finish separately authorized M1B work and the remaining M1C-M1G slices, and obtain slice/module acceptance before production release.
+The current Phase 0 repository work is complete mechanically. Phases 1R through 1Z established the organization-core boundary and exact candidate; Phase 1AA records unchanged approval, Phase 1AB promotes the checksum-bound interactive registry, Phase 1AC delivers the bounded M1-20 membership read, Phase 1AD delivers governed organization-wide non-owner role changes and revocation, Phase 1AE delivers final-owner-safe owner transfer, Phase 1AF freezes the non-authorizing facility-scope candidate, Phase 1AG enforces approved mandatory-role MFA, Phase 1AH supplies the approved M1-20 wide-table/drawer-card projection, Phase 1AI aligns the shared approved identity/access frame, Phase 1AJ supplies focused field-associated identity validation plus the exact M1-03 action, Phase 1AK starts M1C with exact readiness, Phase 1AL completes M1-07, Phase 1AM completes M1-08 identifiers, and Phase 1AN completes M1-09 effective addresses/masked contacts and live coverage readiness. Production remains fail-closed for unimplemented operations and unaccepted target infrastructure. Teams must define tenant provisioning, activate accepted providers/workers and target controls, capture hosted operational evidence, approve and implement the facility-scoped grant contract, finish separately authorized M1B work and the remaining M1C-M1G slices, and obtain slice/module acceptance before production release.
 
 ## Production status
 
