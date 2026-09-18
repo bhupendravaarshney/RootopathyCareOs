@@ -1,13 +1,5 @@
 :root {
-  font-family:
-    Manrope,
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
+  font-family: Inter, 'Segoe UI', Roboto, system-ui, sans-serif;
   color: #edf7f2;
   background: #06130f;
   font-synthesis: none;
@@ -64,6 +56,24 @@ select:focus-visible,
 textarea:focus-visible {
   outline: 3px solid var(--blue);
   outline-offset: 2px;
+}
+h1:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
+}
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 100;
+  padding: 12px 16px;
+  color: var(--bg);
+  background: var(--blue);
+  border-radius: 8px;
+  transform: translateY(-150%);
+}
+.skip-link:focus {
+  transform: translateY(0);
 }
 .sr-only {
   position: absolute;
@@ -301,6 +311,11 @@ h3 {
   border-color: #745d28;
   background: #392e12;
 }
+.badge.danger {
+  color: var(--danger);
+  border-color: #8c4545;
+  background: #401d1d;
+}
 .badge.info {
   color: var(--blue);
   border-color: #286b88;
@@ -430,6 +445,23 @@ h3 {
   color: var(--warning);
   background: #392e12;
 }
+.status-icon.blocked {
+  color: var(--danger);
+  background: #401d1d;
+}
+.status-icon.not_applicable {
+  color: #bed0c8;
+  background: #243a31;
+}
+.readiness-boundary {
+  margin-bottom: 8px;
+  padding: 14px 16px;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  line-height: 1.5;
+}
 .text-action {
   color: var(--mint-soft);
   border: 0;
@@ -497,6 +529,12 @@ textarea {
   border-radius: var(--radius-sm);
   background: #071712;
   color: var(--text);
+}
+input[aria-invalid='true'],
+select[aria-invalid='true'],
+textarea[aria-invalid='true'] {
+  border-color: var(--danger);
+  border-width: 2px;
 }
 textarea {
   min-height: 100px;
@@ -635,6 +673,12 @@ select:disabled {
   height: 34px;
   margin: -5px -7px -5px auto;
   color: #ffd4d4;
+}
+.error-field-link {
+  width: fit-content;
+  color: inherit;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
 }
 
 .identity-layout {
@@ -908,6 +952,158 @@ select:disabled {
   }
 }
 
+.membership-filter-panel .filter-grid {
+  margin-bottom: 0;
+}
+.membership-filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.membership-filter-actions button,
+.membership-primary-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+.membership-primary-action {
+  text-decoration: none;
+}
+.membership-results {
+  margin-top: 24px;
+}
+.membership-cell-stack {
+  display: grid;
+  gap: 5px;
+  min-width: 140px;
+}
+.membership-cell-stack small,
+.membership-no-action {
+  color: var(--muted);
+}
+.membership-cell-stack .badge {
+  text-transform: capitalize;
+}
+.membership-action-list {
+  display: grid;
+  justify-items: start;
+  gap: 7px;
+  min-width: 130px;
+}
+.membership-action-list .text-action {
+  padding: 0;
+  text-align: left;
+}
+.membership-action-list .danger-text-action {
+  color: #ffb8b8;
+}
+.membership-card-region {
+  min-width: 0;
+}
+.membership-card-region:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
+}
+.membership-card-list {
+  display: grid;
+  gap: 14px;
+}
+.membership-card {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+.membership-card-heading h3 {
+  margin: 0;
+  font-size: 18px;
+}
+.membership-card-heading p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.membership-card-details {
+  display: grid;
+  gap: 14px;
+  margin: 18px 0 0;
+}
+.membership-card-details > div {
+  display: grid;
+  gap: 6px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(142, 177, 162, 0.16);
+}
+.membership-card-details dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.membership-card-details dd {
+  min-width: 0;
+  margin: 0;
+}
+.membership-card-value {
+  display: grid;
+  justify-items: start;
+  gap: 5px;
+}
+.membership-card-value small {
+  color: var(--muted);
+}
+.membership-card-actions {
+  padding-top: 16px;
+  margin-top: 18px;
+  border-top: 1px solid rgba(142, 177, 162, 0.16);
+}
+.membership-workflow {
+  margin-top: 24px;
+}
+.membership-workflow code {
+  overflow-wrap: anywhere;
+}
+.membership-pagination {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+.membership-pagination button:first-child {
+  justify-self: start;
+}
+.membership-pagination button:last-child {
+  justify-self: end;
+}
+.membership-mutation-boundary {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px;
+  margin-top: 24px;
+  color: #b9d8ca;
+  background: #0b241b;
+  border: 1px solid #285846;
+  border-radius: 14px;
+}
+.membership-mutation-boundary > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--mint);
+}
+.membership-mutation-boundary p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .clinical-layout {
   display: grid;
   gap: 20px;
@@ -1081,6 +1277,20 @@ select:disabled {
   .form-actions button {
     width: 100%;
   }
+  .membership-filter-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+  .membership-filter-actions button,
+  .membership-primary-action {
+    width: 100%;
+  }
+  .membership-pagination {
+    grid-template-columns: 1fr 1fr;
+  }
+  .membership-pagination span {
+    display: none;
+  }
   .check-list > div {
     grid-template-columns: 32px 1fr;
   }
@@ -1088,6 +1298,10 @@ select:disabled {
     grid-column: 2;
     justify-self: start;
     padding: 0;
+  }
+  .check-list a.badge {
+    grid-column: 2;
+    justify-self: start;
   }
   .page-pagination {
     grid-template-columns: 1fr 1fr;
@@ -1133,6 +1347,9 @@ select:disabled {
   .stat-card {
     min-height: 125px;
     padding: 18px;
+  }
+  .membership-card {
+    padding: 16px 14px;
   }
 }
 

@@ -9,54 +9,206 @@ const user = {
 const organization = {
   displayName: 'North Clinic',
   id: '22222222-2222-4222-8222-222222222222',
-  roleKeys: ['organization-member'],
+  roleKeys: ['organization_owner'],
   selected: true,
   status: 'active',
 };
+const readinessEvaluatedAt = new Date(Date.now() - 60_000);
+readinessEvaluatedAt.setMilliseconds(0);
+const readinessExpiresAt = new Date(readinessEvaluatedAt.getTime() + 15 * 60_000);
+const readinessGate = (
+  key: string,
+  label: string,
+  outcome: 'blocked' | 'complete' | 'not_applicable' | 'warning',
+  detail: string,
+  href: string,
+) => ({
+  detail,
+  evidenceReferences: [],
+  href,
+  key,
+  label,
+  outcome,
+  reasonCode: 'm1.readiness.test_fixture',
+  remediationCode: 'm1.remediation.test_fixture',
+  version: 'm1-readiness-v1',
+});
 const organizationReadiness = {
   activeMemberships: 2,
-  completedGates: 2,
+  blockedGates: 10,
+  catalogueVersion: 'm1-readiness-v1',
+  completedGates: 3,
   draftFacilityCount: 1,
+  evaluatedAt: readinessEvaluatedAt.toISOString(),
+  expiresAt: readinessExpiresAt.toISOString(),
   facilityCount: 1,
   gates: [
-    {
-      detail: 'Legal and display identity are recorded.',
-      href: '#/M1-07',
-      key: 'organization-profile',
-      label: 'Organization profile',
-      status: 'complete',
-    },
-    {
-      detail: 'An effective owner is present.',
-      href: '#/M1-20',
-      key: 'administrator-access',
-      label: 'Administrator access',
-      status: 'complete',
-    },
-    {
-      detail: 'Activation policy is not approved.',
-      href: '#/M1-21',
-      key: 'activation',
-      label: 'Review and activate',
-      status: 'blocked',
-    },
+    readinessGate(
+      'organization.profile.complete',
+      'Organization profile',
+      'complete',
+      'The approved organization profile is complete at the current revision.',
+      '#/M1-07',
+    ),
+    readinessGate(
+      'organization.identifier.primary_verified',
+      'Primary registration identifier',
+      'blocked',
+      'A verified primary registration identifier is required.',
+      '#/M1-08',
+    ),
+    readinessGate(
+      'organization.contact.coverage',
+      'Address and contact coverage',
+      'blocked',
+      'Registered address and operational contact coverage are missing.',
+      '#/M1-09',
+    ),
+    readinessGate(
+      'organization.governance.coverage',
+      'Governance responsibility coverage',
+      'blocked',
+      'Required governance responsibilities are missing.',
+      '#/M1-11',
+    ),
+    readinessGate(
+      'access.final_owner',
+      'Final owner protection',
+      'complete',
+      'An active indefinite owner remains after every open demotion.',
+      '#/M1-20',
+    ),
+    readinessGate(
+      'access.mfa_enforced',
+      'Mandatory-role MFA',
+      'complete',
+      'Every mandatory-role account has MFA enabled.',
+      '#/M1-03',
+    ),
+    readinessGate(
+      'network.facility.minimum',
+      'Minimum eligible facility',
+      'blocked',
+      'No eligible facility has complete approved configuration.',
+      '#/M1-12',
+    ),
+    readinessGate(
+      'network.hierarchy.valid',
+      'Network hierarchy',
+      'blocked',
+      'The network hierarchy evaluator is unavailable.',
+      '#/M1-14',
+    ),
+    readinessGate(
+      'network.hours.valid',
+      'Operating hours',
+      'blocked',
+      'Approved operating-hours evaluation is unavailable.',
+      '#/M1-16',
+    ),
+    readinessGate(
+      'service.catalogue.active',
+      'Active service catalogue',
+      'blocked',
+      'An eligible service catalogue is unavailable.',
+      '#/M1-17',
+    ),
+    readinessGate(
+      'service.assignment.valid',
+      'Service assignments',
+      'warning',
+      'Service delivery has not been declared.',
+      '#/M1-18',
+    ),
+    readinessGate(
+      'identifier.scheme.active',
+      'Identifier scheme',
+      'not_applicable',
+      'Identifier issuance is not declared.',
+      '#/M1-19',
+    ),
+    readinessGate(
+      'configuration.integrity',
+      'Configuration integrity',
+      'blocked',
+      'Versioned configuration integrity is unavailable.',
+      '#/M1-21',
+    ),
+    readinessGate(
+      'governance.registry.active',
+      'Governance registries',
+      'blocked',
+      'The full approved registry set is not active.',
+      '#/M1-21',
+    ),
+    readinessGate(
+      'platform.dependencies.ready',
+      'Required platform dependencies',
+      'blocked',
+      'Fresh required dependency readiness is unavailable.',
+      '#/M1-21',
+    ),
   ],
   lifecycleStatus: 'active',
+  notApplicableGates: 1,
   organizationId: organization.id,
-  totalGates: 3,
+  organizationRevision: 4,
+  totalGates: 15,
+  warningGates: 1,
 };
 const organizationProfile = {
   countryCode: 'IN',
   displayName: 'North Clinic',
+  editable: true,
   legalName: 'North Clinic Private Limited',
   lifecycleStatus: 'active',
+  locale: 'en-IN',
   lockVersion: 4,
   organizationId: organization.id,
+  organizationType: 'care_provider',
   timezone: 'Asia/Kolkata',
+  tradingName: null,
   updatedAt: '2026-09-16T08:00:00Z',
+};
+const organizationMemberships = {
+  asOf: '2026-09-17T05:30:00Z',
+  availableActions: [
+    'issueInvitation',
+    'approveMembershipChange',
+    'executeMembershipChange',
+    'approveOwnerTransfer',
+    'executeOwnerTransfer',
+  ],
+  items: [
+    {
+      accessState: 'active',
+      accountStatus: 'active',
+      availableActions: [
+        'requestMfaReset',
+        'requestRoleChange',
+        'requestRevocation',
+        'requestOwnerTransfer',
+      ],
+      displayName: 'Ravi Shah',
+      effectiveFrom: '2026-08-01T06:00:00Z',
+      effectiveTo: null,
+      email: 'ravi.shah@example.test',
+      finalOwner: false,
+      lockVersion: 0,
+      membershipId: '77777777-7777-4777-8777-777777777777',
+      mfaEnabled: true,
+      roleDisplayName: 'Security administrator',
+      roleKey: 'security_administrator',
+      roleStatus: 'active',
+      userId: '88888888-8888-4888-8888-888888888888',
+    },
+  ],
+  organizationId: organization.id,
+  page: { hasMore: false, limit: 25, nextCursor: null },
 };
 const authenticatedSession = {
   mfaEnabled: false,
+  mfaRequired: false,
   recentAuthentication: true,
   state: 'authenticated',
   user,
@@ -80,7 +232,9 @@ async function jsonResponse(
     typeof data === 'object' &&
     data !== null &&
     'state' in data &&
-    (data.state === 'authenticated' || data.state === 'mfa_required');
+    (data.state === 'authenticated' ||
+      data.state === 'mfa_required' ||
+      data.state === 'mfa_enrollment_required');
   await route.fulfill({
     body: JSON.stringify(data),
     headers: {
@@ -111,6 +265,9 @@ async function mockAuthenticatedSession(page: Page) {
     jsonResponse(route, organizationProfile, 200, undefined, {
       ETag: '"organization-profile:4"',
     }),
+  );
+  await page.route(`**/api/v1/organizations/${organization.id}/memberships**`, (route) =>
+    jsonResponse(route, organizationMemberships),
   );
 }
 
@@ -229,6 +386,167 @@ test('synthetic screens expose honest action boundaries and usable local filters
   await expectNoSeriousViolations(page, 'honest synthetic prototype boundary');
 });
 
+test('M1-20 renders authorized membership data and permission-projected actions', async ({
+  page,
+}) => {
+  await mockAuthenticatedSession(page);
+  await page.goto('/#/M1-20');
+
+  await expect(page.getByRole('heading', { name: 'Administrator access' })).toBeVisible();
+  await expect(page.getByText('Ravi Shah')).toBeVisible();
+  await expect(page.getByText('ravi.shah@example.test')).toBeVisible();
+  await expect(page.getByText('Synthetic prototype')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Invite administrator' })).toHaveAttribute(
+    'href',
+    '#/M1-02',
+  );
+  await expect(page.getByRole('link', { name: 'Request MFA reset' })).toHaveAttribute(
+    'href',
+    '#/M1-03',
+  );
+  await expect(page.getByRole('button', { name: 'Change role' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Promote to owner' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Governed access change' })).toBeVisible();
+  await expect(page.getByText(/Facility-scoped grants remain unavailable/)).toBeVisible();
+
+  const filteredRequest = page.waitForRequest((request) =>
+    request.url().includes('memberships?search=Ravi&state=active'),
+  );
+  await page.getByLabel('Name or email').fill('Ravi');
+  await page.getByLabel('Access state').selectOption('active');
+  await page.getByRole('button', { name: 'Apply filters' }).click();
+  await filteredRequest;
+  await expect(page.getByText('Ravi Shah')).toBeVisible();
+
+  const memberships = page.getByRole('region', { name: 'Organization memberships' });
+  const viewportWidth = page.viewportSize()?.width ?? 0;
+  if (viewportWidth <= 760) {
+    await expect(
+      memberships.getByRole('list', { name: 'Organization membership cards' }),
+    ).toBeVisible();
+    await expect(memberships.getByRole('table')).toHaveCount(0);
+  } else {
+    await expect(memberships.getByRole('table')).toBeVisible();
+    await expect(
+      memberships.getByRole('list', { name: 'Organization membership cards' }),
+    ).toHaveCount(0);
+  }
+  await memberships.focus();
+  await expect(memberships).toBeFocused();
+  await expectNoDocumentHorizontalOverflow(page, 'M1-20 authorized memberships');
+  await expectNoSeriousViolations(page, 'M1-20 authorized memberships');
+});
+
+test('M1-20 submits an exact governed membership role-change request', async ({ page }) => {
+  await mockAuthenticatedSession(page);
+  await page.unroute(`**/api/v1/organizations/${organization.id}/memberships**`);
+  await page.route('**/api/v1/auth/csrf', (route) =>
+    jsonResponse(route, {
+      headerName: 'X-XSRF-TOKEN',
+      parameterName: '_csrf',
+      token: 'playwright-csrf-token-123456',
+    }),
+  );
+  let capturedHeaders: Record<string, string> = {};
+  let capturedBody: unknown;
+  await page.route(`**/api/v1/organizations/${organization.id}/memberships**`, async (route) => {
+    if (route.request().method() === 'GET') {
+      await jsonResponse(route, organizationMemberships);
+      return;
+    }
+    capturedHeaders = route.request().headers();
+    capturedBody = route.request().postDataJSON();
+    await jsonResponse(
+      route,
+      {
+        approvalId: '99999999-9999-4999-8999-999999999999',
+        changeType: 'role_change',
+        expiresAt: '2026-09-17T12:00:00Z',
+        fromRoleKey: 'security_administrator',
+        lockVersion: 0,
+        membershipId: '77777777-7777-4777-8777-777777777777',
+        status: 'pending',
+        targetUserId: '88888888-8888-4888-8888-888888888888',
+        toRoleKey: 'organization_viewer',
+      },
+      201,
+    );
+  });
+
+  await page.goto('/#/M1-20');
+  await page.getByRole('button', { name: 'Change role' }).click();
+  await page.getByLabel('Reason').fill('Approved least-privilege role adjustment');
+  await page.getByRole('button', { name: 'Submit governed step' }).click();
+
+  await expect(page.getByRole('status')).toContainText('pending');
+  expect(capturedHeaders['if-match']).toBe(
+    '"organization-membership:77777777-7777-4777-8777-777777777777:0"',
+  );
+  expect(capturedHeaders['idempotency-key']).toMatch(/^membership-request_role_change:/);
+  expect(capturedBody).toEqual({
+    changeType: 'role_change',
+    reason: 'Approved least-privilege role adjustment',
+    toRoleKey: 'organization_viewer',
+  });
+  await expectNoDocumentHorizontalOverflow(page, 'M1-20 membership change workflow');
+  await expectNoSeriousViolations(page, 'M1-20 membership change workflow');
+});
+
+test('M1-20 submits an exact governed owner-promotion request', async ({ page }) => {
+  await mockAuthenticatedSession(page);
+  await page.unroute(`**/api/v1/organizations/${organization.id}/memberships**`);
+  await page.route('**/api/v1/auth/csrf', (route) =>
+    jsonResponse(route, {
+      headerName: 'X-XSRF-TOKEN',
+      parameterName: '_csrf',
+      token: 'playwright-owner-csrf-token-123456',
+    }),
+  );
+  let capturedHeaders: Record<string, string> = {};
+  let capturedBody: unknown;
+  await page.route(`**/api/v1/organizations/${organization.id}/memberships**`, async (route) => {
+    if (route.request().method() === 'GET') {
+      await jsonResponse(route, organizationMemberships);
+      return;
+    }
+    capturedHeaders = route.request().headers();
+    capturedBody = route.request().postDataJSON();
+    await jsonResponse(
+      route,
+      {
+        approvalId: '99999999-9999-4999-8999-999999999999',
+        changeType: 'owner_promotion',
+        expiresAt: '2026-09-17T12:00:00Z',
+        fromRoleKey: 'security_administrator',
+        lockVersion: 0,
+        membershipId: '77777777-7777-4777-8777-777777777777',
+        status: 'pending',
+        targetUserId: '88888888-8888-4888-8888-888888888888',
+        toRoleKey: 'organization_owner',
+      },
+      201,
+    );
+  });
+
+  await page.goto('/#/M1-20');
+  await page.getByRole('button', { name: 'Promote to owner' }).click();
+  await expect(page.getByLabel('New role')).toHaveValue('organization_owner');
+  await page.getByLabel('Reason').fill('Approved owner succession promotion request');
+  await page.getByRole('button', { name: 'Submit governed step' }).click();
+
+  await expect(page.getByRole('status')).toContainText('pending');
+  expect(capturedHeaders['if-match']).toBe(
+    '"organization-membership:77777777-7777-4777-8777-777777777777:0"',
+  );
+  expect(capturedHeaders['idempotency-key']).toMatch(/^membership-request_owner_transfer:/);
+  expect(capturedBody).toEqual({
+    reason: 'Approved owner succession promotion request',
+    toRoleKey: 'organization_owner',
+  });
+  await expectNoDocumentHorizontalOverflow(page, 'M1-20 owner promotion workflow');
+  await expectNoSeriousViolations(page, 'M1-20 owner promotion workflow');
+});
+
 test('an unknown protected route fails closed and offers a safe recovery path', async ({
   page,
 }) => {
@@ -256,6 +574,7 @@ test('identity and governed invitation states are accessible', async ({ page }) 
   await page.route('**/api/v1/auth/session', (route) =>
     jsonResponse(route, {
       mfaEnabled: state === 'mfa_required',
+      mfaRequired: false,
       recentAuthentication: state === 'authenticated',
       state,
       user: state === 'anonymous' ? null : user,
@@ -266,48 +585,205 @@ test('identity and governed invitation states are accessible', async ({ page }) 
   );
 
   await page.goto('/#/M1-01');
-  await expect(page.getByRole('heading', { name: 'Sign in to CareOS' })).toBeVisible();
+  const loginHeading = page.getByRole('heading', { name: 'Sign in to CareOS' });
+  await expect(loginHeading).toBeVisible();
+  await expect(loginHeading).toBeFocused();
+  const identitySkipLink = page.getByRole('link', { name: 'Skip to main content' });
+  const identityUrl = page.url();
+  await identitySkipLink.focus();
+  await expect(identitySkipLink).toBeVisible();
+  await identitySkipLink.press('Enter');
+  await expect(page.locator('#main-content')).toBeFocused();
+  expect(page.url()).toBe(identityUrl);
   await expectNoDocumentHorizontalOverflow(page, 'M1-01 anonymous login');
   await expectNoSeriousViolations(page, 'M1-01 anonymous login');
 
   await page.goto('/#/forgot-password');
-  await expect(page.getByRole('heading', { name: 'Reset your password' })).toBeVisible();
+  const resetRequestHeading = page.getByRole('heading', { name: 'Reset your password' });
+  await expect(resetRequestHeading).toBeVisible();
+  await expect(resetRequestHeading).toBeFocused();
   await expectNoDocumentHorizontalOverflow(page, 'password-reset request');
   await expectNoSeriousViolations(page, 'password-reset request');
 
   await page.goto('/#/reset-password?token=Case_Sensitive-Token');
-  await expect(page.getByRole('heading', { name: 'Choose a new password' })).toBeVisible();
+  const resetCompletionHeading = page.getByRole('heading', { name: 'Choose a new password' });
+  await expect(resetCompletionHeading).toBeVisible();
+  await expect(resetCompletionHeading).toBeFocused();
   await expectNoDocumentHorizontalOverflow(page, 'password-reset completion');
   await expectNoSeriousViolations(page, 'password-reset completion');
 
+  await page.getByLabel('New password', { exact: true }).fill('new-secure-password-27');
+  const resetConfirmation = page.getByLabel('Confirm new password', { exact: true });
+  await resetConfirmation.fill('different-password-28');
+  await page.getByRole('button', { name: 'Change password' }).click();
+  const resetValidation = page.getByRole('alert');
+  await expect(resetValidation).toBeFocused();
+  await expect(resetConfirmation).toHaveAttribute('aria-invalid', 'true');
+  await expect(resetConfirmation).toHaveAttribute('aria-describedby', 'confirm-password-error');
+  const resetValidationUrl = page.url();
+  await resetValidation.getByRole('link', { name: /does not match/ }).click();
+  await expect(resetConfirmation).toBeFocused();
+  expect(page.url()).toBe(resetValidationUrl);
+  await expectNoDocumentHorizontalOverflow(page, 'password-reset validation');
+  await expectNoSeriousViolations(page, 'password-reset validation');
+
   await page.goto('/#/accept-invitation?token=Case_Sensitive-Invitation-Token-1234567890');
-  await expect(page.getByRole('heading', { name: 'Accept your CareOS invitation' })).toBeVisible();
+  const invitationHeading = page.getByRole('heading', { name: 'Accept your CareOS invitation' });
+  await expect(invitationHeading).toBeVisible();
+  await expect(invitationHeading).toBeFocused();
   await expectNoDocumentHorizontalOverflow(page, 'M1-02 invitation acceptance');
   await expectNoSeriousViolations(page, 'M1-02 invitation acceptance');
 
+  await page.getByLabel('New password', { exact: true }).fill('new-secure-password-27');
+  const invitationConfirmation = page.getByLabel('Confirm new password', { exact: true });
+  await invitationConfirmation.fill('different-password-28');
+  await page.getByRole('button', { name: 'Accept invitation' }).click();
+  const invitationValidation = page.getByRole('alert');
+  await expect(invitationValidation).toBeFocused();
+  await expect(invitationConfirmation).toHaveAttribute('aria-invalid', 'true');
+  await expect(invitationConfirmation).toHaveAttribute(
+    'aria-describedby',
+    'invitation-password-confirmation-error',
+  );
+  const invitationValidationUrl = page.url();
+  await invitationValidation.getByRole('link', { name: /does not match/ }).click();
+  await expect(invitationConfirmation).toBeFocused();
+  expect(page.url()).toBe(invitationValidationUrl);
+  await expectNoDocumentHorizontalOverflow(page, 'M1-02 invitation validation');
+  await expectNoSeriousViolations(page, 'M1-02 invitation validation');
+
   state = 'mfa_required';
   await page.goto('/?identity=mfa#/M1-03');
-  await expect(page.getByRole('heading', { name: 'Verify your identity' })).toBeVisible();
+  const mfaChallengeHeading = page.getByRole('heading', { name: 'Verify your identity' });
+  await expect(mfaChallengeHeading).toBeVisible();
+  await expect(mfaChallengeHeading).toBeFocused();
   await expectNoDocumentHorizontalOverflow(page, 'M1-03 MFA challenge');
   await expectNoSeriousViolations(page, 'M1-03 MFA challenge');
 
   state = 'authenticated';
   selected = false;
   await page.goto('/?identity=organization#/M1-04');
-  await expect(page.getByRole('heading', { name: 'Choose an organization' })).toBeVisible();
+  const organizationHeading = page.getByRole('heading', { name: 'Choose an organization' });
+  await expect(organizationHeading).toBeVisible();
+  await expect(organizationHeading).toBeFocused();
   await expectNoDocumentHorizontalOverflow(page, 'M1-04 organization selection');
   await expectNoSeriousViolations(page, 'M1-04 organization selection');
 
   selected = true;
   await page.goto('/?identity=invitations#/M1-02');
-  await expect(page.getByRole('heading', { name: 'Organization invitations' })).toBeVisible();
+  const invitationAdministrationHeading = page.getByRole('heading', {
+    name: 'Organization invitations',
+  });
+  await expect(invitationAdministrationHeading).toBeVisible();
+  await expect(invitationAdministrationHeading).toBeFocused();
   await expectNoDocumentHorizontalOverflow(page, 'M1-02 invitation administration');
   await expectNoSeriousViolations(page, 'M1-02 invitation administration');
 
   await page.goto('/?identity=mfa-administration#/M1-03');
-  await expect(page.getByRole('heading', { name: 'Multi-factor authentication' })).toBeVisible();
+  const mfaAdministrationHeading = page.getByRole('heading', {
+    name: 'Multi-factor authentication',
+  });
+  await expect(mfaAdministrationHeading).toBeVisible();
+  await expect(mfaAdministrationHeading).toBeFocused();
   await expectNoDocumentHorizontalOverflow(page, 'M1-03 MFA administration');
   await expectNoSeriousViolations(page, 'M1-03 MFA administration');
+});
+
+test('mandatory-role MFA enrollment keeps the workspace locked through recovery-code storage', async ({
+  page,
+}) => {
+  let enrolled = false;
+  let organizationRequests = 0;
+  await page.route('**/api/v1/**', async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    const method = request.method();
+
+    if (method === 'GET' && path === '/api/v1/auth/session') {
+      await jsonResponse(
+        route,
+        enrolled
+          ? { ...authenticatedSession, mfaEnabled: true, mfaRequired: true }
+          : {
+              mfaEnabled: false,
+              mfaRequired: true,
+              recentAuthentication: true,
+              state: 'mfa_enrollment_required',
+              user,
+            },
+      );
+      return;
+    }
+    if (method === 'GET' && path === '/api/v1/auth/csrf') {
+      await jsonResponse(route, {
+        headerName: 'X-XSRF-TOKEN',
+        parameterName: '_csrf',
+        token: 'mandatory-enrollment-csrf-token',
+      });
+      return;
+    }
+    if (method === 'POST' && path === '/api/v1/auth/mfa/enrollments') {
+      expect(request.postDataJSON()).toEqual({ label: 'Asha Verma authenticator' });
+      await jsonResponse(route, {
+        provisioningUri:
+          'otpauth://totp/ROOTOPATHY%20CareOS:asha@example.test?secret=ABCDEFGHIJKLMNOP',
+        secret: 'ABCDEFGHIJKLMNOP',
+      });
+      return;
+    }
+    if (method === 'POST' && path === '/api/v1/auth/mfa/enrollments/verification') {
+      expect(request.postDataJSON()).toEqual({ code: '654321' });
+      enrolled = true;
+      await jsonResponse(route, {
+        recoveryCodes: ['2345-6789-ABCD', 'EFGH-JKLM-NPQR'],
+      });
+      return;
+    }
+    if (method === 'GET' && path === '/api/v1/organizations') {
+      ++organizationRequests;
+      await jsonResponse(route, [organization]);
+      return;
+    }
+    if (method === 'GET' && path.endsWith('/setup-readiness')) {
+      await jsonResponse(route, organizationReadiness);
+      return;
+    }
+    await jsonResponse(
+      route,
+      {
+        code: 'unexpected-request',
+        correlationId: 'mandatory-enrollment-test',
+        detail: `Unexpected ${method} ${path}`,
+        status: 404,
+        title: 'Unexpected request',
+        type: 'about:blank',
+      },
+      404,
+    );
+  });
+
+  await page.goto('/#/M1-05');
+  await expect(
+    page.getByRole('heading', { name: 'Set up multi-factor authentication' }),
+  ).toBeVisible();
+  await expect(page.getByText(/workspace access remains locked/i)).toBeVisible();
+  expect(organizationRequests).toBe(0);
+
+  await page.getByRole('button', { name: 'Set up authenticator' }).click();
+  await expect(page.getByLabel('One-time authenticator setup key')).toContainText(
+    'ABCDEFGHIJKLMNOP',
+  );
+  await page.getByLabel('Six-digit authenticator code').fill('654321');
+  await page.getByRole('button', { name: 'Confirm and enable MFA' }).click();
+
+  await expect(page.getByText('2345-6789-ABCD')).toBeVisible();
+  expect(organizationRequests).toBe(0);
+  await expectNoDocumentHorizontalOverflow(page, 'mandatory MFA recovery codes');
+  await expectNoSeriousViolations(page, 'mandatory MFA recovery codes');
+
+  await page.getByRole('button', { name: 'I have stored these codes securely' }).click();
+  await expect(page.getByRole('heading', { name: 'Administration dashboard' })).toBeVisible();
+  expect(organizationRequests).toBe(1);
 });
 
 test('password recovery uses generic responses and consumes a scrubbed one-time token', async ({
@@ -322,6 +798,7 @@ test('password recovery uses generic responses and consumes a scrubbed one-time 
     if (method === 'GET' && path === '/api/v1/auth/session') {
       await jsonResponse(route, {
         mfaEnabled: false,
+        mfaRequired: false,
         recentAuthentication: false,
         state: 'anonymous',
         user: null,
@@ -422,7 +899,7 @@ test('recent authentication gates MFA enrollment and one-time recovery-code disp
   await page.getByLabel('Current password').fill('current-password');
   await page.getByRole('button', { name: 'Verify identity' }).click();
   await expect(page.getByText('Authenticator not enabled')).toBeVisible();
-  await page.getByRole('button', { name: 'Set up an authenticator' }).click();
+  await page.getByRole('button', { name: 'Set up authenticator' }).click();
   await expect(page.getByLabel('One-time authenticator setup key')).toHaveText('ABCDEFGHIJKLMNOP');
   await page.getByLabel('Six-digit authenticator code').fill('654321');
   await page.getByRole('button', { name: 'Confirm and enable MFA' }).click();
@@ -506,6 +983,33 @@ test('administrator MFA reset uses the checked maker-checker transition client',
   await expectNoSeriousViolations(page, 'M1-03 administrative MFA reset');
 });
 
+test('administration readiness uses the exact approved catalogue and distinct dashboard views', async ({
+  page,
+}) => {
+  await mockAuthenticatedSession(page);
+
+  await page.goto('/#/M1-05');
+  await expect(page.getByRole('heading', { name: 'Administration dashboard' })).toBeVisible();
+  await expect(page.getByText('3/15')).toBeVisible();
+  await expect(page.getByText('10 blockers · 1 warnings')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Priority exceptions' })).toBeVisible();
+  await expect(page.locator('.check-list > div')).toHaveCount(5);
+  await expectNoDocumentHorizontalOverflow(page, 'M1-05 readiness dashboard');
+  await expectNoSeriousViolations(page, 'M1-05 readiness dashboard');
+
+  await page.getByRole('link', { name: 'Review full checklist' }).click();
+  await expect(page).toHaveURL(/#\/M1-06$/);
+  await expect(page.getByRole('heading', { name: 'Setup checklist' })).toBeVisible();
+  await expect(page.locator('.check-list > div')).toHaveCount(15);
+  await expect(page.getByText('This is a live server projection.', { exact: false })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Not applicable' })).toHaveAttribute(
+    'href',
+    '#/M1-19',
+  );
+  await expectNoDocumentHorizontalOverflow(page, 'M1-06 approved readiness catalogue');
+  await expectNoSeriousViolations(page, 'M1-06 approved readiness catalogue');
+});
+
 test('organization profile update preserves CSRF, idempotency, and strong revision evidence', async ({
   page,
 }) => {
@@ -543,12 +1047,22 @@ test('organization profile update preserves CSRF, idempotency, and strong revisi
         countryCode: 'IN',
         displayName: 'North Care Network',
         legalName: 'North Clinic Private Limited',
+        locale: 'en-GB',
+        organizationType: 'care_network',
         reason: 'Approved identity review CARE-42',
         timezone: 'Asia/Kolkata',
+        tradingName: 'North Care',
       });
       await jsonResponse(
         route,
-        { ...organizationProfile, displayName: 'North Care Network', lockVersion: 5 },
+        {
+          ...organizationProfile,
+          displayName: 'North Care Network',
+          locale: 'en-GB',
+          lockVersion: 5,
+          organizationType: 'care_network',
+          tradingName: 'North Care',
+        },
         200,
         undefined,
         { ETag: '"organization-profile:5"' },
@@ -560,6 +1074,9 @@ test('organization profile update preserves CSRF, idempotency, and strong revisi
 
   await page.goto('/#/M1-07');
   await page.getByLabel('Display name').fill('North Care Network');
+  await page.getByLabel('Trading name (optional)').fill('North Care');
+  await page.getByLabel('Organization type').selectOption('care_network');
+  await page.getByLabel('Locale').fill('en-GB');
   await page.getByLabel('Reason for change').fill('Approved identity review CARE-42');
   await page.getByRole('button', { name: 'Save organization profile' }).click();
   await expect(page.getByRole('status')).toContainText('Organization profile saved');
@@ -582,7 +1099,13 @@ test('anonymous login, organization selection, and logout use the checked browse
       await jsonResponse(
         route,
         sessionState === 'anonymous'
-          ? { mfaEnabled: false, recentAuthentication: false, state: 'anonymous', user: null }
+          ? {
+              mfaEnabled: false,
+              mfaRequired: false,
+              recentAuthentication: false,
+              state: 'anonymous',
+              user: null,
+            }
           : authenticatedSession,
       );
       return;
@@ -632,10 +1155,10 @@ test('anonymous login, organization selection, and logout use the checked browse
   await expect(page.getByRole('heading', { name: 'Sign in to CareOS' })).toBeVisible();
   await page.getByLabel('Email address').fill('asha@example.test');
   await page.getByLabel('Password').fill('test-password');
-  await page.getByRole('button', { name: 'Sign in securely' }).click();
+  await page.getByRole('button', { name: 'Continue securely' }).click();
 
   await expect(page.getByRole('heading', { name: 'Choose an organization' })).toBeVisible();
-  await page.getByRole('button', { name: 'Continue to workspace' }).click();
+  await page.getByRole('button', { name: 'Open workspace' }).click();
   await expect(page.getByRole('heading', { name: 'Administration dashboard' })).toBeVisible();
   await page.locator('.topbar').getByRole('button', { name: 'Sign out' }).click();
   await expect(page.getByRole('heading', { name: 'Sign in to CareOS' })).toBeVisible();
@@ -651,6 +1174,15 @@ test('workspace navigation and mobile menu are usable', async ({ page, isMobile 
   expect([1440, 1024, 768, 390, 320]).toContain(viewport.width);
   const usesDrawer = viewport.width <= 760;
   expect(isMobile).toBe(usesDrawer);
+  const workspaceHeading = page.getByRole('heading', { name: 'Administration dashboard' });
+  await expect(workspaceHeading).toBeFocused();
+  const workspaceSkipLink = page.getByRole('link', { name: 'Skip to main content' });
+  const workspaceUrl = page.url();
+  await workspaceSkipLink.focus();
+  await expect(workspaceSkipLink).toBeVisible();
+  await workspaceSkipLink.press('Enter');
+  await expect(page.locator('#main-content')).toBeFocused();
+  expect(page.url()).toBe(workspaceUrl);
   if (usesDrawer) {
     await expect(page.getByRole('button', { name: 'Open navigation' })).toBeVisible();
     await page.getByRole('button', { name: 'Open navigation' }).click();
@@ -662,6 +1194,7 @@ test('workspace navigation and mobile menu are usable', async ({ page, isMobile 
   await page.getByRole('link', { name: 'M2', exact: true }).click();
   await expect(page).toHaveURL(/M2-01/);
   await expect(page.locator('main h1')).toHaveText('Workforce dashboard');
+  await expect(page.locator('main h1')).toBeFocused();
   if (usesDrawer) {
     await expect(page.locator('.sidebar')).not.toHaveClass(/is-open/);
   }

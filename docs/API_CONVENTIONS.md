@@ -1,8 +1,8 @@
 # CareOS HTTP and frontend API conventions
 
-Status: checked foundation convention with approved-registry identity administration and a bounded organization-core starting slice. This document governs every protected business endpoint; it does not turn an approved catalogue entry into an implemented operation or production acceptance.
+Status: checked foundation convention with approved-registry identity administration, authorized membership read/change/owner-transfer administration, and a bounded organization-core starting slice. This document governs every protected business endpoint; it does not turn an approved catalogue entry into an implemented operation or production acceptance.
 
-The machine-readable source is `contracts/openapi/careos-foundation.json`, currently version `0.9.0`. Its `x-careos-conventions` object and reusable components are enforced by `scripts/verify-api-contract.mjs` and negative tests. If this document and the checked contract disagree, stop and reconcile them before adding an endpoint.
+The machine-readable source is `contracts/openapi/careos-foundation.json`, currently version `0.15.0`. Its `x-careos-conventions`, reusable components, exact readiness catalogue, and exact approved organization-profile boundary are enforced by `scripts/verify-api-contract.mjs` and negative tests. If this document and the checked contract disagree, stop and reconcile them before adding an endpoint.
 
 ## Route and tenant boundary
 
@@ -10,7 +10,23 @@ The machine-readable source is `contracts/openapi/careos-foundation.json`, curre
 - Every protected business resource must be nested under `/api/v1/organizations/{organizationId}/...` and declare the shared required UUID `OrganizationId` path parameter.
 - The path organization is only an authorization input. The backend must revalidate the authenticated actor's live membership and operation permission inside `TenantAuthorizationOperations` before starting business work.
 - The stored organization selection is navigation state only. `X-Organization-Id` is not an accepted tenant selector and is deliberately absent from the CORS allowlist.
-- Hidden-resource policy remains operation-specific. The three organization-core routes now bind to active approved operations. Reference entries still require explicit local/test opt-in and remain rejected in production. Every unimplemented approved business operation remains fail closed until its exact handler, persistence, evidence, and tests exist.
+- Hidden-resource policy remains operation-specific. The three organization-core routes and M1-20 membership read/change/owner-transfer routes bind to active approved operations. Reference entries still require explicit local/test opt-in and remain rejected in production. Every unimplemented approved business operation remains fail closed until its exact handler, persistence, evidence, and tests exist.
+
+## Readiness projection boundary
+
+- `GET /api/v1/organizations/{organizationId}/setup-readiness` returns the canonical ordered 15-key `m1-readiness-v1` catalogue. The only outcomes are `complete`, `warning`, `blocked`, and `not_applicable`; clients reject unknown, missing, duplicate, or reordered gates.
+- The live projection carries the organization revision, database-owned `evaluatedAt` and `expiresAt` exactly 900 seconds apart, exact outcome counts, per-gate version, safe reason/remediation codes, and at most four bounded aggregate evidence references.
+- The server computes outcomes from authoritative state. The browser cannot mark a gate complete. Missing persistence or an unavailable evaluator cannot be converted into completion; current unimplemented evaluators are visibly blocked or not applicable.
+- Deep links are selected from current effective caller permissions. When the actor may read readiness but not the target screen, the response links back to M1-06 rather than exposing or inviting a denied resource.
+- This response is a live M1-05/M1-06 projection, not an immutable activation result. A future `configuration_validation` operation must introduce its approved configuration ID/revision/digests, persistence, invalidation, evidence, and lifecycle rather than treating the organization revision as an activation digest.
+
+## Organization profile boundary
+
+- `GET` and `PUT /api/v1/organizations/{organizationId}/profile` expose the exact approved legal/display/trading identity, organization type, ISO country, IANA timezone, BCP 47 locale, lifecycle status, lock version, update time, and current caller editability.
+- Legacy rows with null organization type or locale remain readable and readiness-blocked. A governed update requires both fields; the API never invents a backfill value.
+- Profile names and the required 10-500-code-point change reason are NFC-normalized and trimmed; names reject markup/control characters and reasons reject control characters. Type, country, timezone, locale, and lifecycle vocabularies fail closed. Validation Problems use stable `m1.field.*` codes and exact JSON-pointer field paths.
+- `editable` is derived from the caller's current `organization.profile.manage` permission. It is presentation evidence only; every mutation still reauthorizes inside the tenant transaction.
+- Successful changes preserve strong revision/idempotency/reason rules and emit only sorted changed field names plus lock version in `organization.profile.updated` evidence. Profile values are not copied into audit/outbox payloads.
 
 ## Lists, filters, and cursors
 
@@ -64,7 +80,7 @@ npm run api:check
 
 Generated files live in `frontend/src/api/generated/` and must not be hand-edited. `api:check` regenerates into an isolated directory and compares both the file set and normalized contents. CI runs this before typecheck.
 
-`frontend/src/api/client.ts` wraps all 24 currently implemented operations with generated request/response types, credential inclusion, per-mutation CSRF bootstrap, correlation handling, safe Problem parsing, abort/network outcomes, strict status/body checks, session-lifecycle publication, ETag exposure, and bounded `Retry-After` parsing. The session feature calls the identity/session/organization subset for login, public password recovery, pending MFA, recent authentication, MFA enrollment/recovery-code replacement, governed invitation issue/revoke/acceptance, maker-checker administrative MFA reset, selection/switching, and logout. The administration feature calls the provisional M1-05/M1-06 readiness projection and M1-07 organization-profile read/update routes, including strong ETag and caller-owned idempotency handling. The remaining protected business integration must happen as approved screen-specific vertical slices replace placeholder behavior. See `FRONTEND_SESSION.md` and `MODULE_1_IMPLEMENTATION_PLAN.md`.
+`frontend/src/api/client.ts` wraps all 31 currently implemented operations with generated request/response types, credential inclusion, per-mutation CSRF bootstrap, correlation handling, safe Problem parsing, abort/network outcomes, strict status/body checks, session-lifecycle publication, ETag exposure, and bounded `Retry-After` parsing. The session feature calls the identity/session/organization subset for login, public password recovery, pending MFA, restricted mandatory-role enrollment, recent authentication, MFA enrollment/recovery-code replacement, governed invitation issue/revoke/acceptance, maker-checker administrative MFA reset, selection/switching, and logout. The administration feature calls the bounded M1-05/M1-06 readiness projection, M1-07 organization-profile read/update routes, and M1-20 membership read plus governed non-owner membership-change and owner-transfer request/approval/execution routes. The remaining protected business integration must happen as approved screen-specific vertical slices replace placeholder behavior. See `FRONTEND_SESSION.md` and `MODULE_1_IMPLEMENTATION_PLAN.md`.
 
 ## Endpoint review checklist
 

@@ -55,6 +55,8 @@ careos:
     credential-pepper: ${CAREOS_SERVICE_IDENTITY_CREDENTIAL_PEPPER:}
   mfa-administration:
     enabled: ${CAREOS_MFA_ADMINISTRATION_ENABLED:false}
+  membership-administration:
+    enabled: ${CAREOS_MEMBERSHIP_ADMINISTRATION_ENABLED:false}
   security:
     allowed-origins: ${CAREOS_ALLOWED_ORIGINS}
     application-base-url: ${CAREOS_BASE_URL}

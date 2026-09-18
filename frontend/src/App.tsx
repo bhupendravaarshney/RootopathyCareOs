@@ -10,6 +10,7 @@ import {
   InvitationAcceptanceScreen,
   InvitationAdministrationScreen,
   MfaAdministrationScreen,
+  MfaEnrollmentRequiredScreen,
   PasswordResetCompletionScreen,
   PasswordResetRequestScreen,
 } from './features/session/IdentitySecurityScreens';
@@ -188,6 +189,19 @@ function RoutedApp({ administrationClient }: { administrationClient: Administrat
       />
     );
   }
+  if (machine.phase === 'mfa_enrollment_required') {
+    return (
+      <MfaEnrollmentRequiredScreen
+        issue={actionIssue}
+        onContinue={retryBootstrap}
+        onLogout={logout}
+        onStartEnrollment={startMfaEnrollment}
+        onVerifyEnrollment={verifyMfaEnrollment}
+        pendingAction={pendingAction}
+        user={machine.user}
+      />
+    );
+  }
   if (id === 'M1-03') {
     return (
       <MfaAdministrationScreen
@@ -263,7 +277,12 @@ function RoutedApp({ administrationClient }: { administrationClient: Administrat
   if (!registeredScreenIds.has(screenId)) {
     return <RouteNotFoundPage shell={shell} />;
   }
-  if (screenId === 'M1-05' || screenId === 'M1-06' || screenId === 'M1-07') {
+  if (
+    screenId === 'M1-05' ||
+    screenId === 'M1-06' ||
+    screenId === 'M1-07' ||
+    screenId === 'M1-20'
+  ) {
     return (
       <AdministrationScreen
         key={machine.selectedOrganization.id}

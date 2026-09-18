@@ -99,6 +99,7 @@ class IdentitySecurityIntegrationTest {
         registry.add("careos.authorization.reference-policy-enabled", () -> true);
         registry.add("careos.invitations.enabled", () -> true);
         registry.add("careos.mfa-administration.enabled", () -> true);
+        registry.add("careos.membership-administration.enabled", () -> true);
     }
 
     @Autowired
@@ -429,6 +430,97 @@ class IdentitySecurityIntegrationTest {
     }
 
     @Test
+    void requiresMandatoryRoleMfaEnrollmentBeforeOrganizationAccessAndReadinessCompletion()
+            throws Exception {
+        seedApprovedOwner();
+        var observerId = UUID.randomUUID();
+        var observerEmail = "mfa.readiness+" + observerId + "@rootopathy.test";
+        seedAccount(observerId, observerEmail, "MFA Readiness Observer");
+        executeAsMigrator("""
+                INSERT INTO organization_memberships
+                    (organization_id, user_id, role_key, status)
+                VALUES ('%s', '%s', 'local_bootstrap', 'active')
+                """.formatted(ORG_ONE, observerId));
+        var observerLogin = login(observerEmail, PASSWORD, csrf(), "198.51.100.63")
+                .andExpect(status().isOk())
+                .andReturn();
+        var observerSession = requireCookie(observerLogin, SESSION_COOKIE);
+        var readinessPath = "/api/v1/organizations/" + ORG_ONE + "/setup-readiness";
+        mockMvc.perform(get(readinessPath).cookie(observerSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.gates[?(@.key == 'access.mfa_enforced')].outcome")
+                        .value(org.hamcrest.Matchers.contains("blocked")));
+
+        var requiredLogin = login(email, PASSWORD, csrf(), "198.51.100.64")
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.state").value("mfa_enrollment_required"))
+                .andExpect(jsonPath("$.recentAuthentication").value(true))
+                .andExpect(jsonPath("$.mfaEnabled").value(false))
+                .andExpect(jsonPath("$.mfaRequired").value(true))
+                .andReturn();
+        var requiredSession = requireCookie(requiredLogin, SESSION_COOKIE);
+        var requiredCsrf = csrf(requiredSession);
+        mockMvc.perform(get("/api/v1/organizations").cookie(requiredSession))
+                .andExpect(status().isForbidden());
+
+        var enrollment = browserPost(
+                        "/api/v1/auth/mfa/enrollments",
+                        "{\"label\":\"Required role authenticator\"}",
+                        requiredCsrf,
+                        "198.51.100.64",
+                        requiredSession)
+                .andExpect(status().isOk())
+                .andReturn();
+        var secret = objectMapper
+                .readTree(enrollment.getResponse().getContentAsString())
+                .get("secret")
+                .stringValue();
+        var verification = browserPost(
+                        "/api/v1/auth/mfa/enrollments/verification",
+                        objectMapper.writeValueAsString(new CodeBody(currentTotp(secret))),
+                        requiredCsrf,
+                        "198.51.100.64",
+                        requiredSession)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.recoveryCodes.length()").value(10))
+                .andReturn();
+        var upgradedSession = verification.getResponse().getCookie(SESSION_COOKIE);
+        if (upgradedSession == null) {
+            upgradedSession = requiredSession;
+        }
+
+        mockMvc.perform(get("/api/v1/auth/session").cookie(upgradedSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state").value("authenticated"))
+                .andExpect(jsonPath("$.mfaEnabled").value(true))
+                .andExpect(jsonPath("$.mfaRequired").value(true));
+        mockMvc.perform(get(readinessPath).cookie(observerSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.gates[?(@.key == 'access.mfa_enforced')].outcome")
+                        .value(org.hamcrest.Matchers.contains("complete")));
+
+        login(email, PASSWORD, csrf(), "198.51.100.65")
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.state").value("mfa_required"))
+                .andExpect(jsonPath("$.mfaRequired").value(true));
+    }
+
+    @Test
+    void revokesAnExistingPasswordOnlySessionWhenAMandatoryRoleBecomesEffective()
+            throws Exception {
+        var initialLogin = login(email, PASSWORD, csrf(), "198.51.100.66")
+                .andExpect(status().isOk())
+                .andReturn();
+        var session = requireCookie(initialLogin, SESSION_COOKIE);
+
+        seedApprovedOwner();
+
+        mockMvc.perform(get("/api/v1/auth/session").cookie(session))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("mfa-enrollment-required"));
+    }
+
+    @Test
     void verifiesRecentAuthenticationAndPersistsFailedEvidence() throws Exception {
         var login = login(email, PASSWORD, csrf(), "198.51.100.70")
                 .andExpect(status().isOk())
@@ -627,20 +719,419 @@ class IdentitySecurityIntegrationTest {
     }
 
     @Test
-    void rejectsApprovedInvitationAdministrationWithoutARecentMfaAssertion() throws Exception {
+    void requiresExactIndependentApprovalForMembershipRoleChangesAndRevocation()
+            throws Exception {
         seedApprovedOwner();
+        var checkerId = UUID.randomUUID();
+        var checkerEmail = "membership.checker+" + checkerId + "@rootopathy.test";
+        var targetId = UUID.randomUUID();
+        var targetEmail = "membership.target+" + targetId + "@rootopathy.test";
+        var membershipId = UUID.randomUUID();
+        seedAccount(checkerId, checkerEmail, "Membership Change Checker");
+        seedAccount(targetId, targetEmail, "Membership Change Target");
+        executeAsMigrator("""
+                INSERT INTO organization_memberships
+                    (id, organization_id, user_id, role_key, status)
+                VALUES
+                    ('%s', '%s', '%s', 'organization_owner', 'active'),
+                    ('%s', '%s', '%s', 'security_administrator', 'active')
+                """.formatted(UUID.randomUUID(), ORG_ONE, checkerId, membershipId, ORG_ONE, targetId));
+
+        var makerSession = enrollMfaAndAuthenticate(email, "198.51.100.75");
+        var checkerSession = enrollMfaAndAuthenticate(checkerEmail, "198.51.100.76");
+        var basePath = "/api/v1/organizations/" + ORG_ONE + "/memberships/" + membershipId
+                + "/change-requests";
+        var roleChangeReason = "Approved least-privilege role adjustment CARE-52";
+        var roleChangeJson = objectMapper.writeValueAsString(Map.of(
+                "changeType", "role_change",
+                "toRoleKey", "organization_viewer",
+                "reason", roleChangeReason));
+
+        browserIdempotentPost(
+                        basePath,
+                        roleChangeJson,
+                        "membership-missing-revision-" + UUID.randomUUID(),
+                        csrf(makerSession),
+                        "198.51.100.75",
+                        makerSession)
+                .andExpect(status().isPreconditionRequired())
+                .andExpect(jsonPath("$.code").value("membership-revision-required"));
+
+        browserConditionalIdempotentPost(
+                        basePath,
+                        roleChangeJson,
+                        "\"organization-membership:" + membershipId + ":1\"",
+                        "membership-stale-" + UUID.randomUUID(),
+                        csrf(makerSession),
+                        "198.51.100.75",
+                        makerSession)
+                .andExpect(status().isPreconditionFailed())
+                .andExpect(jsonPath("$.code").value("membership-revision-stale"));
+
+        var request = browserConditionalIdempotentPost(
+                        basePath,
+                        roleChangeJson,
+                        "\"organization-membership:" + membershipId + ":0\"",
+                        "membership-request-" + UUID.randomUUID(),
+                        csrf(makerSession),
+                        "198.51.100.75",
+                        makerSession)
+                .andExpect(status().isCreated())
+                .andExpect(header().string(
+                        "Cache-Control", org.hamcrest.Matchers.containsString("no-store")))
+                .andExpect(jsonPath("$.membershipId").value(membershipId.toString()))
+                .andExpect(jsonPath("$.targetUserId").value(targetId.toString()))
+                .andExpect(jsonPath("$.changeType").value("role_change"))
+                .andExpect(jsonPath("$.fromRoleKey").value("security_administrator"))
+                .andExpect(jsonPath("$.toRoleKey").value("organization_viewer"))
+                .andExpect(jsonPath("$.lockVersion").value(0))
+                .andExpect(jsonPath("$.status").value("pending"))
+                .andReturn();
+        var approvalId = objectMapper
+                .readTree(request.getResponse().getContentAsString())
+                .get("approvalId")
+                .stringValue();
+        var workflowPath = basePath + "/" + approvalId;
+
+        browserIdempotentPost(
+                        workflowPath + "/approvals",
+                        objectMapper.writeValueAsString(Map.of(
+                                "reason", "Maker cannot approve the same access request")),
+                        "membership-self-approval-" + UUID.randomUUID(),
+                        csrf(makerSession),
+                        "198.51.100.75",
+                        makerSession)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("membership-change-approval-unavailable"));
+
+        browserIdempotentPost(
+                        workflowPath + "/approvals",
+                        objectMapper.writeValueAsString(Map.of(
+                                "reason", "Independent least-privilege review completed")),
+                        "membership-approval-" + UUID.randomUUID(),
+                        csrf(checkerSession),
+                        "198.51.100.76",
+                        checkerSession)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("approved"));
+
+        browserIdempotentPost(
+                        workflowPath + "/executions",
+                        objectMapper.writeValueAsString(Map.of("reason", roleChangeReason)),
+                        "membership-wrong-executor-" + UUID.randomUUID(),
+                        csrf(checkerSession),
+                        "198.51.100.76",
+                        checkerSession)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("independent-approval-required"));
+
+        var roleExecutionKey = "membership-execution-" + UUID.randomUUID();
+        for (var attempt = 0; attempt < 2; attempt++) {
+            browserIdempotentPost(
+                            workflowPath + "/executions",
+                            objectMapper.writeValueAsString(Map.of("reason", roleChangeReason)),
+                            roleExecutionKey,
+                            csrf(makerSession),
+                            "198.51.100.75",
+                            makerSession)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("changed"))
+                    .andExpect(jsonPath("$.lockVersion").value(1));
+        }
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM organization_memberships
+                        WHERE id = '%s' AND role_key = 'organization_viewer'
+                          AND status = 'active' AND lock_version = 1
+                          AND updated_by = '%s'
+                        """.formatted(membershipId, userId)))
+                .isEqualTo(1);
+
+        var revocationReason = "Approved access revocation after offboarding CARE-53";
+        var revocation = browserConditionalIdempotentPost(
+                        basePath,
+                        objectMapper.writeValueAsString(Map.of(
+                                "changeType", "revoke", "reason", revocationReason)),
+                        "\"organization-membership:" + membershipId + ":1\"",
+                        "membership-revoke-request-" + UUID.randomUUID(),
+                        csrf(makerSession),
+                        "198.51.100.75",
+                        makerSession)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.changeType").value("revoke"))
+                .andExpect(jsonPath("$.toRoleKey").value(org.hamcrest.Matchers.nullValue()))
+                .andReturn();
+        var revocationApprovalId = objectMapper
+                .readTree(revocation.getResponse().getContentAsString())
+                .get("approvalId")
+                .stringValue();
+        var revocationPath = basePath + "/" + revocationApprovalId;
+        browserIdempotentPost(
+                        revocationPath + "/approvals",
+                        objectMapper.writeValueAsString(Map.of(
+                                "reason", "Independent offboarding evidence verified")),
+                        "membership-revoke-approval-" + UUID.randomUUID(),
+                        csrf(checkerSession),
+                        "198.51.100.76",
+                        checkerSession)
+                .andExpect(status().isOk());
+        var revokeExecutionKey = "membership-revoke-execution-" + UUID.randomUUID();
+        browserIdempotentPost(
+                        revocationPath + "/executions",
+                        objectMapper.writeValueAsString(Map.of("reason", revocationReason)),
+                        revokeExecutionKey,
+                        csrf(makerSession),
+                        "198.51.100.75",
+                        makerSession)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("revoked"))
+                .andExpect(jsonPath("$.lockVersion").value(2));
+
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM organization_memberships
+                        WHERE id = '%s' AND role_key = 'organization_viewer'
+                          AND status = 'revoked' AND effective_to IS NOT NULL
+                          AND lock_version = 2 AND updated_by = '%s'
+                        """.formatted(membershipId, userId)))
+                .isEqualTo(1);
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM membership_change_requests
+                        WHERE organization_id = '%s' AND membership_id = '%s'
+                        """.formatted(ORG_ONE, membershipId)))
+                .isEqualTo(2);
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM authorization_approval_requests
+                        WHERE organization_id = '%s' AND subject_id = '%s'
+                          AND operation_key = 'access.membership.change'
+                          AND status = 'consumed' AND consumed_by_user_id = '%s'
+                        """.formatted(ORG_ONE, membershipId, userId)))
+                .isEqualTo(2);
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM audit_events
+                        WHERE organization_id = '%s'
+                          AND event_name IN (
+                            'identity.membership-change.requested',
+                            'identity.membership-change.approved',
+                            'identity.membership.changed',
+                            'identity.membership.revoked')
+                          AND (subject_id = '%s' OR subject_id = '%s' OR subject_id = '%s')
+                        """.formatted(ORG_ONE, membershipId, approvalId, revocationApprovalId)))
+                .isEqualTo(6);
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM outbox_events
+                        WHERE organization_id = '%s'
+                          AND event_name IN (
+                            'identity.membership-change.requested',
+                            'identity.membership-change.approved',
+                            'identity.membership.changed',
+                            'identity.membership.revoked')
+                          AND (aggregate_id = '%s' OR aggregate_id = '%s'
+                               OR aggregate_id = '%s')
+                        """.formatted(ORG_ONE, membershipId, approvalId, revocationApprovalId)))
+                .isEqualTo(6);
+    }
+
+    @Test
+    void requiresExactIndependentApprovalForOwnerPromotionAndDemotion()
+            throws Exception {
+        seedApprovedOwner();
+        var checkerId = UUID.randomUUID();
+        var checkerEmail = "owner-transfer.checker+" + checkerId + "@rootopathy.test";
+        var targetId = UUID.randomUUID();
+        var targetEmail = "owner-transfer.target+" + targetId + "@rootopathy.test";
+        var membershipId = UUID.randomUUID();
+        seedAccount(checkerId, checkerEmail, "Owner Transfer Checker");
+        seedAccount(targetId, targetEmail, "Owner Transfer Target");
+        executeAsMigrator("""
+                INSERT INTO organization_memberships
+                    (id, organization_id, user_id, role_key, status)
+                VALUES
+                    ('%s', '%s', '%s', 'organization_owner', 'active'),
+                    ('%s', '%s', '%s', 'security_administrator', 'active')
+                """.formatted(UUID.randomUUID(), ORG_ONE, checkerId, membershipId, ORG_ONE, targetId));
+
+        var makerSession = enrollMfaAndAuthenticate(email, "198.51.100.77");
+        var checkerSession = enrollMfaAndAuthenticate(checkerEmail, "198.51.100.78");
+        enrollMfaAndAuthenticate(targetEmail, "198.51.100.79");
+        var basePath = "/api/v1/organizations/" + ORG_ONE + "/memberships/" + membershipId
+                + "/owner-transfer-requests";
+        var promotionReason = "Approved owner promotion for succession plan CARE-54";
+        var promotion = browserConditionalIdempotentPost(
+                        basePath,
+                        objectMapper.writeValueAsString(Map.of(
+                                "toRoleKey", "organization_owner",
+                                "reason", promotionReason)),
+                        "\"organization-membership:" + membershipId + ":0\"",
+                        "owner-promotion-request-" + UUID.randomUUID(),
+                        csrf(makerSession),
+                        "198.51.100.77",
+                        makerSession)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.membershipId").value(membershipId.toString()))
+                .andExpect(jsonPath("$.targetUserId").value(targetId.toString()))
+                .andExpect(jsonPath("$.changeType").value("owner_promotion"))
+                .andExpect(jsonPath("$.fromRoleKey").value("security_administrator"))
+                .andExpect(jsonPath("$.toRoleKey").value("organization_owner"))
+                .andExpect(jsonPath("$.lockVersion").value(0))
+                .andExpect(jsonPath("$.status").value("pending"))
+                .andReturn();
+        var promotionApprovalId = objectMapper
+                .readTree(promotion.getResponse().getContentAsString())
+                .get("approvalId")
+                .stringValue();
+        var promotionPath = basePath + "/" + promotionApprovalId;
+
+        browserIdempotentPost(
+                        promotionPath + "/approvals",
+                        objectMapper.writeValueAsString(Map.of(
+                                "reason", "Maker cannot approve an owner promotion")),
+                        "owner-promotion-self-approval-" + UUID.randomUUID(),
+                        csrf(makerSession),
+                        "198.51.100.77",
+                        makerSession)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("membership-change-approval-unavailable"));
+
+        browserIdempotentPost(
+                        promotionPath + "/approvals",
+                        objectMapper.writeValueAsString(Map.of(
+                                "reason", "Independent succession review completed")),
+                        "owner-promotion-approval-" + UUID.randomUUID(),
+                        csrf(checkerSession),
+                        "198.51.100.78",
+                        checkerSession)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("approved"));
+
+        browserIdempotentPost(
+                        promotionPath + "/executions",
+                        objectMapper.writeValueAsString(Map.of("reason", promotionReason)),
+                        "owner-promotion-wrong-executor-" + UUID.randomUUID(),
+                        csrf(checkerSession),
+                        "198.51.100.78",
+                        checkerSession)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("independent-approval-required"));
+
+        var promotionExecutionKey = "owner-promotion-execution-" + UUID.randomUUID();
+        for (var attempt = 0; attempt < 2; attempt++) {
+            browserIdempotentPost(
+                            promotionPath + "/executions",
+                            objectMapper.writeValueAsString(Map.of("reason", promotionReason)),
+                            promotionExecutionKey,
+                            csrf(makerSession),
+                            "198.51.100.77",
+                            makerSession)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("transferred"))
+                    .andExpect(jsonPath("$.lockVersion").value(1));
+        }
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM organization_memberships
+                        WHERE id = '%s' AND role_key = 'organization_owner'
+                          AND status = 'active' AND effective_to IS NULL
+                          AND lock_version = 1 AND updated_by = '%s'
+                        """.formatted(membershipId, userId)))
+                .isEqualTo(1);
+
+        var demotionReason = "Approved owner demotion after succession handover CARE-55";
+        var demotion = browserConditionalIdempotentPost(
+                        basePath,
+                        objectMapper.writeValueAsString(Map.of(
+                                "toRoleKey", "organization_viewer",
+                                "reason", demotionReason)),
+                        "\"organization-membership:" + membershipId + ":1\"",
+                        "owner-demotion-request-" + UUID.randomUUID(),
+                        csrf(makerSession),
+                        "198.51.100.77",
+                        makerSession)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.changeType").value("owner_demotion"))
+                .andExpect(jsonPath("$.fromRoleKey").value("organization_owner"))
+                .andExpect(jsonPath("$.toRoleKey").value("organization_viewer"))
+                .andReturn();
+        var demotionApprovalId = objectMapper
+                .readTree(demotion.getResponse().getContentAsString())
+                .get("approvalId")
+                .stringValue();
+        var demotionPath = basePath + "/" + demotionApprovalId;
+        browserIdempotentPost(
+                        demotionPath + "/approvals",
+                        objectMapper.writeValueAsString(Map.of(
+                                "reason", "Independent handover evidence verified")),
+                        "owner-demotion-approval-" + UUID.randomUUID(),
+                        csrf(checkerSession),
+                        "198.51.100.78",
+                        checkerSession)
+                .andExpect(status().isOk());
+        var demotionExecutionKey = "owner-demotion-execution-" + UUID.randomUUID();
+        browserIdempotentPost(
+                        demotionPath + "/executions",
+                        objectMapper.writeValueAsString(Map.of("reason", demotionReason)),
+                        demotionExecutionKey,
+                        csrf(makerSession),
+                        "198.51.100.77",
+                        makerSession)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("transferred"))
+                .andExpect(jsonPath("$.lockVersion").value(2));
+
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM organization_memberships
+                        WHERE id = '%s' AND role_key = 'organization_viewer'
+                          AND status = 'active' AND lock_version = 2
+                          AND updated_by = '%s'
+                        """.formatted(membershipId, userId)))
+                .isEqualTo(1);
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM owner_transfer_requests
+                        WHERE organization_id = '%s' AND membership_id = '%s'
+                        """.formatted(ORG_ONE, membershipId)))
+                .isEqualTo(2);
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM authorization_approval_requests
+                        WHERE organization_id = '%s' AND subject_id = '%s'
+                          AND operation_key = 'access.owner-transfer.execute'
+                          AND status = 'consumed' AND consumed_by_user_id = '%s'
+                        """.formatted(ORG_ONE, membershipId, userId)))
+                .isEqualTo(2);
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM audit_events
+                        WHERE organization_id = '%s'
+                          AND event_name IN (
+                            'identity.owner-transfer.requested',
+                            'identity.owner-transfer.approved',
+                            'identity.owner.transferred')
+                          AND (subject_id = '%s' OR subject_id = '%s' OR subject_id = '%s')
+                        """.formatted(
+                        ORG_ONE, membershipId, promotionApprovalId, demotionApprovalId)))
+                .isEqualTo(6);
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM outbox_events
+                        WHERE organization_id = '%s'
+                          AND event_name IN (
+                            'identity.owner-transfer.requested',
+                            'identity.owner-transfer.approved',
+                            'identity.owner.transferred')
+                          AND (aggregate_id = '%s' OR aggregate_id = '%s'
+                               OR aggregate_id = '%s')
+                        """.formatted(
+                        ORG_ONE, membershipId, promotionApprovalId, demotionApprovalId)))
+                .isEqualTo(6);
+    }
+
+    @Test
+    void rejectsApprovedInvitationAdministrationWithoutARecentMfaAssertion() throws Exception {
         var loginResult = login(email, PASSWORD, csrf(), "198.51.100.90")
                 .andExpect(status().isOk())
                 .andReturn();
         var session = requireCookie(loginResult, SESSION_COOKIE);
         var sessionCsrf = csrf(session);
-        browserPost(
-                        "/api/v1/auth/recent-authentications",
-                        objectMapper.writeValueAsString(Map.of("password", PASSWORD)),
-                        sessionCsrf,
-                        "198.51.100.90",
-                        session)
-                .andExpect(status().isNoContent());
+        seedApprovedOwner();
+        executeAsMigrator("""
+                INSERT INTO mfa_methods
+                    (user_id, method_type, status, encrypted_secret, verified_at)
+                VALUES ('%s', 'totp', 'enabled', 'integration-test-secret', now())
+                """.formatted(userId));
         var invitedEmail = "missing.mfa+" + UUID.randomUUID() + "@rootopathy.test";
 
         browserIdempotentPost(
@@ -872,15 +1363,60 @@ class IdentitySecurityIntegrationTest {
                 .andExpect(header().string(
                         "Cache-Control", org.hamcrest.Matchers.containsString("no-store")))
                 .andExpect(jsonPath("$.organizationId").value(ORG_ONE.toString()))
-                .andExpect(jsonPath("$.completedGates").value(2))
-                .andExpect(jsonPath("$.totalGates").value(8))
+                .andExpect(jsonPath("$.catalogueVersion").value("m1-readiness-v1"))
+                .andExpect(jsonPath("$.organizationRevision").isNumber())
+                .andExpect(jsonPath("$.evaluatedAt").isString())
+                .andExpect(jsonPath("$.expiresAt").isString())
+                .andExpect(jsonPath("$.completedGates")
+                        .value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.blockedGates")
+                        .value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.warningGates").value(1))
+                .andExpect(jsonPath("$.notApplicableGates").value(1))
+                .andExpect(jsonPath("$.totalGates").value(15))
                 .andExpect(jsonPath("$.activeMemberships")
                         .value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)))
                 .andExpect(jsonPath("$.facilityCount").value(1))
                 .andExpect(jsonPath("$.draftFacilityCount").value(1))
-                .andExpect(jsonPath("$.gates[0].key").value("organization-profile"))
-                .andExpect(jsonPath("$.gates[0].status").value("complete"))
-                .andExpect(jsonPath("$.gates[7].status").value("blocked"));
+                .andExpect(jsonPath("$.gates[0].key")
+                        .value("organization.profile.complete"))
+                .andExpect(jsonPath("$.gates[0].outcome").value("blocked"))
+                .andExpect(jsonPath("$.gates[0].version").value("m1-readiness-v1"))
+                .andExpect(jsonPath("$.gates[0].reasonCode")
+                        .value("m1.readiness.profile_incomplete"))
+                .andExpect(jsonPath("$.gates[4].key").value("access.final_owner"))
+                .andExpect(jsonPath("$.gates[5].key").value("access.mfa_enforced"))
+                .andExpect(jsonPath("$.gates[10].outcome").value("warning"))
+                .andExpect(jsonPath("$.gates[11].outcome").value("not_applicable"))
+                .andExpect(jsonPath("$.gates[14].key")
+                        .value("platform.dependencies.ready"))
+                .andExpect(jsonPath("$.gates[14].outcome").value("blocked"));
+
+        var readinessViewerId = UUID.randomUUID();
+        var readinessViewerEmail = "readiness.viewer+" + readinessViewerId + "@rootopathy.test";
+        seedAccount(readinessViewerId, readinessViewerEmail, "Readiness Viewer");
+        executeAsMigrator("""
+                INSERT INTO organization_memberships
+                    (organization_id, user_id, role_key, status)
+                VALUES ('%s', '%s', 'organization_viewer', 'active')
+                """.formatted(ORG_ONE, readinessViewerId));
+        var readinessViewerSession = requireCookie(login(
+                                readinessViewerEmail,
+                                PASSWORD,
+                                csrf(),
+                                "198.51.100.72")
+                        .andExpect(status().isOk())
+                        .andReturn(),
+                SESSION_COOKIE);
+        mockMvc.perform(get("/api/v1/organizations/" + ORG_ONE + "/setup-readiness")
+                        .cookie(readinessViewerSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.gates[0].href").value("#/M1-07"))
+                .andExpect(jsonPath("$.gates[4].href").value("#/M1-06"))
+                .andExpect(jsonPath("$.gates[12].href").value("#/M1-06"));
+        mockMvc.perform(get(profilePath).cookie(readinessViewerSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.editable").value(false));
 
         var initial = mockMvc.perform(get(profilePath).cookie(session))
                 .andExpect(status().isOk())
@@ -888,6 +1424,10 @@ class IdentitySecurityIntegrationTest {
                         "Cache-Control", org.hamcrest.Matchers.containsString("no-store")))
                 .andExpect(header().exists("ETag"))
                 .andExpect(jsonPath("$.organizationId").value(ORG_ONE.toString()))
+                .andExpect(jsonPath("$.tradingName").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.organizationType").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.locale").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.editable").value(true))
                 .andReturn();
         var initialJson = objectMapper.readTree(initial.getResponse().getContentAsString());
         var initialEtag = initial.getResponse().getHeader("ETag");
@@ -895,10 +1435,57 @@ class IdentitySecurityIntegrationTest {
         var updateBody = objectMapper.writeValueAsString(Map.of(
                 "legalName", initialJson.get("legalName").stringValue(),
                 "displayName", "Organization Profile " + userId,
+                "tradingName", "ROOTOPATHY Synthetic Care",
+                "organizationType", "care_network",
                 "countryCode", initialJson.get("countryCode").stringValue(),
                 "timezone", initialJson.get("timezone").stringValue(),
+                "locale", "en-IN",
                 "reason", "Approved organization identity review CARE-71"));
         var requestCsrf = csrf(session);
+
+        var invalidTypeBody = objectMapper.writeValueAsString(Map.of(
+                "legalName", initialJson.get("legalName").stringValue(),
+                "displayName", "Organization Profile " + userId,
+                "tradingName", "ROOTOPATHY Synthetic Care",
+                "organizationType", "hospital",
+                "countryCode", initialJson.get("countryCode").stringValue(),
+                "timezone", initialJson.get("timezone").stringValue(),
+                "locale", "en-IN",
+                "reason", "Approved organization identity review CARE-71"));
+        browserIdempotentPut(
+                        profilePath,
+                        invalidTypeBody,
+                        initialEtag,
+                        "profile-invalid-type-" + UUID.randomUUID(),
+                        requestCsrf,
+                        "198.51.100.71",
+                        session)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("organization-profile-invalid"))
+                .andExpect(jsonPath("$.errors[0].path").value("/organizationType"))
+                .andExpect(jsonPath("$.errors[0].code").value("m1.field.enum"));
+
+        var shortReasonBody = objectMapper.writeValueAsString(Map.of(
+                "legalName", initialJson.get("legalName").stringValue(),
+                "displayName", "Organization Profile " + userId,
+                "tradingName", "ROOTOPATHY Synthetic Care",
+                "organizationType", "care_network",
+                "countryCode", initialJson.get("countryCode").stringValue(),
+                "timezone", initialJson.get("timezone").stringValue(),
+                "locale", "en-IN",
+                "reason", "short"));
+        browserIdempotentPut(
+                        profilePath,
+                        shortReasonBody,
+                        initialEtag,
+                        "profile-invalid-reason-" + UUID.randomUUID(),
+                        requestCsrf,
+                        "198.51.100.71",
+                        session)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("organization-profile-invalid"))
+                .andExpect(jsonPath("$.errors[0].path").value("/reason"))
+                .andExpect(jsonPath("$.errors[0].code").value("m1.field.length"));
 
         browserIdempotentPut(
                         profilePath,
@@ -923,6 +1510,10 @@ class IdentitySecurityIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(header().exists("ETag"))
                 .andExpect(jsonPath("$.displayName").value("Organization Profile " + userId))
+                .andExpect(jsonPath("$.tradingName").value("ROOTOPATHY Synthetic Care"))
+                .andExpect(jsonPath("$.organizationType").value("care_network"))
+                .andExpect(jsonPath("$.locale").value("en-IN"))
+                .andExpect(jsonPath("$.editable").value(true))
                 .andExpect(jsonPath("$.lockVersion").value(initialLockVersion + 1))
                 .andReturn();
         var updatedEtag = updated.getResponse().getHeader("ETag");
@@ -943,8 +1534,11 @@ class IdentitySecurityIntegrationTest {
         var changedReplayBody = objectMapper.writeValueAsString(Map.of(
                 "legalName", initialJson.get("legalName").stringValue(),
                 "displayName", "Reused key with different payload",
+                "tradingName", "ROOTOPATHY Synthetic Care",
+                "organizationType", "care_network",
                 "countryCode", initialJson.get("countryCode").stringValue(),
                 "timezone", initialJson.get("timezone").stringValue(),
+                "locale", "en-IN",
                 "reason", "Approved organization identity review CARE-71"));
         browserIdempotentPut(
                         profilePath,
@@ -972,10 +1566,24 @@ class IdentitySecurityIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(header().string("ETag", updatedEtag))
                 .andExpect(jsonPath("$.lockVersion").value(initialLockVersion + 1));
+        mockMvc.perform(get("/api/v1/organizations/" + ORG_ONE + "/setup-readiness")
+                        .cookie(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.gates[0].outcome").value("complete"))
+                .andExpect(jsonPath("$.gates[0].reasonCode")
+                        .value("m1.readiness.profile_complete"));
         assertThat(migratorCount("""
                         SELECT count(*) FROM audit_events
                         WHERE organization_id = '%s' AND subject_id = '%s'
                           AND event_name = 'organization.profile.updated'
+                        """.formatted(ORG_ONE, ORG_ONE)))
+                .isEqualTo(1);
+        assertThat(migratorCount("""
+                        SELECT count(*) FROM audit_events
+                        WHERE organization_id = '%s' AND subject_id = '%s'
+                          AND event_name = 'organization.profile.updated'
+                          AND payload -> 'changedFields' =
+                              '["displayName", "locale", "organizationType", "tradingName"]'::jsonb
                         """.formatted(ORG_ONE, ORG_ONE)))
                 .isEqualTo(1);
         assertThat(migratorCount("""
@@ -993,11 +1601,150 @@ class IdentitySecurityIntegrationTest {
     }
 
     @Test
+    void listsMinimumNecessaryMembershipPagesWithBoundCursorsAndServerActions()
+            throws Exception {
+        seedApprovedOwner();
+        var search = "cursor" + userId.toString().replace("-", "").substring(0, 10);
+        var firstTarget = UUID.randomUUID();
+        var secondTarget = UUID.randomUUID();
+        seedAccount(firstTarget, search + ".first@rootopathy.test", search + " First");
+        seedAccount(secondTarget, search + ".second@rootopathy.test", search + " Second");
+        executeAsMigrator("""
+                INSERT INTO organization_memberships
+                    (organization_id, user_id, role_key, status, effective_from)
+                VALUES
+                    ('%s', '%s', 'security_administrator', 'active', now() - interval '1 hour'),
+                    ('%s', '%s', 'organization_viewer', 'active', now() - interval '2 hours')
+                """.formatted(ORG_ONE, firstTarget, ORG_ONE, secondTarget));
+        executeAsMigrator("""
+                INSERT INTO mfa_methods
+                    (id, user_id, method_type, status, encrypted_secret, verified_at)
+                VALUES ('%s', '%s', 'totp', 'enabled', 'integration-test-secret', now())
+                """.formatted(UUID.randomUUID(), firstTarget));
+
+        var session = enrollMfaAndAuthenticate(email, "198.51.100.72");
+        var path = "/api/v1/organizations/" + ORG_ONE + "/memberships";
+        var firstPage = mockMvc.perform(get(path)
+                        .cookie(session)
+                        .param("search", search)
+                        .param("state", "active")
+                        .param("limit", "1"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(
+                        "Cache-Control", org.hamcrest.Matchers.containsString("no-store")))
+                .andExpect(jsonPath("$.organizationId").value(ORG_ONE.toString()))
+                .andExpect(jsonPath("$.asOf").isString())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].userId").value(firstTarget.toString()))
+                .andExpect(jsonPath("$.items[0].email")
+                        .value(search + ".first@rootopathy.test"))
+                .andExpect(jsonPath("$.items[0].mfaEnabled").value(true))
+                .andExpect(jsonPath("$.items[0].lockVersion").value(0))
+                .andExpect(jsonPath("$.items[0].availableActions[0]")
+                        .value("requestMfaReset"))
+                .andExpect(jsonPath("$.items[0].availableActions[1]")
+                        .value("requestRoleChange"))
+                .andExpect(jsonPath("$.items[0].availableActions[2]")
+                        .value("requestRevocation"))
+                .andExpect(jsonPath("$.items[0].availableActions[3]")
+                        .value("requestOwnerTransfer"))
+                .andExpect(jsonPath("$.page.limit").value(1))
+                .andExpect(jsonPath("$.page.hasMore").value(true))
+                .andExpect(jsonPath("$.page.nextCursor").isString())
+                .andExpect(jsonPath("$.availableActions[0]").value("issueInvitation"))
+                .andExpect(jsonPath("$.availableActions[1]")
+                        .value("approveMembershipChange"))
+                .andExpect(jsonPath("$.availableActions[2]")
+                        .value("executeMembershipChange"))
+                .andExpect(jsonPath("$.availableActions[3]")
+                        .value("approveOwnerTransfer"))
+                .andExpect(jsonPath("$.availableActions[4]")
+                        .value("executeOwnerTransfer"))
+                .andReturn();
+        var cursor = objectMapper
+                .readTree(firstPage.getResponse().getContentAsString())
+                .get("page")
+                .get("nextCursor")
+                .stringValue();
+
+        mockMvc.perform(get(path)
+                        .cookie(session)
+                        .param("search", search)
+                        .param("state", "active")
+                        .param("limit", "1")
+                        .param("cursor", cursor))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].userId").value(secondTarget.toString()))
+                .andExpect(jsonPath("$.items[0].availableActions.length()").value(3))
+                .andExpect(jsonPath("$.items[0].availableActions[0]")
+                        .value("requestRoleChange"))
+                .andExpect(jsonPath("$.items[0].availableActions[1]")
+                        .value("requestRevocation"))
+                .andExpect(jsonPath("$.items[0].availableActions[2]")
+                        .value("requestOwnerTransfer"))
+                .andExpect(jsonPath("$.page.hasMore").value(false))
+                .andExpect(jsonPath("$.page.nextCursor").value(org.hamcrest.Matchers.nullValue()));
+
+        var replacement = cursor.endsWith("A") ? "B" : "A";
+        var tamperedCursor = cursor.substring(0, cursor.length() - 1) + replacement;
+        mockMvc.perform(get(path)
+                        .cookie(session)
+                        .param("search", search)
+                        .param("state", "active")
+                        .param("limit", "1")
+                        .param("cursor", tamperedCursor))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("membership-list-invalid"));
+
+        mockMvc.perform(get(path)
+                        .cookie(session)
+                        .param("search", search)
+                        .param("state", "scheduled")
+                        .param("limit", "1")
+                        .param("cursor", cursor))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("membership-list-invalid"));
+        mockMvc.perform(get(path).cookie(session).param("unsupported", "value"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("membership-list-invalid"));
+    }
+
+    @Test
+    void hidesMembershipPagesFromNonMembersAndRolesWithoutReadPermission()
+            throws Exception {
+        var viewerId = UUID.randomUUID();
+        var viewerEmail = "membership-viewer+" + viewerId + "@rootopathy.test";
+        seedAccount(viewerId, viewerEmail, "Membership Viewer");
+        executeAsMigrator("""
+                INSERT INTO organization_memberships
+                    (organization_id, user_id, role_key, status, effective_from)
+                VALUES ('%s', '%s', 'organization_viewer', 'active', now() - interval '1 hour')
+                """.formatted(ORG_ONE, viewerId));
+        var login = login(viewerEmail, PASSWORD, csrf(), "198.51.100.73")
+                .andExpect(status().isOk())
+                .andReturn();
+        var session = requireCookie(login, SESSION_COOKIE);
+
+        mockMvc.perform(get("/api/v1/organizations/" + ORG_ONE + "/memberships")
+                        .cookie(session))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("resource-not-found"));
+        mockMvc.perform(get("/api/v1/organizations/" + UUID.randomUUID() + "/memberships")
+                        .cookie(session))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("resource-not-found"));
+    }
+
+    @Test
     void discoversAndSelectsOnlyLiveMembershipsAndIgnoresOrganizationHeaders() throws Exception {
         var unavailableOrganization = UUID.randomUUID();
         executeAsMigrator("""
-                INSERT INTO organizations (id, legal_name, display_name, country_code, timezone, status)
-                VALUES ('%s', 'Unavailable Test Organization', 'Unavailable Organization', 'IN', 'Asia/Kolkata', 'active')
+                INSERT INTO organizations
+                    (id, legal_name, display_name, organization_type,
+                     country_code, timezone, locale, status)
+                VALUES ('%s', 'Unavailable Test Organization', 'Unavailable Organization',
+                        'care_provider', 'IN', 'Asia/Kolkata', 'en-IN', 'active')
                 """.formatted(unavailableOrganization));
         executeAsMigrator("""
                 INSERT INTO authorization_roles
@@ -1150,6 +1897,31 @@ class IdentitySecurityIntegrationTest {
         return mockMvc.perform(builder);
     }
 
+    private org.springframework.test.web.servlet.ResultActions browserConditionalIdempotentPost(
+            String path,
+            String json,
+            String ifMatch,
+            String idempotencyKey,
+            CsrfMaterial csrf,
+            String remoteAddress,
+            Cookie... cookies)
+            throws Exception {
+        var builder = post(path)
+                .header("Origin", ORIGIN)
+                .header("If-Match", ifMatch)
+                .header("Idempotency-Key", idempotencyKey)
+                .header(csrf.headerName(), csrf.token())
+                .cookie(csrf.cookie())
+                .with(request -> {
+                    request.setRemoteAddr(remoteAddress);
+                    return request;
+                })
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json);
+        addCookies(builder, cookies);
+        return mockMvc.perform(builder);
+    }
+
     private org.springframework.test.web.servlet.ResultActions browserIdempotentPut(
             String path,
             String json,
@@ -1240,7 +2012,8 @@ class IdentitySecurityIntegrationTest {
     private Cookie enrollMfaAndAuthenticate(String accountEmail, String remoteAddress)
             throws Exception {
         var loginResult = login(accountEmail, PASSWORD, csrf(), remoteAddress)
-                .andExpect(status().isOk())
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.state").value("mfa_enrollment_required"))
                 .andReturn();
         var session = requireCookie(loginResult, SESSION_COOKIE);
         var sessionCsrf = csrf(session);
@@ -1256,23 +2029,29 @@ class IdentitySecurityIntegrationTest {
                 .readTree(enrollment.getResponse().getContentAsString())
                 .get("secret")
                 .stringValue();
-        browserPost(
+        var verification = browserPost(
                         "/api/v1/auth/mfa/enrollments/verification",
                         objectMapper.writeValueAsString(new CodeBody(currentTotp(secret))),
                         sessionCsrf,
                         remoteAddress,
                         session)
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andReturn();
+        var upgradedSession = verification.getResponse().getCookie(SESSION_COOKIE);
+        if (upgradedSession == null) {
+            upgradedSession = session;
+        }
+        var upgradedCsrf = csrf(upgradedSession);
         browserPost(
                         "/api/v1/auth/recent-authentications",
                         objectMapper.writeValueAsString(Map.of(
                                 "password", PASSWORD,
                                 "secondFactor", currentTotp(secret))),
-                        sessionCsrf,
+                        upgradedCsrf,
                         remoteAddress,
-                        session)
+                        upgradedSession)
                 .andExpect(status().isNoContent());
-        return session;
+        return upgradedSession;
     }
 
     private void seedApprovedOwner() throws Exception {

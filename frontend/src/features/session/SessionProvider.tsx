@@ -41,19 +41,32 @@ function validSession(value: unknown): value is SessionState {
   if (
     !isRecord(value) ||
     typeof value.recentAuthentication !== 'boolean' ||
-    typeof value.mfaEnabled !== 'boolean'
+    typeof value.mfaEnabled !== 'boolean' ||
+    typeof value.mfaRequired !== 'boolean'
   ) {
     return false;
   }
   if (value.state === 'anonymous') {
     return (
-      value.user === null && value.recentAuthentication === false && value.mfaEnabled === false
+      value.user === null &&
+      value.recentAuthentication === false &&
+      value.mfaEnabled === false &&
+      value.mfaRequired === false
     );
   }
   if (value.state === 'mfa_required') {
     return isUser(value.user) && value.mfaEnabled && !value.recentAuthentication;
   }
-  return value.state === 'authenticated' && isUser(value.user);
+  if (value.state === 'mfa_enrollment_required') {
+    return (
+      isUser(value.user) && !value.mfaEnabled && value.mfaRequired && value.recentAuthentication
+    );
+  }
+  return (
+    value.state === 'authenticated' &&
+    isUser(value.user) &&
+    (!value.mfaRequired || value.mfaEnabled)
+  );
 }
 
 function isOrganization(value: unknown): value is OrganizationAccess {
@@ -162,7 +175,11 @@ function isFullyAuthenticated(machine: SessionMachine): machine is FullyAuthenti
 }
 
 function hasAuthenticatedSession(machine: SessionMachine): boolean {
-  return machine.phase === 'mfa_required' || isFullyAuthenticated(machine);
+  return (
+    machine.phase === 'mfa_required' ||
+    machine.phase === 'mfa_enrollment_required' ||
+    isFullyAuthenticated(machine)
+  );
 }
 
 function issueFromFailure(failure: ApiFailure): SessionIssue {
@@ -362,6 +379,11 @@ export function SessionProvider({ children, client = careOsApi }: SessionProvide
         setPendingAction(null);
         return;
       }
+      if (session.state === 'mfa_enrollment_required') {
+        setMachine({ phase: 'mfa_enrollment_required', user });
+        setPendingAction(null);
+        return;
+      }
 
       setMachine({ phase: 'loading', reason: 'organizations' });
       const organizationsResult = await client.listSelectableOrganizations({ signal });
@@ -469,6 +491,7 @@ export function SessionProvider({ children, client = careOsApi }: SessionProvide
     const revalidateOnResume = () => {
       if (
         !hasAuthenticatedSession(machineRef.current) ||
+        machineRef.current.phase === 'mfa_enrollment_required' ||
         pendingActionRef.current !== null ||
         resumeRevalidationInFlight.current
       ) {
@@ -527,7 +550,7 @@ export function SessionProvider({ children, client = careOsApi }: SessionProvide
         setActionIssue(
           contractIssue(
             result.correlationId,
-            'The login response did not contain an authenticated or pending-MFA session.',
+            'The login response did not contain an authenticated, pending-MFA, or required-enrollment session.',
           ),
         );
         setPendingAction(null);
@@ -912,9 +935,8 @@ export function SessionProvider({ children, client = careOsApi }: SessionProvide
   const startMfaEnrollment = useCallback(
     async (label?: string) => {
       if (
-        !isFullyAuthenticated(machine) ||
-        !machine.recentAuthentication ||
-        machine.mfaEnabled ||
+        (machine.phase !== 'mfa_enrollment_required' && !isFullyAuthenticated(machine)) ||
+        (isFullyAuthenticated(machine) && (!machine.recentAuthentication || machine.mfaEnabled)) ||
         pendingAction
       ) {
         return null;
@@ -948,7 +970,11 @@ export function SessionProvider({ children, client = careOsApi }: SessionProvide
 
   const verifyMfaEnrollment = useCallback(
     async (code: string) => {
-      if (!isFullyAuthenticated(machine) || !machine.recentAuthentication || pendingAction) {
+      if (
+        (machine.phase !== 'mfa_enrollment_required' && !isFullyAuthenticated(machine)) ||
+        (isFullyAuthenticated(machine) && !machine.recentAuthentication) ||
+        pendingAction
+      ) {
         return null;
       }
       const operation = ++identityOperation.current;

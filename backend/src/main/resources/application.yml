@@ -118,6 +118,10 @@ careos:
     enabled: ${CAREOS_MFA_ADMINISTRATION_ENABLED:false}
     approval-ttl: ${CAREOS_MFA_ADMINISTRATION_APPROVAL_TTL:30m}
     idempotency-ttl: ${CAREOS_MFA_ADMINISTRATION_IDEMPOTENCY_TTL:24h}
+  membership-administration:
+    enabled: ${CAREOS_MEMBERSHIP_ADMINISTRATION_ENABLED:false}
+    approval-ttl: ${CAREOS_MEMBERSHIP_ADMINISTRATION_APPROVAL_TTL:30m}
+    idempotency-ttl: ${CAREOS_MEMBERSHIP_ADMINISTRATION_IDEMPOTENCY_TTL:24h}
   notifications:
     postgres:
       enabled: ${CAREOS_NOTIFICATIONS_POSTGRES_ENABLED:false}

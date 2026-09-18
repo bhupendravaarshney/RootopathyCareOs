@@ -9,10 +9,22 @@ export type Screen = {
 };
 
 const m1: Array<[string, string, string]> = [
-  ['Login', 'Authenticate securely and continue to the correct workspace.', 'Identity'],
-  ['Invitation', 'Accept a one-use administrator invitation.', 'Identity'],
-  ['MFA', 'Enroll or confirm multi-factor authentication.', 'Identity'],
-  ['Organization selector', 'Choose an authorized organization workspace.', 'Identity'],
+  [
+    'Login',
+    'Authenticate securely and continue to the requested authorized workspace.',
+    'Identity',
+  ],
+  [
+    'Invitations',
+    'Issue, inspect, revoke, and accept one-use administrator invitations.',
+    'Identity',
+  ],
+  [
+    'Multi-factor authentication',
+    'Enroll, challenge, recover, replace factors, and govern administrative reset.',
+    'Identity',
+  ],
+  ['Organization selector', 'Choose one currently authorized organization workspace.', 'Identity'],
   ['Administration dashboard', 'Review readiness, counts and exceptions.', 'Overview'],
   ['Setup checklist', 'Complete server-calculated organization setup gates.', 'Overview'],
   ['Organization profile', 'Manage legal and display identity.', 'Organization'],

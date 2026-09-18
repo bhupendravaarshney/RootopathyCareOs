@@ -10,6 +10,7 @@ import type {
   OrganizationAccess,
   User,
 } from '../../api/generated';
+import { IdentityFormIssueAlert } from './IdentityFormIssueAlert';
 import { SessionIssueAlert } from './SessionIssueAlert';
 import { IdentityFrame, IdentityMark } from './SessionScreens';
 import type { SessionAction, SessionIssue } from './session-types';
@@ -17,6 +18,11 @@ import type { SessionAction, SessionIssue } from './session-types';
 const MAX_PASSWORD_BYTES = 72;
 const MAX_RESET_TOKEN_LENGTH = 512;
 const MIN_INVITATION_TOKEN_LENGTH = 32;
+
+type FieldValidationIssue = {
+  fieldId: string;
+  message: string;
+};
 
 type PasswordResetRequestScreenProps = {
   busy: boolean;
@@ -110,24 +116,30 @@ export function PasswordResetCompletionScreen({
 }: PasswordResetCompletionScreenProps) {
   const [newPassword, setNewPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
-  const [validationIssue, setValidationIssue] = useState('');
+  const [validationIssue, setValidationIssue] = useState<FieldValidationIssue | null>(null);
   const [complete, setComplete] = useState(false);
   const usableToken =
     typeof token === 'string' && token.length > 0 && token.length <= MAX_RESET_TOKEN_LENGTH;
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setValidationIssue('');
+    setValidationIssue(null);
     if (!usableToken) {
       return;
     }
     if (newPassword !== confirmation) {
-      setValidationIssue('The password confirmation does not match.');
+      setValidationIssue({
+        fieldId: 'confirm-password',
+        message: 'The password confirmation does not match.',
+      });
       return;
     }
     const byteLength = new TextEncoder().encode(newPassword).byteLength;
     if (newPassword.length < 12 || byteLength > MAX_PASSWORD_BYTES) {
-      setValidationIssue('Use at least 12 characters and no more than 72 UTF-8 bytes.');
+      setValidationIssue({
+        fieldId: 'new-password',
+        message: 'Use at least 12 characters and no more than 72 UTF-8 bytes.',
+      });
       return;
     }
 
@@ -160,9 +172,10 @@ export function PasswordResetCompletionScreen({
           </>
         ) : !usableToken ? (
           <>
-            <p className="warning-callout" role="alert">
-              This reset link is missing its one-time token or is malformed.
-            </p>
+            <IdentityFormIssueAlert
+              message="This reset link is missing its one-time token or is malformed."
+              title="This reset link cannot be used"
+            />
             <a className="primary-button full-button button-link" href="#/forgot-password">
               Request a new reset link
             </a>
@@ -174,11 +187,7 @@ export function PasswordResetCompletionScreen({
               bytes.
             </p>
             {issue && <SessionIssueAlert issue={issue} />}
-            {validationIssue && (
-              <p className="warning-callout" role="alert">
-                {validationIssue}
-              </p>
-            )}
+            {validationIssue && <IdentityFormIssueAlert {...validationIssue} />}
             <form onSubmit={(event) => void submit(event)}>
               <label htmlFor="new-password">
                 New password
@@ -189,8 +198,17 @@ export function PasswordResetCompletionScreen({
                   minLength={12}
                   maxLength={128}
                   required
+                  aria-describedby={
+                    validationIssue?.fieldId === 'new-password' ? 'new-password-error' : undefined
+                  }
+                  aria-invalid={validationIssue?.fieldId === 'new-password'}
                   value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
+                  onChange={(event) => {
+                    setNewPassword(event.target.value);
+                    if (validationIssue?.fieldId === 'new-password') {
+                      setValidationIssue(null);
+                    }
+                  }}
                   disabled={busy}
                 />
               </label>
@@ -203,8 +221,19 @@ export function PasswordResetCompletionScreen({
                   minLength={12}
                   maxLength={128}
                   required
+                  aria-describedby={
+                    validationIssue?.fieldId === 'confirm-password'
+                      ? 'confirm-password-error'
+                      : undefined
+                  }
+                  aria-invalid={validationIssue?.fieldId === 'confirm-password'}
                   value={confirmation}
-                  onChange={(event) => setConfirmation(event.target.value)}
+                  onChange={(event) => {
+                    setConfirmation(event.target.value);
+                    if (validationIssue?.fieldId === 'confirm-password') {
+                      setValidationIssue(null);
+                    }
+                  }}
                   disabled={busy}
                 />
               </label>
@@ -238,7 +267,7 @@ export function InvitationAcceptanceScreen({
 }: InvitationAcceptanceScreenProps) {
   const [newPassword, setNewPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
-  const [validationIssue, setValidationIssue] = useState('');
+  const [validationIssue, setValidationIssue] = useState<FieldValidationIssue | null>(null);
   const [acceptance, setAcceptance] = useState<InvitationAcceptance | null>(null);
   const usableToken =
     typeof token === 'string' &&
@@ -248,19 +277,25 @@ export function InvitationAcceptanceScreen({
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setValidationIssue('');
+    setValidationIssue(null);
     if (!usableToken) {
       return;
     }
     let submittedPassword: string | undefined;
     if (creatingAccount) {
       if (newPassword !== confirmation) {
-        setValidationIssue('The password confirmation does not match.');
+        setValidationIssue({
+          fieldId: 'invitation-password-confirmation',
+          message: 'The password confirmation does not match.',
+        });
         return;
       }
       const byteLength = new TextEncoder().encode(newPassword).byteLength;
       if (newPassword.length < 12 || byteLength > MAX_PASSWORD_BYTES) {
-        setValidationIssue('Use at least 12 characters and no more than 72 UTF-8 bytes.');
+        setValidationIssue({
+          fieldId: 'invitation-password',
+          message: 'Use at least 12 characters and no more than 72 UTF-8 bytes.',
+        });
         return;
       }
       submittedPassword = newPassword;
@@ -299,9 +334,10 @@ export function InvitationAcceptanceScreen({
           </>
         ) : !usableToken ? (
           <>
-            <p className="warning-callout" role="alert">
-              This invitation link is missing its one-time token or is malformed.
-            </p>
+            <IdentityFormIssueAlert
+              message="This invitation link is missing its one-time token or is malformed."
+              title="This invitation link cannot be used"
+            />
             <a className="primary-button full-button button-link" href="#/M1-01">
               Continue to sign in
             </a>
@@ -314,11 +350,7 @@ export function InvitationAcceptanceScreen({
                 : `Accept this invitation as ${authenticatedEmail}. The server will reject a token addressed to any other account.`}
             </p>
             {issue && <SessionIssueAlert issue={issue} />}
-            {validationIssue && (
-              <p className="warning-callout" role="alert">
-                {validationIssue}
-              </p>
-            )}
+            {validationIssue && <IdentityFormIssueAlert {...validationIssue} />}
             <form onSubmit={(event) => void submit(event)}>
               {creatingAccount && (
                 <>
@@ -331,8 +363,19 @@ export function InvitationAcceptanceScreen({
                       minLength={12}
                       maxLength={128}
                       required
+                      aria-describedby={
+                        validationIssue?.fieldId === 'invitation-password'
+                          ? 'invitation-password-error'
+                          : undefined
+                      }
+                      aria-invalid={validationIssue?.fieldId === 'invitation-password'}
                       value={newPassword}
-                      onChange={(event) => setNewPassword(event.target.value)}
+                      onChange={(event) => {
+                        setNewPassword(event.target.value);
+                        if (validationIssue?.fieldId === 'invitation-password') {
+                          setValidationIssue(null);
+                        }
+                      }}
                       disabled={busy}
                     />
                   </label>
@@ -345,8 +388,19 @@ export function InvitationAcceptanceScreen({
                       minLength={12}
                       maxLength={128}
                       required
+                      aria-describedby={
+                        validationIssue?.fieldId === 'invitation-password-confirmation'
+                          ? 'invitation-password-confirmation-error'
+                          : undefined
+                      }
+                      aria-invalid={validationIssue?.fieldId === 'invitation-password-confirmation'}
                       value={confirmation}
-                      onChange={(event) => setConfirmation(event.target.value)}
+                      onChange={(event) => {
+                        setConfirmation(event.target.value);
+                        if (validationIssue?.fieldId === 'invitation-password-confirmation') {
+                          setValidationIssue(null);
+                        }
+                      }}
                       disabled={busy}
                     />
                   </label>
@@ -487,9 +541,10 @@ export function InvitationAdministrationScreen({
         </p>
         {issue && <SessionIssueAlert issue={issue} />}
         {localIssue && (
-          <p className="warning-callout" role="alert">
-            {localIssue}
-          </p>
+          <IdentityFormIssueAlert
+            message={localIssue}
+            title="The invitation could not be prepared"
+          />
         )}
 
         {!recentAuthentication ? (
@@ -599,7 +654,9 @@ export function InvitationAdministrationScreen({
               />
             </label>
             <button className="primary-button full-button" disabled={busy}>
-              {busyAction === 'issue-invitation' ? 'Issuing invitation...' : 'Issue invitation'}
+              {busyAction === 'issue-invitation'
+                ? 'Inviting administrator...'
+                : 'Invite administrator'}
             </button>
           </form>
         )}
@@ -733,8 +790,68 @@ export function MfaAdministrationScreen({
   );
 }
 
+type MfaEnrollmentRequiredScreenProps = {
+  issue: SessionIssue | null;
+  onContinue(): Promise<void>;
+  onLogout(): Promise<void>;
+  onStartEnrollment(label?: string): Promise<MfaEnrollment | null>;
+  onVerifyEnrollment(code: string): Promise<string[] | null>;
+  pendingAction: SessionAction | null;
+  user: User;
+};
+
+export function MfaEnrollmentRequiredScreen({
+  issue,
+  onContinue,
+  onLogout,
+  onStartEnrollment,
+  onVerifyEnrollment,
+  pendingAction,
+  user,
+}: MfaEnrollmentRequiredScreenProps) {
+  return (
+    <IdentityFrame>
+      <section
+        className="auth-panel security-workflow-panel panel"
+        aria-labelledby="mfa-enrollment-required-heading"
+      >
+        <span className="eyebrow">M1-03 / Required</span>
+        <IdentityMark>
+          <ShieldCheck aria-hidden="true" />
+        </IdentityMark>
+        <h1 id="mfa-enrollment-required-heading">Set up multi-factor authentication</h1>
+        <p>
+          An active access role for <strong>{user.email}</strong> requires MFA. Your password was
+          verified, but workspace access remains locked until an authenticator is confirmed.
+        </p>
+        {issue && <SessionIssueAlert issue={issue} />}
+        <RecentlyAuthenticatedMfaControls
+          mfaEnabled={false}
+          onEnrollmentStored={() => void onContinue()}
+          onRegenerateRecoveryCodes={async () => null}
+          onStartEnrollment={onStartEnrollment}
+          onVerifyEnrollment={onVerifyEnrollment}
+          pendingAction={pendingAction}
+          user={user}
+        />
+        <div className="security-footer-actions">
+          <button
+            type="button"
+            className="text-action"
+            disabled={pendingAction !== null}
+            onClick={() => void onLogout()}
+          >
+            Cancel and sign out
+          </button>
+        </div>
+      </section>
+    </IdentityFrame>
+  );
+}
+
 function RecentlyAuthenticatedMfaControls({
   mfaEnabled,
+  onEnrollmentStored,
   onRegenerateRecoveryCodes,
   onStartEnrollment,
   onVerifyEnrollment,
@@ -742,6 +859,7 @@ function RecentlyAuthenticatedMfaControls({
   user,
 }: {
   mfaEnabled: boolean;
+  onEnrollmentStored?(): void;
   onRegenerateRecoveryCodes(): Promise<string[] | null>;
   onStartEnrollment(label?: string): Promise<MfaEnrollment | null>;
   onVerifyEnrollment(code: string): Promise<string[] | null>;
@@ -786,7 +904,13 @@ function RecentlyAuthenticatedMfaControls({
     return (
       <RecoveryCodesPanel
         codes={view.codes}
-        onStored={() => setView({ kind: 'overview' })}
+        onStored={() => {
+          if (view.source === 'enrollment' && onEnrollmentStored) {
+            onEnrollmentStored();
+          } else {
+            setView({ kind: 'overview' });
+          }
+        }}
         source={view.source}
       />
     );
@@ -838,7 +962,7 @@ function RecentlyAuthenticatedMfaControls({
           >
             {pendingAction === 'start-mfa-enrollment'
               ? 'Creating setup...'
-              : 'Set up an authenticator'}
+              : 'Set up authenticator'}
           </button>
         </div>
       )}
@@ -951,9 +1075,10 @@ function MfaAdministrativeResetPanel({
         can execute that exact request.
       </p>
       {localIssue && (
-        <p className="warning-callout" role="alert">
-          {localIssue}
-        </p>
+        <IdentityFormIssueAlert
+          message={localIssue}
+          title="The MFA reset action could not be prepared"
+        />
       )}
       {outcome && (
         <p className="success-callout" role="status">

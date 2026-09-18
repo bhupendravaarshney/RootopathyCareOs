@@ -10,6 +10,16 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public final class AuthorizedTenantTransactionGuard {
     private AuthorizedTenantTransactionGuard() {}
 
+    public static void requireBound(
+            JdbcTemplate jdbcTemplate, AuthorizedTenantContext context) {
+        Objects.requireNonNull(jdbcTemplate, "jdbcTemplate");
+        Objects.requireNonNull(context, "context");
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("An active tenant transaction is required");
+        }
+        requireMatchingSettings(jdbcTemplate, context);
+    }
+
     public static void requireWritable(
             JdbcTemplate jdbcTemplate, AuthorizedTenantContext context) {
         Objects.requireNonNull(jdbcTemplate, "jdbcTemplate");
@@ -18,6 +28,11 @@ public final class AuthorizedTenantTransactionGuard {
                 || TransactionSynchronizationManager.isCurrentTransactionReadOnly()) {
             throw new IllegalStateException("An active writable tenant transaction is required");
         }
+        requireMatchingSettings(jdbcTemplate, context);
+    }
+
+    private static void requireMatchingSettings(
+            JdbcTemplate jdbcTemplate, AuthorizedTenantContext context) {
         Map<String, Object> settings = jdbcTemplate.queryForMap("""
                 SELECT current_setting('app.current_organization_id', true) AS organization_id,
                        current_setting('app.current_actor_id', true) AS actor_id,

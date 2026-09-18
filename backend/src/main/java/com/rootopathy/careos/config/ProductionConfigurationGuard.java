@@ -129,7 +129,9 @@ final class ProductionConfigurationGuard {
         var approvedIdentityAdministrationEnabled =
                 environment.getProperty("careos.invitations.enabled", Boolean.class, false)
                         || environment.getProperty(
-                                "careos.mfa-administration.enabled", Boolean.class, false);
+                                "careos.mfa-administration.enabled", Boolean.class, false)
+                        || environment.getProperty(
+                                "careos.membership-administration.enabled", Boolean.class, false);
         if (approvedIdentityAdministrationEnabled) {
             requireExactValue(
                     environment,

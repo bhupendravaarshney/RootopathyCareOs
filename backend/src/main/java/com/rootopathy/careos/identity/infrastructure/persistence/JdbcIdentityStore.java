@@ -35,7 +35,8 @@ public class JdbcIdentityStore implements IdentityStore {
                                EXISTS (
                                    SELECT 1 FROM mfa_methods
                                    WHERE mfa_methods.user_id = users.id AND mfa_methods.status = 'enabled'
-                               ) AS mfa_enabled
+                               ) AS mfa_enabled,
+                               careos_user_requires_mfa(users.id) AS mfa_required
                         FROM users
                         JOIN password_credentials credentials ON credentials.user_id = users.id
                         WHERE lower(users.email) = ?
@@ -55,7 +56,8 @@ public class JdbcIdentityStore implements IdentityStore {
                                EXISTS (
                                    SELECT 1 FROM mfa_methods
                                    WHERE mfa_methods.user_id = users.id AND mfa_methods.status = 'enabled'
-                               ) AS mfa_enabled
+                               ) AS mfa_enabled,
+                               careos_user_requires_mfa(users.id) AS mfa_required
                         FROM users
                         JOIN password_credentials credentials ON credentials.user_id = users.id
                         WHERE users.id = ?
@@ -383,7 +385,8 @@ public class JdbcIdentityStore implements IdentityStore {
                 resultSet.getString("status"),
                 resultSet.getString("password_hash"),
                 resultSet.getLong("security_version"),
-                resultSet.getBoolean("mfa_enabled"));
+                resultSet.getBoolean("mfa_enabled"),
+                resultSet.getBoolean("mfa_required"));
     }
 
     private static TotpMethod mapTotp(ResultSet resultSet, int rowNumber) throws SQLException {

@@ -35,6 +35,8 @@ careos:
     credential-pepper: ${CAREOS_SERVICE_IDENTITY_CREDENTIAL_PEPPER:CareOS-Local-Service-Credential-Pepper-Change-Me}
   mfa-administration:
     enabled: true
+  membership-administration:
+    enabled: true
   security:
     allowed-origins: ${CAREOS_ALLOWED_ORIGINS:http://localhost:4173,http://localhost:5173}
     application-base-url: ${CAREOS_BASE_URL:http://localhost:4173}

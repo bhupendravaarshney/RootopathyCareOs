@@ -21,6 +21,11 @@ export const expectedOperations = [
   ["post", "/api/v1/auth/organization-selections", "selectOrganization"],
   [
     "get",
+    "/api/v1/organizations/{organizationId}/memberships",
+    "listOrganizationMemberships",
+  ],
+  [
+    "get",
     "/api/v1/organizations/{organizationId}/setup-readiness",
     "getAdministrationReadiness",
   ],
@@ -59,6 +64,67 @@ export const expectedOperations = [
     "/api/v1/organizations/{organizationId}/users/{targetUserId}/mfa-reset-requests/{approvalId}/executions",
     "executeMfaAdministrativeReset",
   ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/memberships/{membershipId}/change-requests",
+    "requestOrganizationMembershipChange",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/memberships/{membershipId}/change-requests/{approvalId}/approvals",
+    "approveOrganizationMembershipChange",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/memberships/{membershipId}/change-requests/{approvalId}/executions",
+    "executeOrganizationMembershipChange",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/memberships/{membershipId}/owner-transfer-requests",
+    "requestOrganizationOwnerTransfer",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/memberships/{membershipId}/owner-transfer-requests/{approvalId}/approvals",
+    "approveOrganizationOwnerTransfer",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/memberships/{membershipId}/owner-transfer-requests/{approvalId}/executions",
+    "executeOrganizationOwnerTransfer",
+  ],
+];
+
+const approvedReadinessGateKeys = [
+  "organization.profile.complete",
+  "organization.identifier.primary_verified",
+  "organization.contact.coverage",
+  "organization.governance.coverage",
+  "access.final_owner",
+  "access.mfa_enforced",
+  "network.facility.minimum",
+  "network.hierarchy.valid",
+  "network.hours.valid",
+  "service.catalogue.active",
+  "service.assignment.valid",
+  "identifier.scheme.active",
+  "configuration.integrity",
+  "governance.registry.active",
+  "platform.dependencies.ready",
+];
+
+const approvedOrganizationTypes = [
+  "care_provider",
+  "care_network",
+  "administrative",
+];
+const approvedOrganizationLifecycles = [
+  "draft",
+  "under_review",
+  "active",
+  "suspended",
+  "closed",
 ];
 
 const sessionProtectedOperations = new Set([
@@ -70,6 +136,7 @@ const sessionProtectedOperations = new Set([
   "regenerateRecoveryCodes",
   "listSelectableOrganizations",
   "selectOrganization",
+  "listOrganizationMemberships",
   "getAdministrationReadiness",
   "getOrganizationProfile",
   "updateOrganizationProfile",
@@ -78,6 +145,12 @@ const sessionProtectedOperations = new Set([
   "requestMfaAdministrativeReset",
   "approveMfaAdministrativeReset",
   "executeMfaAdministrativeReset",
+  "requestOrganizationMembershipChange",
+  "approveOrganizationMembershipChange",
+  "executeOrganizationMembershipChange",
+  "requestOrganizationOwnerTransfer",
+  "approveOrganizationOwnerTransfer",
+  "executeOrganizationOwnerTransfer",
 ]);
 
 const idempotentOperations = new Set([
@@ -87,6 +160,12 @@ const idempotentOperations = new Set([
   "requestMfaAdministrativeReset",
   "approveMfaAdministrativeReset",
   "executeMfaAdministrativeReset",
+  "requestOrganizationMembershipChange",
+  "approveOrganizationMembershipChange",
+  "executeOrganizationMembershipChange",
+  "requestOrganizationOwnerTransfer",
+  "approveOrganizationOwnerTransfer",
+  "executeOrganizationOwnerTransfer",
 ]);
 
 export function verifyApiContract(contract) {
@@ -353,6 +432,98 @@ export function verifyApiContract(contract) {
       sessionExpiryHeader.schema.minimum === 0 &&
       sessionExpiryHeader.schema.maximum === 2147483647,
     "The session-expiry signal must be a bounded non-negative duration",
+  );
+
+  const readiness = contract.components?.schemas?.AdministrationReadiness;
+  const readinessGate = contract.components?.schemas?.ReadinessGate;
+  assert(
+    readiness?.["x-careos-freshness-seconds"] === 900 &&
+      readiness?.properties?.catalogueVersion?.const === "m1-readiness-v1" &&
+      readiness?.properties?.totalGates?.minimum === 15 &&
+      readiness?.properties?.totalGates?.maximum === 15 &&
+      readiness?.properties?.gates?.minItems === 15 &&
+      readiness?.properties?.gates?.maxItems === 15 &&
+      [
+        "organizationRevision",
+        "evaluatedAt",
+        "expiresAt",
+        "blockedGates",
+        "warningGates",
+        "notApplicableGates",
+      ].every((field) => readiness?.required?.includes(field)),
+    "Administration readiness must bind the approved catalogue and 15-minute freshness contract",
+  );
+  assert(
+    JSON.stringify(readinessGate?.properties?.key?.enum) ===
+      JSON.stringify(approvedReadinessGateKeys) &&
+      readinessGate?.properties?.version?.const === "m1-readiness-v1" &&
+      JSON.stringify(readinessGate?.properties?.outcome?.enum) ===
+        JSON.stringify(["complete", "warning", "blocked", "not_applicable"]) &&
+      readinessGate?.properties?.evidenceReferences?.maxItems === 4 &&
+      readinessGate?.properties?.href?.pattern === "^#/M1-[0-9]{2}$",
+    "ReadinessGate must expose the exact approved ordered keys, outcomes, evidence bound, and deep links",
+  );
+
+  const organizationProfile = contract.components?.schemas?.OrganizationProfile;
+  const organizationProfileUpdate =
+    contract.components?.schemas?.OrganizationProfileUpdateRequest;
+  const exactProfileFields = [
+    "organizationId",
+    "legalName",
+    "displayName",
+    "tradingName",
+    "organizationType",
+    "countryCode",
+    "timezone",
+    "locale",
+    "lifecycleStatus",
+    "editable",
+    "lockVersion",
+    "updatedAt",
+  ];
+  assert(
+    exactProfileFields.every((field) =>
+      organizationProfile?.required?.includes(field),
+    ) &&
+      organizationProfile?.additionalProperties === false &&
+      organizationProfile?.properties?.legalName?.minLength === 2 &&
+      organizationProfile?.properties?.legalName?.maxLength === 200 &&
+      organizationProfile?.properties?.displayName?.minLength === 2 &&
+      organizationProfile?.properties?.displayName?.maxLength === 120 &&
+      organizationProfile?.properties?.tradingName?.maxLength === 160 &&
+      JSON.stringify(
+        organizationProfile?.properties?.organizationType?.enum,
+      ) === JSON.stringify([...approvedOrganizationTypes, null]) &&
+      organizationProfile?.properties?.locale?.pattern ===
+        "^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$" &&
+      JSON.stringify(organizationProfile?.properties?.lifecycleStatus?.enum) ===
+        JSON.stringify(approvedOrganizationLifecycles) &&
+      organizationProfile?.properties?.editable?.type === "boolean",
+    "OrganizationProfile must expose the exact approved identity fields, bounds, lifecycle, and live edit projection",
+  );
+  assert(
+    [
+      "legalName",
+      "displayName",
+      "tradingName",
+      "organizationType",
+      "countryCode",
+      "timezone",
+      "locale",
+      "reason",
+    ].every((field) => organizationProfileUpdate?.required?.includes(field)) &&
+      organizationProfileUpdate?.additionalProperties === false &&
+      JSON.stringify(
+        organizationProfileUpdate?.properties?.organizationType?.enum,
+      ) === JSON.stringify(approvedOrganizationTypes) &&
+      organizationProfileUpdate?.properties?.tradingName?.type?.includes(
+        "null",
+      ) &&
+      organizationProfileUpdate?.properties?.locale?.pattern ===
+        "^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$" &&
+      organizationProfileUpdate?.properties?.reason?.minLength === 10 &&
+      organizationProfileUpdate?.properties?.reason?.maxLength === 500,
+    "OrganizationProfileUpdateRequest must require the exact approved mutable profile contract",
   );
   for (const response of [
     contract.paths?.["/api/v1/auth/session"]?.get?.responses?.["200"],

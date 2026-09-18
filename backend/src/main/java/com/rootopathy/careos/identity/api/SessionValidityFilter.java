@@ -1,5 +1,7 @@
 package com.rootopathy.careos.identity.api;
 
+import static com.rootopathy.careos.identity.infrastructure.security.CareOsAuthorities.MFA_ENROLLMENT_PENDING;
+
 import com.rootopathy.careos.identity.application.IdentityStore;
 import com.rootopathy.careos.identity.infrastructure.security.CareOsPrincipal;
 import com.rootopathy.careos.shared.api.SecurityProblemWriter;
@@ -41,22 +43,36 @@ public final class SessionValidityFilter extends OncePerRequestFilter {
         }
 
         var session = request.getSession(false);
-        var currentVersion = identityStore.findSecurityVersion(principal.id());
+        var account = identityStore.findAccountById(principal.id());
         var expired = session == null || expiryHeaders.isAbsolutelyExpired(session);
-        var revoked = currentVersion.isEmpty() || currentVersion.get() != principal.securityVersion();
+        var revoked = account.isEmpty() || account.get().securityVersion() != principal.securityVersion();
+        var assuranceChanged = account.isPresent()
+                && account.get().mfaRequired()
+                && !account.get().mfaEnabled()
+                && authentication.getAuthorities().stream()
+                        .noneMatch(authority -> MFA_ENROLLMENT_PENDING.equals(authority.getAuthority()));
 
-        if (session == null || expired || revoked) {
+        if (session == null || expired || revoked || assuranceChanged) {
             SecurityContextHolder.clearContext();
             if (session != null) {
                 session.invalidate();
             }
+            var code = expired
+                    ? "session-expired"
+                    : assuranceChanged ? "mfa-enrollment-required" : "session-revoked";
+            var title = expired
+                    ? "Session expired"
+                    : assuranceChanged ? "MFA enrollment required" : "Session revoked";
+            var detail = assuranceChanged
+                    ? "Your access now requires MFA. Sign in again to enroll an authenticator."
+                    : "The session is no longer valid. Sign in again.";
             problemWriter.write(
                     request,
                     response,
                     HttpStatus.UNAUTHORIZED,
-                    expired ? "session-expired" : "session-revoked",
-                    expired ? "Session expired" : "Session revoked",
-                    "The session is no longer valid. Sign in again.");
+                    code,
+                    title,
+                    detail);
             return;
         }
         expiryHeaders.write(session, response);

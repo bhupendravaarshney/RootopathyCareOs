@@ -164,8 +164,12 @@ class TenantRlsIntegrationTest {
                     ON CONFLICT (id) DO NOTHING
                     """);
             statement.executeUpdate("""
-                    INSERT INTO organizations (id, legal_name, display_name, country_code, timezone, status)
-                    VALUES ('01900000-0000-7000-8000-000000000002', 'Second Synthetic Care Org', 'Second Care Org', 'IN', 'Asia/Kolkata', 'active')
+                    INSERT INTO organizations
+                        (id, legal_name, display_name, organization_type,
+                         country_code, timezone, locale, status)
+                    VALUES ('01900000-0000-7000-8000-000000000002',
+                            'Second Synthetic Care Org', 'Second Care Org',
+                            'care_provider', 'IN', 'Asia/Kolkata', 'en-IN', 'active')
                     ON CONFLICT (id) DO NOTHING
                     """);
             statement.executeUpdate("""
@@ -345,10 +349,12 @@ class TenantRlsIntegrationTest {
                         Map.entry("facilities", "uuidv7()"),
                         Map.entry("idempotency_records", "uuidv7()"),
                         Map.entry("invitations", "uuidv7()"),
+                        Map.entry("membership_change_requests", "uuidv7()"),
                         Map.entry("mfa_methods", "uuidv7()"),
                         Map.entry("organization_memberships", "uuidv7()"),
                         Map.entry("organizations", "uuidv7()"),
                         Map.entry("outbox_events", "uuidv7()"),
+                        Map.entry("owner_transfer_requests", "uuidv7()"),
                         Map.entry("password_reset_tokens", "uuidv7()"),
                         Map.entry("recovery_codes", "uuidv7()"),
                         Map.entry("service_identities", "uuidv7()"),
@@ -593,6 +599,23 @@ class TenantRlsIntegrationTest {
                         "3d65f85fc39d2ddcca0bcdce4fb43c1c8f4ff55902fbfc1a455669671e2c308b")
                 .containsEntry("approved_by", "bhupendra, developer")
                 .containsEntry("status", "active");
+        assertThat(jdbcTemplate.queryForMap(
+                        """
+                        SELECT permission_key, mutation, denial_mode, reason_required,
+                               recent_authentication_required, mfa_required,
+                               maker_checker_required, status, registry_version
+                        FROM authorization_operations
+                        WHERE operation_key = 'access.membership.read'
+                        """))
+                .containsEntry("permission_key", "access.membership.read")
+                .containsEntry("mutation", false)
+                .containsEntry("denial_mode", "hidden")
+                .containsEntry("reason_required", false)
+                .containsEntry("recent_authentication_required", false)
+                .containsEntry("mfa_required", false)
+                .containsEntry("maker_checker_required", false)
+                .containsEntry("status", "active")
+                .containsEntry("registry_version", "m1-candidate-1");
 
         assertThat(jdbcTemplate.queryForList(
                         """
@@ -610,6 +633,21 @@ class TenantRlsIntegrationTest {
                         "service_notification_delivery",
                         "service_outbox_publisher",
                         "service_scheduler");
+        assertThat(jdbcTemplate.queryForList(
+                        """
+                        SELECT role_key
+                        FROM authorization_roles
+                        WHERE mfa_required
+                        ORDER BY role_key
+                        """,
+                        String.class))
+                .containsExactly(
+                        "auditor",
+                        "configuration_approver",
+                        "export_approver",
+                        "organization_administrator",
+                        "organization_owner",
+                        "security_administrator");
         assertThat(jdbcTemplate.queryForObject(
                         "SELECT count(*) FROM authorization_operations WHERE status = 'reference'",
                         Integer.class))
@@ -639,6 +677,57 @@ class TenantRlsIntegrationTest {
                         "UPDATE authorization_registry_releases SET status = 'retired'"))
                 .isInstanceOf(SQLException.class)
                 .hasMessageContaining("migration-owned and immutable");
+    }
+
+    @Test
+    void derivesMandatoryRoleMfaWithoutDisclosingMembershipsAndRejectsDirectDisable()
+            throws SQLException {
+        var mandatoryUser = UUID.randomUUID();
+        var membershipId = UUID.randomUUID();
+        var methodId = UUID.randomUUID();
+        executeAsMigrator("""
+                INSERT INTO users (id, email, display_name, status)
+                VALUES ('%s', 'mandatory.mfa.%s@rootopathy.test',
+                        'Mandatory MFA User', 'active');
+                INSERT INTO organization_memberships
+                    (id, organization_id, user_id, role_key, status)
+                VALUES ('%s', '%s', '%s', 'security_administrator', 'active');
+                INSERT INTO mfa_methods
+                    (id, user_id, method_type, status, encrypted_secret, verified_at)
+                VALUES ('%s', '%s', 'totp', 'enabled', 'protected-test-secret', now());
+                """.formatted(
+                mandatoryUser,
+                mandatoryUser,
+                membershipId,
+                ORG_ONE,
+                mandatoryUser,
+                methodId,
+                mandatoryUser));
+
+        assertThat(jdbcTemplate.queryForObject(
+                        "select careos_user_requires_mfa(?)", Boolean.class, mandatoryUser))
+                .isTrue();
+        assertThatThrownBy(() -> jdbcTemplate.queryForObject(
+                        "select count(*) from identity_mfa_role_requirements", Integer.class))
+                .hasRootCauseInstanceOf(PSQLException.class)
+                .rootCause()
+                .hasMessageContaining("permission denied");
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                        "update mfa_methods set status = 'revoked', encrypted_secret = null, "
+                                + "revoked_at = now() where id = ?",
+                        methodId))
+                .hasRootCauseInstanceOf(PSQLException.class)
+                .rootCause()
+                .hasMessageContaining("exact governed administrative reset");
+
+        executeAsMigrator("""
+                UPDATE organization_memberships
+                SET role_key = 'organization_viewer'
+                WHERE id = '%s'
+                """.formatted(membershipId));
+        assertThat(jdbcTemplate.queryForObject(
+                        "select careos_user_requires_mfa(?)", Boolean.class, mandatoryUser))
+                .isFalse();
     }
 
     @Test
@@ -674,6 +763,30 @@ class TenantRlsIntegrationTest {
                 new OperationKey("organization.profile.update"),
                 "Approved database-boundary organization profile test",
                 null);
+        var shortReasonRequest = new TenantAuthorizationRequest(
+                REFERENCE_ORGANIZATION,
+                new AuthenticatedActorContext(
+                        REFERENCE_OWNER,
+                        "organization-administration",
+                        "profile-short-reason-db-42"),
+                new OperationKey("organization.profile.update"),
+                "short",
+                null);
+        assertThatThrownBy(() -> approvedAuthorization.execute(
+                        shortReasonRequest,
+                        () -> jdbcTemplate.update(
+                                """
+                                UPDATE organizations
+                                SET display_name = 'Short reason attack',
+                                    updated_by = ?, lock_version = lock_version + 1
+                                WHERE id = ?
+                                """,
+                                REFERENCE_OWNER,
+                                REFERENCE_ORGANIZATION)))
+                .rootCause()
+                .isInstanceOf(PSQLException.class)
+                .hasMessageContaining("authorized approved operation");
+
         assertThatThrownBy(() -> approvedAuthorization.execute(
                         updateRequest,
                         () -> jdbcTemplate.update(
@@ -688,6 +801,51 @@ class TenantRlsIntegrationTest {
                 .rootCause()
                 .isInstanceOf(PSQLException.class)
                 .hasMessageContaining("protected lifecycle data");
+
+        assertThatThrownBy(() -> approvedAuthorization.execute(
+                        updateRequest,
+                        () -> jdbcTemplate.update(
+                                """
+                                UPDATE organizations
+                                SET organization_type = 'hospital',
+                                    updated_by = ?, lock_version = lock_version + 1
+                                WHERE id = ?
+                                """,
+                                REFERENCE_OWNER,
+                                REFERENCE_ORGANIZATION)))
+                .rootCause()
+                .isInstanceOf(PSQLException.class)
+                .hasMessageContaining("organizations_type_check");
+
+        assertThatThrownBy(() -> approvedAuthorization.execute(
+                        updateRequest,
+                        () -> jdbcTemplate.update(
+                                """
+                                UPDATE organizations
+                                SET legal_name = '<script>invalid</script>',
+                                    updated_by = ?, lock_version = lock_version + 1
+                                WHERE id = ?
+                                """,
+                                REFERENCE_OWNER,
+                                REFERENCE_ORGANIZATION)))
+                .rootCause()
+                .isInstanceOf(PSQLException.class)
+                .hasMessageContaining("organizations_legal_name_check");
+
+        assertThatThrownBy(() -> approvedAuthorization.execute(
+                        updateRequest,
+                        () -> jdbcTemplate.update(
+                                """
+                                UPDATE organizations
+                                SET display_name = 'Care' || chr(769) || ' Network',
+                                    updated_by = ?, lock_version = lock_version + 1
+                                WHERE id = ?
+                                """,
+                                REFERENCE_OWNER,
+                                REFERENCE_ORGANIZATION)))
+                .rootCause()
+                .isInstanceOf(PSQLException.class)
+                .hasMessageContaining("organizations_display_name_check");
 
         assertThat(approvedAuthorization.execute(
                         updateRequest,
@@ -718,6 +876,60 @@ class TenantRlsIntegrationTest {
     }
 
     @Test
+    void rejectsMembershipChangesOutsideTheExactConsumedApprovalContext()
+            throws SQLException {
+        seedReferenceOwner();
+        executeAsMigrator("""
+                INSERT INTO organization_memberships
+                    (id, organization_id, user_id, role_key, status, effective_from)
+                VALUES
+                    ('01900000-0000-7000-8000-000000000305',
+                     '01900000-0000-7000-8000-000000000003',
+                     '01900000-0000-7000-8000-000000000204',
+                     'organization_viewer', 'active', now())
+                ON CONFLICT (id) DO UPDATE
+                    SET role_key = 'organization_viewer', status = 'active',
+                        effective_from = now(), effective_to = NULL,
+                        lock_version = 0
+                """);
+        var readRequest = new TenantAuthorizationRequest(
+                REFERENCE_ORGANIZATION,
+                new AuthenticatedActorContext(
+                        REFERENCE_OWNER,
+                        "membership-administration",
+                        "membership-read-write-attack-42"),
+                new OperationKey("access.membership.read"));
+
+        assertThatThrownBy(() -> tenantAuthorization.execute(
+                        readRequest,
+                        () -> jdbcTemplate.update(
+                                """
+                                UPDATE organization_memberships
+                                SET role_key = 'configuration_editor', updated_by = ?,
+                                    lock_version = lock_version + 1
+                                WHERE id = '01900000-0000-7000-8000-000000000305'
+                                """,
+                                REFERENCE_OWNER)))
+                .rootCause()
+                .isInstanceOf(PSQLException.class)
+                .hasMessageContaining("approved operation");
+
+        assertThatThrownBy(() -> tenantAuthorization.execute(
+                        readRequest,
+                        () -> jdbcTemplate.update(
+                                """
+                                UPDATE organization_memberships
+                                SET role_key = 'organization_owner', updated_by = ?,
+                                    lock_version = lock_version + 1
+                                WHERE id = '01900000-0000-7000-8000-000000000305'
+                                """,
+                                REFERENCE_OWNER)))
+                .rootCause()
+                .isInstanceOf(PSQLException.class)
+                .hasMessageContaining("approved owner transfer operation");
+    }
+
+    @Test
     void enforcesTheMfaMakerCheckerLifecycleAtTheDatabaseBoundary() throws SQLException {
         var organizationId = UUID.randomUUID();
         var makerId = UUID.randomUUID();
@@ -733,9 +945,11 @@ class TenantRlsIntegrationTest {
                 """.formatted(makerId, makerId, checkerId, checkerId, targetId, targetId));
         executeAsMigrator("""
                 INSERT INTO organizations
-                    (id, legal_name, display_name, country_code, timezone, status)
+                    (id, legal_name, display_name, organization_type,
+                     country_code, timezone, locale, status)
                 VALUES ('%s', 'MFA Approval Test Organization',
-                        'MFA Approval Test Organization', 'IN', 'Asia/Kolkata', 'active')
+                        'MFA Approval Test Organization', 'care_provider',
+                        'IN', 'Asia/Kolkata', 'en-IN', 'active')
                 """.formatted(organizationId));
         executeAsMigrator("""
                 INSERT INTO organization_memberships
@@ -1898,11 +2112,12 @@ class TenantRlsIntegrationTest {
                 """);
         executeAsMigrator("""
                 INSERT INTO organizations
-                    (id, legal_name, display_name, country_code, timezone, status)
+                    (id, legal_name, display_name, organization_type,
+                     country_code, timezone, locale, status)
                 VALUES
                     ('01900000-0000-7000-8000-000000000003',
                      'Reference Policy Organization', 'Reference Organization',
-                     'IN', 'Asia/Kolkata', 'active')
+                     'care_network', 'IN', 'Asia/Kolkata', 'en-IN', 'active')
                 ON CONFLICT (id) DO UPDATE SET status = 'active'
                 """);
         executeAsMigrator("""

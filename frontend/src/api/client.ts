@@ -5,6 +5,12 @@ import type {
   ApproveMfaAdministrativeResetData,
   ApproveMfaAdministrativeResetResponse,
   ApproveMfaAdministrativeResetResponses,
+  ApproveOrganizationMembershipChangeData,
+  ApproveOrganizationMembershipChangeResponse,
+  ApproveOrganizationMembershipChangeResponses,
+  ApproveOrganizationOwnerTransferData,
+  ApproveOrganizationOwnerTransferResponse,
+  ApproveOrganizationOwnerTransferResponses,
   CompleteMfaChallengeData,
   CompleteMfaChallengeResponse,
   CompleteMfaChallengeResponses,
@@ -15,6 +21,12 @@ import type {
   ExecuteMfaAdministrativeResetData,
   ExecuteMfaAdministrativeResetResponse,
   ExecuteMfaAdministrativeResetResponses,
+  ExecuteOrganizationMembershipChangeData,
+  ExecuteOrganizationMembershipChangeResponse,
+  ExecuteOrganizationMembershipChangeResponses,
+  ExecuteOrganizationOwnerTransferData,
+  ExecuteOrganizationOwnerTransferResponse,
+  ExecuteOrganizationOwnerTransferResponses,
   GetAdministrationReadinessData,
   GetAdministrationReadinessResponse,
   GetAdministrationReadinessResponses,
@@ -36,6 +48,9 @@ import type {
   ListPrototypeScreensData,
   ListPrototypeScreensResponse,
   ListPrototypeScreensResponses,
+  ListOrganizationMembershipsData,
+  ListOrganizationMembershipsResponse,
+  ListOrganizationMembershipsResponses,
   ListSelectableOrganizationsData,
   ListSelectableOrganizationsResponse,
   ListSelectableOrganizationsResponses,
@@ -54,6 +69,12 @@ import type {
   RequestMfaAdministrativeResetData,
   RequestMfaAdministrativeResetResponse,
   RequestMfaAdministrativeResetResponses,
+  RequestOrganizationMembershipChangeData,
+  RequestOrganizationMembershipChangeResponse,
+  RequestOrganizationMembershipChangeResponses,
+  RequestOrganizationOwnerTransferData,
+  RequestOrganizationOwnerTransferResponse,
+  RequestOrganizationOwnerTransferResponses,
   RevokeInvitationData,
   RevokeInvitationResponse,
   RevokeInvitationResponses,
@@ -79,6 +100,15 @@ const CORRELATION_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{16,128}$/;
 const STRONG_ETAG_PATTERN = /^"[A-Za-z0-9._:-]{1,128}"$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const MEMBERSHIP_CURSOR_PATTERN = /^[A-Za-z0-9_-]{1,512}$/;
+const MEMBERSHIP_ROLE_KEY_PATTERN = /^[a-z][a-z0-9]*([._:-][a-z0-9]+)*$/;
+const MEMBERSHIP_ACCESS_STATES = new Set([
+  'active',
+  'scheduled',
+  'suspended',
+  'expired',
+  'revoked',
+]);
 const MAX_RETRY_AFTER_SECONDS = 86_400;
 const SESSION_EXPIRY_HEADER = 'X-CareOS-Session-Expires-In';
 const MAX_SESSION_EXPIRY_SECONDS = 2_147_483_647;
@@ -96,6 +126,18 @@ const endpoints = {
       200,
     ] satisfies readonly ResponseStatus<ApproveMfaAdministrativeResetResponses>[],
   },
+  approveOrganizationMembershipChange: {
+    path: '/api/v1/organizations/{organizationId}/memberships/{membershipId}/change-requests/{approvalId}/approvals' satisfies ApproveOrganizationMembershipChangeData['url'],
+    successStatuses: [
+      200,
+    ] satisfies readonly ResponseStatus<ApproveOrganizationMembershipChangeResponses>[],
+  },
+  approveOrganizationOwnerTransfer: {
+    path: '/api/v1/organizations/{organizationId}/memberships/{membershipId}/owner-transfer-requests/{approvalId}/approvals' satisfies ApproveOrganizationOwnerTransferData['url'],
+    successStatuses: [
+      200,
+    ] satisfies readonly ResponseStatus<ApproveOrganizationOwnerTransferResponses>[],
+  },
   completeMfaChallenge: {
     path: '/api/v1/auth/mfa/challenges' satisfies CompleteMfaChallengeData['url'],
     successStatuses: [200] satisfies readonly ResponseStatus<CompleteMfaChallengeResponses>[],
@@ -109,6 +151,18 @@ const endpoints = {
     successStatuses: [
       200,
     ] satisfies readonly ResponseStatus<ExecuteMfaAdministrativeResetResponses>[],
+  },
+  executeOrganizationMembershipChange: {
+    path: '/api/v1/organizations/{organizationId}/memberships/{membershipId}/change-requests/{approvalId}/executions' satisfies ExecuteOrganizationMembershipChangeData['url'],
+    successStatuses: [
+      200,
+    ] satisfies readonly ResponseStatus<ExecuteOrganizationMembershipChangeResponses>[],
+  },
+  executeOrganizationOwnerTransfer: {
+    path: '/api/v1/organizations/{organizationId}/memberships/{membershipId}/owner-transfer-requests/{approvalId}/executions' satisfies ExecuteOrganizationOwnerTransferData['url'],
+    successStatuses: [
+      200,
+    ] satisfies readonly ResponseStatus<ExecuteOrganizationOwnerTransferResponses>[],
   },
   getAdministrationReadiness: {
     path: '/api/v1/organizations/{organizationId}/setup-readiness' satisfies GetAdministrationReadinessData['url'],
@@ -138,6 +192,12 @@ const endpoints = {
     path: '/api/public/prototype-screens' satisfies ListPrototypeScreensData['url'],
     successStatuses: [200] satisfies readonly ResponseStatus<ListPrototypeScreensResponses>[],
   },
+  listOrganizationMemberships: {
+    path: '/api/v1/organizations/{organizationId}/memberships' satisfies ListOrganizationMembershipsData['url'],
+    successStatuses: [
+      200,
+    ] satisfies readonly ResponseStatus<ListOrganizationMembershipsResponses>[],
+  },
   listSelectableOrganizations: {
     path: '/api/v1/organizations' satisfies ListSelectableOrganizationsData['url'],
     successStatuses: [
@@ -165,6 +225,18 @@ const endpoints = {
     successStatuses: [
       201,
     ] satisfies readonly ResponseStatus<RequestMfaAdministrativeResetResponses>[],
+  },
+  requestOrganizationMembershipChange: {
+    path: '/api/v1/organizations/{organizationId}/memberships/{membershipId}/change-requests' satisfies RequestOrganizationMembershipChangeData['url'],
+    successStatuses: [
+      201,
+    ] satisfies readonly ResponseStatus<RequestOrganizationMembershipChangeResponses>[],
+  },
+  requestOrganizationOwnerTransfer: {
+    path: '/api/v1/organizations/{organizationId}/memberships/{membershipId}/owner-transfer-requests' satisfies RequestOrganizationOwnerTransferData['url'],
+    successStatuses: [
+      201,
+    ] satisfies readonly ResponseStatus<RequestOrganizationOwnerTransferResponses>[],
   },
   revokeInvitation: {
     path: '/api/v1/organizations/{organizationId}/invitations/{invitationId}/revocations' satisfies RevokeInvitationData['url'],
@@ -267,6 +339,57 @@ function requireStrongEtag(value: string): string {
     throw new Error('If-Match must contain a strong entity tag from the latest response.');
   }
   return value;
+}
+
+type OrganizationMembershipQuery = NonNullable<ListOrganizationMembershipsData['query']>;
+
+function organizationMembershipQuery(query: OrganizationMembershipQuery): string {
+  const parameters = new URLSearchParams();
+  if (query.search !== undefined) {
+    if (typeof query.search !== 'string') {
+      throw new Error('Membership search must be text.');
+    }
+    const search = query.search.trim().normalize('NFC');
+    const length = Array.from(search).length;
+    const hasControlCharacter = Array.from(search).some((character) => {
+      const code = character.charCodeAt(0);
+      return code <= 31 || code === 127;
+    });
+    if (length < 2 || length > 100 || hasControlCharacter) {
+      throw new Error('Membership search must contain 2 to 100 valid characters.');
+    }
+    parameters.set('search', search);
+  }
+  if (query.state !== undefined) {
+    if (typeof query.state !== 'string' || !MEMBERSHIP_ACCESS_STATES.has(query.state)) {
+      throw new Error('Membership state is not allowed.');
+    }
+    parameters.set('state', query.state);
+  }
+  if (query.roleKey !== undefined) {
+    if (
+      typeof query.roleKey !== 'string' ||
+      query.roleKey.length > 100 ||
+      !MEMBERSHIP_ROLE_KEY_PATTERN.test(query.roleKey)
+    ) {
+      throw new Error('Membership role key has an invalid format.');
+    }
+    parameters.set('roleKey', query.roleKey);
+  }
+  if (query.limit !== undefined) {
+    if (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > 100) {
+      throw new Error('Membership page limit must be an integer from 1 to 100.');
+    }
+    parameters.set('limit', String(query.limit));
+  }
+  if (query.cursor !== undefined) {
+    if (typeof query.cursor !== 'string' || !MEMBERSHIP_CURSOR_PATTERN.test(query.cursor)) {
+      throw new Error('Membership cursor has an invalid format.');
+    }
+    parameters.set('cursor', query.cursor);
+  }
+  const serialized = parameters.toString();
+  return serialized ? `?${serialized}` : '';
 }
 
 function normalizeBaseUrl(value: string): string {
@@ -958,6 +1081,156 @@ export class CareOsApiClient {
     });
   }
 
+  requestOrganizationMembershipChange(
+    organizationId: string,
+    membershipId: string,
+    body: RequestOrganizationMembershipChangeData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.requestOrganizationMembershipChange.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace(
+        '{membershipId}',
+        requireUuid(membershipId, 'membershipId'),
+      ) as `/api/v1/organizations/${string}/memberships/${string}/change-requests`;
+    return this.#mutation<RequestOrganizationMembershipChangeResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.requestOrganizationMembershipChange.successStatuses,
+    });
+  }
+
+  approveOrganizationMembershipChange(
+    organizationId: string,
+    membershipId: string,
+    approvalId: string,
+    body: ApproveOrganizationMembershipChangeData['body'],
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.approveOrganizationMembershipChange.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace('{membershipId}', requireUuid(membershipId, 'membershipId'))
+      .replace(
+        '{approvalId}',
+        requireUuid(approvalId, 'approvalId'),
+      ) as `/api/v1/organizations/${string}/memberships/${string}/change-requests/${string}/approvals`;
+    return this.#mutation<ApproveOrganizationMembershipChangeResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.approveOrganizationMembershipChange.successStatuses,
+    });
+  }
+
+  executeOrganizationMembershipChange(
+    organizationId: string,
+    membershipId: string,
+    approvalId: string,
+    body: ExecuteOrganizationMembershipChangeData['body'],
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.executeOrganizationMembershipChange.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace('{membershipId}', requireUuid(membershipId, 'membershipId'))
+      .replace(
+        '{approvalId}',
+        requireUuid(approvalId, 'approvalId'),
+      ) as `/api/v1/organizations/${string}/memberships/${string}/change-requests/${string}/executions`;
+    return this.#mutation<ExecuteOrganizationMembershipChangeResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.executeOrganizationMembershipChange.successStatuses,
+    });
+  }
+
+  requestOrganizationOwnerTransfer(
+    organizationId: string,
+    membershipId: string,
+    body: RequestOrganizationOwnerTransferData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.requestOrganizationOwnerTransfer.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace(
+        '{membershipId}',
+        requireUuid(membershipId, 'membershipId'),
+      ) as `/api/v1/organizations/${string}/memberships/${string}/owner-transfer-requests`;
+    return this.#mutation<RequestOrganizationOwnerTransferResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.requestOrganizationOwnerTransfer.successStatuses,
+    });
+  }
+
+  approveOrganizationOwnerTransfer(
+    organizationId: string,
+    membershipId: string,
+    approvalId: string,
+    body: ApproveOrganizationOwnerTransferData['body'],
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.approveOrganizationOwnerTransfer.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace('{membershipId}', requireUuid(membershipId, 'membershipId'))
+      .replace(
+        '{approvalId}',
+        requireUuid(approvalId, 'approvalId'),
+      ) as `/api/v1/organizations/${string}/memberships/${string}/owner-transfer-requests/${string}/approvals`;
+    return this.#mutation<ApproveOrganizationOwnerTransferResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.approveOrganizationOwnerTransfer.successStatuses,
+    });
+  }
+
+  executeOrganizationOwnerTransfer(
+    organizationId: string,
+    membershipId: string,
+    approvalId: string,
+    body: ExecuteOrganizationOwnerTransferData['body'],
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.executeOrganizationOwnerTransfer.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace('{membershipId}', requireUuid(membershipId, 'membershipId'))
+      .replace(
+        '{approvalId}',
+        requireUuid(approvalId, 'approvalId'),
+      ) as `/api/v1/organizations/${string}/memberships/${string}/owner-transfer-requests/${string}/executions`;
+    return this.#mutation<ExecuteOrganizationOwnerTransferResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.executeOrganizationOwnerTransfer.successStatuses,
+    });
+  }
+
   startMfaEnrollment(body: StartMfaEnrollmentData['body'] = {}, options: ApiRequestOptions = {}) {
     return this.#mutation<StartMfaEnrollmentResponse>({
       body,
@@ -1017,6 +1290,24 @@ export class CareOsApiClient {
       responseBody: 'json',
       signal: options.signal,
       successStatuses: endpoints.listSelectableOrganizations.successStatuses,
+    });
+  }
+
+  listOrganizationMemberships(
+    organizationId: string,
+    query: OrganizationMembershipQuery = {},
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.listOrganizationMemberships.path.replace(
+      '{organizationId}',
+      requireUuid(organizationId, 'organizationId'),
+    ) as `/api/v1/organizations/${string}/memberships`;
+    return this.#request<ListOrganizationMembershipsResponse>({
+      method: 'GET',
+      path: `${relativeEndpointPath(path)}${organizationMembershipQuery(query)}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.listOrganizationMemberships.successStatuses,
     });
   }
 

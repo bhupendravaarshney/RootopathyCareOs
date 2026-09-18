@@ -37,10 +37,7 @@ test("rejects filters that do not fail closed", () => {
     candidate["x-careos-conventions"].filtering.unknownParameters = "ignore";
   });
 
-  assert.throws(
-    () => verifyApiContract(contract),
-    /reject unknown keys/,
-  );
+  assert.throws(() => verifyApiContract(contract), /reject unknown keys/);
 });
 
 test("rejects automatic mutation retries", () => {
@@ -48,10 +45,7 @@ test("rejects automatic mutation retries", () => {
     candidate["x-careos-conventions"].retry.automaticMutationRetry = true;
   });
 
-  assert.throws(
-    () => verifyApiContract(contract),
-    /disabled for mutations/,
-  );
+  assert.throws(() => verifyApiContract(contract), /disabled for mutations/);
 });
 
 test("rejects session polling that would defeat idle expiry", () => {
@@ -76,6 +70,30 @@ test("rejects a weakened concurrency precondition", () => {
   );
 });
 
+test("rejects readiness catalogue drift", () => {
+  const contract = changed((candidate) => {
+    candidate.components.schemas.ReadinessGate.properties.key.enum[0] =
+      "organization.profile.approximate";
+  });
+
+  assert.throws(
+    () => verifyApiContract(contract),
+    /exact approved ordered keys/,
+  );
+});
+
+test("rejects organization profile contract drift", () => {
+  const contract = changed((candidate) => {
+    candidate.components.schemas.OrganizationProfileUpdateRequest.properties.organizationType.enum =
+      ["provider", "network"];
+  });
+
+  assert.throws(
+    () => verifyApiContract(contract),
+    /exact approved mutable profile contract/,
+  );
+});
+
 test("rejects dangling local references", () => {
   const contract = changed((candidate) => {
     candidate.components.responses.InternalError.content[
@@ -83,8 +101,5 @@ test("rejects dangling local references", () => {
     ].schema.$ref = "#/components/schemas/RemovedProblem";
   });
 
-  assert.throws(
-    () => verifyApiContract(contract),
-    /Unresolved reference/,
-  );
+  assert.throws(() => verifyApiContract(contract), /Unresolved reference/);
 });

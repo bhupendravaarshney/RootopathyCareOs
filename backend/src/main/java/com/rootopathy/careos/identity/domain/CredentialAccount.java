@@ -9,7 +9,8 @@ public record CredentialAccount(
         String status,
         String passwordHash,
         long securityVersion,
-        boolean mfaEnabled) {
+        boolean mfaEnabled,
+        boolean mfaRequired) {
     public boolean isActive() {
         return "active".equals(status);
     }

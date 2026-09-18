@@ -35,7 +35,7 @@ jobs:
   assert.deepEqual(validateWorkflowText("secure.yml", workflow), []);
 });
 
-test("requires the Module 1 production, review-draft, and candidate checks in the quality workflow", () => {
+test("requires every Module 1 input and additive-candidate check in the quality workflow", () => {
   const workflow = `name: quality
 on: push
 permissions:
@@ -54,22 +54,24 @@ jobs:
       - run: node --test scripts/tests/verify-module-1-review-drafts.test.mjs
       - run: node scripts/verify-module-1-candidate-inputs.mjs
       - run: node --test scripts/tests/verify-module-1-candidate-inputs.test.mjs
+      - run: node scripts/verify-module-1-facility-scope-candidate.mjs
+      - run: node --test scripts/tests/verify-module-1-facility-scope-candidate.test.mjs
 `;
   assert.deepEqual(validateWorkflowText("quality.yml", workflow), []);
 
   const weakened = workflow.replace(
-    "      - run: node --test scripts/tests/verify-module-1-candidate-inputs.test.mjs\n",
+    "      - run: node --test scripts/tests/verify-module-1-facility-scope-candidate.test.mjs\n",
     "",
   );
   assert.match(
     validateWorkflowText("quality.yml", weakened).join("\n"),
-    /contracts job must run the Module 1 input\/review\/candidate command/,
+    /contracts job must run the Module 1 input\/review\/candidate\/facility-scope command/,
   );
 
   const approvalWeakened = workflow.replace(" --require-approved", "");
   assert.match(
     validateWorkflowText("quality.yml", approvalWeakened).join("\n"),
-    /contracts job must run the Module 1 input\/review\/candidate command/,
+    /contracts job must run the Module 1 input\/review\/candidate\/facility-scope command/,
   );
 });
 

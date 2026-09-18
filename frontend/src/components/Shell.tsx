@@ -1,5 +1,5 @@
 import { LogOut, Menu, Search, X } from 'lucide-react';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { screens, type ModuleKey } from '../data/screens';
 
 export type ShellSessionProps = {
@@ -35,6 +35,7 @@ export function Shell({
 }: ShellProps) {
   const current = screens.find((screen) => screen.id === currentId);
   const currentModule = current?.module ?? 'M1';
+  const main = useRef<HTMLElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const moduleScreens = useMemo(
@@ -48,8 +49,32 @@ export function Shell({
   );
   const groups = [...new Set(moduleScreens.map((screen) => screen.group))];
 
+  useEffect(() => {
+    if (
+      document.activeElement !== document.body &&
+      document.activeElement !== main.current &&
+      main.current?.contains(document.activeElement)
+    ) {
+      return;
+    }
+    const heading = main.current?.querySelector<HTMLHeadingElement>('h1');
+    if (!heading) return;
+    heading.tabIndex = -1;
+    heading.focus();
+  }, [currentId]);
+
   return (
     <div className="app-shell">
+      <a
+        className="skip-link"
+        href="#main-content"
+        onClick={(event) => {
+          event.preventDefault();
+          main.current?.focus();
+        }}
+      >
+        Skip to main content
+      </a>
       <header className="topbar">
         <button
           className="icon-button mobile-menu"
@@ -177,7 +202,7 @@ export function Shell({
           onClick={() => setOpen(false)}
         />
       )}
-      <main className="content" id="main-content">
+      <main className="content" id="main-content" ref={main} tabIndex={-1}>
         {sessionNotice}
         {children}
       </main>

@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "ROOTOPATHY CareOS Foundation API",
-    "version": "0.9.0",
-    "description": "Checked contract for the currently implemented public foundation, browser identity, approved-registry governed invitations, maker-checker MFA administration, membership-backed organization selection, and bounded organization-core administration endpoints. Unsafe browser operations require an approved Origin or Referer plus the double-submit CSRF cookie/header pair."
+    "version": "0.15.0",
+    "description": "Checked contract for the currently implemented public foundation, browser identity with approved role-level MFA enforcement, approved-registry governed invitations, maker-checker MFA and membership administration, membership-backed organization selection and access projection, and bounded organization-core administration endpoints with the exact approved readiness catalogue and organization-profile contract. Unsafe browser operations require an approved Origin or Referer plus the double-submit CSRF cookie/header pair."
   },
   "servers": [
     {
@@ -149,7 +149,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Anonymous, pending-MFA, or fully authenticated session state",
+            "description": "Anonymous, MFA challenge, mandatory MFA enrollment, or fully authenticated session state",
             "headers": {
               "X-Correlation-Id": {
                 "$ref": "#/components/headers/CorrelationId"
@@ -339,6 +339,7 @@
     "/api/v1/auth/mfa/enrollments": {
       "post": {
         "operationId": "startMfaEnrollment",
+        "description": "Starts recent-authenticated TOTP enrollment for either a fully authenticated account or a restricted session whose approved active role mandates MFA.",
         "parameters": [
           {
             "$ref": "#/components/parameters/BrowserOrigin"
@@ -401,6 +402,7 @@
     "/api/v1/auth/mfa/enrollments/verification": {
       "post": {
         "operationId": "verifyMfaEnrollment",
+        "description": "Enables the pending TOTP method and returns one-time recovery codes. A mandatory-enrollment session is atomically upgraded to fully authenticated after verification.",
         "parameters": [
           {
             "$ref": "#/components/parameters/BrowserOrigin"
@@ -1135,6 +1137,485 @@
         }
       }
     },
+    "/api/v1/organizations/{organizationId}/memberships/{membershipId}/change-requests": {
+      "post": {
+        "operationId": "requestOrganizationMembershipChange",
+        "description": "Creates an immutable, time-bounded request for an exact non-owner role change or revocation after permission, reason, recent-authentication, recent-MFA, delegation, target-separation, and membership-revision checks.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          },
+          {
+            "$ref": "#/components/parameters/MembershipId"
+          },
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MembershipChangeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Membership change approval requested",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipChangeMutation"
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "412": { "$ref": "#/components/responses/PreconditionFailed" },
+          "428": { "$ref": "#/components/responses/PreconditionRequired" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/memberships/{membershipId}/change-requests/{approvalId}/approvals": {
+      "post": {
+        "operationId": "approveOrganizationMembershipChange",
+        "description": "Records a recent-MFA-authenticated decision by an authorized owner distinct from both the original requester and target member; approval does not change access.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          },
+          {
+            "$ref": "#/components/parameters/MembershipId"
+          },
+          {
+            "$ref": "#/components/parameters/ApprovalId"
+          },
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MembershipChangeReasonRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Membership change independently approved",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipChangeMutation"
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "428": { "$ref": "#/components/responses/PreconditionRequired" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/memberships/{membershipId}/change-requests/{approvalId}/executions": {
+      "post": {
+        "operationId": "executeOrganizationMembershipChange",
+        "description": "Consumes the exact independent approval only for its recent-MFA-authenticated original requester and atomically applies the requested role change or revocation with governance evidence.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          },
+          {
+            "$ref": "#/components/parameters/MembershipId"
+          },
+          {
+            "$ref": "#/components/parameters/ApprovalId"
+          },
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MembershipChangeReasonRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Approved membership change applied",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipChangeMutation"
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "428": { "$ref": "#/components/responses/PreconditionRequired" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/memberships/{membershipId}/owner-transfer-requests": {
+      "post": {
+        "operationId": "requestOrganizationOwnerTransfer",
+        "description": "Creates an immutable, time-bounded request for an exact owner promotion or demotion after owner permission, reason, recent-authentication, recent-MFA, target-separation, approved-role, and membership-revision checks.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          },
+          {
+            "$ref": "#/components/parameters/MembershipId"
+          },
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OwnerTransferRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Owner transfer approval requested",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipChangeMutation"
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "412": { "$ref": "#/components/responses/PreconditionFailed" },
+          "428": { "$ref": "#/components/responses/PreconditionRequired" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/memberships/{membershipId}/owner-transfer-requests/{approvalId}/approvals": {
+      "post": {
+        "operationId": "approveOrganizationOwnerTransfer",
+        "description": "Records a recent-MFA-authenticated decision by an authorized owner distinct from both the original requester and target member; approval does not change owner access.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          },
+          {
+            "$ref": "#/components/parameters/MembershipId"
+          },
+          {
+            "$ref": "#/components/parameters/ApprovalId"
+          },
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MembershipChangeReasonRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Owner transfer independently approved",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipChangeMutation"
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "428": { "$ref": "#/components/responses/PreconditionRequired" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/memberships/{membershipId}/owner-transfer-requests/{approvalId}/executions": {
+      "post": {
+        "operationId": "executeOrganizationOwnerTransfer",
+        "description": "Consumes the exact independent approval only for its recent-MFA-authenticated original owner requester and atomically applies the requested owner promotion or demotion with final-owner protection and governance evidence.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          },
+          {
+            "$ref": "#/components/parameters/MembershipId"
+          },
+          {
+            "$ref": "#/components/parameters/ApprovalId"
+          },
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MembershipChangeReasonRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Approved owner transfer applied",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipChangeMutation"
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "428": { "$ref": "#/components/responses/PreconditionRequired" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/memberships": {
+      "get": {
+        "operationId": "listOrganizationMemberships",
+        "description": "Returns a minimum-necessary, snapshot-classified cursor page of organization memberships. Filters are allow-listed, cursors are signed and bound to the tenant and filters, and action keys are projected from current server authorization rather than inferred by the client.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "Normalized literal search across member display name and email.",
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "description": "Derived access-state filter evaluated at the page snapshot time.",
+            "schema": {
+              "type": "string",
+              "enum": ["active", "scheduled", "suspended", "expired", "revoked"]
+            }
+          },
+          {
+            "name": "roleKey",
+            "in": "query",
+            "required": false,
+            "description": "Exact active interactive role key from the approved registry.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "pattern": "^[a-z][a-z0-9]*([._:-][a-z0-9]+)*$"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized organization membership page",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationMembershipPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
     "/api/v1/organizations/{organizationId}/setup-readiness": {
       "get": {
         "operationId": "getAdministrationReadiness",
@@ -1379,6 +1860,16 @@
           "format": "uuid"
         }
       },
+      "MembershipId": {
+        "name": "membershipId",
+        "in": "path",
+        "required": true,
+        "description": "Opaque identifier of an organization membership.",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
       "ApprovalId": {
         "name": "approvalId",
         "in": "path",
@@ -1511,7 +2002,7 @@
         }
       },
       "MfaPendingSession": {
-        "description": "Primary credentials accepted; MFA challenge required",
+        "description": "Primary credentials accepted; an MFA challenge or mandatory authenticator enrollment is required",
         "headers": {
           "X-Correlation-Id": {
             "$ref": "#/components/headers/CorrelationId"
@@ -1805,11 +2296,22 @@
       "SessionState": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["state", "user", "recentAuthentication", "mfaEnabled"],
+        "required": [
+          "state",
+          "user",
+          "recentAuthentication",
+          "mfaEnabled",
+          "mfaRequired"
+        ],
         "properties": {
           "state": {
             "type": "string",
-            "enum": ["anonymous", "mfa_required", "authenticated"]
+            "enum": [
+              "anonymous",
+              "mfa_required",
+              "mfa_enrollment_required",
+              "authenticated"
+            ]
           },
           "user": {
             "oneOf": [
@@ -1826,6 +2328,10 @@
           },
           "mfaEnabled": {
             "type": "boolean"
+          },
+          "mfaRequired": {
+            "type": "boolean",
+            "description": "True when at least one currently effective approved membership role mandates MFA."
           }
         }
       },
@@ -2021,13 +2527,161 @@
           }
         }
       },
-      "AdministrationReadiness": {
+      "OrganizationMembershipPage": {
         "type": "object",
         "additionalProperties": false,
         "required": [
           "organizationId",
+          "asOf",
+          "items",
+          "page",
+          "availableActions"
+        ],
+        "properties": {
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "asOf": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrganizationMembershipSummary"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/CursorPageMetadata"
+          },
+          "availableActions": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "issueInvitation",
+                "approveMembershipChange",
+                "executeMembershipChange",
+                "approveOwnerTransfer",
+                "executeOwnerTransfer"
+              ]
+            }
+          }
+        }
+      },
+      "OrganizationMembershipSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "membershipId",
+          "userId",
+          "displayName",
+          "email",
+          "accountStatus",
+          "roleKey",
+          "roleDisplayName",
+          "roleStatus",
+          "finalOwner",
+          "accessState",
+          "effectiveFrom",
+          "effectiveTo",
+          "lockVersion",
+          "mfaEnabled",
+          "availableActions"
+        ],
+        "properties": {
+          "membershipId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 320
+          },
+          "accountStatus": {
+            "type": "string",
+            "enum": ["invited", "active", "suspended", "disabled"]
+          },
+          "roleKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^[a-z][a-z0-9]*([._:-][a-z0-9]+)*$"
+          },
+          "roleDisplayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "roleStatus": {
+            "type": "string",
+            "enum": ["active", "reference", "retired"]
+          },
+          "finalOwner": {
+            "type": "boolean"
+          },
+          "accessState": {
+            "type": "string",
+            "enum": ["active", "scheduled", "suspended", "expired", "revoked"]
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "effectiveTo": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "lockVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "mfaEnabled": {
+            "type": "boolean"
+          },
+          "availableActions": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "requestMfaReset",
+                "requestRoleChange",
+                "requestRevocation",
+                "requestOwnerTransfer"
+              ]
+            }
+          }
+        }
+      },
+      "AdministrationReadiness": {
+        "type": "object",
+        "additionalProperties": false,
+        "x-careos-freshness-seconds": 900,
+        "required": [
+          "organizationId",
           "lifecycleStatus",
+          "catalogueVersion",
+          "organizationRevision",
+          "evaluatedAt",
+          "expiresAt",
           "completedGates",
+          "blockedGates",
+          "warningGates",
+          "notApplicableGates",
           "totalGates",
           "activeMemberships",
           "facilityCount",
@@ -2041,15 +2695,49 @@
           },
           "lifecycleStatus": {
             "type": "string",
-            "enum": ["draft", "active", "suspended", "disabled"]
+            "enum": ["draft", "under_review", "active", "suspended", "closed"]
+          },
+          "catalogueVersion": {
+            "type": "string",
+            "const": "m1-readiness-v1"
+          },
+          "organizationRevision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "evaluatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
           },
           "completedGates": {
             "type": "integer",
-            "minimum": 0
+            "minimum": 0,
+            "maximum": 15
+          },
+          "blockedGates": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 15
+          },
+          "warningGates": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 15
+          },
+          "notApplicableGates": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 15
           },
           "totalGates": {
             "type": "integer",
-            "minimum": 1
+            "minimum": 15,
+            "maximum": 15
           },
           "activeMemberships": {
             "type": "integer",
@@ -2065,7 +2753,8 @@
           },
           "gates": {
             "type": "array",
-            "minItems": 1,
+            "minItems": 15,
+            "maxItems": 15,
             "items": {
               "$ref": "#/components/schemas/ReadinessGate"
             }
@@ -2075,25 +2764,75 @@
       "ReadinessGate": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["key", "label", "status", "detail", "href"],
+        "required": [
+          "key",
+          "version",
+          "label",
+          "outcome",
+          "reasonCode",
+          "remediationCode",
+          "detail",
+          "evidenceReferences",
+          "href"
+        ],
         "properties": {
           "key": {
             "type": "string",
-            "pattern": "^[a-z][a-z0-9-]{0,79}$"
+            "enum": [
+              "organization.profile.complete",
+              "organization.identifier.primary_verified",
+              "organization.contact.coverage",
+              "organization.governance.coverage",
+              "access.final_owner",
+              "access.mfa_enforced",
+              "network.facility.minimum",
+              "network.hierarchy.valid",
+              "network.hours.valid",
+              "service.catalogue.active",
+              "service.assignment.valid",
+              "identifier.scheme.active",
+              "configuration.integrity",
+              "governance.registry.active",
+              "platform.dependencies.ready"
+            ]
+          },
+          "version": {
+            "type": "string",
+            "const": "m1-readiness-v1"
           },
           "label": {
             "type": "string",
             "minLength": 1,
             "maxLength": 160
           },
-          "status": {
+          "outcome": {
             "type": "string",
-            "enum": ["complete", "in_progress", "not_started", "blocked"]
+            "enum": ["complete", "warning", "blocked", "not_applicable"]
+          },
+          "reasonCode": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(\\.[a-z0-9_]+)+$",
+            "maxLength": 160
+          },
+          "remediationCode": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(\\.[a-z0-9_]+)+$",
+            "maxLength": 160
           },
           "detail": {
             "type": "string",
             "minLength": 1,
             "maxLength": 500
+          },
+          "evidenceReferences": {
+            "type": "array",
+            "maxItems": 4,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            }
           },
           "href": {
             "type": "string",
@@ -2108,9 +2847,13 @@
           "organizationId",
           "legalName",
           "displayName",
+          "tradingName",
+          "organizationType",
           "countryCode",
           "timezone",
+          "locale",
           "lifecycleStatus",
+          "editable",
           "lockVersion",
           "updatedAt"
         ],
@@ -2121,13 +2864,22 @@
           },
           "legalName": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 240
+            "minLength": 2,
+            "maxLength": 200
           },
           "displayName": {
             "type": "string",
-            "minLength": 1,
+            "minLength": 2,
+            "maxLength": 120
+          },
+          "tradingName": {
+            "type": ["string", "null"],
+            "minLength": 2,
             "maxLength": 160
+          },
+          "organizationType": {
+            "type": ["string", "null"],
+            "enum": ["care_provider", "care_network", "administrative", null]
           },
           "countryCode": {
             "type": "string",
@@ -2138,9 +2890,19 @@
             "minLength": 1,
             "maxLength": 80
           },
+          "locale": {
+            "type": ["string", "null"],
+            "minLength": 2,
+            "maxLength": 255,
+            "pattern": "^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$"
+          },
           "lifecycleStatus": {
             "type": "string",
-            "enum": ["draft", "active", "suspended", "disabled"]
+            "enum": ["draft", "under_review", "active", "suspended", "closed"]
+          },
+          "editable": {
+            "type": "boolean",
+            "description": "True only when the current actor has the live organization.profile.manage permission."
           },
           "lockVersion": {
             "type": "integer",
@@ -2156,17 +2918,35 @@
       "OrganizationProfileUpdateRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["legalName", "displayName", "countryCode", "timezone", "reason"],
+        "required": [
+          "legalName",
+          "displayName",
+          "tradingName",
+          "organizationType",
+          "countryCode",
+          "timezone",
+          "locale",
+          "reason"
+        ],
         "properties": {
           "legalName": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 240
+            "minLength": 2,
+            "maxLength": 200
           },
           "displayName": {
             "type": "string",
-            "minLength": 1,
+            "minLength": 2,
+            "maxLength": 120
+          },
+          "tradingName": {
+            "type": ["string", "null"],
+            "minLength": 2,
             "maxLength": 160
+          },
+          "organizationType": {
+            "type": "string",
+            "enum": ["care_provider", "care_network", "administrative"]
           },
           "countryCode": {
             "type": "string",
@@ -2177,10 +2957,16 @@
             "minLength": 1,
             "maxLength": 80
           },
+          "locale": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 255,
+            "pattern": "^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$"
+          },
           "reason": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 2000
+            "minLength": 10,
+            "maxLength": 500
           }
         }
       },
@@ -2200,6 +2986,118 @@
           "status": {
             "type": "string",
             "enum": ["pending", "approved", "reset"]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MembershipChangeRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["changeType", "reason"],
+        "properties": {
+          "changeType": {
+            "type": "string",
+            "enum": ["role_change", "revoke"]
+          },
+          "toRoleKey": {
+            "type": ["string", "null"],
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^[a-z][a-z0-9]*([._:-][a-z0-9]+)*$"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 500
+          }
+        }
+      },
+      "MembershipChangeReasonRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason"],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 500
+          }
+        }
+      },
+      "OwnerTransferRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["toRoleKey", "reason"],
+        "properties": {
+          "toRoleKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^[a-z][a-z0-9]*([._:-][a-z0-9]+)*$"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 500
+          }
+        }
+      },
+      "MembershipChangeMutation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "approvalId",
+          "membershipId",
+          "targetUserId",
+          "changeType",
+          "fromRoleKey",
+          "toRoleKey",
+          "lockVersion",
+          "status",
+          "expiresAt"
+        ],
+        "properties": {
+          "approvalId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "membershipId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetUserId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "changeType": {
+            "type": "string",
+            "enum": [
+              "role_change",
+              "revoke",
+              "owner_promotion",
+              "owner_demotion"
+            ]
+          },
+          "fromRoleKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "toRoleKey": {
+            "type": ["string", "null"],
+            "maxLength": 100
+          },
+          "lockVersion": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "approved", "changed", "revoked", "transferred"]
           },
           "expiresAt": {
             "type": "string",

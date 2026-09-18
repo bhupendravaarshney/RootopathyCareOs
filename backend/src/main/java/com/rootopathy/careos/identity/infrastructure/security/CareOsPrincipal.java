@@ -19,6 +19,7 @@ public final class CareOsPrincipal implements UserDetails, CredentialsContainer,
     private final String email;
     private final String displayName;
     private final long securityVersion;
+    private final boolean mfaEnabled;
     private final boolean mfaRequired;
     private String passwordHash;
 
@@ -28,12 +29,14 @@ public final class CareOsPrincipal implements UserDetails, CredentialsContainer,
             String displayName,
             String passwordHash,
             long securityVersion,
+            boolean mfaEnabled,
             boolean mfaRequired) {
         this.id = id;
         this.email = email;
         this.displayName = displayName;
         this.passwordHash = passwordHash;
         this.securityVersion = securityVersion;
+        this.mfaEnabled = mfaEnabled;
         this.mfaRequired = mfaRequired;
     }
 
@@ -54,13 +57,21 @@ public final class CareOsPrincipal implements UserDetails, CredentialsContainer,
         return securityVersion;
     }
 
+    public boolean mfaEnabled() {
+        return mfaEnabled;
+    }
+
     public boolean mfaRequired() {
         return mfaRequired;
     }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        var authority = mfaRequired ? CareOsAuthorities.MFA_PENDING : CareOsAuthorities.AUTHENTICATED;
+        var authority = mfaEnabled
+                ? CareOsAuthorities.MFA_PENDING
+                : mfaRequired
+                        ? CareOsAuthorities.MFA_ENROLLMENT_PENDING
+                        : CareOsAuthorities.AUTHENTICATED;
         return List.of(new SimpleGrantedAuthority(authority));
     }
 

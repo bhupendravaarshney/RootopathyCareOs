@@ -82,6 +82,7 @@ describe('CareOsApiClient', () => {
       jsonResponse(
         {
           mfaEnabled: false,
+          mfaRequired: false,
           recentAuthentication: true,
           state: 'authenticated',
           user: {
@@ -151,6 +152,7 @@ describe('CareOsApiClient', () => {
       jsonResponse(
         {
           mfaEnabled: false,
+          mfaRequired: false,
           recentAuthentication: true,
           state: 'authenticated',
           user: {
@@ -331,11 +333,15 @@ describe('CareOsApiClient', () => {
     const profile = {
       countryCode: 'IN',
       displayName: 'North Clinic',
+      editable: true,
       legalName: 'North Clinic Private Limited',
       lifecycleStatus: 'draft',
+      locale: 'en-IN',
       lockVersion: 4,
       organizationId,
+      organizationType: 'care_provider',
       timezone: 'Asia/Kolkata',
+      tradingName: null,
       updatedAt: '2026-09-16T08:00:00Z',
     };
     const fetcher = mockFetch(
@@ -367,8 +373,11 @@ describe('CareOsApiClient', () => {
           countryCode: 'IN',
           displayName: 'North Care Network',
           legalName: 'North Clinic Private Limited',
+          locale: 'en-IN',
+          organizationType: 'care_network',
           reason: 'Approved legal identity review CARE-42',
           timezone: 'Asia/Kolkata',
+          tradingName: 'North Care',
         },
         '"organization-profile:4"',
         'profile:11111111-1111-4111-8111-111111111111',
@@ -390,6 +399,48 @@ describe('CareOsApiClient', () => {
     expect(updateHeaders.get('X-XSRF-TOKEN')).toBe('valid-csrf-token-123456');
   });
 
+  it('lists memberships with an opaque checked cursor and allow-listed filters', async () => {
+    const organizationId = '22222222-2222-4222-8222-222222222222';
+    const fetcher = mockFetch(
+      jsonResponse({
+        asOf: '2026-09-17T05:30:00Z',
+        availableActions: ['issueInvitation'],
+        items: [],
+        organizationId,
+        page: { hasMore: false, limit: 25, nextCursor: null },
+      }),
+    );
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+
+    await expect(
+      client.listOrganizationMemberships(organizationId, {
+        cursor: 'signed_cursor-1',
+        limit: 25,
+        roleKey: 'security_administrator',
+        search: '  Asha Verma  ',
+        state: 'active',
+      }),
+    ).resolves.toMatchObject({ ok: true, status: 200 });
+
+    const [url, init] = fetcher.mock.calls[0]!;
+    const headers = new Headers(init?.headers);
+    expect(url).toBe(
+      `/api/v1/organizations/${organizationId}/memberships?search=Asha+Verma&state=active&roleKey=security_administrator&limit=25&cursor=signed_cursor-1`,
+    );
+    expect(init?.credentials).toBe('include');
+    expect(init?.method).toBe('GET');
+    expect(headers.get('X-Correlation-Id')).toBe('request-1');
+
+    expect(() =>
+      client.listOrganizationMemberships(organizationId, { cursor: 'not a cursor' }),
+    ).toThrow(/cursor has an invalid format/i);
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
   it('rejects a weak or malformed profile precondition before CSRF bootstrap', () => {
     const fetcher = mockFetch();
     const client = createCareOsApiClient({ baseUrl: '/api', fetch: fetcher });
@@ -401,8 +452,11 @@ describe('CareOsApiClient', () => {
           countryCode: 'IN',
           displayName: 'North Clinic',
           legalName: 'North Clinic Private Limited',
+          locale: 'en-IN',
+          organizationType: 'care_provider',
           reason: 'Approved identity review',
           timezone: 'Asia/Kolkata',
+          tradingName: null,
         },
         'W/"organization-profile:4"',
         'profile:11111111-1111-4111-8111-111111111111',
@@ -493,6 +547,175 @@ describe('CareOsApiClient', () => {
       'mfa-request:11111111-1111-4111-8111-111111111111',
       'mfa-approve:11111111-1111-4111-8111-111111111111',
       'mfa-execute:11111111-1111-4111-8111-111111111111',
+    ]);
+  });
+
+  it('sends governed membership transitions with exact route and revision evidence', async () => {
+    const csrfPayload = {
+      headerName: 'X-XSRF-TOKEN',
+      parameterName: '_csrf',
+      token: 'valid-csrf-token-123456',
+    };
+    const organizationId = '22222222-2222-4222-8222-222222222222';
+    const membershipId = '77777777-7777-4777-8777-777777777777';
+    const targetUserId = '88888888-8888-4888-8888-888888888888';
+    const approvalId = '99999999-9999-4999-8999-999999999999';
+    const expiresAt = '2026-09-17T12:00:00Z';
+    const mutation = {
+      approvalId,
+      changeType: 'role_change' as const,
+      expiresAt,
+      fromRoleKey: 'security_administrator',
+      lockVersion: 4,
+      membershipId,
+      targetUserId,
+      toRoleKey: 'organization_viewer',
+    };
+    const fetcher = mockFetch(
+      jsonResponse(csrfPayload),
+      jsonResponse({ ...mutation, status: 'pending' }, { status: 201 }),
+      jsonResponse(csrfPayload),
+      jsonResponse({ ...mutation, status: 'approved' }),
+      jsonResponse(csrfPayload),
+      jsonResponse({ ...mutation, lockVersion: 5, status: 'changed' }),
+    );
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+
+    await expect(
+      client.requestOrganizationMembershipChange(
+        organizationId,
+        membershipId,
+        {
+          changeType: 'role_change',
+          reason: 'Approved least-privilege role adjustment',
+          toRoleKey: 'organization_viewer',
+        },
+        `"organization-membership:${membershipId}:4"`,
+        'membership-request:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ ok: true, status: 201 });
+    await expect(
+      client.approveOrganizationMembershipChange(
+        organizationId,
+        membershipId,
+        approvalId,
+        { reason: 'Independent access review completed' },
+        'membership-approve:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ ok: true, status: 200 });
+    await expect(
+      client.executeOrganizationMembershipChange(
+        organizationId,
+        membershipId,
+        approvalId,
+        { reason: 'Approved least-privilege role adjustment' },
+        'membership-execute:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ ok: true, status: 200 });
+
+    const mutationCalls = [fetcher.mock.calls[1]!, fetcher.mock.calls[3]!, fetcher.mock.calls[5]!];
+    expect(mutationCalls.map(([url]) => url)).toEqual([
+      `/api/v1/organizations/${organizationId}/memberships/${membershipId}/change-requests`,
+      `/api/v1/organizations/${organizationId}/memberships/${membershipId}/change-requests/${approvalId}/approvals`,
+      `/api/v1/organizations/${organizationId}/memberships/${membershipId}/change-requests/${approvalId}/executions`,
+    ]);
+    expect(new Headers(mutationCalls[0]![1]?.headers).get('If-Match')).toBe(
+      `"organization-membership:${membershipId}:4"`,
+    );
+    expect(
+      mutationCalls.map(([, init]) => new Headers(init?.headers).get('Idempotency-Key')),
+    ).toEqual([
+      'membership-request:11111111-1111-4111-8111-111111111111',
+      'membership-approve:11111111-1111-4111-8111-111111111111',
+      'membership-execute:11111111-1111-4111-8111-111111111111',
+    ]);
+    expect(fetcher).toHaveBeenCalledTimes(6);
+  });
+
+  it('sends governed owner transitions through their distinct checked routes', async () => {
+    const csrfPayload = {
+      headerName: 'X-XSRF-TOKEN',
+      parameterName: '_csrf',
+      token: 'valid-csrf-token-123456',
+    };
+    const organizationId = '22222222-2222-4222-8222-222222222222';
+    const membershipId = '77777777-7777-4777-8777-777777777777';
+    const targetUserId = '88888888-8888-4888-8888-888888888888';
+    const approvalId = '99999999-9999-4999-8999-999999999999';
+    const mutation = {
+      approvalId,
+      changeType: 'owner_promotion' as const,
+      expiresAt: '2026-09-17T12:00:00Z',
+      fromRoleKey: 'security_administrator',
+      lockVersion: 4,
+      membershipId,
+      targetUserId,
+      toRoleKey: 'organization_owner',
+    };
+    const fetcher = mockFetch(
+      jsonResponse(csrfPayload),
+      jsonResponse({ ...mutation, status: 'pending' }, { status: 201 }),
+      jsonResponse(csrfPayload),
+      jsonResponse({ ...mutation, status: 'approved' }),
+      jsonResponse(csrfPayload),
+      jsonResponse({ ...mutation, lockVersion: 5, status: 'transferred' }),
+    );
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+
+    await expect(
+      client.requestOrganizationOwnerTransfer(
+        organizationId,
+        membershipId,
+        {
+          reason: 'Approved owner succession promotion request',
+          toRoleKey: 'organization_owner',
+        },
+        `"organization-membership:${membershipId}:4"`,
+        'owner-request:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ ok: true, status: 201 });
+    await expect(
+      client.approveOrganizationOwnerTransfer(
+        organizationId,
+        membershipId,
+        approvalId,
+        { reason: 'Independent owner succession review completed' },
+        'owner-approve:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ ok: true, status: 200 });
+    await expect(
+      client.executeOrganizationOwnerTransfer(
+        organizationId,
+        membershipId,
+        approvalId,
+        { reason: 'Approved owner succession promotion request' },
+        'owner-execute:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ ok: true, status: 200 });
+
+    const mutationCalls = [fetcher.mock.calls[1]!, fetcher.mock.calls[3]!, fetcher.mock.calls[5]!];
+    expect(mutationCalls.map(([url]) => url)).toEqual([
+      `/api/v1/organizations/${organizationId}/memberships/${membershipId}/owner-transfer-requests`,
+      `/api/v1/organizations/${organizationId}/memberships/${membershipId}/owner-transfer-requests/${approvalId}/approvals`,
+      `/api/v1/organizations/${organizationId}/memberships/${membershipId}/owner-transfer-requests/${approvalId}/executions`,
+    ]);
+    expect(new Headers(mutationCalls[0]![1]?.headers).get('If-Match')).toBe(
+      `"organization-membership:${membershipId}:4"`,
+    );
+    expect(
+      mutationCalls.map(([, init]) => new Headers(init?.headers).get('Idempotency-Key')),
+    ).toEqual([
+      'owner-request:11111111-1111-4111-8111-111111111111',
+      'owner-approve:11111111-1111-4111-8111-111111111111',
+      'owner-execute:11111111-1111-4111-8111-111111111111',
     ]);
   });
 

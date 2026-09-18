@@ -27,10 +27,14 @@ export type CsrfToken = {
 };
 
 export type SessionState = {
-  state: 'anonymous' | 'mfa_required' | 'authenticated';
+  state: 'anonymous' | 'mfa_required' | 'mfa_enrollment_required' | 'authenticated';
   user: User | null;
   recentAuthentication: boolean;
   mfaEnabled: boolean;
+  /**
+   * True when at least one currently effective approved membership role mandates MFA.
+   */
+  mfaRequired: boolean;
 };
 
 export type User = {
@@ -90,22 +94,98 @@ export type MfaAdministrationReasonRequest = {
   reason: string;
 };
 
+export type OrganizationMembershipPage = {
+  organizationId: string;
+  asOf: string;
+  items: Array<OrganizationMembershipSummary>;
+  page: CursorPageMetadata;
+  availableActions: Array<
+    | 'issueInvitation'
+    | 'approveMembershipChange'
+    | 'executeMembershipChange'
+    | 'approveOwnerTransfer'
+    | 'executeOwnerTransfer'
+  >;
+};
+
+export type OrganizationMembershipSummary = {
+  membershipId: string;
+  userId: string;
+  displayName: string;
+  email: string;
+  accountStatus: 'invited' | 'active' | 'suspended' | 'disabled';
+  roleKey: string;
+  roleDisplayName: string;
+  roleStatus: 'active' | 'reference' | 'retired';
+  finalOwner: boolean;
+  accessState: 'active' | 'scheduled' | 'suspended' | 'expired' | 'revoked';
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  lockVersion: number;
+  mfaEnabled: boolean;
+  availableActions: Array<
+    'requestMfaReset' | 'requestRoleChange' | 'requestRevocation' | 'requestOwnerTransfer'
+  >;
+};
+
 export type AdministrationReadiness = {
   organizationId: string;
-  lifecycleStatus: 'draft' | 'active' | 'suspended' | 'disabled';
+  lifecycleStatus: 'draft' | 'under_review' | 'active' | 'suspended' | 'closed';
+  catalogueVersion: 'm1-readiness-v1';
+  organizationRevision: number;
+  evaluatedAt: string;
+  expiresAt: string;
   completedGates: number;
+  blockedGates: number;
+  warningGates: number;
+  notApplicableGates: number;
   totalGates: number;
   activeMemberships: number;
   facilityCount: number;
   draftFacilityCount: number;
-  gates: Array<ReadinessGate>;
+  gates: [
+    ReadinessGate,
+    ReadinessGate,
+    ReadinessGate,
+    ReadinessGate,
+    ReadinessGate,
+    ReadinessGate,
+    ReadinessGate,
+    ReadinessGate,
+    ReadinessGate,
+    ReadinessGate,
+    ReadinessGate,
+    ReadinessGate,
+    ReadinessGate,
+    ReadinessGate,
+    ReadinessGate,
+  ];
 };
 
 export type ReadinessGate = {
-  key: string;
+  key:
+    | 'organization.profile.complete'
+    | 'organization.identifier.primary_verified'
+    | 'organization.contact.coverage'
+    | 'organization.governance.coverage'
+    | 'access.final_owner'
+    | 'access.mfa_enforced'
+    | 'network.facility.minimum'
+    | 'network.hierarchy.valid'
+    | 'network.hours.valid'
+    | 'service.catalogue.active'
+    | 'service.assignment.valid'
+    | 'identifier.scheme.active'
+    | 'configuration.integrity'
+    | 'governance.registry.active'
+    | 'platform.dependencies.ready';
+  version: 'm1-readiness-v1';
   label: string;
-  status: 'complete' | 'in_progress' | 'not_started' | 'blocked';
+  outcome: 'complete' | 'warning' | 'blocked' | 'not_applicable';
+  reasonCode: string;
+  remediationCode: string;
   detail: string;
+  evidenceReferences: Array<string>;
   href: string;
 };
 
@@ -113,9 +193,16 @@ export type OrganizationProfile = {
   organizationId: string;
   legalName: string;
   displayName: string;
+  tradingName: string | null;
+  organizationType: 'care_provider' | 'care_network' | 'administrative' | null;
   countryCode: string;
   timezone: string;
-  lifecycleStatus: 'draft' | 'active' | 'suspended' | 'disabled';
+  locale: string | null;
+  lifecycleStatus: 'draft' | 'under_review' | 'active' | 'suspended' | 'closed';
+  /**
+   * True only when the current actor has the live organization.profile.manage permission.
+   */
+  editable: boolean;
   lockVersion: number;
   updatedAt: string;
 };
@@ -123,8 +210,11 @@ export type OrganizationProfile = {
 export type OrganizationProfileUpdateRequest = {
   legalName: string;
   displayName: string;
+  tradingName: string | null;
+  organizationType: 'care_provider' | 'care_network' | 'administrative';
   countryCode: string;
   timezone: string;
+  locale: string;
   reason: string;
 };
 
@@ -132,6 +222,33 @@ export type MfaResetMutation = {
   approvalId: string;
   targetUserId: string;
   status: 'pending' | 'approved' | 'reset';
+  expiresAt: string;
+};
+
+export type MembershipChangeRequest = {
+  changeType: 'role_change' | 'revoke';
+  toRoleKey?: string | null;
+  reason: string;
+};
+
+export type MembershipChangeReasonRequest = {
+  reason: string;
+};
+
+export type OwnerTransferRequest = {
+  toRoleKey: string;
+  reason: string;
+};
+
+export type MembershipChangeMutation = {
+  approvalId: string;
+  membershipId: string;
+  targetUserId: string;
+  changeType: 'role_change' | 'revoke' | 'owner_promotion' | 'owner_demotion';
+  fromRoleKey: string;
+  toRoleKey: string | null;
+  lockVersion: number;
+  status: 'pending' | 'approved' | 'changed' | 'revoked' | 'transferred';
   expiresAt: string;
 };
 
@@ -209,6 +326,11 @@ export type InvitationId = string;
  * Opaque identifier of the organization member whose MFA is being administered.
  */
 export type TargetUserId = string;
+
+/**
+ * Opaque identifier of an organization membership.
+ */
+export type MembershipId = string;
 
 /**
  * Opaque identifier of a time-bounded independent approval workflow.
@@ -337,7 +459,7 @@ export type GetAuthenticationSessionError =
 
 export type GetAuthenticationSessionResponses = {
   /**
-   * Anonymous, pending-MFA, or fully authenticated session state
+   * Anonymous, MFA challenge, mandatory MFA enrollment, or fully authenticated session state
    */
   200: SessionState;
 };
@@ -389,7 +511,7 @@ export type LoginResponses = {
    */
   200: SessionState;
   /**
-   * Primary credentials accepted; MFA challenge required
+   * Primary credentials accepted; an MFA challenge or mandatory authenticator enrollment is required
    */
   202: SessionState;
 };
@@ -1272,6 +1394,547 @@ export type ExecuteMfaAdministrativeResetResponses = {
 
 export type ExecuteMfaAdministrativeResetResponse =
   ExecuteMfaAdministrativeResetResponses[keyof ExecuteMfaAdministrativeResetResponses];
+
+export type RequestOrganizationMembershipChangeData = {
+  body: MembershipChangeRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    /**
+     * Opaque identifier of an organization membership.
+     */
+    membershipId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/memberships/{membershipId}/change-requests';
+};
+
+export type RequestOrganizationMembershipChangeErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type RequestOrganizationMembershipChangeError =
+  RequestOrganizationMembershipChangeErrors[keyof RequestOrganizationMembershipChangeErrors];
+
+export type RequestOrganizationMembershipChangeResponses = {
+  /**
+   * Membership change approval requested
+   */
+  201: MembershipChangeMutation;
+};
+
+export type RequestOrganizationMembershipChangeResponse =
+  RequestOrganizationMembershipChangeResponses[keyof RequestOrganizationMembershipChangeResponses];
+
+export type ApproveOrganizationMembershipChangeData = {
+  body: MembershipChangeReasonRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    /**
+     * Opaque identifier of an organization membership.
+     */
+    membershipId: string;
+    /**
+     * Opaque identifier of a time-bounded independent approval workflow.
+     */
+    approvalId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/memberships/{membershipId}/change-requests/{approvalId}/approvals';
+};
+
+export type ApproveOrganizationMembershipChangeErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type ApproveOrganizationMembershipChangeError =
+  ApproveOrganizationMembershipChangeErrors[keyof ApproveOrganizationMembershipChangeErrors];
+
+export type ApproveOrganizationMembershipChangeResponses = {
+  /**
+   * Membership change independently approved
+   */
+  200: MembershipChangeMutation;
+};
+
+export type ApproveOrganizationMembershipChangeResponse =
+  ApproveOrganizationMembershipChangeResponses[keyof ApproveOrganizationMembershipChangeResponses];
+
+export type ExecuteOrganizationMembershipChangeData = {
+  body: MembershipChangeReasonRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    /**
+     * Opaque identifier of an organization membership.
+     */
+    membershipId: string;
+    /**
+     * Opaque identifier of a time-bounded independent approval workflow.
+     */
+    approvalId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/memberships/{membershipId}/change-requests/{approvalId}/executions';
+};
+
+export type ExecuteOrganizationMembershipChangeErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type ExecuteOrganizationMembershipChangeError =
+  ExecuteOrganizationMembershipChangeErrors[keyof ExecuteOrganizationMembershipChangeErrors];
+
+export type ExecuteOrganizationMembershipChangeResponses = {
+  /**
+   * Approved membership change applied
+   */
+  200: MembershipChangeMutation;
+};
+
+export type ExecuteOrganizationMembershipChangeResponse =
+  ExecuteOrganizationMembershipChangeResponses[keyof ExecuteOrganizationMembershipChangeResponses];
+
+export type RequestOrganizationOwnerTransferData = {
+  body: OwnerTransferRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    /**
+     * Opaque identifier of an organization membership.
+     */
+    membershipId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/memberships/{membershipId}/owner-transfer-requests';
+};
+
+export type RequestOrganizationOwnerTransferErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type RequestOrganizationOwnerTransferError =
+  RequestOrganizationOwnerTransferErrors[keyof RequestOrganizationOwnerTransferErrors];
+
+export type RequestOrganizationOwnerTransferResponses = {
+  /**
+   * Owner transfer approval requested
+   */
+  201: MembershipChangeMutation;
+};
+
+export type RequestOrganizationOwnerTransferResponse =
+  RequestOrganizationOwnerTransferResponses[keyof RequestOrganizationOwnerTransferResponses];
+
+export type ApproveOrganizationOwnerTransferData = {
+  body: MembershipChangeReasonRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    /**
+     * Opaque identifier of an organization membership.
+     */
+    membershipId: string;
+    /**
+     * Opaque identifier of a time-bounded independent approval workflow.
+     */
+    approvalId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/memberships/{membershipId}/owner-transfer-requests/{approvalId}/approvals';
+};
+
+export type ApproveOrganizationOwnerTransferErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type ApproveOrganizationOwnerTransferError =
+  ApproveOrganizationOwnerTransferErrors[keyof ApproveOrganizationOwnerTransferErrors];
+
+export type ApproveOrganizationOwnerTransferResponses = {
+  /**
+   * Owner transfer independently approved
+   */
+  200: MembershipChangeMutation;
+};
+
+export type ApproveOrganizationOwnerTransferResponse =
+  ApproveOrganizationOwnerTransferResponses[keyof ApproveOrganizationOwnerTransferResponses];
+
+export type ExecuteOrganizationOwnerTransferData = {
+  body: MembershipChangeReasonRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    /**
+     * Opaque identifier of an organization membership.
+     */
+    membershipId: string;
+    /**
+     * Opaque identifier of a time-bounded independent approval workflow.
+     */
+    approvalId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/memberships/{membershipId}/owner-transfer-requests/{approvalId}/executions';
+};
+
+export type ExecuteOrganizationOwnerTransferErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type ExecuteOrganizationOwnerTransferError =
+  ExecuteOrganizationOwnerTransferErrors[keyof ExecuteOrganizationOwnerTransferErrors];
+
+export type ExecuteOrganizationOwnerTransferResponses = {
+  /**
+   * Approved owner transfer applied
+   */
+  200: MembershipChangeMutation;
+};
+
+export type ExecuteOrganizationOwnerTransferResponse =
+  ExecuteOrganizationOwnerTransferResponses[keyof ExecuteOrganizationOwnerTransferResponses];
+
+export type ListOrganizationMembershipsData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: {
+    /**
+     * Normalized literal search across member display name and email.
+     */
+    search?: string;
+    /**
+     * Derived access-state filter evaluated at the page snapshot time.
+     */
+    state?: 'active' | 'scheduled' | 'suspended' | 'expired' | 'revoked';
+    /**
+     * Exact active interactive role key from the approved registry.
+     */
+    roleKey?: string;
+    /**
+     * Opaque continuation cursor returned by the preceding page. Clients must not parse or construct it.
+     */
+    cursor?: string;
+    /**
+     * Maximum number of records requested for one cursor page.
+     */
+    limit?: number;
+  };
+  url: '/api/v1/organizations/{organizationId}/memberships';
+};
+
+export type ListOrganizationMembershipsErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type ListOrganizationMembershipsError =
+  ListOrganizationMembershipsErrors[keyof ListOrganizationMembershipsErrors];
+
+export type ListOrganizationMembershipsResponses = {
+  /**
+   * Authorized organization membership page
+   */
+  200: OrganizationMembershipPage;
+};
+
+export type ListOrganizationMembershipsResponse =
+  ListOrganizationMembershipsResponses[keyof ListOrganizationMembershipsResponses];
 
 export type GetAdministrationReadinessData = {
   body?: never;

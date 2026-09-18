@@ -1,6 +1,7 @@
 package com.rootopathy.careos.config;
 
 import static com.rootopathy.careos.identity.infrastructure.security.CareOsAuthorities.AUTHENTICATED;
+import static com.rootopathy.careos.identity.infrastructure.security.CareOsAuthorities.MFA_ENROLLMENT_PENDING;
 import static com.rootopathy.careos.identity.infrastructure.security.CareOsAuthorities.MFA_PENDING;
 
 import com.rootopathy.careos.identity.api.BrowserOriginFilter;
@@ -9,6 +10,7 @@ import com.rootopathy.careos.identity.api.SecurityAccessFailureHandler;
 import com.rootopathy.careos.identity.api.SessionValidityFilter;
 import com.rootopathy.careos.identity.infrastructure.config.IdentitySecurityProperties;
 import com.rootopathy.careos.identity.infrastructure.config.InvitationPolicyProperties;
+import com.rootopathy.careos.identity.infrastructure.config.MembershipAdministrationPolicyProperties;
 import com.rootopathy.careos.identity.infrastructure.config.MfaAdministrationPolicyProperties;
 import com.rootopathy.careos.identity.infrastructure.security.PersistentUserDetailsService;
 import java.util.List;
@@ -44,6 +46,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @EnableConfigurationProperties({
     IdentitySecurityProperties.class,
     InvitationPolicyProperties.class,
+    MembershipAdministrationPolicyProperties.class,
     MfaAdministrationPolicyProperties.class
 })
 public class SecurityConfig {
@@ -113,6 +116,11 @@ public class SecurityConfig {
                         .authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/mfa/challenges")
                         .hasAuthority(MFA_PENDING)
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/v1/auth/mfa/enrollments",
+                                "/api/v1/auth/mfa/enrollments/verification")
+                        .hasAnyAuthority(AUTHENTICATED, MFA_ENROLLMENT_PENDING)
                         .requestMatchers("/api/v1/**")
                         .hasAuthority(AUTHENTICATED)
                         .anyRequest()

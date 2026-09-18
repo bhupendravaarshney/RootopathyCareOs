@@ -21,7 +21,7 @@ Do not implement random screens. Each phase starts with architecture, mockup rev
 
 ## Current build status
 
-**Phase 0 repository mechanics are complete; target-environment production acceptance remains open.** `m1-candidate-1` was approved unchanged by **bhupendra, developer** on 16 September 2026. The production input gate is `APPROVED` at eight of eight artifacts and package digest `19aff5ce30516b7ee2101c093a8429d8a74394995ca90d486790bcc18a392946`. Flyway V20 records the immutable approval release and activates the approved Module 1 interactive authorization catalogue. The first M1B identity/access increment is implemented; M1B and Module 1 remain in progress.
+**Phase 0 repository mechanics are complete; target-environment production acceptance remains open.** `m1-candidate-1` was approved unchanged by **bhupendra, developer** on 16 September 2026. The production input gate is `APPROVED` at eight of eight artifacts and package digest `19aff5ce30516b7ee2101c093a8429d8a74394995ca90d486790bcc18a392946`. Flyway V20 records the immutable approval release and activates the approved Module 1 interactive authorization catalogue; V21 implements the exact approved M1-20 membership-read operation; V22 implements governed organization-wide non-owner role changes and membership revocation; V23 implements final-owner-safe owner promotion/demotion; V24 implements approved mandatory-role MFA enrollment/use and protects factor removal; V25 implements the exact approved M1-07 organization-profile boundary. Five bounded M1B identity/access runtime increments, three shared frontend-conformance increments, and two M1C increments are implemented: M1-05/M1-06 consume the exact ordered live readiness projection, and M1-07 now persists, validates, governs, and renders the approved profile fields with a real profile-complete evaluator. Other missing evaluators remain blocked; persisted configuration validation/activation is not claimed. The facility-scope candidate remains non-authorizing, and M1B, M1C, and Module 1 remain in progress.
 
 ### Phase 0A - build verification and reproducibility (completed 13 September 2026)
 
@@ -367,7 +367,8 @@ This closes the repository work that can be safely implemented without inventing
 
 ### Remaining Phase 0 production acceptance
 
-- [ ] Owner-review, replace or activate the provisional permission/role/operation/event registry and decide organization MFA-enforcement/self-disable policy; bind each future protected business route to an approved operation.
+- [x] Replace the provisional interactive registry with the checksum-approved Module 1 catalogue and enforce its exact mandatory-role MFA/self-disable rule.
+- [ ] If optional viewer/editor organization-level MFA enforcement or self-disable is desired, approve its exact lifecycle/readiness contract first; bind every future protected business route to an approved operation as it is implemented.
 - [x] Provide disabled-in-production reference implementations for governed invitation issuance/revocation/acceptance, existing-account linkage, and a separate non-interactive service-identity authorization path.
 - [x] Enforce delegation ceilings, final-owner protection, recent authentication/reasons, and database-backed maker-checker administrative MFA reset for the reference policy.
 - [ ] Extend V8's composite tenant-link pattern and add operation-specific database invariants as the first production business vertical slice is introduced.
@@ -544,7 +545,142 @@ This completes the input gate, not Module 1 delivery or target-environment accep
 
 Local evidence: Flyway validates and applies V20 on fresh PostgreSQL 18; the 14-case identity HTTP suite passes, including missing-MFA denial without invitation or notification side effects; all 33 tenant/RLS/authorization cases pass, including approved-release immutability. A clean Maven 3.9.11/Java 25 build passes all 166 backend tests and packages the bootable JAR. Frontend API drift, architecture, formatting, strict typecheck, lint, all 45 unit tests, the production build, and all 70 five-viewport Playwright/Axe cases pass. This verifies the increment; full M1B and Module 1 acceptance remain governed by the open delivery checkpoints below.
 
-This begins M1B but does not complete it. M1-20 membership listing, maker-checker role/scope change and revocation, final-owner-safe owner transfer, permission-projected actions, approved visual adaptation, browser acceptance, and target-environment evidence remain open.
+At this checkpoint M1-20 membership listing, mutations, owner transfer, action projection, and acceptance remained open. Phase 1AC below resolves the list/read and action-projection portion only.
+
+### Phase 1AC - authorized M1-20 membership read (completed 17 September 2026)
+
+- [x] Add Flyway V21 with active approved `access.membership.read`, the existing approved permission binding, hidden denial, and no unapproved mutation/event capability.
+- [x] Implement `GET /api/v1/organizations/{organizationId}/memberships` inside an actor-bound tenant transaction with forced RLS and an approved minimum-field projection.
+- [x] Enforce NFC-normalized literal search, allow-listed access-state/role filters, unknown/duplicate query rejection, deterministic descending keyset order, and limit-plus-one paging.
+- [x] Sign opaque cursors with HMAC-SHA256; bind operation, tenant, normalized filters, limit, snapshot, and keyset position; enforce a 15-minute expiry and bounded future skew.
+- [x] Compute actions from current live approved permissions: expose only page-level invitation and eligible-row MFA-reset navigation, never inferred role/scope/revoke/owner actions.
+- [x] Replace the synthetic M1-20 route with runtime-validated loading, failure/retry, empty/no-result, filter, cursor-history, responsive-table, and permission-projected navigation states.
+- [x] Extend OpenAPI to version 0.10.0 and 25 operations, regenerate the checked client, and add backend authorization/cursor attacks, client/unit tests, and all-five-viewport browser/Axe coverage.
+
+Local evidence: a clean Maven 3.9.11/Java 25 build compiles 223 production sources and 19 test sources, applies all 21 migrations to disposable PostgreSQL 18, passes all 168 backend tests, enforces all 11 architecture rules, and packages the bootable JAR. OpenAPI 0.10.0 verifies all 25 operations and seven conventions; all seven negative tests pass. Frontend API drift, the 21-source/48-import architecture boundary and four negative fixtures, strict typecheck, lint, formatting, all 47 unit tests, the production build, and all 75 browser tests across 1440/1024/768/390/320 pass. The 79-screen, approved-input, review, candidate, and repository-security contracts also pass.
+
+This completed M1-20 list/read, server filtering/cursor paging, and safe action projection. At that checkpoint M1B remained open for maker-checker role/scope change and revocation, final-owner-safe owner transfer, approved final visual acceptance, complete mutation attack/browser regression, target-environment evidence, and owner acceptance. Phase 1AD below resolves organization-wide non-owner role changes and revocation.
+
+### Phase 1AD - governed non-owner membership role change and revocation (completed 17 September 2026)
+
+- [x] Add Flyway V22 with immutable forced-RLS `membership_change_requests`, optimistic membership revisions, exact approved request/approve/execute operations, 30-minute approvals, and approved `identity.membership.changed`/`identity.membership.revoked` audit and outbox bindings.
+- [x] Enforce organization-wide non-owner targets, self/target separation, maker/checker separation, delegation ceilings, final-owner safety, NFC/control-free 10-500-code-point reasons, recent primary authentication plus MFA, and exact revision/approval/reason binding in both application and PostgreSQL boundaries.
+- [x] Implement idempotent request, independent approval, and execution endpoints with strong membership ETags, `428` missing-precondition behavior, `412` stale revisions, hidden target denial, no-store responses, exact replay, and conflict-safe execution.
+- [x] Extend M1-20 live action projection with authorized role-change/revocation row actions and approve/execute page actions without advertising owner transfer or facility-scoped grants.
+- [x] Add the runtime-validated governed access-change panel for request, approval, and execution; preserve caller-owned idempotency keys and refresh the membership projection after execution.
+- [x] Advance OpenAPI to version 0.11.0 and 28 operations, regenerate the checked TypeScript client, and add HTTP, direct-SQL, transport, UI, accessibility, overflow, and five-viewport regression coverage.
+- [x] Keep production membership administration disabled by default and bind any activation to the exact approved registry/package digest through the production configuration guard.
+
+Local evidence: a Maven 3.9.11/Java 25 verification build compiles 232 production sources and 19 test sources, validates and applies all 22 migrations to disposable PostgreSQL 18, passes all 170 backend tests with zero failures, errors, or skips, enforces all 11 architecture rules, and packages the bootable JAR. OpenAPI 0.11.0 verifies all 28 operations and seven conventions. Frontend API drift, the 21-source/48-import architecture boundary and four negative fixtures, strict typecheck, lint, formatting, all 49 unit tests, the production build, and all 80 browser tests across 1440/1024/768/390/320 pass.
+
+This completes organization-wide non-owner membership role change and revocation only. M1B remains open for facility-scoped grants/scope changes, final-owner-safe owner transfer, final visual/owner acceptance, target-environment evidence, and full slice acceptance.
+
+### Phase 1AE - governed final-owner-safe owner transfer (completed 17 September 2026)
+
+- [x] Add Flyway V23 with immutable forced-RLS `owner_transfer_requests`, exact approved permission bindings, a 30-minute approval workflow, and approved final `identity.owner.transferred` audit/outbox evidence.
+- [x] Govern both non-owner-to-owner promotion and owner-to-approved-non-owner demotion with strong membership revisions, exact reason binding, recent primary authentication plus MFA, caller-owned idempotency, and maker/checker/target separation.
+- [x] Enforce the exact request, approval, executor, membership, role, revision, reason, and expiry in PostgreSQL; require an indefinite promotion target, enforce the demotion delegation ceiling, and preserve at least one indefinite active owner.
+- [x] Add request, independent-approval, and maker-execution endpoints with hidden target denial, `428`/`412` precondition behavior, exact replay, no-store responses, and conflict-safe execution.
+- [x] Project owner-transfer row/page actions from current live permissions and extend the M1-20 governed access panel with owner promotion/demotion states without advertising facility scope.
+- [x] Advance OpenAPI to version 0.12.0 and 31 operations, regenerate the checked TypeScript client, and add HTTP, direct-SQL, transport, UI, accessibility, overflow, and five-viewport promotion coverage.
+- [x] Keep membership administration disabled by default and retain exact approved registry/package-digest production activation guards.
+
+Local evidence: a Maven 3.9.11/Java 25 clean verification compiles 232 production sources and 19 test sources, validates and applies all 23 migrations to disposable PostgreSQL 18, passes all 171 backend tests with zero failures, errors, or skips, enforces all 11 architecture rules, and packages the bootable JAR. OpenAPI 0.12.0 verifies all 31 operations and seven conventions. Frontend API drift, architecture, strict typecheck, lint, formatting, all 51 unit tests, the production build, and all 85 browser tests across 1440/1024/768/390/320 pass.
+
+This completes final-owner-safe owner transfer. M1B remains open for facility-scoped membership grants/scope changes, final visual/owner acceptance, target-environment evidence, and full slice acceptance. The approved package states the facility-scope narrowing rule but does not define the grant record, lifecycle, or exact enforcement contract; that contract must be approved before implementation.
+
+### Phase 1AF - approval-ready facility-scope contract (completed 17 September 2026)
+
+- [x] Trace the approved Module 1 package and complete build specification to confirm that neither defines the facility-grant record, set-replacement lifecycle, role-transition interaction, facility derivation, API projection, or database enforcement semantics.
+- [x] Add one exact additive contract for explicit `organization`/`facilities` modes, eligible editor/viewer roles, temporal `access_assignments`, immutable scope requests, canonical set digests, atomic full-set replacement, role/revoke/owner interactions, facility-aware permission intersection, HTTP/UI projection, and approved six-key final evidence.
+- [x] Bind the candidate to `m1-candidate-1`, approval record `M1-APPROVAL-20260916-01`, and approved package digest `19aff5ce30516b7ee2101c093a8429d8a74394995ca90d486790bcc18a392946` without changing the approved artifacts.
+- [x] Add a path-safe, exact-shape verifier and seven mutation tests that reject false approval, base-package drift, descriptor drift, missing security decisions, unresolved markers, and any implementation-authorized claim.
+- [x] Run the additive candidate verifier and tests in the maintained quality workflow, and make the CI-security contract reject removal of either command.
+- [x] Preserve the authorization boundary: no migration, API, server action, or UI control implements facility scope before a separate accountable approval binds the exact candidate digest.
+
+Local evidence: `m1-facility-scope-candidate-1` verifies at SHA-256 `76a3f7a2c63cef0cab02b8a1d38a66220eee0abb99c9be0a82b64eaa8941fddb`; all seven candidate tests and all thirteen CI-security tests pass. The verifier reports `CANDIDATE_FOR_APPROVAL` and `implementationAuthorized: false`.
+
+This resolves the contract-authoring gap only. Facility-scope implementation remains blocked until an approval record names that exact candidate version and digest plus an accountable approver identity/role and approval time.
+
+### Phase 1AG - approved mandatory-role MFA enforcement (completed 17 September 2026)
+
+- [x] Add Flyway V24, bound to the exact approved release, with an interactive-role `mfa_required` flag set only for owner, administrator, configuration approver, security administrator, auditor, and export approver.
+- [x] Maintain a non-tenant-disclosing, membership-derived MFA requirement projection and expose only the boolean `careos_user_requires_mfa(uuid)` function to the runtime role.
+- [x] Split enabled MFA from required MFA in persisted account lookup and principal authorities; return `mfa_enrollment_required` with HTTP `202` when a mandatory-role account has no enabled factor.
+- [x] Restrict that session to logout/session and MFA enrollment/verification, keep organization data and workspace content locked, rotate the session after verification, record primary/MFA evidence, and require browser acknowledgement of one-time recovery codes before workspace bootstrap.
+- [x] Re-evaluate the requirement on protected requests so an already authenticated password-only session is invalidated immediately after a mandatory role becomes effective.
+- [x] Reject enabled-factor removal at the PostgreSQL boundary unless it is the exact consumed `identity.mfa.admin-reset.execute` operation with matching organization, actor, approval, target, correlation, and executor evidence; expose no self-disable endpoint.
+- [x] Replace the approximate administrator-access readiness gate with exact non-overrideable `access.final_owner` and `access.mfa_enforced` calculations from approved policy.
+- [x] Advance OpenAPI to version 0.13.0 without inventing a new operation, regenerate the checked client, and add login/enrollment, promotion/session-invalidation, readiness, direct-SQL, unit, responsive, accessibility, and overflow coverage.
+
+Local evidence: a Maven 3.9.11/Java 25 clean verification compiles 232 production sources and 19 test sources, validates and applies all 24 migrations to disposable PostgreSQL 18, passes all 174 backend tests with zero failures, errors, or skips, enforces all 11 architecture rules, and packages the bootable JAR. OpenAPI 0.13.0 verifies all 31 operations and seven conventions; all seven negative tests pass. Frontend API drift, the 21-source/48-import architecture boundary and four negative fixtures, strict typecheck, lint, formatting, all 52 unit tests, the production build, and all 90 browser/Axe/overflow tests across 1440/1024/768/390/320 pass.
+
+This completes the approved mandatory-role MFA and active-membership self-disable boundary. It does not approve the facility-scope candidate or define optional viewer/editor organization-level enforcement. M1B remains open for facility-scope approval/implementation, final visual/owner acceptance, target-environment evidence, and full slice acceptance.
+
+### Phase 1AH - approved M1-20 responsive record-card projection (completed 17 September 2026)
+
+- [x] Reconcile the production M1-20 result layout with the approved design-system rule that action-heavy tables become record cards at drawer widths.
+- [x] Keep the named keyboard-focusable result region and the wide table at 768px, 1024px, and 1440px.
+- [x] Render semantic membership record cards at 390px and 320px with administrator, role, access, MFA, effective-period, and action content equivalent to the table.
+- [x] Reuse one server-authorized `MembershipActions` component for table rows and cards so viewport changes cannot create or remove authority.
+- [x] Retain the explicit facility-scope unavailable boundary and make no API, database, permission, or mutation change.
+- [x] Add compact-projection unit coverage and explicit card-versus-table assertions to the full five-viewport browser/Axe/overflow matrix.
+
+Local evidence: a fresh Maven 3.9.11/Java 25 containerized clean verification compiles 232 production and 19 test sources, validates/applies all 24 migrations, passes all 174 backend tests with zero failures, errors, or skips, enforces all 11 architecture rules, and packages the JAR. Generated API drift, the 21-source/48-import frontend architecture boundary and four negative fixtures, formatting, strict typecheck, lint, all 53 unit tests, the production build, and all 90 Playwright/Axe/overflow cases pass. The updated M1-20 test proves cards with no table at 390/320 and a table with no card list at 768/1024/1440; the 79-screen, 31-operation, CI-security, approved-input, draft, candidate, and facility-scope-candidate repository verifiers also pass.
+
+This resolves the approved responsive table/card projection for M1-20, not final M1B acceptance. Facility-scope approval/implementation, remaining M1-01 through M1-04 visual reconciliation, explicit owner acceptance, and target-environment evidence remain open.
+
+### Phase 1AI - approved identity/access frame and content conformance (completed 17 September 2026)
+
+- [x] Reconcile the shared M1-01 through M1-04 identity frame and authenticated workspace frame with the approved font stack and primary content.
+- [x] Add a keyboard-visible `Skip to main content` link to both frames without allowing the fragment-router URL to change.
+- [x] Focus each newly rendered identity or workspace route heading while preserving higher-priority focus already placed on a problem summary.
+- [x] Align the M1-01 through M1-04 registry titles/purposes and the approved `Continue securely`, `Invite administrator`, and `Open workspace` primary actions.
+- [x] Add unit coverage for identity/workspace heading focus and hash-safe skip navigation, and exercise the behavior across the exact five-viewport browser matrix.
+
+Local evidence: frontend formatting, lint, strict typecheck/build, generated-client drift, the 21-source/48-import architecture boundary and four negative fixtures, all 54 unit tests, and all 90 Playwright/Axe/overflow cases pass. The browser suite explicitly checks identity and workspace heading focus plus hash-safe skip navigation at 1440, 1024, 768, 390, and 320 pixels. The 79-screen, 31-operation, CI-security, approved-input, draft, candidate, and facility-scope-candidate repository verifiers also pass. No backend, OpenAPI, or database source changed in this increment; the immediately preceding fresh Maven 3.9.11/Java 25 baseline remains 174 passing backend tests through Flyway V24.
+
+This closes the shared frame, route-focus, font, metadata, and primary-action content portion of M1-01 through M1-04, not final M1B acceptance. Facility-scope approval/implementation, remaining screen-specific identity states, any additional invitation inspection/resend/delivery contract work, explicit owner acceptance, and target-environment evidence remain open.
+
+### Phase 1AJ - approved identity validation and M1-03 action conformance (completed 17 September 2026)
+
+- [x] Replace passive local validation messages with a reusable focused error summary for identity forms and local governed-action preparation failures.
+- [x] Associate password-reset and invitation-acceptance validation with the exact invalid input through `aria-invalid` and `aria-describedby`, using the approved two-pixel danger treatment.
+- [x] Provide a keyboard-operable field link that focuses the invalid control without allowing the fragment-router URL to change.
+- [x] Give malformed reset/invitation token states and local invitation/MFA preparation failures the same deterministic error-summary focus behavior.
+- [x] Align the remaining M1-03 primary enrollment action with the approved `Set up authenticator` content.
+- [x] Prove password-reset and invitation-validation focus, association, containment, Axe, and hash preservation in unit tests and all five exact viewport projects.
+
+Local evidence: generated API drift, formatting, lint, strict typecheck, production build, the 22-source/49-import frontend architecture boundary and four negative fixtures, all 55 unit tests, and all 90 Playwright/Axe/overflow cases pass. All 79-screen, 31-operation, CI-security, approved-input, draft, candidate, and facility-scope-candidate repository verifiers plus their 56 combined negative tests pass. No backend, OpenAPI, or database source changed in this increment; the current clean Maven 3.9.11/Java 25 baseline remains 174 passing backend tests through Flyway V24.
+
+This closes the approved local identity-validation focus/association contract and final M1-03 primary-action copy gap, not final M1B acceptance. Facility-scope approval/implementation, invitation inspection/resend/delivery behavior requiring separately authorized contracts, explicit owner acceptance, target-environment evidence, and full slice acceptance remain open.
+
+### Phase 1AK - exact approved readiness catalogue projection (completed 17 September 2026)
+
+- [x] Replace all nine provisional readiness entries with the 15 exact ordered `m1-readiness-v1` gate keys and the approved `complete`, `warning`, `blocked`, and `not_applicable` outcomes.
+- [x] Add domain invariants and checked OpenAPI 0.14.0 fields for catalogue/gate version, organization revision, database evaluation/expiry time, exact outcome counts, stable reason/remediation codes, bounded evidence references, and a 900-second freshness window.
+- [x] Keep missing authoritative entity/evaluator families fail-closed: only exact final-owner and mandatory-MFA checks can complete; absent organization/network/service/configuration/registry/dependency evaluators do not receive synthetic success.
+- [x] Derive every gate destination from the caller's live permission projection and fall back to M1-06 rather than exposing an unreadable M1-20/M1-21 target.
+- [x] Split M1-05 into its approved metric/priority-exception dashboard and M1-06 into the complete ordered checklist with explicit live-projection versus persisted-validation scope.
+- [x] Fail client rendering on catalogue version/order/count/outcome/freshness/evidence/link drift and lock the contract with a new API negative case, backend domain/HTTP tests, frontend unit coverage, and the five exact browser widths.
+
+Local evidence: a clean Maven 3.9.11/Java 25 verification compiles 232 production and 20 test sources, validates and applies all 24 migrations, passes all 177 backend tests with zero failures, errors, or skips, enforces all 11 architecture rules, and packages the bootable JAR. OpenAPI 0.14.0 retains 31 operations and seven conventions; all 8 negative tests pass. Generated-client drift, the 22-source/49-import frontend architecture boundary and four negative fixtures, formatting, strict typecheck, lint, all 56 unit tests, the production build, and all 95 Playwright/Axe/overflow cases across 1440/1024/768/390/320 pass.
+
+This starts M1C but does not complete it. At this checkpoint exact profile/type/locale, identifiers, address/contact, international settings, governance, network/service/scheme persistence and evaluators remained; Phase 1AL below resolves the profile/type/locale portion. Immutable configuration validation/result digests, invalidation, submission, approval, activation, history, and export remain M1F work.
+
+### Phase 1AL - exact approved M1-07 organization profile (completed 18 September 2026)
+
+- [x] Extend the organization aggregate through Flyway V25 with optional trading name, required approved organization type, required BCP 47 locale, exact name bounds, exact lifecycle vocabulary, and legacy-safe readiness blocking rather than invented backfill values.
+- [x] Validate and normalize required/optional names, approved type, ISO 3166-1 alpha-2 country, IANA timezone, BCP 47 locale, and the NFC/control-free 10-500-code-point reason; return stable field-specific RFC 9457 violations.
+- [x] Restrict runtime persistence to the exact approved mutable fields, required actor/tenant/reason context, monotonic revision, IANA timezone, and non-empty change; preserve strong ETag, caller idempotency, stale-write rejection, and atomic audit/outbox behavior.
+- [x] Emit the exact `organization.profile.updated` payload with alphabetically sorted changed fields and lock version, including exact replay with no duplicate evidence.
+- [x] Derive `editable` from the caller's live `organization.profile.manage` permission and render either the exact editable M1-07 form or a usable read-only projection without client-side role inference.
+- [x] Replace the provisional profile readiness blocker with the approved evaluator over legal/display/trading identity, organization type, ISO country, IANA timezone, BCP 47 locale, eligible lifecycle, and current revision.
+- [x] Advance OpenAPI to 0.15.0, regenerate the TypeScript contract, add profile-drift rejection, and cover legacy blocking, exact field errors, permission projection, governed update/replay/conflict, evidence, post-update readiness, responsive UI, and direct database attacks.
+
+Local evidence: a clean Maven 3.9.11/Java 25 verification compiles 232 production and 21 test sources, validates and applies all 25 migrations, passes all 181 backend tests with zero failures, errors, or skips, enforces all 11 architecture rules, and packages the bootable JAR. OpenAPI 0.15.0 retains 31 operations and seven conventions; all 9 contract tests pass, comprising one acceptance case and eight negative drift fixtures. Generated-client drift, the 22-source/49-import frontend boundary and four negative fixtures, formatting, strict typecheck, lint, all 57 unit tests, the production build, and all 95 Playwright/Axe/overflow cases across 1440/1024/768/390/320 pass. The 79-screen, approved-input, review/candidate, facility-candidate, and 13-test CI-security gates also pass.
+
+This closes the exact M1-07 profile vertical slice, not M1C. M1-08 registration identifiers, M1-09 effective addresses/contacts, M1-10 international-settings change behavior, M1-11 governance responsibilities, their readiness evaluators, configuration-version invalidation, and final M1C owner/target acceptance remain.
 
 ### Phase 1 approval gate and implementation slices
 
@@ -553,6 +689,7 @@ This begins M1B but does not complete it. M1-20 membership listing, maker-checke
 - [x] Approve the Module 1 data dictionary, validation catalogue, lifecycle/state-transition rules, and readiness/activation gates.
 - [x] Promote or replace the provisional permission/role/operation registry and approve matching Module 1 audit/outbox events and schemas.
 - [x] Record artifact versions/checksums and owner approval for the exact implementation input package.
+- [ ] Approve the additive `m1-facility-scope-candidate-1` package at digest `76a3f7a2c63cef0cab02b8a1d38a66220eee0abb99c9be0a82b64eaa8941fddb` before implementing facility scope.
 - [ ] Deliver M1B production identity/access acceptance for M1-01 to M1-04 and M1-20.
 - [ ] Deliver M1C organization core and readiness for M1-05 to M1-11.
 - [ ] Deliver M1D facilities, hierarchy, locations, and atomic hours for M1-12 to M1-16.

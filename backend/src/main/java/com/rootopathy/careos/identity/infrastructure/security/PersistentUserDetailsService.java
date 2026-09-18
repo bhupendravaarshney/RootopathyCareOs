@@ -28,6 +28,7 @@ public final class PersistentUserDetailsService implements UserDetailsService {
                 account.displayName(),
                 account.passwordHash(),
                 account.securityVersion(),
-                account.mfaEnabled());
+                account.mfaEnabled(),
+                account.mfaRequired());
     }
 }

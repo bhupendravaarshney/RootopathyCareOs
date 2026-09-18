@@ -148,14 +148,17 @@ class PostgresDurableNotificationIntegrationTest {
                     """);
             statement.executeUpdate("""
                     INSERT INTO organizations
-                        (id, legal_name, display_name, country_code, timezone, status)
+                        (id, legal_name, display_name, organization_type,
+                         country_code, timezone, locale, status)
                     VALUES ('01900000-0000-7000-8000-000000000002',
                             'Second Notification Test Org', 'Second Notification Org',
-                            'IN', 'Asia/Kolkata', 'active')
-                    ON CONFLICT (id) DO UPDATE SET status = 'active'
+                            'care_provider', 'IN', 'Asia/Kolkata', 'en-IN', 'active')
+                    ON CONFLICT (id) DO UPDATE
+                        SET organization_type = 'care_provider', locale = 'en-IN', status = 'active'
                     """);
             statement.executeUpdate("""
-                    UPDATE organizations SET status = 'active'
+                    UPDATE organizations
+                    SET organization_type = 'care_network', locale = 'en-IN', status = 'active'
                     WHERE id = '01900000-0000-7000-8000-000000000001'
                     """);
             statement.executeUpdate("""

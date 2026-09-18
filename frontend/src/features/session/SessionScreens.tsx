@@ -1,5 +1,5 @@
 import { Building2, LoaderCircle, LockKeyhole, ShieldCheck, UserRoundX } from 'lucide-react';
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { OrganizationAccess, User } from '../../api/generated';
 import { SessionIssueAlert } from './SessionIssueAlert';
 import type { SessionIssue } from './session-types';
@@ -13,15 +13,41 @@ export function IdentityFrame({
   homeHref?: string;
   homeLabel?: string;
 }) {
+  const main = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (
+      document.activeElement !== document.body &&
+      document.activeElement !== main.current &&
+      main.current?.contains(document.activeElement)
+    ) {
+      return;
+    }
+    const heading = main.current?.querySelector<HTMLHeadingElement>('h1');
+    if (!heading) return;
+    heading.tabIndex = -1;
+    heading.focus();
+  }, []);
+
   return (
     <div className="identity-layout">
+      <a
+        className="skip-link"
+        href="#main-content"
+        onClick={(event) => {
+          event.preventDefault();
+          main.current?.focus();
+        }}
+      >
+        Skip to main content
+      </a>
       <header className="identity-header">
         <a className="brand" href={homeHref} aria-label={homeLabel}>
           <strong>ROOTOPATHY</strong>
           <span>CareOS secure access</span>
         </a>
       </header>
-      <main className="identity-main" id="main-content">
+      <main className="identity-main" id="main-content" ref={main} tabIndex={-1}>
         {children}
       </main>
     </div>
@@ -90,7 +116,7 @@ export function LoginScreen({ busy, issue, onLogin }: LoginScreenProps) {
             Forgot your password?
           </a>
           <button className="primary-button full-button" disabled={busy}>
-            {busy ? 'Signing in…' : 'Sign in securely'}
+            {busy ? 'Continuing…' : 'Continue securely'}
           </button>
         </form>
         <p className="security-note">
@@ -235,7 +261,7 @@ export function OrganizationSelectionScreen({
             ))}
           </fieldset>
           <button className="primary-button full-button" disabled={busy || !organizationId}>
-            {busy ? 'Selecting…' : 'Continue to workspace'}
+            {busy ? 'Opening…' : 'Open workspace'}
           </button>
           <button
             type="button"

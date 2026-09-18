@@ -1,6 +1,7 @@
 package com.rootopathy.careos.identity.api;
 
 import static com.rootopathy.careos.identity.infrastructure.security.CareOsAuthorities.AUTHENTICATED;
+import static com.rootopathy.careos.identity.infrastructure.security.CareOsAuthorities.MFA_ENROLLMENT_PENDING;
 import static com.rootopathy.careos.identity.infrastructure.security.CareOsAuthorities.MFA_PENDING;
 
 import com.rootopathy.careos.identity.application.IdentitySecurityException;
@@ -81,9 +82,13 @@ public final class AuthenticationController {
         if (!(authentication != null && authentication.getPrincipal() instanceof CareOsPrincipal principal)) {
             return ResponseEntity.ok()
                     .cacheControl(CacheControl.noStore())
-                    .body(new SessionResponse("anonymous", null, false, false));
+                    .body(new SessionResponse("anonymous", null, false, false, false));
         }
-        var state = hasAuthority(authentication, MFA_PENDING) ? "mfa_required" : "authenticated";
+        var state = hasAuthority(authentication, MFA_PENDING)
+                ? "mfa_required"
+                : hasAuthority(authentication, MFA_ENROLLMENT_PENDING)
+                        ? "mfa_enrollment_required"
+                        : "authenticated";
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(sessionResponse(state, principal, isRecent(session)));
@@ -127,12 +132,21 @@ public final class AuthenticationController {
         rateLimits.clear("login-email", email);
         rateLimits.clear("login-remote", remoteAddress);
 
-        if (principal.mfaRequired()) {
+        if (principal.mfaEnabled()) {
             saveAuthentication(authentication, request, response);
             expiryHeaders.write(session, response);
             return ResponseEntity.status(HttpStatus.ACCEPTED)
                     .cacheControl(CacheControl.noStore())
                     .body(sessionResponse("mfa_required", principal, false));
+        }
+
+        if (principal.mfaRequired()) {
+            session.setAttribute(AuthenticationSessionState.RECENT_AUTHENTICATION_AT, now.toEpochMilli());
+            saveAuthentication(authentication, request, response);
+            expiryHeaders.write(session, response);
+            return ResponseEntity.status(HttpStatus.ACCEPTED)
+                    .cacheControl(CacheControl.noStore())
+                    .body(sessionResponse("mfa_enrollment_required", principal, true));
         }
 
         session.setAttribute(AuthenticationSessionState.RECENT_AUTHENTICATION_AT, now.toEpochMilli());
@@ -204,16 +218,40 @@ public final class AuthenticationController {
     }
 
     @PostMapping("/mfa/enrollments/verification")
-    RecoveryCodesResponse verifyMfaEnrollment(
+    ResponseEntity<RecoveryCodesResponse> verifyMfaEnrollment(
             @Valid @RequestBody MfaCodeRequest body,
             Authentication authentication,
             HttpSession session,
-            HttpServletRequest request) {
+            HttpServletRequest request,
+            HttpServletResponse response) {
         requireRecent(session);
         var principal = requirePrincipal(authentication);
         var codes = identitySecurity.verifyMfaEnrollment(
                 principal.id(), body.code(), correlationId(request), remoteAddress(request));
-        return new RecoveryCodesResponse(codes);
+        var now = clock.instant();
+        session.setAttribute(AuthenticationSessionState.RECENT_AUTHENTICATION_AT, now.toEpochMilli());
+        session.setAttribute(AuthenticationSessionState.MFA_AUTHENTICATED_AT, now.toEpochMilli());
+        var account = identitySecurity.requireActiveAccount(principal.id());
+        if (hasAuthority(authentication, MFA_ENROLLMENT_PENDING)) {
+            request.changeSessionId();
+            session.setAttribute(AuthenticationSessionState.AUTHENTICATED_AT, now.toEpochMilli());
+            var upgraded = UsernamePasswordAuthenticationToken.authenticated(
+                    principal, null, List.of(new SimpleGrantedAuthority(AUTHENTICATED)));
+            upgraded.setDetails(authentication.getDetails());
+            identitySecurity.recordLoginSucceeded(
+                    account,
+                    session.getId(),
+                    true,
+                    correlationId(request),
+                    remoteAddress(request));
+            saveAuthentication(upgraded, request, response);
+        } else {
+            identitySecurity.markSessionRecentlyAuthenticated(account, session.getId(), true);
+        }
+        expiryHeaders.write(session, response);
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(new RecoveryCodesResponse(codes));
     }
 
     @PostMapping("/mfa/challenges")
@@ -378,12 +416,13 @@ public final class AuthenticationController {
     }
 
     private SessionResponse sessionResponse(String state, CareOsPrincipal principal, boolean recent) {
-        var mfaEnabled = identitySecurity.requireActiveAccount(principal.id()).mfaEnabled();
+        var account = identitySecurity.requireActiveAccount(principal.id());
         return new SessionResponse(
                 state,
                 new UserResponse(principal.id().toString(), principal.email(), principal.displayName()),
                 recent,
-                mfaEnabled);
+                account.mfaEnabled(),
+                account.mfaRequired());
     }
 
     private static String correlationId(HttpServletRequest request) {
@@ -399,7 +438,11 @@ public final class AuthenticationController {
     public record UserResponse(String id, String email, String displayName) {}
 
     public record SessionResponse(
-            String state, UserResponse user, boolean recentAuthentication, boolean mfaEnabled) {}
+            String state,
+            UserResponse user,
+            boolean recentAuthentication,
+            boolean mfaEnabled,
+            boolean mfaRequired) {}
 
     public record LoginRequest(
             @NotBlank @Email @Size(max = 320) String email,

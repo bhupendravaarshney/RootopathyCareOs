@@ -135,14 +135,17 @@ class PostgresDocumentEvidenceIntegrationTest {
                     """);
             statement.executeUpdate("""
                     INSERT INTO organizations
-                        (id, legal_name, display_name, country_code, timezone, status)
+                        (id, legal_name, display_name, organization_type,
+                         country_code, timezone, locale, status)
                     VALUES ('01900000-0000-7000-8000-000000000002',
                             'Second Document Test Org', 'Second Document Org',
-                            'IN', 'Asia/Kolkata', 'active')
-                    ON CONFLICT (id) DO UPDATE SET status = 'active'
+                            'care_provider', 'IN', 'Asia/Kolkata', 'en-IN', 'active')
+                    ON CONFLICT (id) DO UPDATE
+                        SET organization_type = 'care_provider', locale = 'en-IN', status = 'active'
                     """);
             statement.executeUpdate("""
-                    UPDATE organizations SET status = 'active'
+                    UPDATE organizations
+                    SET organization_type = 'care_network', locale = 'en-IN', status = 'active'
                     WHERE id = '01900000-0000-7000-8000-000000000001'
                     """);
             statement.executeUpdate("""
@@ -174,16 +177,20 @@ class PostgresDocumentEvidenceIntegrationTest {
                     """);
             statement.executeUpdate("""
                     INSERT INTO organization_memberships
-                        (organization_id, user_id, role_key, status)
+                        (organization_id, user_id, role_key, status, effective_from)
                     VALUES
                         ('01900000-0000-7000-8000-000000000001',
                          '01900000-0000-7000-8000-000000000201',
-                         'document_test_actor', 'active'),
+                         'document_test_actor', 'active',
+                         clock_timestamp() - interval '1 minute'),
                         ('01900000-0000-7000-8000-000000000002',
                          '01900000-0000-7000-8000-000000000201',
-                         'document_test_actor', 'active')
+                         'document_test_actor', 'active',
+                         clock_timestamp() - interval '1 minute')
                     ON CONFLICT (organization_id, user_id, role_key)
-                    DO UPDATE SET status = 'active', effective_to = NULL
+                    DO UPDATE SET status = 'active',
+                                  effective_from = EXCLUDED.effective_from,
+                                  effective_to = NULL
                     """);
         }
     }

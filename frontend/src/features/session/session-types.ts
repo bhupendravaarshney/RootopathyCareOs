@@ -45,6 +45,7 @@ export type SessionMachine =
   | { phase: 'loading'; reason: 'organizations' | 'session' }
   | { phase: 'anonymous' }
   | { phase: 'mfa_required'; user: User }
+  | { phase: 'mfa_enrollment_required'; user: User }
   | {
       mfaEnabled: boolean;
       phase: 'selecting_organization';

@@ -3,7 +3,9 @@ import type { ApiFailure, ApiResult } from './api/client';
 import type {
   AdministrationReadiness,
   OrganizationAccess,
+  OrganizationMembershipPage,
   OrganizationProfile,
+  ReadinessGate,
   SessionState,
 } from './api/generated';
 import App from './App';
@@ -20,76 +22,241 @@ const user = {
 const selectedOrganization: OrganizationAccess = {
   displayName: 'North Clinic',
   id: '22222222-2222-4222-8222-222222222222',
-  roleKeys: ['organization-member'],
+  roleKeys: ['organization_owner'],
   selected: true,
   status: 'active',
 };
 const otherOrganization: OrganizationAccess = {
   displayName: 'South Clinic',
   id: '33333333-3333-4333-8333-333333333333',
-  roleKeys: ['organization-member'],
+  roleKeys: ['organization_viewer'],
   selected: false,
   status: 'draft',
 };
 const anonymousSession: SessionState = {
   mfaEnabled: false,
+  mfaRequired: false,
   recentAuthentication: false,
   state: 'anonymous',
   user: null,
 };
 const authenticatedSession: SessionState = {
   mfaEnabled: false,
+  mfaRequired: false,
   recentAuthentication: true,
   state: 'authenticated',
   user,
 };
 const mfaSession: SessionState = {
   mfaEnabled: true,
+  mfaRequired: false,
   recentAuthentication: false,
   state: 'mfa_required',
   user,
 };
+const mfaEnrollmentSession: SessionState = {
+  mfaEnabled: false,
+  mfaRequired: true,
+  recentAuthentication: true,
+  state: 'mfa_enrollment_required',
+  user,
+};
+const readinessEvaluatedAt = new Date(Date.now() - 60_000);
+readinessEvaluatedAt.setMilliseconds(0);
+const readinessExpiresAt = new Date(readinessEvaluatedAt.getTime() + 15 * 60_000);
+
+function gate(
+  key: ReadinessGate['key'],
+  label: string,
+  outcome: ReadinessGate['outcome'],
+  detail: string,
+  href: string,
+): ReadinessGate {
+  return {
+    detail,
+    evidenceReferences: [],
+    href,
+    key,
+    label,
+    outcome,
+    reasonCode: 'm1.readiness.test_fixture',
+    remediationCode: 'm1.remediation.test_fixture',
+    version: 'm1-readiness-v1',
+  };
+}
+
 const readiness: AdministrationReadiness = {
   activeMemberships: 2,
-  completedGates: 2,
+  blockedGates: 10,
+  catalogueVersion: 'm1-readiness-v1',
+  completedGates: 3,
   draftFacilityCount: 1,
+  evaluatedAt: readinessEvaluatedAt.toISOString(),
+  expiresAt: readinessExpiresAt.toISOString(),
   facilityCount: 1,
   gates: [
-    {
-      detail: 'Legal and display identity are recorded.',
-      href: '#/M1-07',
-      key: 'organization-profile',
-      label: 'Organization profile',
-      status: 'complete',
-    },
-    {
-      detail: 'An effective owner is present.',
-      href: '#/M1-20',
-      key: 'administrator-access',
-      label: 'Administrator access',
-      status: 'complete',
-    },
-    {
-      detail: 'Activation policy is not approved.',
-      href: '#/M1-21',
-      key: 'activation',
-      label: 'Review and activate',
-      status: 'blocked',
-    },
+    gate(
+      'organization.profile.complete',
+      'Organization profile',
+      'complete',
+      'The approved organization profile is complete at the current revision.',
+      '#/M1-07',
+    ),
+    gate(
+      'organization.identifier.primary_verified',
+      'Primary registration identifier',
+      'blocked',
+      'A verified primary registration identifier is required.',
+      '#/M1-08',
+    ),
+    gate(
+      'organization.contact.coverage',
+      'Address and contact coverage',
+      'blocked',
+      'Registered address and operational contact coverage are missing.',
+      '#/M1-09',
+    ),
+    gate(
+      'organization.governance.coverage',
+      'Governance responsibility coverage',
+      'blocked',
+      'Required governance responsibilities are missing.',
+      '#/M1-11',
+    ),
+    gate(
+      'access.final_owner',
+      'Final owner protection',
+      'complete',
+      'An active indefinite owner remains after every open demotion.',
+      '#/M1-20',
+    ),
+    gate(
+      'access.mfa_enforced',
+      'Mandatory-role MFA',
+      'complete',
+      'Every mandatory-role account has MFA enabled.',
+      '#/M1-03',
+    ),
+    gate(
+      'network.facility.minimum',
+      'Minimum eligible facility',
+      'blocked',
+      'No eligible facility has complete approved configuration.',
+      '#/M1-12',
+    ),
+    gate(
+      'network.hierarchy.valid',
+      'Network hierarchy',
+      'blocked',
+      'The network hierarchy evaluator is unavailable.',
+      '#/M1-14',
+    ),
+    gate(
+      'network.hours.valid',
+      'Operating hours',
+      'blocked',
+      'Approved operating-hours evaluation is unavailable.',
+      '#/M1-16',
+    ),
+    gate(
+      'service.catalogue.active',
+      'Active service catalogue',
+      'blocked',
+      'An eligible service catalogue is unavailable.',
+      '#/M1-17',
+    ),
+    gate(
+      'service.assignment.valid',
+      'Service assignments',
+      'warning',
+      'Service delivery has not been declared.',
+      '#/M1-18',
+    ),
+    gate(
+      'identifier.scheme.active',
+      'Identifier scheme',
+      'not_applicable',
+      'Identifier issuance is not declared.',
+      '#/M1-19',
+    ),
+    gate(
+      'configuration.integrity',
+      'Configuration integrity',
+      'blocked',
+      'Versioned configuration integrity is unavailable.',
+      '#/M1-21',
+    ),
+    gate(
+      'governance.registry.active',
+      'Governance registries',
+      'blocked',
+      'The full approved registry set is not active.',
+      '#/M1-21',
+    ),
+    gate(
+      'platform.dependencies.ready',
+      'Required platform dependencies',
+      'blocked',
+      'Fresh required dependency readiness is unavailable.',
+      '#/M1-21',
+    ),
   ],
   lifecycleStatus: 'draft',
+  notApplicableGates: 1,
   organizationId: selectedOrganization.id,
-  totalGates: 3,
+  organizationRevision: 4,
+  totalGates: 15,
+  warningGates: 1,
 };
 const organizationProfile: OrganizationProfile = {
   countryCode: 'IN',
   displayName: 'North Clinic',
+  editable: true,
   legalName: 'North Clinic Private Limited',
   lifecycleStatus: 'draft',
+  locale: 'en-IN',
   lockVersion: 4,
   organizationId: selectedOrganization.id,
+  organizationType: 'care_provider',
   timezone: 'Asia/Kolkata',
+  tradingName: null,
   updatedAt: '2026-09-16T08:00:00Z',
+};
+const membershipPage: OrganizationMembershipPage = {
+  asOf: '2026-09-17T05:30:00Z',
+  availableActions: [
+    'issueInvitation',
+    'approveMembershipChange',
+    'executeMembershipChange',
+    'approveOwnerTransfer',
+    'executeOwnerTransfer',
+  ],
+  items: [
+    {
+      accessState: 'active',
+      accountStatus: 'active',
+      availableActions: [
+        'requestMfaReset',
+        'requestRoleChange',
+        'requestRevocation',
+        'requestOwnerTransfer',
+      ],
+      displayName: 'Ravi Shah',
+      effectiveFrom: '2026-08-01T06:00:00Z',
+      effectiveTo: null,
+      email: 'ravi.shah@example.test',
+      finalOwner: false,
+      lockVersion: 0,
+      membershipId: '77777777-7777-4777-8777-777777777777',
+      mfaEnabled: true,
+      roleDisplayName: 'Security administrator',
+      roleKey: 'security_administrator',
+      roleStatus: 'active',
+      userId: '88888888-8888-4888-8888-888888888888',
+    },
+  ],
+  organizationId: selectedOrganization.id,
+  page: { hasMore: false, limit: 25, nextCursor: null },
 };
 type ApplicationClient = SessionClient & AdministrationClient;
 
@@ -142,6 +309,30 @@ function sessionClient(overrides: Partial<ApplicationClient> = {}): ApplicationC
         status: 'approved',
         targetUserId,
       }),
+    approveOrganizationMembershipChange: async (_organizationId, membershipId, approvalId) =>
+      success({
+        approvalId,
+        changeType: 'role_change',
+        expiresAt: '2026-09-16T12:00:00Z',
+        fromRoleKey: 'security_administrator',
+        lockVersion: 0,
+        membershipId,
+        status: 'approved',
+        targetUserId: '88888888-8888-4888-8888-888888888888',
+        toRoleKey: 'organization_viewer',
+      }),
+    approveOrganizationOwnerTransfer: async (_organizationId, membershipId, approvalId) =>
+      success({
+        approvalId,
+        changeType: 'owner_promotion',
+        expiresAt: '2026-09-16T12:00:00Z',
+        fromRoleKey: 'security_administrator',
+        lockVersion: 0,
+        membershipId,
+        status: 'approved',
+        targetUserId: '88888888-8888-4888-8888-888888888888',
+        toRoleKey: 'organization_owner',
+      }),
     completeMfaChallenge: async () => success(authenticatedSession),
     completePasswordReset: async () => success(undefined, 204),
     executeMfaAdministrativeReset: async (_organizationId, targetUserId, approvalId) =>
@@ -150,6 +341,30 @@ function sessionClient(overrides: Partial<ApplicationClient> = {}): ApplicationC
         expiresAt: '2026-09-16T12:00:00Z',
         status: 'reset',
         targetUserId,
+      }),
+    executeOrganizationMembershipChange: async (_organizationId, membershipId, approvalId) =>
+      success({
+        approvalId,
+        changeType: 'role_change',
+        expiresAt: '2026-09-16T12:00:00Z',
+        fromRoleKey: 'security_administrator',
+        lockVersion: 1,
+        membershipId,
+        status: 'changed',
+        targetUserId: '88888888-8888-4888-8888-888888888888',
+        toRoleKey: 'organization_viewer',
+      }),
+    executeOrganizationOwnerTransfer: async (_organizationId, membershipId, approvalId) =>
+      success({
+        approvalId,
+        changeType: 'owner_promotion',
+        expiresAt: '2026-09-16T12:00:00Z',
+        fromRoleKey: 'security_administrator',
+        lockVersion: 1,
+        membershipId,
+        status: 'transferred',
+        targetUserId: '88888888-8888-4888-8888-888888888888',
+        toRoleKey: 'organization_owner',
       }),
     getAdministrationReadiness: async () => success(readiness),
     getAuthenticationSession: async () => success(authenticatedSession),
@@ -167,6 +382,7 @@ function sessionClient(overrides: Partial<ApplicationClient> = {}): ApplicationC
         },
         201,
       ),
+    listOrganizationMemberships: async () => success(membershipPage),
     listSelectableOrganizations: async () => success([selectedOrganization]),
     login: async () => success(authenticatedSession),
     logout: async () => success(undefined, 204),
@@ -180,6 +396,36 @@ function sessionClient(overrides: Partial<ApplicationClient> = {}): ApplicationC
           expiresAt: '2026-09-16T12:00:00Z',
           status: 'pending',
           targetUserId,
+        },
+        201,
+      ),
+    requestOrganizationMembershipChange: async (_organizationId, membershipId, body) =>
+      success(
+        {
+          approvalId: '99999999-9999-4999-8999-999999999999',
+          changeType: body.changeType,
+          expiresAt: '2026-09-16T12:00:00Z',
+          fromRoleKey: 'security_administrator',
+          lockVersion: 0,
+          membershipId,
+          status: 'pending',
+          targetUserId: '88888888-8888-4888-8888-888888888888',
+          toRoleKey: body.toRoleKey ?? null,
+        },
+        201,
+      ),
+    requestOrganizationOwnerTransfer: async (_organizationId, membershipId, body) =>
+      success(
+        {
+          approvalId: '99999999-9999-4999-8999-999999999999',
+          changeType: 'owner_promotion',
+          expiresAt: '2026-09-16T12:00:00Z',
+          fromRoleKey: 'security_administrator',
+          lockVersion: 0,
+          membershipId,
+          status: 'pending',
+          targetUserId: '88888888-8888-4888-8888-888888888888',
+          toRoleKey: body.toRoleKey,
         },
         201,
       ),
@@ -229,7 +475,204 @@ describe('CareOS frontend session boundary', () => {
   it('registers all M1, M2 and COS screens', () => {
     expect(screens).toHaveLength(79);
     expect(new Set(screens.map((item) => item.id)).size).toBe(79);
+    expect(findScreen('M1-01').purpose).toBe(
+      'Authenticate securely and continue to the requested authorized workspace.',
+    );
+    expect(findScreen('M1-02').title).toBe('Invitations');
+    expect(findScreen('M1-03').title).toBe('Multi-factor authentication');
+    expect(findScreen('M1-04').purpose).toBe(
+      'Choose one currently authorized organization workspace.',
+    );
     expect(() => findScreen('M1-99')).toThrow('does not contain M1-99');
+  });
+
+  it('focuses identity and workspace headings and provides hash-safe skip navigation', async () => {
+    const anonymousView = render(
+      <App
+        client={sessionClient({
+          getAuthenticationSession: async () => success(anonymousSession),
+        })}
+      />,
+    );
+
+    const loginHeading = await screen.findByRole('heading', { name: 'Sign in to CareOS' });
+    expect(loginHeading).toHaveFocus();
+    const identitySkipLink = screen.getByRole('link', { name: 'Skip to main content' });
+    expect(identitySkipLink).toHaveAttribute('href', '#main-content');
+    const identityHash = window.location.hash;
+    identitySkipLink.focus();
+    expect(identitySkipLink).toBeVisible();
+    fireEvent.click(identitySkipLink);
+    expect(document.getElementById('main-content')).toHaveFocus();
+    expect(window.location.hash).toBe(identityHash);
+    anonymousView.unmount();
+
+    render(<App client={sessionClient()} />);
+    const workspaceHeading = await screen.findByRole('heading', {
+      name: 'Administration dashboard',
+    });
+    expect(workspaceHeading).toHaveFocus();
+    const workspaceSkipLink = screen.getByRole('link', { name: 'Skip to main content' });
+    const workspaceHash = window.location.hash;
+    fireEvent.click(workspaceSkipLink);
+    expect(document.getElementById('main-content')).toHaveFocus();
+    expect(window.location.hash).toBe(workspaceHash);
+  });
+
+  it('renders M1-20 from the authorized membership projection and only exposes live actions', async () => {
+    window.location.hash = '#/M1-20';
+    const listOrganizationMemberships = vi.fn(async () => success(membershipPage));
+    render(<App client={sessionClient({ listOrganizationMemberships })} />);
+
+    expect(await screen.findByRole('heading', { name: 'Administrator access' })).toBeVisible();
+    expect(await screen.findByText('Ravi Shah')).toBeVisible();
+    expect(screen.getByText('ravi.shah@example.test')).toBeVisible();
+    expect(screen.queryByText('Synthetic prototype')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Invite administrator' })).toHaveAttribute(
+      'href',
+      '#/M1-02',
+    );
+    expect(screen.getByRole('link', { name: 'Request MFA reset' })).toHaveAttribute(
+      'href',
+      '#/M1-03',
+    );
+    expect(screen.getByRole('button', { name: 'Change role' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Promote to owner' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Governed access change' })).toBeVisible();
+    expect(screen.getByText(/Facility-scoped grants remain unavailable/)).toBeVisible();
+    expect(listOrganizationMemberships).toHaveBeenCalledWith(
+      selectedOrganization.id,
+      { limit: 25 },
+      { signal: expect.any(AbortSignal) },
+    );
+  });
+
+  it('projects M1-20 memberships as equivalent record cards at drawer widths', async () => {
+    window.location.hash = '#/M1-20';
+    const previousMatchMedia = window.matchMedia;
+    const mediaQuery = {
+      addEventListener: vi.fn(),
+      addListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+      matches: true,
+      media: '(max-width: 760px)',
+      onchange: null,
+      removeEventListener: vi.fn(),
+      removeListener: vi.fn(),
+    };
+    const matchMedia = vi.fn(() => mediaQuery);
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: matchMedia,
+      writable: true,
+    });
+
+    try {
+      render(<App client={sessionClient()} />);
+
+      const memberships = await screen.findByRole('region', {
+        name: 'Organization memberships',
+      });
+      const cards = within(memberships).getByRole('list', {
+        name: 'Organization membership cards',
+      });
+      expect(within(cards).getByRole('listitem')).toHaveTextContent('Ravi Shah');
+      expect(within(cards).getByText('Security administrator')).toBeVisible();
+      expect(within(cards).getByText('Enabled')).toBeVisible();
+      expect(within(cards).getByRole('button', { name: 'Change role' })).toBeVisible();
+      expect(within(memberships).queryByRole('table')).not.toBeInTheDocument();
+      expect(matchMedia).toHaveBeenCalledWith('(max-width: 760px)');
+    } finally {
+      Object.defineProperty(window, 'matchMedia', {
+        configurable: true,
+        value: previousMatchMedia,
+        writable: true,
+      });
+    }
+  });
+
+  it('submits an exact membership role-change request from the authorized row action', async () => {
+    window.location.hash = '#/M1-20';
+    const requestOrganizationMembershipChange = vi.fn(
+      async (_organizationId: string, membershipId: string) =>
+        success(
+          {
+            approvalId: '99999999-9999-4999-8999-999999999999',
+            changeType: 'role_change' as const,
+            expiresAt: '2026-09-17T12:00:00Z',
+            fromRoleKey: 'security_administrator',
+            lockVersion: 0,
+            membershipId,
+            status: 'pending' as const,
+            targetUserId: '88888888-8888-4888-8888-888888888888',
+            toRoleKey: 'organization_viewer',
+          },
+          201,
+        ),
+    );
+    render(<App client={sessionClient({ requestOrganizationMembershipChange })} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Change role' }));
+    fireEvent.change(screen.getByLabelText('Reason'), {
+      target: { value: 'Approved least-privilege role adjustment' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Submit governed step' }));
+
+    await waitFor(() => expect(requestOrganizationMembershipChange).toHaveBeenCalledOnce());
+    expect(requestOrganizationMembershipChange).toHaveBeenCalledWith(
+      selectedOrganization.id,
+      '77777777-7777-4777-8777-777777777777',
+      {
+        changeType: 'role_change',
+        reason: 'Approved least-privilege role adjustment',
+        toRoleKey: 'organization_viewer',
+      },
+      '"organization-membership:77777777-7777-4777-8777-777777777777:0"',
+      expect.stringMatching(/^membership-request_role_change:/),
+    );
+    expect(screen.getByText(/Access change is/)).toHaveTextContent('pending');
+  });
+
+  it('submits an exact owner-promotion request from the server-authorized row action', async () => {
+    window.location.hash = '#/M1-20';
+    const requestOrganizationOwnerTransfer = vi.fn(
+      async (_organizationId: string, membershipId: string) =>
+        success(
+          {
+            approvalId: '99999999-9999-4999-8999-999999999999',
+            changeType: 'owner_promotion' as const,
+            expiresAt: '2026-09-17T12:00:00Z',
+            fromRoleKey: 'security_administrator',
+            lockVersion: 0,
+            membershipId,
+            status: 'pending' as const,
+            targetUserId: '88888888-8888-4888-8888-888888888888',
+            toRoleKey: 'organization_owner',
+          },
+          201,
+        ),
+    );
+    render(<App client={sessionClient({ requestOrganizationOwnerTransfer })} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Promote to owner' }));
+    expect(screen.getByLabelText('New role')).toHaveValue('organization_owner');
+    fireEvent.change(screen.getByLabelText('Reason'), {
+      target: { value: 'Approved owner succession promotion request' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Submit governed step' }));
+
+    await waitFor(() => expect(requestOrganizationOwnerTransfer).toHaveBeenCalledOnce());
+    expect(requestOrganizationOwnerTransfer).toHaveBeenCalledWith(
+      selectedOrganization.id,
+      '77777777-7777-4777-8777-777777777777',
+      {
+        reason: 'Approved owner succession promotion request',
+        toRoleKey: 'organization_owner',
+      },
+      '"organization-membership:77777777-7777-4777-8777-777777777777:0"',
+      expect.stringMatching(/^membership-request_owner_transfer:/),
+    );
+    expect(screen.getByText(/Access change is/)).toHaveTextContent('pending');
   });
 
   it('labels synthetic list data and limits interaction to honest local filtering', async () => {
@@ -339,6 +782,8 @@ describe('CareOS frontend session boundary', () => {
     expect(
       await screen.findByRole('heading', { name: 'Administration dashboard' }),
     ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Priority exceptions' })).toBeInTheDocument();
+    expect(screen.getByText('3/15')).toBeInTheDocument();
     expect(screen.getAllByText('Asha Verma')).toHaveLength(2);
     expect(screen.getByLabelText('Current organization')).toHaveValue(selectedOrganization.id);
   });
@@ -352,12 +797,36 @@ describe('CareOS frontend session boundary', () => {
     render(<App client={sessionClient({ getAdministrationReadiness })} />);
 
     expect(await screen.findByRole('heading', { name: 'Setup checklist' })).toBeInTheDocument();
-    expect(await screen.findByText('2/3')).toBeInTheDocument();
-    expect(screen.getByText('Activation policy is not approved.')).toBeInTheDocument();
+    expect(await screen.findByText(/Approved catalogue m1-readiness-v1/)).toBeInTheDocument();
+    expect(
+      screen.getByText('Versioned configuration integrity is unavailable.'),
+    ).toBeInTheDocument();
     expect(getAdministrationReadiness).toHaveBeenCalledWith(
       selectedOrganization.id,
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
+  });
+
+  it('fails closed when readiness gates are not in the approved catalogue order', async () => {
+    window.location.hash = '#/M1-06';
+    const invalidReadiness = structuredClone(readiness);
+    [invalidReadiness.gates[0], invalidReadiness.gates[1]] = [
+      invalidReadiness.gates[1],
+      invalidReadiness.gates[0],
+    ];
+
+    render(
+      <App
+        client={sessionClient({
+          getAdministrationReadiness: async () => success(invalidReadiness),
+        })}
+      />,
+    );
+
+    expect(await screen.findByText('Unable to load organization data')).toBeInTheDocument();
+    expect(
+      screen.getByText('The server response did not match the organization-readiness contract.'),
+    ).toBeInTheDocument();
   });
 
   it('updates an organization profile with its strong revision and a caller-owned retry key', async () => {
@@ -369,8 +838,11 @@ describe('CareOS frontend session boundary', () => {
           countryCode: body.countryCode,
           displayName: body.displayName,
           legalName: body.legalName,
+          locale: body.locale,
           lockVersion: 5,
+          organizationType: body.organizationType,
           timezone: body.timezone,
+          tradingName: body.tradingName,
           updatedAt: '2026-09-16T09:00:00Z',
         }),
         etag: '"organization-profile:5"',
@@ -385,6 +857,15 @@ describe('CareOS frontend session boundary', () => {
     fireEvent.change(screen.getByLabelText('Display name'), {
       target: { value: 'North Care Network' },
     });
+    fireEvent.change(screen.getByLabelText('Trading name (optional)'), {
+      target: { value: 'North Care' },
+    });
+    fireEvent.change(screen.getByLabelText('Organization type'), {
+      target: { value: 'care_network' },
+    });
+    fireEvent.change(screen.getByLabelText('Locale'), {
+      target: { value: 'en-GB' },
+    });
     fireEvent.change(screen.getByLabelText('Reason for change'), {
       target: { value: 'Approved identity review CARE-42' },
     });
@@ -397,8 +878,11 @@ describe('CareOS frontend session boundary', () => {
         countryCode: 'IN',
         displayName: 'North Care Network',
         legalName: 'North Clinic Private Limited',
+        locale: 'en-GB',
+        organizationType: 'care_network',
         reason: 'Approved identity review CARE-42',
         timezone: 'Asia/Kolkata',
+        tradingName: 'North Care',
       },
       '"organization-profile:4"',
       expect.stringMatching(/^organization-profile:[0-9a-f-]{36}$/),
@@ -407,6 +891,31 @@ describe('CareOS frontend session boundary', () => {
       'Organization profile saved with audit and outbox evidence',
     );
     expect(screen.getByText(/Revision 5/)).toBeInTheDocument();
+  });
+
+  it('projects organization profile mutations as unavailable without live manage permission', async () => {
+    window.location.hash = '#/M1-07';
+    const updateOrganizationProfile = vi.fn<AdministrationClient['updateOrganizationProfile']>();
+    render(
+      <App
+        client={sessionClient({
+          getOrganizationProfile: async () => ({
+            ...success({ ...organizationProfile, editable: false }),
+            etag: '"organization-profile:4"',
+          }),
+          updateOrganizationProfile,
+        })}
+      />,
+    );
+
+    expect(await screen.findByText(/You have read-only profile access/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Legal name')).toHaveAttribute('readonly');
+    expect(screen.getByLabelText('Organization type')).toBeDisabled();
+    expect(screen.queryByLabelText('Reason for change')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Save organization profile' }),
+    ).not.toBeInTheDocument();
+    expect(updateOrganizationProfile).not.toHaveBeenCalled();
   });
 
   it('blocks a stale organization profile result until the latest revision is reloaded', async () => {
@@ -455,7 +964,7 @@ describe('CareOS frontend session boundary', () => {
       target: { value: 'asha@example.test' },
     });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'not-a-demo-secret' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in securely' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue securely' }));
 
     await waitFor(() =>
       expect(login).toHaveBeenCalledWith({
@@ -492,6 +1001,57 @@ describe('CareOS frontend session boundary', () => {
     ).toBeInTheDocument();
   });
 
+  it('keeps mandatory-role access locked until enrollment codes are stored', async () => {
+    const getAuthenticationSession = vi
+      .fn<SessionClient['getAuthenticationSession']>()
+      .mockResolvedValueOnce(success(mfaEnrollmentSession, 202))
+      .mockResolvedValue(success({ ...authenticatedSession, mfaEnabled: true, mfaRequired: true }));
+    const listSelectableOrganizations = vi.fn(async () => success([selectedOrganization]));
+    const startMfaEnrollment = vi.fn(async () =>
+      success({
+        provisioningUri:
+          'otpauth://totp/ROOTOPATHY%20CareOS:asha@example.test?secret=ABCDEFGHIJKLMNOP',
+        secret: 'ABCDEFGHIJKLMNOP',
+      }),
+    );
+    const verifyMfaEnrollment = vi.fn(async () =>
+      success({ recoveryCodes: ['2345-6789-ABCD', 'EFGH-JKLM-NPQR'] }),
+    );
+    render(
+      <App
+        client={sessionClient({
+          getAuthenticationSession,
+          listSelectableOrganizations,
+          startMfaEnrollment,
+          verifyMfaEnrollment,
+        })}
+      />,
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Set up multi-factor authentication' }),
+    ).toBeVisible();
+    expect(screen.getByText(/workspace access remains locked/i)).toBeVisible();
+    expect(listSelectableOrganizations).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Set up authenticator' }));
+    expect(await screen.findByLabelText('One-time authenticator setup key')).toHaveTextContent(
+      'ABCDEFGHIJKLMNOP',
+    );
+    fireEvent.change(screen.getByLabelText('Six-digit authenticator code'), {
+      target: { value: '654321' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm and enable MFA' }));
+
+    expect(await screen.findByText('2345-6789-ABCD')).toBeVisible();
+    expect(listSelectableOrganizations).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'I have stored these codes securely' }));
+
+    expect(await screen.findByRole('heading', { name: 'Administration dashboard' })).toBeVisible();
+    expect(getAuthenticationSession).toHaveBeenCalledTimes(2);
+    expect(listSelectableOrganizations).toHaveBeenCalledOnce();
+  });
+
   it('requires explicit organization selection and can switch context from the shell', async () => {
     const selectOrganization = vi.fn(async ({ organizationId }: { organizationId: string }) =>
       success({
@@ -516,7 +1076,7 @@ describe('CareOS frontend session boundary', () => {
       await screen.findByRole('heading', { name: 'Choose an organization' }),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText(/South Clinic/));
-    fireEvent.click(screen.getByRole('button', { name: 'Continue to workspace' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open workspace' }));
 
     await waitFor(() =>
       expect(selectOrganization).toHaveBeenCalledWith({ organizationId: otherOrganization.id }),
@@ -698,7 +1258,7 @@ describe('CareOS frontend session boundary', () => {
     fireEvent.change(screen.getByLabelText('Access reason'), {
       target: { value: 'Approved onboarding request CARE-42' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Issue invitation' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Invite administrator' }));
 
     await waitFor(() => expect(issueInvitation).toHaveBeenCalledOnce());
     expect(issueInvitation.mock.calls[0]?.[0]).toBe(selectedOrganization.id);
@@ -836,7 +1396,9 @@ describe('CareOS frontend session boundary', () => {
     const completePasswordReset = vi.fn(async () => success(undefined, 204));
     const view = render(<App client={sessionClient({ completePasswordReset })} />);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('missing its one-time token');
+    const missingTokenAlert = await screen.findByRole('alert');
+    expect(missingTokenAlert).toHaveTextContent('missing its one-time token');
+    expect(missingTokenAlert).toHaveFocus();
     expect(completePasswordReset).not.toHaveBeenCalled();
 
     view.unmount();
@@ -853,6 +1415,82 @@ describe('CareOS frontend session boundary', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('does not match');
     expect(completePasswordReset).not.toHaveBeenCalled();
+  });
+
+  it('focuses and associates identity validation without changing scrubbed routes', async () => {
+    const completePasswordReset = vi.fn(async () => success(undefined, 204));
+    window.location.hash = '#/reset-password?token=usable-token';
+    const resetView = render(<App client={sessionClient({ completePasswordReset })} />);
+
+    await screen.findByRole('heading', { name: 'Choose a new password' });
+    await waitFor(() => expect(window.location.hash).toBe('#/reset-password'));
+    fireEvent.change(screen.getByLabelText('New password'), {
+      target: { value: 'new-secure-password-27' },
+    });
+    const resetConfirmation = screen.getByLabelText('Confirm new password');
+    fireEvent.change(resetConfirmation, { target: { value: 'different-password-28' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Change password' }));
+
+    const resetAlert = await screen.findByRole('alert');
+    expect(resetAlert).toHaveFocus();
+    expect(resetConfirmation).toHaveAttribute('aria-invalid', 'true');
+    expect(resetConfirmation).toHaveAttribute('aria-describedby', 'confirm-password-error');
+    const resetHash = window.location.hash;
+    const resetFieldLink = within(resetAlert).getByRole('link', { name: /does not match/ });
+    expect(resetFieldLink).toHaveAttribute('href', '#confirm-password');
+    fireEvent.click(resetFieldLink);
+    expect(resetConfirmation).toHaveFocus();
+    expect(window.location.hash).toBe(resetHash);
+    expect(completePasswordReset).not.toHaveBeenCalled();
+
+    resetView.unmount();
+
+    const token = 'Case_Sensitive-Invitation-Token-1234567890';
+    window.location.hash = `#/accept-invitation?token=${token}`;
+    const acceptInvitation = vi.fn<SessionClient['acceptInvitation']>(async () =>
+      success(
+        {
+          accountLink: 'created',
+          invitationId: '77777777-7777-4777-8777-777777777777',
+          organizationId: selectedOrganization.id,
+          roleKey: 'organization_viewer',
+          userId: '88888888-8888-4888-8888-888888888888',
+        },
+        201,
+      ),
+    );
+    render(
+      <App
+        client={sessionClient({
+          acceptInvitation,
+          getAuthenticationSession: async () => success(anonymousSession),
+        })}
+      />,
+    );
+
+    await screen.findByRole('heading', { name: 'Accept your CareOS invitation' });
+    await waitFor(() => expect(window.location.hash).toBe('#/accept-invitation'));
+    fireEvent.change(screen.getByLabelText('New password'), {
+      target: { value: 'new-secure-password-27' },
+    });
+    const invitationConfirmation = screen.getByLabelText('Confirm new password');
+    fireEvent.change(invitationConfirmation, {
+      target: { value: 'different-password-28' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Accept invitation' }));
+
+    const invitationAlert = await screen.findByRole('alert');
+    expect(invitationAlert).toHaveFocus();
+    expect(invitationConfirmation).toHaveAttribute('aria-invalid', 'true');
+    expect(invitationConfirmation).toHaveAttribute(
+      'aria-describedby',
+      'invitation-password-confirmation-error',
+    );
+    const invitationHash = window.location.hash;
+    fireEvent.click(within(invitationAlert).getByRole('link', { name: /does not match/ }));
+    expect(invitationConfirmation).toHaveFocus();
+    expect(window.location.hash).toBe(invitationHash);
+    expect(acceptInvitation).not.toHaveBeenCalled();
   });
 
   it('enrolls MFA and reveals validated recovery codes only once in memory', async () => {
@@ -873,7 +1511,7 @@ describe('CareOS frontend session boundary', () => {
       await screen.findByRole('heading', { name: 'Multi-factor authentication' }),
     ).toBeInTheDocument();
     expect(screen.getByText('Authenticator not enabled')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Set up an authenticator' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Set up authenticator' }));
 
     expect(await screen.findByLabelText('One-time authenticator setup key')).toHaveTextContent(
       'ABCDEFGHIJKLMNOP',
