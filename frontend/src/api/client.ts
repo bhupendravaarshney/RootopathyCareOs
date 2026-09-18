@@ -23,6 +23,9 @@ import type {
   UpdateFacilityDraftData,
   UpdateFacilityDraftResponse,
   UpdateFacilityDraftResponses,
+  SubmitFacilityDraftData,
+  SubmitFacilityDraftResponse,
+  SubmitFacilityDraftResponses,
   CreateOrganizationAddressData,
   CreateOrganizationAddressResponse,
   CreateOrganizationAddressResponses,
@@ -278,6 +281,10 @@ const endpoints = {
   updateFacilityDraft: {
     path: '/api/v1/organizations/{organizationId}/facilities/{facilityId}' satisfies UpdateFacilityDraftData['url'],
     successStatuses: [200] satisfies readonly ResponseStatus<UpdateFacilityDraftResponses>[],
+  },
+  submitFacilityDraft: {
+    path: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/submissions' satisfies SubmitFacilityDraftData['url'],
+    successStatuses: [200] satisfies readonly ResponseStatus<SubmitFacilityDraftResponses>[],
   },
   getOrganizationInternationalSettings: {
     path: '/api/v1/organizations/{organizationId}/international-settings' satisfies GetOrganizationInternationalSettingsData['url'],
@@ -1608,6 +1615,32 @@ export class CareOsApiClient {
       responseBody: 'json',
       signal: options.signal,
       successStatuses: endpoints.updateFacilityDraft.successStatuses,
+    });
+  }
+
+  submitFacilityDraft(
+    organizationId: string,
+    facilityId: string,
+    body: SubmitFacilityDraftData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.submitFacilityDraft.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace(
+        '{facilityId}',
+        requireUuid(facilityId, 'facilityId'),
+      ) as `/api/v1/organizations/${string}/facilities/${string}/submissions`;
+    return this.#mutation<SubmitFacilityDraftResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.submitFacilityDraft.successStatuses,
     });
   }
 

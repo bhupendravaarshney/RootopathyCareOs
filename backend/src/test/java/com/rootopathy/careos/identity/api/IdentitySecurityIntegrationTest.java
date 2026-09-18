@@ -2519,10 +2519,42 @@ class IdentitySecurityIntegrationTest {
         browserIdempotentPut(path + "/" + facilityId, updateBody, etag,
                         "facility-update-stale-" + UUID.randomUUID(), csrf, "198.51.100.83", session)
                 .andExpect(status().isPreconditionFailed());
+        var addressId = UUID.randomUUID();
+        executeAsMigrator("""
+                INSERT INTO organization_addresses
+                  (id,organization_id,address_type,address_line_1,locality,region,postcode,country_code,
+                   validation_status,validation_source,is_primary,effective_from,status,created_by,updated_by)
+                VALUES ('%s','%s','service','1 Care Street','Pune','Maharashtra','411001','IN',
+                        'validated','integration-test',true,now()-interval '1 hour','active','%s','%s')
+                """.formatted(addressId, ORG_ONE, userId, userId));
+        var completeBody = objectMapper.writeValueAsString(Map.of(
+                "facilityCode", "CARE-01",
+                "legalName", "Care One Facility Limited",
+                "displayName", "Care One Updated",
+                "facilityType", "care_site",
+                "addressId", addressId,
+                "timezone", "Asia/Kolkata",
+                "reason", "Attach the validated service address before submission"));
+        browserIdempotentPut(path + "/" + facilityId, completeBody,
+                        "\"facility:" + facilityId + ":1\"", "facility-complete-" + UUID.randomUUID(),
+                        csrf, "198.51.100.83", session)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.facilities[0].lockVersion").value(2));
+        var submitKey = "facility-submit-" + UUID.randomUUID();
+        var submitBody = objectMapper.writeValueAsString(Map.of(
+                "reason", "Submit the complete facility for independent review"));
+        browserConditionalIdempotentPost(path + "/" + facilityId + "/submissions", submitBody,
+                        "\"facility:" + facilityId + ":2\"", submitKey, csrf, "198.51.100.83", session)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.facilities[0].status").value("under_review"))
+                .andExpect(jsonPath("$.facilities[0].lockVersion").value(3));
+        browserConditionalIdempotentPost(path + "/" + facilityId + "/submissions", submitBody,
+                        "\"facility:" + facilityId + ":2\"", submitKey, csrf, "198.51.100.83", session)
+                .andExpect(status().isOk());
         mockMvc.perform(get("/api/v1/organizations/" + ORG_ONE + "/setup-readiness").cookie(session))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.gates[6].outcome").value("blocked"))
-                .andExpect(jsonPath("$.gates[6].evidenceReferences[1]").value("draft-facility-count:2"));
+                .andExpect(jsonPath("$.gates[6].outcome").value("complete"))
+                .andExpect(jsonPath("$.gates[6].evidenceReferences[1]").value("draft-facility-count:1"));
         assertThat(migratorCount("""
                 SELECT count(*) FROM audit_events WHERE organization_id='%s'
                   AND event_name='facility.created'
@@ -2544,6 +2576,18 @@ class IdentitySecurityIntegrationTest {
         assertThat(migratorCount("""
                 SELECT count(*) FROM outbox_events WHERE organization_id='%s'
                   AND event_name='facility.updated'
+                """.formatted(ORG_ONE))).isEqualTo(2);
+        assertThat(migratorCount("""
+                SELECT count(*) FROM audit_events WHERE organization_id='%s'
+                  AND event_name='facility.submitted'
+                  AND (SELECT count(*) FROM jsonb_object_keys(payload))=4
+                  AND payload->>'facilityId'='%s'
+                  AND payload->>'fromState'='draft' AND payload->>'toState'='under_review'
+                  AND payload->>'lockVersion'='3'
+                """.formatted(ORG_ONE, facilityId))).isEqualTo(1);
+        assertThat(migratorCount("""
+                SELECT count(*) FROM outbox_events WHERE organization_id='%s'
+                  AND event_name='facility.submitted'
                 """.formatted(ORG_ONE))).isEqualTo(1);
     }
 

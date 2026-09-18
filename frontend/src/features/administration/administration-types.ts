@@ -10,6 +10,7 @@ export type AdministrationClient = Pick<
   | 'createOrganizationGovernanceResponsibility'
   | 'createFacilityDraft'
   | 'updateFacilityDraft'
+  | 'submitFacilityDraft'
   | 'endOrganizationAddress'
   | 'endOrganizationContact'
   | 'executeOrganizationMembershipChange'

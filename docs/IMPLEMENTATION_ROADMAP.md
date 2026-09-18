@@ -759,6 +759,33 @@ This closes the bounded M1-12 directory and draft-creation slice. Facility submi
 
 This completes only the prerequisite draft-edit boundary for M1-13. Submission, impact review, approval/activation, suspension, closure, complete address orchestration, and final M1D/target acceptance remain open.
 
+### Phase 1AS - checked M1-13 facility draft editing UI (completed 18 September 2026)
+
+- M1-12 now projects an edit control only when the authorized directory grants facility management and the record remains in `draft`.
+- Selecting a draft hydrates the checked write form; saving sends the exact current `facility:{id}:{lockVersion}` strong entity tag, a fresh idempotency key, and the required reason through `updateFacilityDraft`.
+- Successful writes replace the directory from the validated server response; failures remain visible without discarding the in-progress correction, and cancel returns to draft creation.
+- The focused React interaction proof verifies hydration and exact mutation arguments. All 64 frontend tests, strict typecheck, lint, formatting, production build, and 105 five-viewport Playwright/Axe/overflow cases pass.
+
+This closes the browser control omitted by Phase 1AR, not the M1-13 lifecycle. Submission, impact review, approval/activation, suspension, closure, complete address orchestration, and final M1D/target acceptance remain open.
+
+### Phase 1AT - governed M1-13 facility submission foundation (completed 18 September 2026)
+
+- Flyway V32 registers exact `facility.submitted` audit/outbox evidence and advances the database guard only for governed `draft -> under_review` transitions.
+- Submission requires the exact facility-bound strong entity tag, a fresh idempotency key, a bounded reason, an unchanged draft, a validated currently effective address, and an explicit or inherited timezone.
+- OpenAPI 0.22.0 checks 55 operations and the generated/handwritten clients expose `submitFacilityDraft`; cross-facility entity tags are rejected before persistence.
+- The focused live PostgreSQL/Redis proof covers prerequisite completion, submission, exact replay, revision 3, readiness completion, and exactly one four-key audit/outbox pair. All 64 frontend tests, generated drift, and strict typecheck pass.
+
+This completes the submission foundation, not independent activation. Hierarchy, operating-hours/service-policy readiness, maker-checker activation, suspension/reactivation, closure impact, browser submission controls, and final M1D/target acceptance remain open.
+
+### Phase 1AU - checked M1-13 facility submission UI (completed 18 September 2026)
+
+- Authorized draft cards now expose `Submit for review`; non-draft records and read-only users receive no submission control.
+- The inline confirmation captures a bounded reason, explains the validated-address/timezone prerequisites, and sends the current facility-bound strong entity tag plus a fresh idempotency key.
+- Conflict and other governed failures remain visible without discarding the reason; success replaces the directory from the validated server response and removes draft-only controls.
+- The focused React proof verifies exact submission arguments and the `under_review` projection. All 64 frontend tests, strict typecheck, lint, formatting, production build, and 105 five-viewport Playwright/Axe/overflow cases pass.
+
+This closes the browser submission control omitted by Phase 1AT. Hierarchy, operating-hours/service-policy readiness, maker-checker activation, suspension/reactivation, closure impact, and final M1D/target acceptance remain open.
+
 ### Phase 1 approval gate and implementation slices
 
 - [x] Supply and approve versioned M1-01 through M1-23 desktop/responsive mockups and all interaction states.

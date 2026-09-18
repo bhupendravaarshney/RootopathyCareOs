@@ -226,6 +226,10 @@ export type FacilityCreateRequest = {
   reason: string;
 };
 
+export type ReasonRequest = {
+  reason: string;
+};
+
 export type GovernanceAssignee = {
   id: string;
   type: 'membership' | 'external_contact';
@@ -2503,6 +2507,80 @@ export type UpdateFacilityDraftResponses = {
 
 export type UpdateFacilityDraftResponse =
   UpdateFacilityDraftResponses[keyof UpdateFacilityDraftResponses];
+
+export type SubmitFacilityDraftData = {
+  body: ReasonRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    facilityId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/submissions';
+};
+
+export type SubmitFacilityDraftErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type SubmitFacilityDraftError = SubmitFacilityDraftErrors[keyof SubmitFacilityDraftErrors];
+
+export type SubmitFacilityDraftResponses = {
+  /**
+   * Complete facility draft submitted or exact idempotent response replayed
+   */
+  200: FacilityDirectory;
+};
+
+export type SubmitFacilityDraftResponse =
+  SubmitFacilityDraftResponses[keyof SubmitFacilityDraftResponses];
 
 export type GetOrganizationGovernanceDirectoryData = {
   body?: never;

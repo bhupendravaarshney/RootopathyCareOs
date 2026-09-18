@@ -4579,6 +4579,9 @@ function FacilityScreen({ client, organizationId }: AdministrationScreenProps) {
   const [state, setState] = useState<LoadState<FacilityDirectory>>({ phase: 'loading' });
   const [busy, setBusy] = useState(false);
   const [issue, setIssue] = useState('');
+  const [editingFacilityId, setEditingFacilityId] = useState<string | null>(null);
+  const [submittingFacilityId, setSubmittingFacilityId] = useState<string | null>(null);
+  const [submissionReason, setSubmissionReason] = useState('');
   const [form, setForm] = useState<FacilityCreateRequest>({
     facilityCode: '',
     legalName: '',
@@ -4614,18 +4617,30 @@ function FacilityScreen({ client, organizationId }: AdministrationScreenProps) {
     if (state.phase !== 'ready' || !state.data.canCreate || busy) return;
     setBusy(true);
     setIssue('');
-    const result = await client.createFacilityDraft(
-      organizationId,
-      {
-        ...form,
-        facilityCode: form.facilityCode.trim().toUpperCase(),
-        legalName: form.legalName.trim(),
-        displayName: form.displayName.trim(),
-        timezone: form.timezone?.trim() || null,
-        reason: form.reason.trim(),
-      },
-      `facility-draft:${globalThis.crypto.randomUUID()}`,
-    );
+    const body = {
+      ...form,
+      facilityCode: form.facilityCode.trim().toUpperCase(),
+      legalName: form.legalName.trim(),
+      displayName: form.displayName.trim(),
+      timezone: form.timezone?.trim() || null,
+      reason: form.reason.trim(),
+    };
+    const editingFacility = editingFacilityId
+      ? state.data.facilities.find((facility) => facility.facilityId === editingFacilityId)
+      : undefined;
+    const result = editingFacility
+      ? await client.updateFacilityDraft(
+          organizationId,
+          editingFacility.facilityId,
+          body,
+          `"facility:${editingFacility.facilityId}:${editingFacility.lockVersion}"`,
+          `facility-update:${globalThis.crypto.randomUUID()}`,
+        )
+      : await client.createFacilityDraft(
+          organizationId,
+          body,
+          `facility-draft:${globalThis.crypto.randomUUID()}`,
+        );
     setBusy(false);
     if (!result.ok) {
       setIssue(failureMessage(result));
@@ -4636,7 +4651,37 @@ function FacilityScreen({ client, organizationId }: AdministrationScreenProps) {
       return;
     }
     setState({ phase: 'ready', data: result.data });
+    setEditingFacilityId(null);
     setForm({ ...form, facilityCode: '', legalName: '', displayName: '', reason: '' });
+  };
+  const submitForReview = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (state.phase !== 'ready' || !state.data.canCreate || busy || !submittingFacilityId) return;
+    const facility = state.data.facilities.find(
+      (candidate) => candidate.facilityId === submittingFacilityId,
+    );
+    if (!facility || facility.status !== 'draft') return;
+    setBusy(true);
+    setIssue('');
+    const result = await client.submitFacilityDraft(
+      organizationId,
+      facility.facilityId,
+      { reason: submissionReason.trim() },
+      `"facility:${facility.facilityId}:${facility.lockVersion}"`,
+      `facility-submit:${globalThis.crypto.randomUUID()}`,
+    );
+    setBusy(false);
+    if (!result.ok) {
+      setIssue(failureMessage(result));
+      return;
+    }
+    if (!validFacilityDirectory(result.data, organizationId)) {
+      setIssue('The submitted response did not preserve the facility contract.');
+      return;
+    }
+    setState({ phase: 'ready', data: result.data });
+    setSubmittingFacilityId(null);
+    setSubmissionReason('');
   };
   return (
     <>
@@ -4680,6 +4725,77 @@ function FacilityScreen({ client, organizationId }: AdministrationScreenProps) {
                     <small>
                       {f.facilityCode} · {f.facilityType} · {f.timezone ?? 'Inherited timezone'}
                     </small>
+                    {state.data.canCreate && f.status === 'draft' && (
+                      <div className="form-actions">
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          onClick={() => {
+                            setEditingFacilityId(f.facilityId);
+                            setIssue('');
+                            setForm({
+                              facilityCode: f.facilityCode,
+                              legalName: f.legalName,
+                              displayName: f.displayName,
+                              facilityType: f.facilityType,
+                              addressId: null,
+                              contactId: null,
+                              timezone: f.timezone ?? null,
+                              reason: '',
+                            });
+                          }}
+                        >
+                          Edit draft
+                        </button>
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          onClick={() => {
+                            setSubmittingFacilityId(f.facilityId);
+                            setSubmissionReason('');
+                            setIssue('');
+                          }}
+                        >
+                          Submit for review
+                        </button>
+                      </div>
+                    )}
+                    {submittingFacilityId === f.facilityId && (
+                      <form
+                        className="stacked-form"
+                        onSubmit={(event) => void submitForReview(event)}
+                      >
+                        <label>
+                          Submission reason
+                          <textarea
+                            required
+                            minLength={10}
+                            maxLength={500}
+                            value={submissionReason}
+                            onChange={(event) => setSubmissionReason(event.target.value)}
+                          />
+                        </label>
+                        <p className="field-help">
+                          Submission requires a validated active address and effective timezone.
+                        </p>
+                        <div className="form-actions">
+                          <button className="primary-button" disabled={busy}>
+                            {busy ? 'Submitting...' : 'Confirm submission'}
+                          </button>
+                          <button
+                            className="secondary-button"
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                              setSubmittingFacilityId(null);
+                              setSubmissionReason('');
+                            }}
+                          >
+                            Cancel submission
+                          </button>
+                        </div>
+                      </form>
+                    )}
                   </article>
                 ))
               )}
@@ -4687,7 +4803,7 @@ function FacilityScreen({ client, organizationId }: AdministrationScreenProps) {
           </section>
           {state.data.canCreate && (
             <section className="content-panel">
-              <h2>Add facility draft</h2>
+              <h2>{editingFacilityId ? 'Edit facility draft' : 'Add facility draft'}</h2>
               <form onSubmit={(e) => void submit(e)}>
                 <div className="form-grid">
                   <label>
@@ -4755,8 +4871,37 @@ function FacilityScreen({ client, organizationId }: AdministrationScreenProps) {
                 </div>
                 <div className="form-actions">
                   <button className="primary-button" disabled={busy}>
-                    {busy ? 'Creating...' : 'Add facility'}
+                    {busy
+                      ? editingFacilityId
+                        ? 'Saving...'
+                        : 'Creating...'
+                      : editingFacilityId
+                        ? 'Save facility'
+                        : 'Add facility'}
                   </button>
+                  {editingFacilityId && (
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        setEditingFacilityId(null);
+                        setIssue('');
+                        setForm({
+                          facilityCode: '',
+                          legalName: '',
+                          displayName: '',
+                          facilityType: state.data.facilityTypes[0]?.key ?? 'care_site',
+                          addressId: null,
+                          contactId: null,
+                          timezone: null,
+                          reason: '',
+                        });
+                      }}
+                    >
+                      Cancel edit
+                    </button>
+                  )}
                 </div>
               </form>
             </section>

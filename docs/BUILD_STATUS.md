@@ -670,6 +670,33 @@ The bounded M1-12 directory/draft slice is complete. Facility lifecycle submissi
 
 This is a bounded M1-13 prerequisite, not lifecycle completion. Submission, impact checks, maker-checker approval/activation, suspension, closure, complete address orchestration, browser edit controls, and final M1D/target acceptance remain open.
 
+## Verified during Phase 1AS M1-13 facility draft editing UI (18 September 2026)
+
+- The live facility directory exposes editing only for authorized draft rows and hydrates the existing checked facility form without inferring authority for non-draft records.
+- Save supplies the current strong facility entity tag, a fresh idempotency key, normalized values, and a required reason to the checked client; cancel restores creation mode.
+- A focused React interaction assertion verifies the exact facility ID, revision tag, corrected payload, and idempotency-key namespace.
+- All 64 frontend tests, strict typecheck, lint, formatting, production build, and all 105 five-viewport Playwright/Axe/overflow cases pass.
+
+Facility submission, impact review, maker-checker approval/activation, suspension, closure, complete address orchestration, and final M1D/target acceptance remain open.
+
+## Verified during Phase 1AT M1-13 facility submission foundation (18 September 2026)
+
+- V32 supplies the exact `facility.submitted` definitions and a narrow database-enforced `draft -> under_review` transition with immutable identity/creation fields and a +1 revision.
+- Submission fails closed unless the facility has a validated effective address and effective timezone, and it requires tenant authorization, reason, idempotency, and a strong entity tag bound to that facility ID.
+- OpenAPI 0.22.0 verifies 55 operations; generated-client drift, strict typecheck, and all 64 frontend tests pass with the checked submission client.
+- The focused HTTP/security test proves completion, submission, replay, readiness, and exactly one four-key audit/outbox pair against fresh PostgreSQL and Redis.
+
+Independent activation, hierarchy/hours/service-policy readiness, suspension/reactivation, closure impact, browser submission controls, and final M1D/target acceptance remain open.
+
+## Verified during Phase 1AU M1-13 facility submission UI (18 September 2026)
+
+- Authorized draft cards expose an inline submission confirmation with the server prerequisite explanation and a required reason; non-draft/read-only projections remain action-free.
+- Submission uses the exact current facility revision, a facility-bound strong entity tag, and a fresh idempotency key, retaining governed failure context and accepting only a validated directory response.
+- The React interaction proof verifies exact mutation arguments and the returned `under_review` state.
+- All 64 frontend tests, strict typecheck, lint, formatting, production build, and 105 five-viewport Playwright/Axe/overflow cases pass.
+
+Independent maker-checker activation, hierarchy/hours/service-policy readiness, suspension/reactivation, closure impact, and final M1D/target acceptance remain open.
+
 ## Configured but not yet fully integration-verified
 
 - Remote GitHub Actions execution of both updated workflows, including dependency-graph access, CodeQL result upload, required-check/repository-rule enforcement, and SBOM artifact retention

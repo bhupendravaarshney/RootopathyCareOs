@@ -27,6 +27,17 @@ public class JdbcFacilityStore implements FacilityStore {
  UPDATE facilities SET name=?,code=?,legal_name=?,facility_type=?,address_id=?,contact_id=?,timezone=?,lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
  WHERE organization_id=? AND id=? AND status='draft' AND lock_version=?
  """,d.displayName(),d.facilityCode(),d.legalName(),d.facilityType(),d.addressId(),d.contactId(),d.timezone(),c.actorId(),c.organizationId(),id,revision);if(changed!=1)throw new FacilityException(FacilityException.Reason.STALE,"Facility changed or is no longer an editable draft.");return new Result(directory(c,null,null),id,revision+1);}
+ public Result submit(AuthorizedTenantContext c,UUID id,long revision){AuthorizedTenantTransactionGuard.requireBound(jdbc,c);var eligible=Boolean.TRUE.equals(jdbc.queryForObject("""
+ SELECT EXISTS(SELECT 1 FROM facilities f JOIN organizations o ON o.id=f.organization_id
+   JOIN organization_addresses a ON a.organization_id=f.organization_id AND a.id=f.address_id
+  WHERE f.organization_id=? AND f.id=? AND f.status='draft' AND f.lock_version=?
+    AND a.validation_status='validated' AND a.status='active'
+    AND a.effective_from<=clock_timestamp() AND (a.effective_to IS NULL OR a.effective_to>clock_timestamp())
+    AND COALESCE(f.timezone,o.timezone) IS NOT NULL)
+ """,Boolean.class,c.organizationId(),id,revision));if(!eligible)throw new FacilityException(FacilityException.Reason.CONFLICT,"Facility submission requires a validated active address and an effective timezone.");var changed=jdbc.update("""
+ UPDATE facilities SET status='under_review',lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
+ WHERE organization_id=? AND id=? AND status='draft' AND lock_version=?
+ """,c.actorId(),c.organizationId(),id,revision);if(changed!=1)throw new FacilityException(FacilityException.Reason.STALE,"Facility changed or is no longer a draft.");return new Result(directory(c,null,null),id,revision+1);}
  private Set<String> permissions(AuthorizedTenantContext c){return Set.copyOf(jdbc.queryForList("""
  SELECT DISTINCT p.permission_key FROM organization_memberships m JOIN authorization_roles r ON r.role_key=m.role_key JOIN authorization_role_permissions rp ON rp.role_key=r.role_key JOIN authorization_permissions p ON p.permission_key=rp.permission_key AND p.registry_version=r.registry_version WHERE m.organization_id=? AND m.user_id=? AND m.status='active' AND r.registry_version='m1-candidate-1' AND r.status='active' AND p.status='active'
  """,String.class,c.organizationId(),c.actorId()));}

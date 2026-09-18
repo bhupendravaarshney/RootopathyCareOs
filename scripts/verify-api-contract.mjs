@@ -42,6 +42,7 @@ export const expectedOperations = [
   ["get", "/api/v1/organizations/{organizationId}/facilities", "getFacilityDirectory"],
   ["post", "/api/v1/organizations/{organizationId}/facilities", "createFacilityDraft"],
   ["put", "/api/v1/organizations/{organizationId}/facilities/{facilityId}", "updateFacilityDraft"],
+  ["post", "/api/v1/organizations/{organizationId}/facilities/{facilityId}/submissions", "submitFacilityDraft"],
   ["get", "/api/v1/organizations/{organizationId}/governance-responsibilities", "getOrganizationGovernanceDirectory"],
   ["post", "/api/v1/organizations/{organizationId}/governance-responsibilities", "createOrganizationGovernanceResponsibility"],
   ["post", "/api/v1/organizations/{organizationId}/governance-responsibilities/{responsibilityId}/supersessions", "supersedeOrganizationGovernanceResponsibility"],

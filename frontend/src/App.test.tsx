@@ -572,6 +572,8 @@ function sessionClient(overrides: Partial<ApplicationClient> = {}): ApplicationC
     getAuthenticationSession: async () => success(authenticatedSession),
     getFacilityDirectory: async () => success(facilityDirectory),
     createFacilityDraft: async () => success(facilityDirectory, 201),
+    updateFacilityDraft: async () => success(facilityDirectory),
+    submitFacilityDraft: async () => success(facilityDirectory),
     getOrganizationProfile: async () => ({
       ...success(organizationProfile),
       etag: '"organization-profile:4"',
@@ -992,7 +994,20 @@ describe('CareOS frontend session boundary', () => {
 
   it('renders the live facility directory and draft action', async () => {
     window.location.hash = '#/M1-12';
-    render(<App client={sessionClient()} />);
+    const updateFacilityDraft = vi.fn<AdministrationClient['updateFacilityDraft']>(async () =>
+      success(facilityDirectory),
+    );
+    const submitFacilityDraft = vi.fn<AdministrationClient['submitFacilityDraft']>(async () =>
+      success({
+        ...facilityDirectory,
+        facilities: facilityDirectory.facilities.map((facility) => ({
+          ...facility,
+          lockVersion: 1,
+          status: 'under_review' as const,
+        })),
+      }),
+    );
+    render(<App client={sessionClient({ submitFacilityDraft, updateFacilityDraft })} />);
 
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Facilities' }),
@@ -1002,6 +1017,43 @@ describe('CareOS frontend session boundary', () => {
     expect(
       screen.queryByRole('complementary', { name: 'Synthetic prototype only' }),
     ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit draft' }));
+    expect(screen.getByRole('heading', { name: 'Edit facility draft' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Facility code')).toHaveValue('NORTH-01');
+    fireEvent.change(screen.getByLabelText('Display name'), {
+      target: { value: 'North Clinic Updated' },
+    });
+    fireEvent.change(screen.getByLabelText('Reason'), {
+      target: { value: 'Correct the approved facility display name' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save facility' }));
+    await waitFor(() => expect(updateFacilityDraft).toHaveBeenCalledOnce());
+    expect(updateFacilityDraft).toHaveBeenCalledWith(
+      selectedOrganization.id,
+      '33333333-3333-4333-8333-333333333333',
+      expect.objectContaining({
+        displayName: 'North Clinic Updated',
+        reason: 'Correct the approved facility display name',
+      }),
+      '"facility:33333333-3333-4333-8333-333333333333:0"',
+      expect.stringMatching(/^facility-update:/),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Submit for review' }));
+    fireEvent.change(screen.getByLabelText('Submission reason'), {
+      target: { value: 'Submit the completed facility for independent review' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm submission' }));
+    await waitFor(() => expect(submitFacilityDraft).toHaveBeenCalledOnce());
+    expect(submitFacilityDraft).toHaveBeenCalledWith(
+      selectedOrganization.id,
+      '33333333-3333-4333-8333-333333333333',
+      { reason: 'Submit the completed facility for independent review' },
+      '"facility:33333333-3333-4333-8333-333333333333:0"',
+      expect.stringMatching(/^facility-submit:/),
+    );
+    expect(screen.getByText('under_review')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Search facilities'), { target: { value: 'north' } });
     await waitFor(() => expect(screen.getByText('North Clinic Limited')).toBeInTheDocument());
