@@ -171,6 +171,16 @@ careos:
       maximum-upload-bytes: ${CAREOS_STORAGE_S3_MAXIMUM_UPLOAD_BYTES:52428800}
       allow-http: ${CAREOS_STORAGE_S3_ALLOW_HTTP:false}
       create-bucket-if-missing: ${CAREOS_STORAGE_S3_CREATE_BUCKET_IF_MISSING:false}
+  evidence-export:
+    storage:
+      enabled: ${CAREOS_EVIDENCE_EXPORT_STORAGE_ENABLED:false}
+      endpoint: ${CAREOS_EVIDENCE_EXPORT_STORAGE_ENDPOINT:http://localhost:9000}
+      public-endpoint: ${CAREOS_EVIDENCE_EXPORT_STORAGE_PUBLIC_ENDPOINT:${CAREOS_EVIDENCE_EXPORT_STORAGE_ENDPOINT:http://localhost:9000}}
+      access-key: ${CAREOS_EVIDENCE_EXPORT_STORAGE_ACCESS_KEY:}
+      secret-key: ${CAREOS_EVIDENCE_EXPORT_STORAGE_SECRET_KEY:}
+      bucket: ${CAREOS_EVIDENCE_EXPORT_STORAGE_BUCKET:careos-evidence-exports}
+      allow-http: ${CAREOS_EVIDENCE_EXPORT_STORAGE_ALLOW_HTTP:false}
+      create-bucket-if-missing: ${CAREOS_EVIDENCE_EXPORT_STORAGE_CREATE_BUCKET_IF_MISSING:false}
   documents:
     promotion:
       enabled: ${CAREOS_DOCUMENT_PROMOTION_ENABLED:false}

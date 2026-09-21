@@ -123,6 +123,14 @@ final class ProductionConfigurationGuard {
             violations.add("production must not create document buckets at runtime");
         }
         if (environment.getProperty(
+                "careos.evidence-export.storage.allow-http", Boolean.class, false)) {
+            violations.add("the evidence-export storage HTTP override must be disabled");
+        }
+        if (environment.getProperty(
+                "careos.evidence-export.storage.create-bucket-if-missing", Boolean.class, false)) {
+            violations.add("production must not create evidence-export buckets at runtime");
+        }
+        if (environment.getProperty(
                 "careos.authorization.reference-policy-enabled", Boolean.class, false)) {
             violations.add("the provisional reference authorization policy must be disabled");
         }
@@ -159,6 +167,19 @@ final class ProductionConfigurationGuard {
                     environment, "careos.storage.s3.access-key", "S3 access key", violations);
             requireNonProductionSecretAbsent(
                     environment, "careos.storage.s3.secret-key", "S3 secret key", violations);
+        }
+        if (environment.getProperty(
+                "careos.evidence-export.storage.enabled", Boolean.class, false)) {
+            requireNonProductionSecretAbsent(
+                    environment,
+                    "careos.evidence-export.storage.access-key",
+                    "evidence export storage access key",
+                    violations);
+            requireNonProductionSecretAbsent(
+                    environment,
+                    "careos.evidence-export.storage.secret-key",
+                    "evidence export storage secret key",
+                    violations);
         }
         if (environment.getProperty(
                 "careos.documents.promotion.enabled", Boolean.class, false)) {

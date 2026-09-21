@@ -3,6 +3,8 @@ import type { ApiFailure, ApiResult } from './api/client';
 import type {
   AdministrationReadiness,
   FacilityDirectory,
+  OrganizationUnitDirectory,
+  ServiceLocationDirectory,
   OrganizationAddress,
   OrganizationAccess,
   OrganizationContact,
@@ -35,6 +37,7 @@ const selectedOrganization: OrganizationAccess = {
 const facilityDirectory: FacilityDirectory = {
   organizationId: selectedOrganization.id,
   canCreate: true,
+  canManageLifecycle: true,
   evaluatedAt: '2026-09-18T10:00:00Z',
   facilityTypes: [{ key: 'care_site', displayName: 'Care site' }],
   facilities: [
@@ -49,6 +52,73 @@ const facilityDirectory: FacilityDirectory = {
       lockVersion: 0,
       createdAt: '2026-09-18T10:00:00Z',
       updatedAt: '2026-09-18T10:00:00Z',
+    },
+  ],
+};
+const unitDirectory: OrganizationUnitDirectory = {
+  organizationId: selectedOrganization.id,
+  facilityId: facilityDirectory.facilities[0]!.facilityId,
+  canManage: true,
+  canManageLifecycle: true,
+  evaluatedAt: '2026-09-20T10:00:00Z',
+  units: [
+    {
+      unitId: '44444444-4444-4444-8444-444444444444',
+      unitCode: 'CLINICAL',
+      unitType: 'department',
+      name: 'Clinical Services',
+      effectiveFrom: '2026-09-20T00:00:00Z',
+      status: 'draft',
+      lockVersion: 0,
+      createdAt: '2026-09-20T10:00:00Z',
+      updatedAt: '2026-09-20T10:00:00Z',
+    },
+    {
+      unitId: '55555555-5555-4555-8555-555555555555',
+      parentId: '44444444-4444-4444-8444-444444444444',
+      unitCode: 'CARDIOLOGY',
+      unitType: 'unit',
+      name: 'Cardiology',
+      effectiveFrom: '2026-09-20T00:00:00Z',
+      status: 'draft',
+      lockVersion: 2,
+      createdAt: '2026-09-20T10:00:00Z',
+      updatedAt: '2026-09-20T10:00:00Z',
+    },
+  ],
+};
+const locationDirectory: ServiceLocationDirectory = {
+  organizationId: selectedOrganization.id,
+  facilityId: facilityDirectory.facilities[0]!.facilityId,
+  canManage: true,
+  canManageLifecycle: true,
+  evaluatedAt: '2026-09-20T10:00:00Z',
+  locations: [
+    {
+      locationId: '66666666-6666-4666-8666-666666666666',
+      addressId: '66666666-6666-4666-8666-666666666666',
+      locationCode: 'MAIN_CLINIC',
+      locationType: 'physical',
+      name: 'Main clinic',
+      capacity: 20,
+      effectiveFrom: '2026-09-20T00:00:00Z',
+      status: 'draft',
+      lockVersion: 0,
+      createdAt: '2026-09-20T10:00:00Z',
+      updatedAt: '2026-09-20T10:00:00Z',
+    },
+    {
+      locationId: '88888888-8888-4888-8888-888888888888',
+      parentId: '66666666-6666-4666-8666-666666666666',
+      locationCode: 'SATELLITE',
+      locationType: 'virtual',
+      name: 'Satellite room',
+      virtualServiceType: 'video consultation',
+      effectiveFrom: '2026-09-20T00:00:00Z',
+      status: 'draft',
+      lockVersion: 2,
+      createdAt: '2026-09-20T10:00:00Z',
+      updatedAt: '2026-09-20T10:00:00Z',
     },
   ],
 };
@@ -571,6 +641,22 @@ function sessionClient(overrides: Partial<ApplicationClient> = {}): ApplicationC
     getAdministrationReadiness: async () => success(readiness),
     getAuthenticationSession: async () => success(authenticatedSession),
     getFacilityDirectory: async () => success(facilityDirectory),
+    getOrganizationUnitDirectory: async () => success(unitDirectory),
+    createOrganizationUnitDraft: async () => success(unitDirectory, 201),
+    getServiceLocationDirectory: async () => success(locationDirectory),
+    createServiceLocationDraft: async () => success(locationDirectory, 201),
+    updateServiceLocationDraft: async () => success(locationDirectory),
+    reparentServiceLocation: async () => success(locationDirectory),
+    activateServiceLocation: async () => success(locationDirectory),
+    suspendServiceLocation: async () => success(locationDirectory),
+    reactivateServiceLocation: async () => success(locationDirectory),
+    closeServiceLocation: async () => success(locationDirectory),
+    activateOrganizationUnit: async () => success(unitDirectory),
+    suspendOrganizationUnit: async () => success(unitDirectory),
+    reactivateOrganizationUnit: async () => success(unitDirectory),
+    closeOrganizationUnit: async () => success(unitDirectory),
+    updateOrganizationUnitDraft: async () => success(unitDirectory),
+    reparentOrganizationUnit: async () => success(unitDirectory),
     createFacilityDraft: async () => success(facilityDirectory, 201),
     updateFacilityDraft: async () => success(facilityDirectory),
     submitFacilityDraft: async () => success(facilityDirectory),
@@ -1057,6 +1143,267 @@ describe('CareOS frontend session boundary', () => {
 
     fireEvent.change(screen.getByLabelText('Search facilities'), { target: { value: 'north' } });
     await waitFor(() => expect(screen.getByText('North Clinic Limited')).toBeInTheDocument());
+  });
+
+  it('renders the live unit hierarchy and creates a governed draft', async () => {
+    window.location.hash = '#/M1-14';
+    const createOrganizationUnitDraft = vi.fn<AdministrationClient['createOrganizationUnitDraft']>(
+      async () => success(unitDirectory, 201),
+    );
+    const updateOrganizationUnitDraft = vi.fn<AdministrationClient['updateOrganizationUnitDraft']>(
+      async () => success(unitDirectory),
+    );
+    const reparentOrganizationUnit = vi.fn<AdministrationClient['reparentOrganizationUnit']>(
+      async () => success(unitDirectory),
+    );
+    const activateOrganizationUnit = vi.fn<AdministrationClient['activateOrganizationUnit']>(
+      async () => success(unitDirectory),
+    );
+    render(
+      <App
+        client={sessionClient({
+          createOrganizationUnitDraft,
+          activateOrganizationUnit,
+          reparentOrganizationUnit,
+          updateOrganizationUnitDraft,
+        })}
+      />,
+    );
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Departments and units' }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('Clinical Services')).toHaveLength(2);
+    expect(screen.getByText('— Cardiology')).toBeInTheDocument();
+    expect(screen.getByText('Depth 2 · revision 2')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Add hierarchy draft' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Unit code'), { target: { value: 'imaging' } });
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'unit' } });
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Imaging' } });
+    fireEvent.change(screen.getByLabelText('Parent'), {
+      target: { value: '44444444-4444-4444-8444-444444444444' },
+    });
+    fireEvent.change(screen.getByLabelText('Reason'), {
+      target: { value: 'Create the approved imaging unit hierarchy draft' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add hierarchy draft' }));
+
+    await waitFor(() => expect(createOrganizationUnitDraft).toHaveBeenCalledOnce());
+    expect(createOrganizationUnitDraft).toHaveBeenCalledWith(
+      selectedOrganization.id,
+      facilityDirectory.facilities[0]!.facilityId,
+      expect.objectContaining({
+        name: 'Imaging',
+        parentId: '44444444-4444-4444-8444-444444444444',
+        reason: 'Create the approved imaging unit hierarchy draft',
+        unitCode: 'IMAGING',
+        unitType: 'unit',
+      }),
+      expect.stringMatching(/^unit-draft:/),
+    );
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Edit draft' })[0]!);
+    fireEvent.change(screen.getByLabelText('Edit name'), {
+      target: { value: 'Clinical Operations' },
+    });
+    fireEvent.change(screen.getByLabelText('Edit reason'), {
+      target: { value: 'Rename the approved clinical hierarchy draft' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save draft changes' }));
+    await waitFor(() => expect(updateOrganizationUnitDraft).toHaveBeenCalledOnce());
+    expect(updateOrganizationUnitDraft).toHaveBeenCalledWith(
+      selectedOrganization.id,
+      facilityDirectory.facilities[0]!.facilityId,
+      '44444444-4444-4444-8444-444444444444',
+      expect.objectContaining({
+        name: 'Clinical Operations',
+        parentId: null,
+        reason: 'Rename the approved clinical hierarchy draft',
+        unitCode: 'CLINICAL',
+      }),
+      '"organization-unit:44444444-4444-4444-8444-444444444444:0"',
+      expect.stringMatching(/^unit-update:/),
+    );
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Change parent' })[1]!);
+    fireEvent.change(screen.getByLabelText('New parent'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Parent change reason'), {
+      target: { value: 'Move cardiology to the facility hierarchy root' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save parent change' }));
+    await waitFor(() => expect(reparentOrganizationUnit).toHaveBeenCalledOnce());
+    expect(reparentOrganizationUnit).toHaveBeenCalledWith(
+      selectedOrganization.id,
+      facilityDirectory.facilities[0]!.facilityId,
+      '55555555-5555-4555-8555-555555555555',
+      expect.objectContaining({
+        parentId: null,
+        reason: 'Move cardiology to the facility hierarchy root',
+      }),
+      '"organization-unit:55555555-5555-4555-8555-555555555555:2"',
+      expect.stringMatching(/^unit-reparent:/),
+    );
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Activate' })[0]!);
+    expect(screen.getByText(/requires current MFA and recent authentication/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Lifecycle reason'), {
+      target: { value: 'Activate the approved root hierarchy in parent order' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm activate' }));
+    await waitFor(() => expect(activateOrganizationUnit).toHaveBeenCalledOnce());
+    expect(activateOrganizationUnit).toHaveBeenCalledWith(
+      selectedOrganization.id,
+      facilityDirectory.facilities[0]!.facilityId,
+      '44444444-4444-4444-8444-444444444444',
+      { reason: 'Activate the approved root hierarchy in parent order' },
+      '"organization-unit:44444444-4444-4444-8444-444444444444:0"',
+      expect.stringMatching(/^unit-activate:/),
+    );
+  });
+
+  it('does not infer hierarchy lifecycle authority from draft management', async () => {
+    window.location.hash = '#/M1-14';
+    render(
+      <App
+        client={sessionClient({
+          getOrganizationUnitDirectory: async () =>
+            success({ ...unitDirectory, canManageLifecycle: false }),
+        })}
+      />,
+    );
+
+    expect(await screen.findAllByRole('button', { name: 'Edit draft' })).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Activate' })).not.toBeInTheDocument();
+  });
+
+  it('renders service locations and creates a virtual location draft', async () => {
+    window.location.hash = '#/M1-15';
+    const createServiceLocationDraft = vi.fn<AdministrationClient['createServiceLocationDraft']>(
+      async () => success(locationDirectory, 201),
+    );
+    const updateServiceLocationDraft = vi.fn<AdministrationClient['updateServiceLocationDraft']>(
+      async () => success(locationDirectory),
+    );
+    const reparentServiceLocation = vi.fn<AdministrationClient['reparentServiceLocation']>(
+      async () => success(locationDirectory),
+    );
+    const activateServiceLocation = vi.fn<AdministrationClient['activateServiceLocation']>(
+      async () => success(locationDirectory),
+    );
+    render(
+      <App
+        client={sessionClient({
+          createServiceLocationDraft,
+          activateServiceLocation,
+          reparentServiceLocation,
+          updateServiceLocationDraft,
+        })}
+      />,
+    );
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Locations' })).toBeInTheDocument();
+    expect(screen.getAllByText('Main clinic')).toHaveLength(2);
+    fireEvent.change(screen.getByLabelText('Location code'), { target: { value: 'telehealth' } });
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'virtual' } });
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Telehealth room' } });
+    fireEvent.change(screen.getByLabelText('Virtual service type'), {
+      target: { value: 'video consultation' },
+    });
+    fireEvent.change(screen.getByLabelText('Creation reason'), {
+      target: { value: 'Create the approved virtual consultation location' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create location draft' }));
+
+    await waitFor(() => expect(createServiceLocationDraft).toHaveBeenCalledOnce());
+    expect(createServiceLocationDraft).toHaveBeenCalledWith(
+      selectedOrganization.id,
+      facilityDirectory.facilities[0]!.facilityId,
+      expect.objectContaining({
+        addressId: null,
+        locationCode: 'TELEHEALTH',
+        locationType: 'virtual',
+        name: 'Telehealth room',
+        virtualServiceType: 'video consultation',
+      }),
+      expect.stringMatching(/^location-draft:/),
+    );
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Edit draft' })[0]!);
+    fireEvent.change(screen.getByLabelText('Edit name'), { target: { value: 'Main care clinic' } });
+    fireEvent.change(screen.getByLabelText('Edit reason'), {
+      target: { value: 'Rename the approved physical location draft' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save location draft' }));
+    await waitFor(() => expect(updateServiceLocationDraft).toHaveBeenCalledOnce());
+    expect(updateServiceLocationDraft).toHaveBeenCalledWith(
+      selectedOrganization.id,
+      facilityDirectory.facilities[0]!.facilityId,
+      '66666666-6666-4666-8666-666666666666',
+      expect.objectContaining({ name: 'Main care clinic', locationCode: 'MAIN_CLINIC' }),
+      '"service-location:66666666-6666-4666-8666-666666666666:0"',
+      expect.stringMatching(/^location-update:/),
+    );
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Change parent' })[1]!);
+    fireEvent.change(screen.getByLabelText('New location parent'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Parent change reason'), {
+      target: { value: 'Move the satellite service location to the facility root' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save location parent' }));
+    await waitFor(() => expect(reparentServiceLocation).toHaveBeenCalledOnce());
+    expect(reparentServiceLocation).toHaveBeenCalledWith(
+      selectedOrganization.id,
+      facilityDirectory.facilities[0]!.facilityId,
+      '88888888-8888-4888-8888-888888888888',
+      expect.objectContaining({ parentId: null }),
+      '"service-location:88888888-8888-4888-8888-888888888888:2"',
+      expect.stringMatching(/^location-reparent:/),
+    );
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Activate' })[0]!);
+    expect(screen.getByText(/requires current MFA and recent authentication/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Location lifecycle reason'), {
+      target: { value: 'Activate the approved service location in parent order' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm activate' }));
+    await waitFor(() => expect(activateServiceLocation).toHaveBeenCalledOnce());
+    expect(activateServiceLocation).toHaveBeenCalledWith(
+      selectedOrganization.id,
+      facilityDirectory.facilities[0]!.facilityId,
+      '66666666-6666-4666-8666-666666666666',
+      { reason: 'Activate the approved service location in parent order' },
+      '"service-location:66666666-6666-4666-8666-666666666666:0"',
+      expect.stringMatching(/^location-activate:/),
+    );
+  });
+
+  it('does not expose location creation without exact management authority', async () => {
+    window.location.hash = '#/M1-15';
+    render(
+      <App
+        client={sessionClient({
+          getServiceLocationDirectory: async () =>
+            success({ ...locationDirectory, canManage: false }),
+        })}
+      />,
+    );
+    expect(await screen.findByText('Main clinic')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Add location draft' })).not.toBeInTheDocument();
+  });
+
+  it('does not infer location lifecycle authority from draft management', async () => {
+    window.location.hash = '#/M1-15';
+    render(
+      <App
+        client={sessionClient({
+          getServiceLocationDirectory: async () =>
+            success({ ...locationDirectory, canManageLifecycle: false }),
+        })}
+      />,
+    );
+    expect(await screen.findAllByRole('button', { name: 'Edit draft' })).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Activate' })).not.toBeInTheDocument();
   });
 
   it('creates an organization identifier draft through the governed API', async () => {

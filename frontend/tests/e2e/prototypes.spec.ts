@@ -332,6 +332,60 @@ const facilityDirectory = {
     },
   ],
 };
+const unitDirectory = {
+  organizationId: organization.id,
+  facilityId: facilityDirectory.facilities[0].facilityId,
+  canManage: true,
+  canManageLifecycle: true,
+  evaluatedAt: '2026-09-20T10:00:00Z',
+  units: [
+    {
+      unitId: '44444444-4444-4444-8444-444444444444',
+      unitCode: 'CLINICAL',
+      unitType: 'department',
+      name: 'Clinical Services',
+      effectiveFrom: '2026-09-20T00:00:00Z',
+      status: 'draft',
+      lockVersion: 0,
+      createdAt: '2026-09-20T10:00:00Z',
+      updatedAt: '2026-09-20T10:00:00Z',
+    },
+    {
+      unitId: '55555555-5555-4555-8555-555555555555',
+      parentId: '44444444-4444-4444-8444-444444444444',
+      unitCode: 'CARDIOLOGY',
+      unitType: 'unit',
+      name: 'Cardiology',
+      effectiveFrom: '2026-09-20T00:00:00Z',
+      status: 'active',
+      lockVersion: 2,
+      createdAt: '2026-09-20T10:00:00Z',
+      updatedAt: '2026-09-20T10:00:00Z',
+    },
+  ],
+};
+const locationDirectory = {
+  organizationId: organization.id,
+  facilityId: facilityDirectory.facilities[0].facilityId,
+  canManage: true,
+  canManageLifecycle: true,
+  evaluatedAt: '2026-09-20T10:00:00Z',
+  locations: [
+    {
+      locationId: '66666666-6666-4666-8666-666666666666',
+      addressId: '77777777-7777-4777-8777-777777777777',
+      locationCode: 'MAIN_CLINIC',
+      locationType: 'physical',
+      name: 'Main clinic',
+      capacity: 20,
+      effectiveFrom: '2026-09-20T00:00:00Z',
+      status: 'draft',
+      lockVersion: 0,
+      createdAt: '2026-09-20T10:00:00Z',
+      updatedAt: '2026-09-20T10:00:00Z',
+    },
+  ],
+};
 const organizationMemberships = {
   asOf: '2026-09-17T05:30:00Z',
   availableActions: [
@@ -367,6 +421,69 @@ const organizationMemberships = {
   ],
   organizationId: organization.id,
   page: { hasMore: false, limit: 25, nextCursor: null },
+};
+const liveAdministrationEvaluatedAt = '2026-09-21T12:00:00Z';
+const operatingHoursOverview = {
+  organizationId: organization.id,
+  canManage: true,
+  batches: [],
+  evaluatedAt: liveAdministrationEvaluatedAt,
+};
+const serviceCatalogue = {
+  organizationId: organization.id,
+  canManage: true,
+  canManageLifecycle: true,
+  services: [],
+  evaluatedAt: liveAdministrationEvaluatedAt,
+};
+const serviceAssignments = {
+  organizationId: organization.id,
+  canManage: true,
+  canManageLifecycle: true,
+  assignments: [],
+  evaluatedAt: liveAdministrationEvaluatedAt,
+};
+const identifierSchemes = {
+  organizationId: organization.id,
+  canManage: true,
+  canActivate: false,
+  canRetire: false,
+  schemes: [],
+  evaluatedAt: liveAdministrationEvaluatedAt,
+};
+const configurationActivations = {
+  organizationId: organization.id,
+  canValidate: true,
+  canSubmit: true,
+  canApprove: true,
+  canActivate: true,
+  pendingChanges: [],
+  configurations: [],
+  evaluatedAt: liveAdministrationEvaluatedAt,
+};
+const configurationHistory = {
+  organizationId: organization.id,
+  asOf: liveAdministrationEvaluatedAt,
+  items: [],
+  pageSize: 25,
+  hasMore: false,
+  nextCursor: null,
+};
+const auditEvidence = {
+  organizationId: organization.id,
+  asOf: liveAdministrationEvaluatedAt,
+  items: [],
+  pageSize: 25,
+  hasMore: false,
+  nextCursor: null,
+};
+const evidenceExports = {
+  organizationId: organization.id,
+  canRequest: true,
+  canApprove: true,
+  canAccess: true,
+  jobs: [],
+  evaluatedAt: liveAdministrationEvaluatedAt,
 };
 const authenticatedSession = {
   mfaEnabled: false,
@@ -446,8 +563,39 @@ async function mockAuthenticatedSession(page: Page) {
   await page.route(`**/api/v1/organizations/${organization.id}/facilities**`, (route) =>
     jsonResponse(route, facilityDirectory, route.request().method() === 'POST' ? 201 : 200),
   );
+  await page.route(`**/api/v1/organizations/${organization.id}/facilities/*/units**`, (route) =>
+    jsonResponse(route, unitDirectory, route.request().method() === 'POST' ? 201 : 200),
+  );
+  await page.route(`**/api/v1/organizations/${organization.id}/facilities/*/locations**`, (route) =>
+    jsonResponse(route, locationDirectory, route.request().method() === 'POST' ? 201 : 200),
+  );
   await page.route(`**/api/v1/organizations/${organization.id}/memberships**`, (route) =>
     jsonResponse(route, organizationMemberships),
+  );
+  await page.route(`**/api/v1/organizations/${organization.id}/operating-hours**`, (route) =>
+    jsonResponse(route, operatingHoursOverview),
+  );
+  await page.route(`**/api/v1/organizations/${organization.id}/services**`, (route) =>
+    jsonResponse(route, serviceCatalogue, route.request().method() === 'POST' ? 201 : 200),
+  );
+  await page.route(`**/api/v1/organizations/${organization.id}/service-assignments**`, (route) =>
+    jsonResponse(route, serviceAssignments, route.request().method() === 'POST' ? 201 : 200),
+  );
+  await page.route(`**/api/v1/organizations/${organization.id}/identifier-schemes**`, (route) =>
+    jsonResponse(route, identifierSchemes, route.request().method() === 'POST' ? 201 : 200),
+  );
+  await page.route(
+    `**/api/v1/organizations/${organization.id}/configuration-activations`,
+    (route) => jsonResponse(route, configurationActivations),
+  );
+  await page.route(`**/api/v1/organizations/${organization.id}/configuration-history**`, (route) =>
+    jsonResponse(route, configurationHistory),
+  );
+  await page.route(`**/api/v1/organizations/${organization.id}/audit-evidence**`, (route) =>
+    jsonResponse(route, auditEvidence),
+  );
+  await page.route(`**/api/v1/organizations/${organization.id}/evidence-exports**`, (route) =>
+    jsonResponse(route, evidenceExports, route.request().method() === 'POST' ? 201 : 200),
   );
 }
 
@@ -510,14 +658,15 @@ for (const { module, count, start } of routeGroups) {
   });
 }
 
-test('remaining synthetic screens expose honest action boundaries', async ({ page }) => {
+test('live activation and remaining synthetic screens expose honest action boundaries', async ({
+  page,
+}) => {
   await mockAuthenticatedSession(page);
 
   await page.goto('/#/M1-21');
-  await expect(page.getByRole('button', { name: /Review.*unavailable/ })).toHaveCount(4);
-  for (const action of await page.getByRole('button', { name: /Review.*unavailable/ }).all()) {
-    await expect(action).toBeDisabled();
-  }
+  await expect(page.getByRole('heading', { name: 'Review and activate' })).toBeVisible();
+  await expect(page.getByText('0 versions')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Review.*unavailable/ })).toHaveCount(0);
 
   await page.goto('/#/COS-27');
   await expect(page.getByText('Synthetic patient')).toBeVisible();
@@ -531,6 +680,62 @@ test('remaining synthetic screens expose honest action boundaries', async ({ pag
   await expect(pagination.getByText('COS-27')).toHaveAttribute('aria-disabled', 'true');
   await expectNoDocumentHorizontalOverflow(page, 'honest synthetic prototype boundary');
   await expectNoSeriousViolations(page, 'honest synthetic prototype boundary');
+});
+
+test('M1-22 refreshes an active export with bounded polling and stops at ready', async ({
+  page,
+}) => {
+  await mockAuthenticatedSession(page);
+  await page.unroute(`**/api/v1/organizations/${organization.id}/evidence-exports**`);
+  let directoryRequests = 0;
+  let allowReady = false;
+  const exportId = '99999999-9999-4999-8999-999999999999';
+  await page.route(`**/api/v1/organizations/${organization.id}/evidence-exports**`, (route) => {
+    ++directoryRequests;
+    const ready = allowReady;
+    return jsonResponse(route, {
+      ...evidenceExports,
+      jobs: [
+        {
+          exportId,
+          requesterId: user.id,
+          projection: 'history-summary-v1',
+          format: 'csv',
+          purposeCode: 'configuration_review',
+          status: ready ? 'ready' : 'authorized',
+          canApprove: false,
+          canAccess: ready,
+          approvalId: null,
+          approverId: null,
+          rowCount: ready ? 0 : null,
+          byteCount: ready ? 0 : null,
+          artifactDigest: ready ? 'a'.repeat(64) : null,
+          readyAt: ready ? '2026-09-21T12:00:02Z' : null,
+          expiresAt: ready ? '2026-09-22T12:00:02Z' : null,
+          failureCode: null,
+          lockVersion: ready ? 2 : 1,
+          createdAt: liveAdministrationEvaluatedAt,
+          updatedAt: ready ? '2026-09-21T12:00:02Z' : liveAdministrationEvaluatedAt,
+        },
+      ],
+    });
+  });
+
+  await page.goto('/#/M1-22');
+  await expect(
+    page.getByText('Export status will refresh automatically with bounded backoff.'),
+  ).toBeVisible();
+  const requestsBeforeReady = directoryRequests;
+  allowReady = true;
+  await expect.poll(() => directoryRequests).toBeGreaterThan(requestsBeforeReady);
+  await expect(page.getByRole('button', { name: 'Create 10-minute download' })).toBeVisible();
+  await expect
+    .poll(async () => {
+      const count = directoryRequests;
+      await page.waitForTimeout(1_250);
+      return directoryRequests - count;
+    })
+    .toBe(0);
 });
 
 test('M1-08 verifies and supersedes governed identifiers with exact revision evidence', async ({
@@ -1463,7 +1668,11 @@ test('administration readiness uses the exact approved catalogue and distinct da
   await expect(page).toHaveURL(/#\/M1-06$/);
   await expect(page.getByRole('heading', { name: 'Setup checklist' })).toBeVisible();
   await expect(page.locator('.check-list > div')).toHaveCount(15);
-  await expect(page.getByText('This is a live server projection.', { exact: false })).toBeVisible();
+  await expect(
+    page.getByText('This live server projection feeds the persisted M1-21 validation', {
+      exact: false,
+    }),
+  ).toBeVisible();
   await expect(page.getByRole('link', { name: 'Not applicable' })).toHaveAttribute(
     'href',
     '#/M1-19',

@@ -7,7 +7,7 @@ import java.util.regex.Pattern;
 final class GovernanceValues {
     static final int MAX_JSON_BYTES = 1_048_576;
     private static final Pattern REGISTRY_KEY =
-            Pattern.compile("[a-z][a-z0-9]*([.:-][a-z0-9]+)*");
+            Pattern.compile("[a-z][a-z0-9]*([._:-][a-z0-9]+)*");
     private static final Pattern TYPE_KEY =
             Pattern.compile("[a-z][a-z0-9]*([._:-][a-z0-9]+)*");
     private static final Pattern CORRELATION_ID = Pattern.compile("[A-Za-z0-9._:-]{1,128}");

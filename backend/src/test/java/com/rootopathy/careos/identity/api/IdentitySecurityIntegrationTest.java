@@ -26,6 +26,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.postgresql.util.PSQLException;
@@ -95,6 +96,7 @@ class IdentitySecurityIntegrationTest {
         registry.add("spring.flyway.user", () -> MIGRATOR_USER);
         registry.add("spring.flyway.password", () -> MIGRATOR_PASSWORD);
         registry.add("spring.flyway.placeholders.applicationRole", () -> APP_USER);
+        registry.add("spring.flyway.clean-disabled", () -> false);
         registry.add("spring.data.redis.host", REDIS::getHost);
         registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
         registry.add("careos.authorization.reference-policy-enabled", () -> true);
@@ -113,6 +115,9 @@ class IdentitySecurityIntegrationTest {
     private JdbcTemplate jdbcTemplate;
 
     @Autowired
+    private Flyway flyway;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -129,6 +134,8 @@ class IdentitySecurityIntegrationTest {
 
     @BeforeEach
     void seedActiveAccount() {
+        flyway.clean();
+        flyway.migrate();
         redisTemplate.execute((RedisCallback<Void>) connection -> {
             connection.serverCommands().flushDb();
             return null;
@@ -1391,7 +1398,7 @@ class IdentitySecurityIntegrationTest {
                 .andExpect(jsonPath("$.gates[11].outcome").value("not_applicable"))
                 .andExpect(jsonPath("$.gates[14].key")
                         .value("platform.dependencies.ready"))
-                .andExpect(jsonPath("$.gates[14].outcome").value("blocked"));
+                .andExpect(jsonPath("$.gates[14].outcome").value("complete"));
 
         var readinessViewerId = UUID.randomUUID();
         var readinessViewerEmail = "readiness.viewer+" + readinessViewerId + "@rootopathy.test";
@@ -2458,6 +2465,417 @@ class IdentitySecurityIntegrationTest {
                           AND event_name='organization.governance.changed'
                         """.formatted(ORG_ONE)))
                 .isEqualTo(4);
+    }
+
+    @Test
+    void createsAndUpdatesGovernedOrganizationUnitDraftsWithExactEvidence() throws Exception {
+        seedApprovedOwner();
+        var session = enrollMfaAndAuthenticate(email, "198.51.100.84");
+        var facilityId = UUID.fromString("01900000-0000-7000-8000-000000000101");
+        var facilityAddressId = UUID.randomUUID();
+        var path = "/api/v1/organizations/" + ORG_ONE + "/facilities/" + facilityId + "/units";
+        mockMvc.perform(get(path).cookie(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.organizationId").value(ORG_ONE.toString()))
+                .andExpect(jsonPath("$.facilityId").value(facilityId.toString()))
+                .andExpect(jsonPath("$.canManage").value(true))
+                .andExpect(jsonPath("$.canManageLifecycle").value(true))
+                .andExpect(jsonPath("$.units.length()").value(0));
+        var csrf = csrf(session);
+        var createBody = objectMapper.writeValueAsString(Map.of(
+                "unitCode", "CARDIOLOGY",
+                "unitType", "department",
+                "name", "Cardiology",
+                "effectiveFrom", "2026-09-20T00:00:00Z",
+                "reason", "Create the approved cardiology department draft"));
+        var created = browserIdempotentPost(path, createBody, "unit-create-" + UUID.randomUUID(), csrf,
+                        "198.51.100.84", session)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.units[0].unitCode").value("CARDIOLOGY"))
+                .andExpect(jsonPath("$.units[0].lockVersion").value(0))
+                .andReturn();
+        var unitId = objectMapper.readTree(created.getResponse().getContentAsString()).path("units").get(0).path("unitId").asText();
+        var updateBody = objectMapper.writeValueAsString(Map.of(
+                "unitCode", "CARDIOLOGY",
+                "unitType", "department",
+                "name", "Cardiology Department",
+                "effectiveFrom", "2026-09-20T00:00:00Z",
+                "reason", "Correct the approved department display name"));
+        var etag = "\"organization-unit:" + unitId + ":0\"";
+        var updateKey = "unit-update-" + UUID.randomUUID();
+        browserIdempotentPut(path + "/" + unitId, updateBody, etag, updateKey, csrf, "198.51.100.84", session)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.units[0].name").value("Cardiology Department"))
+                .andExpect(jsonPath("$.units[0].lockVersion").value(1));
+        browserIdempotentPut(path + "/" + unitId, updateBody, etag, updateKey, csrf, "198.51.100.84", session)
+                .andExpect(status().isOk());
+        browserIdempotentPut(path + "/" + unitId, updateBody, etag, "unit-stale-" + UUID.randomUUID(), csrf,
+                        "198.51.100.84", session)
+                .andExpect(status().isPreconditionFailed());
+        browserIdempotentPut(path + "/" + unitId, updateBody,
+                        "\"organization-unit:" + UUID.randomUUID() + ":1\"", "unit-cross-" + UUID.randomUUID(), csrf,
+                        "198.51.100.84", session)
+                .andExpect(status().isPreconditionFailed());
+        var parentBody = objectMapper.writeValueAsString(Map.of(
+                "unitCode", "CLINICAL",
+                "unitType", "department",
+                "name", "Clinical Services",
+                "effectiveFrom", "2026-09-20T00:00:00Z",
+                "reason", "Create the approved clinical services parent draft"));
+        var parentCreated = browserIdempotentPost(path, parentBody, "unit-parent-" + UUID.randomUUID(), csrf,
+                        "198.51.100.84", session)
+                .andExpect(status().isCreated()).andReturn();
+        var parentId = objectMapper.readTree(parentCreated.getResponse().getContentAsString()).path("units").get(1).path("unitId").asText();
+        var effectiveFrom = Instant.now().toString();
+        var reparentBody = objectMapper.writeValueAsString(Map.of(
+                "parentId", parentId,
+                "effectiveFrom", effectiveFrom,
+                "reason", "Move cardiology beneath the approved clinical services parent"));
+        var reparentKey = "unit-reparent-" + UUID.randomUUID();
+        browserConditionalIdempotentPost(path + "/" + unitId + "/reparentings", reparentBody,
+                        "\"organization-unit:" + unitId + ":1\"", reparentKey, csrf, "198.51.100.84", session)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.units[0].lockVersion").value(2));
+        browserConditionalIdempotentPost(path + "/" + unitId + "/reparentings", reparentBody,
+                        "\"organization-unit:" + unitId + ":1\"", reparentKey, csrf, "198.51.100.84", session)
+                .andExpect(status().isOk());
+        var cycleBody = objectMapper.writeValueAsString(Map.of(
+                "parentId", unitId,
+                "effectiveFrom", Instant.now().toString(),
+                "reason", "Attempt an invalid cyclic hierarchy change for rejection"));
+        browserConditionalIdempotentPost(path + "/" + parentId + "/reparentings", cycleBody,
+                        "\"organization-unit:" + parentId + ":0\"", "unit-cycle-" + UUID.randomUUID(), csrf,
+                        "198.51.100.84", session)
+                .andExpect(status().isConflict());
+        executeAsMigrator("""
+                INSERT INTO organization_addresses
+                  (id,organization_id,address_type,address_line_1,locality,region,postcode,country_code,
+                   validation_status,validation_source,is_primary,effective_from,status,created_by,updated_by)
+                VALUES ('%s','%s','service','1 Hierarchy Street','Pune','Maharashtra','411001','IN',
+                        'validated','integration-test',true,now()-interval '1 hour','active','%s','%s');
+                UPDATE facilities SET status='under_review',address_id='%s',timezone='Asia/Kolkata'
+                WHERE organization_id='%s' AND id='%s';
+                INSERT INTO organization_memberships(organization_id,user_id,role_key,status)
+                VALUES ('%s','%s','configuration_approver','active')
+                ON CONFLICT (organization_id,user_id,role_key) DO UPDATE
+                  SET status='active',effective_from=now(),effective_to=NULL
+                """.formatted(
+                facilityAddressId,
+                ORG_ONE,
+                userId,
+                userId,
+                facilityAddressId,
+                ORG_ONE,
+                facilityId,
+                ORG_ONE,
+                userId));
+        var lifecycleBody = objectMapper.writeValueAsString(Map.of(
+                "reason", "Activate the approved organization unit hierarchy in parent order"));
+        browserConditionalIdempotentPost(path + "/" + unitId + "/activations", lifecycleBody,
+                        "\"organization-unit:" + unitId + ":2\"", "unit-child-early-" + UUID.randomUUID(), csrf,
+                        "198.51.100.84", session)
+                .andExpect(status().isConflict());
+        var parentActivationKey = "unit-parent-activate-" + UUID.randomUUID();
+        browserConditionalIdempotentPost(path + "/" + parentId + "/activations", lifecycleBody,
+                        "\"organization-unit:" + parentId + ":0\"", parentActivationKey, csrf,
+                        "198.51.100.84", session)
+                .andExpect(status().isOk());
+        browserConditionalIdempotentPost(path + "/" + parentId + "/activations", lifecycleBody,
+                        "\"organization-unit:" + parentId + ":0\"", parentActivationKey, csrf,
+                        "198.51.100.84", session)
+                .andExpect(status().isOk());
+        browserConditionalIdempotentPost(path + "/" + unitId + "/activations", lifecycleBody,
+                        "\"organization-unit:" + unitId + ":2\"", "unit-child-activate-" + UUID.randomUUID(), csrf,
+                        "198.51.100.84", session)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.units[0].status").value("active"))
+                .andExpect(jsonPath("$.units[1].status").value("active"));
+        mockMvc.perform(get("/api/v1/organizations/" + ORG_ONE + "/setup-readiness").cookie(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.gates[7].key").value("network.hierarchy.valid"))
+                .andExpect(jsonPath("$.gates[7].outcome").value("complete"))
+                .andExpect(jsonPath("$.gates[7].evidenceReferences[0]")
+                        .value("eligible-facility-count:1"))
+                .andExpect(jsonPath("$.gates[7].evidenceReferences[1]")
+                        .value("hierarchy-covered-facility-count:1"))
+                .andExpect(jsonPath("$.gates[7].evidenceReferences[2]")
+                        .value("active-unit-count:2;valid:2"))
+                .andExpect(jsonPath("$.gates[7].evidenceReferences[3]")
+                        .value("active-location-count:0;valid:0"));
+        browserConditionalIdempotentPost(path + "/" + unitId + "/activations", lifecycleBody,
+                        "\"organization-unit:" + unitId + ":2\"", "unit-child-stale-" + UUID.randomUUID(), csrf,
+                        "198.51.100.84", session)
+                .andExpect(status().isPreconditionFailed());
+        browserConditionalIdempotentPost(path + "/" + parentId + "/suspensions", lifecycleBody,
+                        "\"organization-unit:" + parentId + ":1\"", "unit-parent-early-suspend-" + UUID.randomUUID(), csrf,
+                        "198.51.100.84", session)
+                .andExpect(status().isConflict());
+        var childSuspensionKey = "unit-child-suspend-" + UUID.randomUUID();
+        browserConditionalIdempotentPost(path + "/" + unitId + "/suspensions", lifecycleBody,
+                        "\"organization-unit:" + unitId + ":3\"", childSuspensionKey, csrf,
+                        "198.51.100.84", session)
+                .andExpect(status().isOk());
+        browserConditionalIdempotentPost(path + "/" + unitId + "/suspensions", lifecycleBody,
+                        "\"organization-unit:" + unitId + ":3\"", childSuspensionKey, csrf,
+                        "198.51.100.84", session)
+                .andExpect(status().isOk());
+        browserConditionalIdempotentPost(path + "/" + parentId + "/suspensions", lifecycleBody,
+                        "\"organization-unit:" + parentId + ":1\"", "unit-parent-suspend-" + UUID.randomUUID(), csrf,
+                        "198.51.100.84", session)
+                .andExpect(status().isOk());
+        browserConditionalIdempotentPost(path + "/" + unitId + "/reactivations", lifecycleBody,
+                        "\"organization-unit:" + unitId + ":4\"", "unit-child-early-reactivate-" + UUID.randomUUID(), csrf,
+                        "198.51.100.84", session)
+                .andExpect(status().isConflict());
+        browserConditionalIdempotentPost(path + "/" + parentId + "/reactivations", lifecycleBody,
+                        "\"organization-unit:" + parentId + ":2\"", "unit-parent-reactivate-" + UUID.randomUUID(), csrf,
+                        "198.51.100.84", session)
+                .andExpect(status().isOk());
+        browserConditionalIdempotentPost(path + "/" + unitId + "/reactivations", lifecycleBody,
+                        "\"organization-unit:" + unitId + ":4\"", "unit-child-reactivate-" + UUID.randomUUID(), csrf,
+                        "198.51.100.84", session)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.units[0].status").value("active"))
+                .andExpect(jsonPath("$.units[1].status").value("active"));
+        var closureBody = objectMapper.writeValueAsString(Map.of(
+                "effectiveTo", Instant.now().toString(),
+                "reason", "Close the approved organization unit hierarchy in descendant order"));
+        browserConditionalIdempotentPost(path + "/" + parentId + "/closures", closureBody,
+                        "\"organization-unit:" + parentId + ":3\"", "unit-parent-early-close-" + UUID.randomUUID(), csrf,
+                        "198.51.100.84", session)
+                .andExpect(status().isConflict());
+        var childClosureKey = "unit-child-close-" + UUID.randomUUID();
+        browserConditionalIdempotentPost(path + "/" + unitId + "/closures", closureBody,
+                        "\"organization-unit:" + unitId + ":5\"", childClosureKey, csrf,
+                        "198.51.100.84", session)
+                .andExpect(status().isOk());
+        browserConditionalIdempotentPost(path + "/" + unitId + "/closures", closureBody,
+                        "\"organization-unit:" + unitId + ":5\"", childClosureKey, csrf,
+                        "198.51.100.84", session)
+                .andExpect(status().isOk());
+        browserConditionalIdempotentPost(path + "/" + parentId + "/closures", closureBody,
+                        "\"organization-unit:" + parentId + ":3\"", "unit-parent-close-" + UUID.randomUUID(), csrf,
+                        "198.51.100.84", session)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.units[0].status").value("closed"))
+                .andExpect(jsonPath("$.units[1].status").value("closed"));
+        mockMvc.perform(get("/api/v1/organizations/" + ORG_ONE + "/setup-readiness").cookie(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.gates[7].outcome").value("blocked"))
+                .andExpect(jsonPath("$.gates[7].evidenceReferences[2]")
+                        .value("active-unit-count:0;valid:0"))
+                .andExpect(jsonPath("$.gates[7].evidenceReferences[3]")
+                        .value("active-location-count:0;valid:0"));
+        browserConditionalIdempotentPost(path + "/" + unitId + "/reactivations", lifecycleBody,
+                        "\"organization-unit:" + unitId + ":6\"", "unit-closed-reactivate-" + UUID.randomUUID(), csrf,
+                        "198.51.100.84", session)
+                .andExpect(status().isPreconditionFailed());
+        assertThat(migratorCount("""
+                SELECT count(*) FROM audit_events WHERE organization_id='%s' AND event_name='network.unit.changed'
+                  AND subject_id='%s' AND (SELECT count(*) FROM jsonb_object_keys(payload))=6
+                """.formatted(ORG_ONE, unitId))).isEqualTo(6);
+        assertThat(migratorCount("""
+                SELECT count(*) FROM outbox_events WHERE organization_id='%s' AND event_name='network.unit.changed'
+                  AND aggregate_id='%s'
+                """.formatted(ORG_ONE, unitId))).isEqualTo(6);
+        assertThat(migratorCount("""
+                SELECT count(*) FROM audit_events WHERE organization_id='%s' AND event_name='network.unit.changed'
+                  AND subject_id='%s' AND payload->>'changeType'='activated'
+                  AND payload->>'fromState'='draft' AND payload->>'toState'='active'
+                  AND (SELECT count(*) FROM jsonb_object_keys(payload))=6
+                """.formatted(ORG_ONE, parentId))).isEqualTo(1);
+        assertThat(migratorCount("""
+                SELECT count(*) FROM audit_events WHERE organization_id='%s' AND event_name='network.unit.changed'
+                  AND subject_id='%s' AND payload->>'changeType' IN ('suspended','reactivated')
+                  AND (SELECT count(*) FROM jsonb_object_keys(payload))=6
+                """.formatted(ORG_ONE, unitId))).isEqualTo(2);
+        assertThat(migratorCount("""
+                SELECT count(*) FROM audit_events WHERE organization_id='%s' AND event_name='network.unit.changed'
+                  AND subject_id='%s' AND payload->>'changeType'='closed'
+                  AND payload->>'fromState'='active' AND payload->>'toState'='closed'
+                  AND (SELECT count(*) FROM jsonb_object_keys(payload))=6
+                """.formatted(ORG_ONE, unitId))).isEqualTo(1);
+        assertThat(migratorCount("""
+                SELECT count(*) FROM organization_unit_parent_history WHERE organization_id='%s' AND unit_id='%s'
+                  AND parent_id='%s' AND lock_version=2
+                """.formatted(ORG_ONE, unitId, parentId))).isEqualTo(1);
+        assertThat(migratorCount("""
+                SELECT count(*) FROM audit_events WHERE organization_id='%s' AND event_name='network.unit.reparented'
+                  AND subject_id='%s' AND (SELECT count(*) FROM jsonb_object_keys(payload))=5
+                """.formatted(ORG_ONE, unitId))).isEqualTo(1);
+        assertThat(migratorCount("""
+                SELECT count(*) FROM outbox_events WHERE organization_id='%s' AND event_name='network.unit.reparented'
+                  AND aggregate_id='%s'
+                """.formatted(ORG_ONE, unitId))).isEqualTo(1);
+    }
+
+    @Test
+    void readsAndCreatesGovernedServiceLocationDraftsWithExactEvidence() throws Exception {
+        seedApprovedOwner();
+        var session = enrollMfaAndAuthenticate(email, "198.51.100.85");
+        var facilityId = UUID.fromString("01900000-0000-7000-8000-000000000101");
+        var path = "/api/v1/organizations/" + ORG_ONE + "/facilities/" + facilityId + "/locations";
+        mockMvc.perform(get(path).cookie(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.organizationId").value(ORG_ONE.toString()))
+                .andExpect(jsonPath("$.facilityId").value(facilityId.toString()))
+                .andExpect(jsonPath("$.canManage").value(true))
+                .andExpect(jsonPath("$.locations.length()").value(0));
+        var csrf = csrf(session);
+        var body = objectMapper.writeValueAsString(Map.of(
+                "locationCode", "TELEHEALTH",
+                "locationType", "virtual",
+                "name", "Telehealth Clinic",
+                "virtualServiceType", "secure-video",
+                "capacity", 50,
+                "accessibilityNotes", "Remote interpretation is available on request.",
+                "effectiveFrom", "2026-09-20T00:00:00Z",
+                "reason", "Create the approved virtual service location draft"));
+        var key = "location-create-" + UUID.randomUUID();
+        var created = browserIdempotentPost(path, body, key, csrf, "198.51.100.85", session)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.locations.length()").value(1))
+                .andExpect(jsonPath("$.locations[0].locationCode").value("TELEHEALTH"))
+                .andExpect(jsonPath("$.locations[0].locationType").value("virtual"))
+                .andExpect(jsonPath("$.locations[0].virtualServiceType").value("secure-video"))
+                .andExpect(jsonPath("$.locations[0].addressId").doesNotExist())
+                .andExpect(jsonPath("$.locations[0].status").value("draft"))
+                .andExpect(jsonPath("$.locations[0].lockVersion").value(0))
+                .andReturn();
+        var locationId = objectMapper.readTree(created.getResponse().getContentAsString())
+                .path("locations").get(0).path("locationId").asText();
+        browserIdempotentPost(path, body, key, csrf, "198.51.100.85", session)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.locations[0].locationId").value(locationId));
+        assertThat(migratorCount("""
+                SELECT count(*) FROM audit_events
+                WHERE organization_id='%s' AND event_name='network.location.changed'
+                  AND subject_id='%s' AND payload->>'changeType'='created'
+                  AND payload->>'fromState'='none' AND payload->>'toState'='draft'
+                  AND payload->>'lockVersion'='0'
+                  AND (SELECT count(*) FROM jsonb_object_keys(payload))=6
+                """.formatted(ORG_ONE, locationId))).isEqualTo(1);
+        assertThat(migratorCount("""
+                SELECT count(*) FROM outbox_events
+                WHERE organization_id='%s' AND event_name='network.location.changed'
+                  AND aggregate_id='%s'
+                """.formatted(ORG_ONE, locationId))).isEqualTo(1);
+
+        var updateBody = objectMapper.writeValueAsString(Map.of(
+                "locationCode", "TELEHEALTH",
+                "locationType", "virtual",
+                "name", "Telehealth Centre",
+                "virtualServiceType", "secure-video",
+                "capacity", 60,
+                "effectiveFrom", "2026-09-20T00:00:00Z",
+                "reason", "Rename the approved virtual service location draft"));
+        browserIdempotentPut(path + "/" + locationId, updateBody,
+                        "\"service-location:" + locationId + ":0\"",
+                        "location-update-" + UUID.randomUUID(), csrf, "198.51.100.85", session)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.locations[0].name").value("Telehealth Centre"))
+                .andExpect(jsonPath("$.locations[0].lockVersion").value(1));
+
+        var childBody = objectMapper.writeValueAsString(Map.of(
+                "parentId", locationId,
+                "locationCode", "REMOTE_ROOM",
+                "locationType", "virtual",
+                "name", "Remote Consultation Room",
+                "virtualServiceType", "secure-video",
+                "effectiveFrom", "2026-09-20T00:00:00Z",
+                "reason", "Create an approved child service location draft"));
+        var child = browserIdempotentPost(path, childBody, "location-child-" + UUID.randomUUID(),
+                        csrf, "198.51.100.85", session)
+                .andExpect(status().isCreated())
+                .andReturn();
+        String childId = null;
+        for (var location : objectMapper.readTree(child.getResponse().getContentAsString()).path("locations")) {
+            var candidateId = location.path("locationId").asText();
+            if (!candidateId.equals(locationId)) childId = candidateId;
+        }
+        if (childId == null) throw new AssertionError("Created child location was not projected");
+        var reparentRequest = new java.util.LinkedHashMap<String, Object>();
+        reparentRequest.put("parentId", null);
+        reparentRequest.put("effectiveFrom", java.time.Instant.now().toString());
+        reparentRequest.put("reason", "Move the approved child service location to the facility root");
+        var reparentBody = objectMapper.writeValueAsString(reparentRequest);
+        browserConditionalIdempotentPost(path + "/" + childId + "/reparentings", reparentBody,
+                        "\"service-location:" + childId + ":0\"",
+                        "location-reparent-" + UUID.randomUUID(), csrf, "198.51.100.85", session)
+                .andExpect(status().isOk());
+        assertThat(migratorCount("""
+                SELECT count(*) FROM service_location_parent_history
+                WHERE organization_id='%s' AND location_id='%s' AND previous_parent_id='%s'
+                  AND parent_id IS NULL AND lock_version=1
+                """.formatted(ORG_ONE, childId, locationId))).isEqualTo(1);
+        assertThat(migratorCount("""
+                SELECT count(*) FROM audit_events
+                WHERE organization_id='%s' AND event_name='network.location.reparented'
+                  AND subject_id='%s' AND (SELECT count(*) FROM jsonb_object_keys(payload))=5
+                """.formatted(ORG_ONE, childId))).isEqualTo(1);
+        var facilityAddressId = UUID.randomUUID();
+        executeAsMigrator("""
+                INSERT INTO organization_addresses
+                  (id,organization_id,address_type,address_line_1,locality,region,postcode,country_code,
+                   validation_status,validation_source,is_primary,effective_from,status,created_by,updated_by)
+                VALUES ('%s','%s','service','1 Location Street','Pune','Maharashtra','411001','IN',
+                        'validated','integration-test',true,now()-interval '1 hour','active','%s','%s');
+                UPDATE facilities SET status='under_review',address_id='%s',timezone='Asia/Kolkata'
+                WHERE organization_id='%s' AND id='%s'
+                """.formatted(
+                facilityAddressId,
+                ORG_ONE,
+                userId,
+                userId,
+                facilityAddressId,
+                ORG_ONE,
+                facilityId));
+        var lifecycleBody = objectMapper.writeValueAsString(Map.of(
+                "reason", "Activate the approved service location lifecycle record"));
+        browserConditionalIdempotentPost(path + "/" + locationId + "/activations", lifecycleBody,
+                        "\"service-location:" + locationId + ":1\"", "location-activate-" + UUID.randomUUID(),
+                        csrf, "198.51.100.85", session)
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/organizations/" + ORG_ONE + "/setup-readiness").cookie(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.gates[7].key").value("network.hierarchy.valid"))
+                .andExpect(jsonPath("$.gates[7].outcome").value("complete"))
+                .andExpect(jsonPath("$.gates[7].evidenceReferences[3]")
+                        .value("active-location-count:1;valid:1"));
+        var suspendBody = objectMapper.writeValueAsString(Map.of(
+                "reason", "Suspend the approved service location lifecycle record"));
+        browserConditionalIdempotentPost(path + "/" + locationId + "/suspensions", suspendBody,
+                        "\"service-location:" + locationId + ":2\"", "location-suspend-" + UUID.randomUUID(),
+                        csrf, "198.51.100.85", session)
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/organizations/" + ORG_ONE + "/setup-readiness").cookie(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.gates[7].outcome").value("blocked"))
+                .andExpect(jsonPath("$.gates[7].evidenceReferences[3]")
+                        .value("active-location-count:0;valid:0"));
+        var reactivateBody = objectMapper.writeValueAsString(Map.of(
+                "reason", "Reactivate the approved service location lifecycle record"));
+        browserConditionalIdempotentPost(path + "/" + locationId + "/reactivations", reactivateBody,
+                        "\"service-location:" + locationId + ":3\"", "location-reactivate-" + UUID.randomUUID(),
+                        csrf, "198.51.100.85", session)
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/organizations/" + ORG_ONE + "/setup-readiness").cookie(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.gates[7].outcome").value("complete"));
+        var closeBody = objectMapper.writeValueAsString(Map.of(
+                "effectiveTo", java.time.Instant.now().toString(),
+                "reason", "Close the approved service location lifecycle record"));
+        browserConditionalIdempotentPost(path + "/" + locationId + "/closures", closeBody,
+                        "\"service-location:" + locationId + ":4\"", "location-close-" + UUID.randomUUID(),
+                        csrf, "198.51.100.85", session)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.locations[?(@.locationId=='" + locationId + "')].status").value("closed"));
+        assertThat(migratorCount("""
+                SELECT count(*) FROM audit_events WHERE organization_id='%s'
+                  AND event_name='network.location.changed' AND subject_id='%s'
+                  AND payload->>'changeType' IN ('activated','suspended','reactivated','closed')
+                  AND (SELECT count(*) FROM jsonb_object_keys(payload))=6
+                """.formatted(ORG_ONE, locationId))).isEqualTo(4);
     }
 
     @Test

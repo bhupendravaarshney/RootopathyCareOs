@@ -213,6 +213,7 @@ export type FacilityDirectory = {
   facilityTypes: Array<FacilityType>;
   facilities: Array<FacilitySummary>;
   evaluatedAt: string;
+  canManageLifecycle: boolean;
 };
 
 export type FacilityCreateRequest = {
@@ -227,6 +228,117 @@ export type FacilityCreateRequest = {
 };
 
 export type ReasonRequest = {
+  reason: string;
+};
+
+export type OrganizationUnitLifecycleRequest = {
+  reason: string;
+};
+
+export type OrganizationUnit = {
+  unitId: string;
+  parentId?: string | null;
+  unitCode: string;
+  unitType: 'department' | 'unit';
+  name: string;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+  status: 'draft' | 'active' | 'suspended' | 'closed';
+  lockVersion: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type OrganizationUnitDirectory = {
+  organizationId: string;
+  facilityId: string;
+  canManage: boolean;
+  canManageLifecycle: boolean;
+  units: Array<OrganizationUnit>;
+  evaluatedAt: string;
+};
+
+export type OrganizationUnitCreateRequest = {
+  parentId?: string | null;
+  unitCode: string;
+  unitType: 'department' | 'unit';
+  name: string;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+  reason: string;
+};
+
+export type OrganizationUnitReparentRequest = {
+  parentId?: string | null;
+  effectiveFrom: string;
+  reason: string;
+};
+
+export type OrganizationUnitClosureRequest = {
+  effectiveTo: string;
+  reason: string;
+};
+
+export type ServiceLocation = {
+  locationId: string;
+  unitId?: string | null;
+  parentId?: string | null;
+  addressId?: string | null;
+  locationCode: string;
+  locationType: 'physical' | 'virtual';
+  name: string;
+  virtualServiceType?: string | null;
+  capacity?: number | null;
+  accessibilityNotes?: string | null;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+  status: 'draft' | 'active' | 'suspended' | 'closed';
+  lockVersion: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ServiceLocationDirectory = {
+  organizationId: string;
+  facilityId: string;
+  canManage: boolean;
+  canManageLifecycle: boolean;
+  locations: Array<ServiceLocation>;
+  evaluatedAt: string;
+};
+
+export type ServiceLocationCreateRequest = {
+  unitId?: string | null;
+  parentId?: string | null;
+  addressId?: string | null;
+  locationCode: string;
+  locationType: 'physical' | 'virtual';
+  name: string;
+  virtualServiceType?: string | null;
+  capacity?: number | null;
+  accessibilityNotes?: string | null;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+  reason: string;
+};
+
+export type ServiceLocationUpdateRequest = {
+  unitId?: string | null;
+  addressId?: string | null;
+  locationCode: string;
+  locationType: 'physical' | 'virtual';
+  name: string;
+  virtualServiceType?: string | null;
+  capacity?: number | null;
+  accessibilityNotes?: string | null;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+  reason: string;
+};
+
+export type ServiceLocationReparentRequest = {
+  parentId: string | null;
+  effectiveFrom: string;
   reason: string;
 };
 
@@ -635,6 +747,447 @@ export type Problem = {
   code: string;
   correlationId: string;
   errors?: Array<FieldViolation>;
+};
+
+export type OperatingHoursOverview = {
+  organizationId: string;
+  canManage: boolean;
+  batches: Array<OperatingHoursOverviewBatch>;
+  evaluatedAt: string;
+};
+
+export type OperatingHoursOverviewBatch = {
+  batchId: string;
+  targetType: 'facility' | 'location';
+  targetId: string;
+  timezone: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  status: string;
+  lockVersion: number;
+};
+
+export type ServiceCatalogue = {
+  organizationId: string;
+  canManage: boolean;
+  canManageLifecycle: boolean;
+  services: Array<ServiceDefinition>;
+  evaluatedAt: string;
+};
+
+export type ServiceDefinition = {
+  serviceId: string;
+  serviceCode: string;
+  displayName: string;
+  clinicalName: string | null;
+  description: string | null;
+  codingSystem: string | null;
+  codingCode: string | null;
+  ownerResponsibilityId: string | null;
+  status: string;
+  retirementReason: string | null;
+  lockVersion: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ServiceWriteRequest = {
+  serviceCode: string;
+  displayName: string;
+  clinicalName?: string | null;
+  description?: string | null;
+  codingSystem?: string | null;
+  codingCode?: string | null;
+  ownerResponsibilityId?: string | null;
+  reason: string;
+};
+
+export type ServiceAssignmentDirectory = {
+  organizationId: string;
+  canManage: boolean;
+  canManageLifecycle: boolean;
+  assignments: Array<ServiceAssignment>;
+  evaluatedAt: string;
+};
+
+export type ServiceAssignment = {
+  assignmentId: string;
+  serviceId: string;
+  facilityId: string;
+  locationId: string | null;
+  capacity: number | null;
+  availabilityNotes: string | null;
+  prerequisites: Array<string>;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  status: string;
+  lockVersion: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ServiceAssignmentWriteRequest = {
+  serviceId: string;
+  facilityId: string;
+  locationId?: string | null;
+  capacity?: number | null;
+  availabilityNotes?: string | null;
+  prerequisites: Array<string>;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+  reason: string;
+};
+
+export type LifecycleFromStateRequest = {
+  fromState: string;
+  reason: string;
+};
+
+export type IdentifierSchemeDirectory = {
+  organizationId: string;
+  canManage: boolean;
+  canActivate: boolean;
+  canRetire: boolean;
+  schemes: Array<IdentifierScheme>;
+  evaluatedAt: string;
+};
+
+export type IdentifierScheme = {
+  schemeId: string;
+  schemeKey: string;
+  scopeType: string;
+  scopeId: string | null;
+  description: string | null;
+  status: string;
+  lockVersion: number;
+  versions: Array<IdentifierSchemeVersion>;
+};
+
+export type IdentifierSchemeVersion = {
+  versionId: string;
+  versionNumber: number;
+  prefix: string;
+  pattern: string;
+  alphabet: string;
+  checkDigitAlgorithm: string | null;
+  sequenceStart: number;
+  sequenceIncrement: number;
+  padding: number;
+  previewSamples: Array<string>;
+  effectiveFrom: string;
+  status: string;
+  lockVersion: number;
+};
+
+export type IdentifierSchemeWriteRequest = {
+  versionId?: string | null;
+  schemeKey?: string | null;
+  scopeType?: string | null;
+  scopeId?: string | null;
+  description?: string | null;
+  prefix: string;
+  pattern: string;
+  alphabet: string;
+  sequenceStart: number;
+  sequenceIncrement: number;
+  padding: number;
+  checkDigitAlgorithm?: string | null;
+  effectiveFrom: string;
+  reason: string;
+};
+
+export type ConfigurationActivationDirectory = {
+  organizationId: string;
+  canValidate: boolean;
+  canSubmit: boolean;
+  canApprove: boolean;
+  canActivate: boolean;
+  pendingChanges: Array<ConfigurationPendingChange>;
+  configurations: Array<ConfigurationActivation>;
+  evaluatedAt: string;
+};
+
+export type ConfigurationPendingChange = {
+  subjectType: string;
+  subjectId: string;
+  expectedRevision: number;
+  changeType: string;
+  label: string;
+  currentStatus: string;
+};
+
+export type ConfigurationActivation = {
+  configurationId: string;
+  displayNumber: string;
+  parentVersionId: string | null;
+  baselineDigest: string;
+  changeSummary: string;
+  requestedEffectiveAt: string;
+  status: string;
+  lockVersion: number;
+  makerId: string;
+  /**
+   * Actor-specific action projection requiring maker ownership and a fresh blocker-free validation.
+   */
+  canSubmit: boolean;
+  /**
+   * Actor-specific action projection requiring an eligible submitted version and maker/checker separation.
+   */
+  canApprove: boolean;
+  /**
+   * Actor-specific action projection requiring fresh approved evidence and maker/activator separation.
+   */
+  canActivate: boolean;
+  validationResultId: string | null;
+  resultDigest: string | null;
+  blockerCount: number;
+  warningCount: number;
+  validationExpiresAt: string | null;
+  approvalId: string | null;
+  decision: string | null;
+  checkerId: string | null;
+  approvalExpiresAt: string | null;
+  activatedAt: string | null;
+};
+
+export type ConfigurationValidationRequest = {
+  configurationId?: string | null;
+  changeSummary: string;
+  reason: string;
+  requestedEffectiveAt: string;
+  changeItems: Array<{
+    subjectType: string;
+    subjectId: string;
+    expectedRevision: number;
+    changeType: string;
+  }>;
+};
+
+export type ConfigurationResultRequest = {
+  resultId: string;
+  resultDigest: string;
+  reason: string;
+};
+
+export type ConfigurationDecisionRequest = {
+  resultId: string;
+  resultDigest: string;
+  approve: boolean;
+  decisionCode: string;
+  reason: string;
+};
+
+export type ConfigurationActivationRequest = {
+  approvalId: string;
+  resultDigest: string;
+  effectiveFrom: string;
+  reason: string;
+};
+
+export type ConfigurationHistoryPage = {
+  organizationId: string;
+  asOf: string;
+  items: Array<ConfigurationHistoryItem>;
+  pageSize: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+};
+
+export type AuditEvidencePage = {
+  organizationId: string;
+  asOf: string;
+  items: Array<AuditEvidenceItem>;
+  pageSize: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+};
+
+export type ConfigurationHistoryItem = {
+  configurationId: string;
+  displayNumber: string;
+  parentVersionId: string | null;
+  status: string;
+  changeSummary: string;
+  reasonProjection: string;
+  makerId: string;
+  checkerId: string | null;
+  activatorId: string | null;
+  requestedEffectiveAt: string;
+  activatedAt: string | null;
+  supersededAt: string | null;
+  resultDigest: string | null;
+  gateCatalogueVersion: string | null;
+  approvalPolicyVersion: string | null;
+  correlationId: string;
+  lockVersion: number;
+  recordedAt: string;
+  changes: Array<ConfigurationHistoryChange>;
+};
+
+export type ConfigurationHistoryChange = {
+  subjectType: string;
+  subjectId: string;
+  baselineRevision: number;
+  newRevision: number;
+  changeType: string;
+};
+
+export type AuditEvidenceItem = {
+  eventId: string;
+  occurredAt: string;
+  actorId: string;
+  operationKey: string;
+  eventName: string;
+  schemaVersion: number;
+  subjectType: string;
+  subjectId: string;
+  outcome: 'success' | 'failure';
+  risk: 'standard' | 'high' | 'restricted';
+  correlationId: string;
+  redacted: boolean;
+};
+
+export type AuditEvidenceDetail = AuditEvidenceItem & {
+  organizationId: string;
+  recordedAt: string;
+  purposeCode: string;
+  reasonProjection: string | null;
+  payload: {
+    [key: string]: unknown;
+  };
+  registryVersion: string;
+};
+
+export type EvidenceExportJob = {
+  exportId: string;
+  requesterId: string;
+  projection: 'history-summary-v1' | 'history-detail-v1' | 'audit-summary-v1' | 'audit-detail-v1';
+  format: 'csv' | 'jsonl';
+  purposeCode: string;
+  status:
+    'requested' | 'authorized' | 'denied' | 'running' | 'ready' | 'expired' | 'disposed' | 'failed';
+  /**
+   * True only for an eligible approver who is not this job's requester.
+   */
+  canApprove: boolean;
+  /**
+   * True only for this job's requester while the ready artifact remains available.
+   */
+  canAccess: boolean;
+  approvalId: string | null;
+  approverId: string | null;
+  rowCount: number | null;
+  byteCount: number | null;
+  artifactDigest: string | null;
+  readyAt: string | null;
+  expiresAt: string | null;
+  failureCode: string | null;
+  lockVersion: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type EvidenceExportDirectory = {
+  organizationId: string;
+  canRequest: boolean;
+  canApprove: boolean;
+  canAccess: boolean;
+  jobs: Array<EvidenceExportJob>;
+  evaluatedAt: string;
+};
+
+export type EvidenceExportRequest = {
+  projection: 'history-summary-v1' | 'history-detail-v1' | 'audit-summary-v1' | 'audit-detail-v1';
+  format: 'csv' | 'jsonl';
+  filters: {
+    from: string;
+    to: string;
+    status?: string;
+    changeType?: string;
+    actorId?: string;
+    subjectType?: string;
+    subjectId?: string;
+    correlationId?: string;
+    operation?: string;
+    eventName?: string;
+    schemaVersion?: number;
+    outcome?: 'success' | 'failure';
+    risk?: 'standard' | 'high' | 'restricted';
+  };
+  purposeCode:
+    'configuration_review' | 'regulatory_evidence' | 'security_investigation' | 'data_correction';
+  legalBasisKey: string;
+  reason: string;
+};
+
+export type EvidenceExportDecisionRequest = {
+  authorize: boolean;
+  reason: string;
+};
+
+export type EvidenceExportAccessRequest = {
+  purposeCode:
+    'configuration_review' | 'regulatory_evidence' | 'security_investigation' | 'data_correction';
+  reason: string;
+};
+
+export type EvidenceExportAccessResponse = {
+  exportId: string;
+  downloadUrl: string;
+  expiresAt: string;
+  artifactDigest: string;
+  contentType: 'text/csv' | 'application/x-ndjson';
+  filename: string;
+};
+
+export type OperatingHoursDirectory = {
+  organizationId: string;
+  targetType: 'facility' | 'location';
+  targetId: string;
+  canManage: boolean;
+  batches: Array<OperatingHoursBatch>;
+  evaluatedAt: string;
+};
+
+export type OperatingHoursBatch = {
+  batchId: string;
+  timezone: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  status: string;
+  lockVersion: number;
+  intervals: Array<OperatingHoursInterval>;
+  exceptions: Array<OperatingHoursException>;
+};
+
+export type OperatingHoursInterval = {
+  weekday: number;
+  startMinute: number;
+  endMinute: number;
+  endsNextDay: boolean;
+};
+
+export type OperatingHoursExceptionInterval = {
+  startMinute: number;
+  endMinute: number;
+  endsNextDay: boolean;
+};
+
+export type OperatingHoursException = {
+  localDate: string;
+  closed: boolean;
+  label: string | null;
+  reasonCode: string | null;
+  intervals: Array<OperatingHoursExceptionInterval>;
+};
+
+export type OperatingHoursBatchRequest = {
+  timezone: string;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+  intervals: Array<OperatingHoursInterval>;
+  exceptions: Array<OperatingHoursException>;
+  reason: string;
 };
 
 /**
@@ -2582,6 +3135,1126 @@ export type SubmitFacilityDraftResponses = {
 export type SubmitFacilityDraftResponse =
   SubmitFacilityDraftResponses[keyof SubmitFacilityDraftResponses];
 
+export type GetOrganizationUnitDirectoryData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    facilityId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/units';
+};
+
+export type GetOrganizationUnitDirectoryErrors = {
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type GetOrganizationUnitDirectoryError =
+  GetOrganizationUnitDirectoryErrors[keyof GetOrganizationUnitDirectoryErrors];
+
+export type GetOrganizationUnitDirectoryResponses = {
+  /**
+   * Authorized facility unit directory
+   */
+  200: OrganizationUnitDirectory;
+};
+
+export type GetOrganizationUnitDirectoryResponse =
+  GetOrganizationUnitDirectoryResponses[keyof GetOrganizationUnitDirectoryResponses];
+
+export type CreateOrganizationUnitDraftData = {
+  body: OrganizationUnitCreateRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    facilityId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/units';
+};
+
+export type CreateOrganizationUnitDraftErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type CreateOrganizationUnitDraftError =
+  CreateOrganizationUnitDraftErrors[keyof CreateOrganizationUnitDraftErrors];
+
+export type CreateOrganizationUnitDraftResponses = {
+  /**
+   * Organization unit draft created
+   */
+  201: OrganizationUnitDirectory;
+};
+
+export type CreateOrganizationUnitDraftResponse =
+  CreateOrganizationUnitDraftResponses[keyof CreateOrganizationUnitDraftResponses];
+
+export type UpdateOrganizationUnitDraftData = {
+  body: OrganizationUnitCreateRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    facilityId: string;
+    unitId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/units/{unitId}';
+};
+
+export type UpdateOrganizationUnitDraftErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type UpdateOrganizationUnitDraftError =
+  UpdateOrganizationUnitDraftErrors[keyof UpdateOrganizationUnitDraftErrors];
+
+export type UpdateOrganizationUnitDraftResponses = {
+  /**
+   * Organization unit draft updated or exact response replayed
+   */
+  200: OrganizationUnitDirectory;
+};
+
+export type UpdateOrganizationUnitDraftResponse =
+  UpdateOrganizationUnitDraftResponses[keyof UpdateOrganizationUnitDraftResponses];
+
+export type ReparentOrganizationUnitData = {
+  body: OrganizationUnitReparentRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    facilityId: string;
+    unitId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/units/{unitId}/reparentings';
+};
+
+export type ReparentOrganizationUnitErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type ReparentOrganizationUnitError =
+  ReparentOrganizationUnitErrors[keyof ReparentOrganizationUnitErrors];
+
+export type ReparentOrganizationUnitResponses = {
+  /**
+   * Organization unit reparented or exact response replayed
+   */
+  200: OrganizationUnitDirectory;
+};
+
+export type ReparentOrganizationUnitResponse =
+  ReparentOrganizationUnitResponses[keyof ReparentOrganizationUnitResponses];
+
+export type ActivateOrganizationUnitData = {
+  body: ReasonRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    facilityId: string;
+    unitId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/units/{unitId}/activations';
+};
+
+export type ActivateOrganizationUnitErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type ActivateOrganizationUnitError =
+  ActivateOrganizationUnitErrors[keyof ActivateOrganizationUnitErrors];
+
+export type ActivateOrganizationUnitResponses = {
+  /**
+   * Organization unit activated or exact response replayed
+   */
+  200: OrganizationUnitDirectory;
+};
+
+export type ActivateOrganizationUnitResponse =
+  ActivateOrganizationUnitResponses[keyof ActivateOrganizationUnitResponses];
+
+export type SuspendOrganizationUnitData = {
+  body: ReasonRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    facilityId: string;
+    unitId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/units/{unitId}/suspensions';
+};
+
+export type SuspendOrganizationUnitErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type SuspendOrganizationUnitError =
+  SuspendOrganizationUnitErrors[keyof SuspendOrganizationUnitErrors];
+
+export type SuspendOrganizationUnitResponses = {
+  /**
+   * Organization unit suspended or exact response replayed
+   */
+  200: OrganizationUnitDirectory;
+};
+
+export type SuspendOrganizationUnitResponse =
+  SuspendOrganizationUnitResponses[keyof SuspendOrganizationUnitResponses];
+
+export type ReactivateOrganizationUnitData = {
+  body: ReasonRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    facilityId: string;
+    unitId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/units/{unitId}/reactivations';
+};
+
+export type ReactivateOrganizationUnitErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type ReactivateOrganizationUnitError =
+  ReactivateOrganizationUnitErrors[keyof ReactivateOrganizationUnitErrors];
+
+export type ReactivateOrganizationUnitResponses = {
+  /**
+   * Organization unit reactivated or exact response replayed
+   */
+  200: OrganizationUnitDirectory;
+};
+
+export type ReactivateOrganizationUnitResponse =
+  ReactivateOrganizationUnitResponses[keyof ReactivateOrganizationUnitResponses];
+
+export type CloseOrganizationUnitData = {
+  body: OrganizationUnitClosureRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    facilityId: string;
+    unitId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/units/{unitId}/closures';
+};
+
+export type CloseOrganizationUnitErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type CloseOrganizationUnitError =
+  CloseOrganizationUnitErrors[keyof CloseOrganizationUnitErrors];
+
+export type CloseOrganizationUnitResponses = {
+  /**
+   * Organization unit closed or exact response replayed
+   */
+  200: OrganizationUnitDirectory;
+};
+
+export type CloseOrganizationUnitResponse =
+  CloseOrganizationUnitResponses[keyof CloseOrganizationUnitResponses];
+
+export type GetServiceLocationDirectoryData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    facilityId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/locations';
+};
+
+export type GetServiceLocationDirectoryErrors = {
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type GetServiceLocationDirectoryError =
+  GetServiceLocationDirectoryErrors[keyof GetServiceLocationDirectoryErrors];
+
+export type GetServiceLocationDirectoryResponses = {
+  /**
+   * Authorized facility service-location directory
+   */
+  200: ServiceLocationDirectory;
+};
+
+export type GetServiceLocationDirectoryResponse =
+  GetServiceLocationDirectoryResponses[keyof GetServiceLocationDirectoryResponses];
+
+export type CreateServiceLocationDraftData = {
+  body: ServiceLocationCreateRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    facilityId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/locations';
+};
+
+export type CreateServiceLocationDraftErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type CreateServiceLocationDraftError =
+  CreateServiceLocationDraftErrors[keyof CreateServiceLocationDraftErrors];
+
+export type CreateServiceLocationDraftResponses = {
+  /**
+   * Service-location draft created
+   */
+  201: ServiceLocationDirectory;
+};
+
+export type CreateServiceLocationDraftResponse =
+  CreateServiceLocationDraftResponses[keyof CreateServiceLocationDraftResponses];
+
+export type UpdateServiceLocationDraftData = {
+  body: ServiceLocationUpdateRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    facilityId: string;
+    locationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/locations/{locationId}';
+};
+
+export type UpdateServiceLocationDraftErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type UpdateServiceLocationDraftError =
+  UpdateServiceLocationDraftErrors[keyof UpdateServiceLocationDraftErrors];
+
+export type UpdateServiceLocationDraftResponses = {
+  /**
+   * Service-location draft updated or exact response replayed
+   */
+  200: ServiceLocationDirectory;
+};
+
+export type UpdateServiceLocationDraftResponse =
+  UpdateServiceLocationDraftResponses[keyof UpdateServiceLocationDraftResponses];
+
+export type ReparentServiceLocationData = {
+  body: ServiceLocationReparentRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    facilityId: string;
+    locationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/locations/{locationId}/reparentings';
+};
+
+export type ReparentServiceLocationErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type ReparentServiceLocationError =
+  ReparentServiceLocationErrors[keyof ReparentServiceLocationErrors];
+
+export type ReparentServiceLocationResponses = {
+  /**
+   * Service location reparented or exact response replayed
+   */
+  200: ServiceLocationDirectory;
+};
+
+export type ReparentServiceLocationResponse =
+  ReparentServiceLocationResponses[keyof ReparentServiceLocationResponses];
+
+export type ActivateServiceLocationData = {
+  body: OrganizationUnitLifecycleRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    facilityId: string;
+    locationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/locations/{locationId}/activations';
+};
+
+export type ActivateServiceLocationErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type ActivateServiceLocationError =
+  ActivateServiceLocationErrors[keyof ActivateServiceLocationErrors];
+
+export type ActivateServiceLocationResponses = {
+  /**
+   * Service location activated
+   */
+  200: ServiceLocationDirectory;
+};
+
+export type ActivateServiceLocationResponse =
+  ActivateServiceLocationResponses[keyof ActivateServiceLocationResponses];
+
+export type SuspendServiceLocationData = {
+  body: OrganizationUnitLifecycleRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    facilityId: string;
+    locationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/locations/{locationId}/suspensions';
+};
+
+export type SuspendServiceLocationErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type SuspendServiceLocationError =
+  SuspendServiceLocationErrors[keyof SuspendServiceLocationErrors];
+
+export type SuspendServiceLocationResponses = {
+  /**
+   * Service location suspended
+   */
+  200: ServiceLocationDirectory;
+};
+
+export type SuspendServiceLocationResponse =
+  SuspendServiceLocationResponses[keyof SuspendServiceLocationResponses];
+
+export type ReactivateServiceLocationData = {
+  body: OrganizationUnitLifecycleRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    facilityId: string;
+    locationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/locations/{locationId}/reactivations';
+};
+
+export type ReactivateServiceLocationErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type ReactivateServiceLocationError =
+  ReactivateServiceLocationErrors[keyof ReactivateServiceLocationErrors];
+
+export type ReactivateServiceLocationResponses = {
+  /**
+   * Service location reactivated
+   */
+  200: ServiceLocationDirectory;
+};
+
+export type ReactivateServiceLocationResponse =
+  ReactivateServiceLocationResponses[keyof ReactivateServiceLocationResponses];
+
+export type CloseServiceLocationData = {
+  body: OrganizationUnitClosureRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    facilityId: string;
+    locationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/locations/{locationId}/closures';
+};
+
+export type CloseServiceLocationErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type CloseServiceLocationError =
+  CloseServiceLocationErrors[keyof CloseServiceLocationErrors];
+
+export type CloseServiceLocationResponses = {
+  /**
+   * Service location closed
+   */
+  200: ServiceLocationDirectory;
+};
+
+export type CloseServiceLocationResponse =
+  CloseServiceLocationResponses[keyof CloseServiceLocationResponses];
+
 export type GetOrganizationGovernanceDirectoryData = {
   body?: never;
   path: {
@@ -4055,3 +5728,2047 @@ export type EndOrganizationContactResponses = {
 
 export type EndOrganizationContactResponse =
   EndOrganizationContactResponses[keyof EndOrganizationContactResponses];
+
+export type TransitionFacilityLifecycleData = {
+  body: LifecycleFromStateRequest;
+  headers: {
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    facilityId: string;
+    action: 'activations' | 'suspensions' | 'reactivations' | 'closures';
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/{action}';
+};
+
+export type TransitionFacilityLifecycleErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type TransitionFacilityLifecycleError =
+  TransitionFacilityLifecycleErrors[keyof TransitionFacilityLifecycleErrors];
+
+export type TransitionFacilityLifecycleResponses = {
+  /**
+   * Successful governed response
+   */
+  200: FacilityDirectory;
+};
+
+export type TransitionFacilityLifecycleResponse =
+  TransitionFacilityLifecycleResponses[keyof TransitionFacilityLifecycleResponses];
+
+export type GetOperatingHoursOverviewData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/operating-hours';
+};
+
+export type GetOperatingHoursOverviewErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type GetOperatingHoursOverviewError =
+  GetOperatingHoursOverviewErrors[keyof GetOperatingHoursOverviewErrors];
+
+export type GetOperatingHoursOverviewResponses = {
+  /**
+   * Successful governed response
+   */
+  200: OperatingHoursOverview;
+};
+
+export type GetOperatingHoursOverviewResponse =
+  GetOperatingHoursOverviewResponses[keyof GetOperatingHoursOverviewResponses];
+
+export type GetServiceCatalogueData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/services';
+};
+
+export type GetServiceCatalogueErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type GetServiceCatalogueError = GetServiceCatalogueErrors[keyof GetServiceCatalogueErrors];
+
+export type GetServiceCatalogueResponses = {
+  /**
+   * Successful governed response
+   */
+  200: ServiceCatalogue;
+};
+
+export type GetServiceCatalogueResponse =
+  GetServiceCatalogueResponses[keyof GetServiceCatalogueResponses];
+
+export type CreateServiceDefinitionData = {
+  body: ServiceWriteRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/services';
+};
+
+export type CreateServiceDefinitionErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type CreateServiceDefinitionError =
+  CreateServiceDefinitionErrors[keyof CreateServiceDefinitionErrors];
+
+export type CreateServiceDefinitionResponses = {
+  /**
+   * Successful governed response
+   */
+  201: ServiceCatalogue;
+};
+
+export type CreateServiceDefinitionResponse =
+  CreateServiceDefinitionResponses[keyof CreateServiceDefinitionResponses];
+
+export type UpdateServiceDefinitionData = {
+  body: ServiceWriteRequest;
+  headers: {
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    serviceId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/services/{serviceId}';
+};
+
+export type UpdateServiceDefinitionErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type UpdateServiceDefinitionError =
+  UpdateServiceDefinitionErrors[keyof UpdateServiceDefinitionErrors];
+
+export type UpdateServiceDefinitionResponses = {
+  /**
+   * Successful governed response
+   */
+  200: ServiceCatalogue;
+};
+
+export type UpdateServiceDefinitionResponse =
+  UpdateServiceDefinitionResponses[keyof UpdateServiceDefinitionResponses];
+
+export type ActivateServiceDefinitionData = {
+  body: ReasonRequest;
+  headers: {
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    serviceId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/services/{serviceId}/activations';
+};
+
+export type ActivateServiceDefinitionErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type ActivateServiceDefinitionError =
+  ActivateServiceDefinitionErrors[keyof ActivateServiceDefinitionErrors];
+
+export type ActivateServiceDefinitionResponses = {
+  /**
+   * Successful governed response
+   */
+  200: ServiceCatalogue;
+};
+
+export type ActivateServiceDefinitionResponse =
+  ActivateServiceDefinitionResponses[keyof ActivateServiceDefinitionResponses];
+
+export type RetireServiceDefinitionData = {
+  body: ReasonRequest;
+  headers: {
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    serviceId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/services/{serviceId}/retirements';
+};
+
+export type RetireServiceDefinitionErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type RetireServiceDefinitionError =
+  RetireServiceDefinitionErrors[keyof RetireServiceDefinitionErrors];
+
+export type RetireServiceDefinitionResponses = {
+  /**
+   * Successful governed response
+   */
+  200: ServiceCatalogue;
+};
+
+export type RetireServiceDefinitionResponse =
+  RetireServiceDefinitionResponses[keyof RetireServiceDefinitionResponses];
+
+export type GetServiceAssignmentDirectoryData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/service-assignments';
+};
+
+export type GetServiceAssignmentDirectoryErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type GetServiceAssignmentDirectoryError =
+  GetServiceAssignmentDirectoryErrors[keyof GetServiceAssignmentDirectoryErrors];
+
+export type GetServiceAssignmentDirectoryResponses = {
+  /**
+   * Successful governed response
+   */
+  200: ServiceAssignmentDirectory;
+};
+
+export type GetServiceAssignmentDirectoryResponse =
+  GetServiceAssignmentDirectoryResponses[keyof GetServiceAssignmentDirectoryResponses];
+
+export type CreateServiceAssignmentData = {
+  body: ServiceAssignmentWriteRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/service-assignments';
+};
+
+export type CreateServiceAssignmentErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type CreateServiceAssignmentError =
+  CreateServiceAssignmentErrors[keyof CreateServiceAssignmentErrors];
+
+export type CreateServiceAssignmentResponses = {
+  /**
+   * Successful governed response
+   */
+  201: ServiceAssignmentDirectory;
+};
+
+export type CreateServiceAssignmentResponse =
+  CreateServiceAssignmentResponses[keyof CreateServiceAssignmentResponses];
+
+export type UpdateServiceAssignmentData = {
+  body: ServiceAssignmentWriteRequest;
+  headers: {
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    assignmentId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/service-assignments/{assignmentId}';
+};
+
+export type UpdateServiceAssignmentErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type UpdateServiceAssignmentError =
+  UpdateServiceAssignmentErrors[keyof UpdateServiceAssignmentErrors];
+
+export type UpdateServiceAssignmentResponses = {
+  /**
+   * Successful governed response
+   */
+  200: ServiceAssignmentDirectory;
+};
+
+export type UpdateServiceAssignmentResponse =
+  UpdateServiceAssignmentResponses[keyof UpdateServiceAssignmentResponses];
+
+export type TransitionServiceAssignmentData = {
+  body: LifecycleFromStateRequest;
+  headers: {
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    assignmentId: string;
+    action: 'activations' | 'suspensions' | 'endings' | 'cancellations';
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/service-assignments/{assignmentId}/{action}';
+};
+
+export type TransitionServiceAssignmentErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type TransitionServiceAssignmentError =
+  TransitionServiceAssignmentErrors[keyof TransitionServiceAssignmentErrors];
+
+export type TransitionServiceAssignmentResponses = {
+  /**
+   * Successful governed response
+   */
+  200: ServiceAssignmentDirectory;
+};
+
+export type TransitionServiceAssignmentResponse =
+  TransitionServiceAssignmentResponses[keyof TransitionServiceAssignmentResponses];
+
+export type GetIdentifierSchemeDirectoryData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/identifier-schemes';
+};
+
+export type GetIdentifierSchemeDirectoryErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type GetIdentifierSchemeDirectoryError =
+  GetIdentifierSchemeDirectoryErrors[keyof GetIdentifierSchemeDirectoryErrors];
+
+export type GetIdentifierSchemeDirectoryResponses = {
+  /**
+   * Successful governed response
+   */
+  200: IdentifierSchemeDirectory;
+};
+
+export type GetIdentifierSchemeDirectoryResponse =
+  GetIdentifierSchemeDirectoryResponses[keyof GetIdentifierSchemeDirectoryResponses];
+
+export type CreateIdentifierSchemeData = {
+  body: IdentifierSchemeWriteRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/identifier-schemes';
+};
+
+export type CreateIdentifierSchemeErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type CreateIdentifierSchemeError =
+  CreateIdentifierSchemeErrors[keyof CreateIdentifierSchemeErrors];
+
+export type CreateIdentifierSchemeResponses = {
+  /**
+   * Successful governed response
+   */
+  201: IdentifierSchemeDirectory;
+};
+
+export type CreateIdentifierSchemeResponse =
+  CreateIdentifierSchemeResponses[keyof CreateIdentifierSchemeResponses];
+
+export type CreateIdentifierSchemeVersionData = {
+  body: IdentifierSchemeWriteRequest;
+  headers: {
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    schemeId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/identifier-schemes/{schemeId}/versions';
+};
+
+export type CreateIdentifierSchemeVersionErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type CreateIdentifierSchemeVersionError =
+  CreateIdentifierSchemeVersionErrors[keyof CreateIdentifierSchemeVersionErrors];
+
+export type CreateIdentifierSchemeVersionResponses = {
+  /**
+   * Successful governed response
+   */
+  201: IdentifierSchemeDirectory;
+};
+
+export type CreateIdentifierSchemeVersionResponse =
+  CreateIdentifierSchemeVersionResponses[keyof CreateIdentifierSchemeVersionResponses];
+
+export type GetConfigurationActivationDirectoryData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/configuration-activations';
+};
+
+export type GetConfigurationActivationDirectoryErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type GetConfigurationActivationDirectoryError =
+  GetConfigurationActivationDirectoryErrors[keyof GetConfigurationActivationDirectoryErrors];
+
+export type GetConfigurationActivationDirectoryResponses = {
+  /**
+   * Successful governed response
+   */
+  200: ConfigurationActivationDirectory;
+};
+
+export type GetConfigurationActivationDirectoryResponse =
+  GetConfigurationActivationDirectoryResponses[keyof GetConfigurationActivationDirectoryResponses];
+
+export type ValidateConfigurationData = {
+  body: ConfigurationValidationRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/configuration-validations';
+};
+
+export type ValidateConfigurationErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type ValidateConfigurationError =
+  ValidateConfigurationErrors[keyof ValidateConfigurationErrors];
+
+export type ValidateConfigurationResponses = {
+  /**
+   * Successful governed response
+   */
+  201: ConfigurationActivationDirectory;
+};
+
+export type ValidateConfigurationResponse =
+  ValidateConfigurationResponses[keyof ValidateConfigurationResponses];
+
+export type SubmitConfigurationData = {
+  body: ConfigurationResultRequest;
+  headers: {
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    configurationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/configurations/{configurationId}/submissions';
+};
+
+export type SubmitConfigurationErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type SubmitConfigurationError = SubmitConfigurationErrors[keyof SubmitConfigurationErrors];
+
+export type SubmitConfigurationResponses = {
+  /**
+   * Successful governed response
+   */
+  200: ConfigurationActivationDirectory;
+};
+
+export type SubmitConfigurationResponse =
+  SubmitConfigurationResponses[keyof SubmitConfigurationResponses];
+
+export type DecideConfigurationData = {
+  body: ConfigurationDecisionRequest;
+  headers: {
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    configurationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/configurations/{configurationId}/decisions';
+};
+
+export type DecideConfigurationErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type DecideConfigurationError = DecideConfigurationErrors[keyof DecideConfigurationErrors];
+
+export type DecideConfigurationResponses = {
+  /**
+   * Successful governed response
+   */
+  200: ConfigurationActivationDirectory;
+};
+
+export type DecideConfigurationResponse =
+  DecideConfigurationResponses[keyof DecideConfigurationResponses];
+
+export type ActivateConfigurationData = {
+  body: ConfigurationActivationRequest;
+  headers: {
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    configurationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/configurations/{configurationId}/activations';
+};
+
+export type ActivateConfigurationErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type ActivateConfigurationError =
+  ActivateConfigurationErrors[keyof ActivateConfigurationErrors];
+
+export type ActivateConfigurationResponses = {
+  /**
+   * Successful governed response
+   */
+  200: ConfigurationActivationDirectory;
+};
+
+export type ActivateConfigurationResponse =
+  ActivateConfigurationResponses[keyof ActivateConfigurationResponses];
+
+export type GetConfigurationHistoryData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query: {
+    from: string;
+    to: string;
+    status?:
+      'draft' | 'validated' | 'submitted' | 'approved' | 'rejected' | 'active' | 'superseded';
+    changeType?: 'activated' | 'closed' | 'retired' | 'ended';
+    actorId?: string;
+    subjectType?: string;
+    subjectId?: string;
+    correlationId?: string;
+    /**
+     * Maximum number of records requested for one cursor page.
+     */
+    limit?: number;
+    /**
+     * Opaque continuation cursor returned by the preceding page. Clients must not parse or construct it.
+     */
+    cursor?: string;
+  };
+  url: '/api/v1/organizations/{organizationId}/configuration-history';
+};
+
+export type GetConfigurationHistoryErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type GetConfigurationHistoryError =
+  GetConfigurationHistoryErrors[keyof GetConfigurationHistoryErrors];
+
+export type GetConfigurationHistoryResponses = {
+  /**
+   * Successful governed response
+   */
+  200: ConfigurationHistoryPage;
+};
+
+export type GetConfigurationHistoryResponse =
+  GetConfigurationHistoryResponses[keyof GetConfigurationHistoryResponses];
+
+export type GetAuditEvidenceData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query: {
+    from: string;
+    to: string;
+    actorId?: string;
+    operation?: string;
+    eventName?: string;
+    schemaVersion?: number;
+    subjectType?: string;
+    subjectId?: string;
+    outcome?: 'success' | 'failure';
+    risk?: 'standard' | 'high' | 'restricted';
+    correlationId?: string;
+    /**
+     * Maximum number of records requested for one cursor page.
+     */
+    limit?: number;
+    /**
+     * Opaque continuation cursor returned by the preceding page. Clients must not parse or construct it.
+     */
+    cursor?: string;
+  };
+  url: '/api/v1/organizations/{organizationId}/audit-evidence';
+};
+
+export type GetAuditEvidenceErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type GetAuditEvidenceError = GetAuditEvidenceErrors[keyof GetAuditEvidenceErrors];
+
+export type GetAuditEvidenceResponses = {
+  /**
+   * Successful governed response
+   */
+  200: AuditEvidencePage;
+};
+
+export type GetAuditEvidenceResponse = GetAuditEvidenceResponses[keyof GetAuditEvidenceResponses];
+
+export type AccessAuditEvidenceDetailData = {
+  body: {
+    purposeCode:
+      'configuration_review' | 'regulatory_evidence' | 'security_investigation' | 'data_correction';
+  };
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    eventId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/audit-evidence/{eventId}/accesses';
+};
+
+export type AccessAuditEvidenceDetailErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type AccessAuditEvidenceDetailError =
+  AccessAuditEvidenceDetailErrors[keyof AccessAuditEvidenceDetailErrors];
+
+export type AccessAuditEvidenceDetailResponses = {
+  /**
+   * Purpose-bound minimum-necessary audit detail
+   */
+  200: AuditEvidenceDetail;
+};
+
+export type AccessAuditEvidenceDetailResponse =
+  AccessAuditEvidenceDetailResponses[keyof AccessAuditEvidenceDetailResponses];
+
+export type GetEvidenceExportDirectoryData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: {
+    source?: 'history' | 'audit';
+  };
+  url: '/api/v1/organizations/{organizationId}/evidence-exports';
+};
+
+export type GetEvidenceExportDirectoryErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type GetEvidenceExportDirectoryError =
+  GetEvidenceExportDirectoryErrors[keyof GetEvidenceExportDirectoryErrors];
+
+export type GetEvidenceExportDirectoryResponses = {
+  /**
+   * Successful governed response
+   */
+  200: EvidenceExportDirectory;
+};
+
+export type GetEvidenceExportDirectoryResponse =
+  GetEvidenceExportDirectoryResponses[keyof GetEvidenceExportDirectoryResponses];
+
+export type RequestEvidenceExportData = {
+  body: EvidenceExportRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/evidence-exports';
+};
+
+export type RequestEvidenceExportErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type RequestEvidenceExportError =
+  RequestEvidenceExportErrors[keyof RequestEvidenceExportErrors];
+
+export type RequestEvidenceExportResponses = {
+  /**
+   * Successful governed response
+   */
+  201: EvidenceExportDirectory;
+};
+
+export type RequestEvidenceExportResponse =
+  RequestEvidenceExportResponses[keyof RequestEvidenceExportResponses];
+
+export type DecideEvidenceExportData = {
+  body: EvidenceExportDecisionRequest;
+  headers: {
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    exportId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/evidence-exports/{exportId}/decisions';
+};
+
+export type DecideEvidenceExportErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type DecideEvidenceExportError =
+  DecideEvidenceExportErrors[keyof DecideEvidenceExportErrors];
+
+export type DecideEvidenceExportResponses = {
+  /**
+   * Successful governed response
+   */
+  200: EvidenceExportDirectory;
+};
+
+export type DecideEvidenceExportResponse =
+  DecideEvidenceExportResponses[keyof DecideEvidenceExportResponses];
+
+export type AccessEvidenceExportData = {
+  body: EvidenceExportAccessRequest;
+  headers: {
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    exportId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/evidence-exports/{exportId}/accesses';
+};
+
+export type AccessEvidenceExportErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type AccessEvidenceExportError =
+  AccessEvidenceExportErrors[keyof AccessEvidenceExportErrors];
+
+export type AccessEvidenceExportResponses = {
+  /**
+   * A short-lived private GET grant
+   */
+  200: EvidenceExportAccessResponse;
+};
+
+export type AccessEvidenceExportResponse =
+  AccessEvidenceExportResponses[keyof AccessEvidenceExportResponses];
+
+export type GetOperatingHoursDirectoryData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    targetType: 'facility' | 'location';
+    targetId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/operating-hours/{targetType}/{targetId}';
+};
+
+export type GetOperatingHoursDirectoryErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type GetOperatingHoursDirectoryError =
+  GetOperatingHoursDirectoryErrors[keyof GetOperatingHoursDirectoryErrors];
+
+export type GetOperatingHoursDirectoryResponses = {
+  /**
+   * Successful governed response
+   */
+  200: OperatingHoursDirectory;
+};
+
+export type GetOperatingHoursDirectoryResponse =
+  GetOperatingHoursDirectoryResponses[keyof GetOperatingHoursDirectoryResponses];
+
+export type ReplaceOperatingHoursBatchData = {
+  body: OperatingHoursBatchRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    targetType: 'facility' | 'location';
+    targetId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/operating-hours/{targetType}/{targetId}/batches';
+};
+
+export type ReplaceOperatingHoursBatchErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type ReplaceOperatingHoursBatchError =
+  ReplaceOperatingHoursBatchErrors[keyof ReplaceOperatingHoursBatchErrors];
+
+export type ReplaceOperatingHoursBatchResponses = {
+  /**
+   * Successful governed response
+   */
+  201: OperatingHoursDirectory;
+};
+
+export type ReplaceOperatingHoursBatchResponse =
+  ReplaceOperatingHoursBatchResponses[keyof ReplaceOperatingHoursBatchResponses];
+
+export type CancelOperatingHoursBatchData = {
+  body: ReasonRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    targetType: 'facility' | 'location';
+    targetId: string;
+    batchId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/operating-hours/{targetType}/{targetId}/batches/{batchId}/cancellations';
+};
+
+export type CancelOperatingHoursBatchErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type CancelOperatingHoursBatchError =
+  CancelOperatingHoursBatchErrors[keyof CancelOperatingHoursBatchErrors];
+
+export type CancelOperatingHoursBatchResponses = {
+  /**
+   * Successful governed response
+   */
+  200: OperatingHoursDirectory;
+};
+
+export type CancelOperatingHoursBatchResponse =
+  CancelOperatingHoursBatchResponses[keyof CancelOperatingHoursBatchResponses];

@@ -19,6 +19,7 @@ import com.rootopathy.careos.governance.domain.IdempotentResponse;
 import com.rootopathy.careos.governance.domain.InboundOutboxEvent;
 import com.rootopathy.careos.governance.domain.OutboxPublicationPolicy;
 import com.rootopathy.careos.governance.domain.OutboxRecord;
+import com.rootopathy.careos.administration.application.EvidenceExportStore;
 import com.rootopathy.careos.tenancy.application.ActorTransactionOperations;
 import com.rootopathy.careos.tenancy.application.ServiceIdentityAuthorizationException;
 import com.rootopathy.careos.tenancy.application.ServiceIdentityAuthorizationOperations;
@@ -153,6 +154,9 @@ class TenantRlsIntegrationTest {
 
     @Autowired
     private Clock clock;
+
+    @Autowired
+    private EvidenceExportStore evidenceExportStore;
 
     @BeforeEach
     void seedSecondTenantAndActor() throws SQLException {
@@ -325,6 +329,80 @@ class TenantRlsIntegrationTest {
     }
 
     @Test
+    void materializesEvidenceExportRowsAtRequestTime() throws SQLException {
+        executeAsMigrator("""
+                INSERT INTO users(id,email,display_name,status)
+                VALUES (
+                    '01900000-0000-7000-8000-000000000620',
+                    'export.snapshot@rootopathy.test','Export Snapshot Actor','active')
+                ON CONFLICT DO NOTHING;
+                INSERT INTO organization_memberships(
+                    id,organization_id,user_id,role_key,status)
+                VALUES (
+                    '01900000-0000-7000-8000-000000000621',
+                    '01900000-0000-7000-8000-000000000001',
+                    '01900000-0000-7000-8000-000000000620',
+                    'organization_owner','active')
+                ON CONFLICT DO NOTHING;
+                INSERT INTO mfa_methods(
+                    id,user_id,method_type,status,encrypted_secret,verified_at)
+                VALUES (
+                    '01900000-0000-7000-8000-000000000622',
+                    '01900000-0000-7000-8000-000000000620',
+                    'totp','enabled','snapshot-test-secret',clock_timestamp())
+                ON CONFLICT DO NOTHING;
+                """);
+        var actor = new AuthenticatedActorContext(
+                UUID.fromString("01900000-0000-7000-8000-000000000620"),
+                "evidence-export",
+                "export-snapshot-test-001");
+        var authorization = new TenantAuthorizationRequest(
+                ORG_ONE,
+                actor,
+                new OperationKey("evidence.export.request"),
+                "Capture an immutable audit export snapshot.",
+                clock.instant(),
+                clock.instant(),
+                null);
+        var firstEvent = UUID.fromString("01900000-0000-7000-8000-000000000611");
+        var laterEvent = UUID.fromString("01900000-0000-7000-8000-000000000612");
+        insertExportRequestAuditEvent(firstEvent, authorization, "snapshot-first-001");
+        var filters = "{\"from\":\"2026-01-01T00:00:00Z\",\"to\":\"2027-01-01T00:00:00Z\"}";
+        var result = tenantAuthorization.execute(
+                authorization,
+                context -> evidenceExportStore.request(
+                        context,
+                        new EvidenceExportStore.Draft(
+                                "audit-summary-v1",
+                                "jsonl",
+                                filters,
+                                "c".repeat(64),
+                                "security_investigation",
+                                "governance.module1",
+                                "Capture an immutable audit export snapshot.",
+                                false)));
+
+        insertExportRequestAuditEvent(laterEvent, authorization, "snapshot-later-001");
+
+        var snapshottedEventIds = tenantAuthorization.execute(
+                authorization,
+                () -> jdbcTemplate.queryForList(
+                        "SELECT row_data->>'id' FROM evidence_export_snapshot_rows WHERE organization_id=? AND export_id=? ORDER BY ordinal",
+                        String.class,
+                        ORG_ONE,
+                        result.exportId()));
+        assertThat(snapshottedEventIds).contains(firstEvent.toString()).doesNotContain(laterEvent.toString());
+        assertThat(tenantAuthorization.execute(
+                        authorization,
+                        () -> jdbcTemplate.queryForObject(
+                                "SELECT policy_digest FROM evidence_export_jobs WHERE organization_id=? AND id=?",
+                                String.class,
+                                ORG_ONE,
+                                result.exportId())))
+                .isEqualTo("9a0de3cf0389b578bf1f68ea06aa63fadfe774ef529689bc029c8a71e3e947de");
+    }
+
+    @Test
     void usesPostgresUuidV7ForEveryDatabaseGeneratedIdentifier() throws SQLException {
         var identifierDefaults = jdbcTemplate.query(
                 """
@@ -347,24 +425,44 @@ class TenantRlsIntegrationTest {
                         Map.entry("audit_events", "uuidv7()"),
                         Map.entry("authentication_events", "uuidv7()"),
                         Map.entry("authorization_approval_requests", "uuidv7()"),
+                        Map.entry("configuration_activation_runs", "uuidv7()"),
+                        Map.entry("configuration_approvals", "uuidv7()"),
+                        Map.entry("configuration_change_items", "uuidv7()"),
+                        Map.entry("configuration_validation_results", "uuidv7()"),
+                        Map.entry("configuration_versions", "uuidv7()"),
+                        Map.entry("evidence_export_accesses", "uuidv7()"),
+                        Map.entry("evidence_export_jobs", "uuidv7()"),
                         Map.entry("facilities", "uuidv7()"),
                         Map.entry("idempotency_records", "uuidv7()"),
+                        Map.entry("identifier_scheme_versions", "uuidv7()"),
+                        Map.entry("identifier_schemes", "uuidv7()"),
                         Map.entry("invitations", "uuidv7()"),
+                        Map.entry("issued_identifiers", "uuidv7()"),
                         Map.entry("membership_change_requests", "uuidv7()"),
                         Map.entry("mfa_methods", "uuidv7()"),
+                        Map.entry("operating_hours_batches", "uuidv7()"),
+                        Map.entry("operating_hours_exception_intervals", "uuidv7()"),
+                        Map.entry("operating_hours_exceptions", "uuidv7()"),
+                        Map.entry("operating_hours_intervals", "uuidv7()"),
                         Map.entry("organization_addresses", "uuidv7()"),
                         Map.entry("organization_contacts", "uuidv7()"),
                         Map.entry("organization_governance_responsibilities", "uuidv7()"),
                         Map.entry("organization_identifiers", "uuidv7()"),
                         Map.entry("organization_international_settings", "uuidv7()"),
                         Map.entry("organization_memberships", "uuidv7()"),
+                        Map.entry("organization_unit_parent_history", "uuidv7()"),
+                        Map.entry("organization_units", "uuidv7()"),
                         Map.entry("organizations", "uuidv7()"),
                         Map.entry("outbox_events", "uuidv7()"),
                         Map.entry("owner_transfer_requests", "uuidv7()"),
                         Map.entry("password_reset_tokens", "uuidv7()"),
                         Map.entry("recovery_codes", "uuidv7()"),
+                        Map.entry("service_assignments", "uuidv7()"),
+                        Map.entry("service_definitions", "uuidv7()"),
                         Map.entry("service_identities", "uuidv7()"),
                         Map.entry("service_identity_credentials", "uuidv7()"),
+                        Map.entry("service_location_parent_history", "uuidv7()"),
+                        Map.entry("service_locations", "uuidv7()"),
                         Map.entry("users", "uuidv7()"));
 
         try (var connection = DriverManager.getConnection(
@@ -654,6 +752,16 @@ class TenantRlsIntegrationTest {
                         "organization_administrator",
                         "organization_owner",
                         "security_administrator");
+        assertThat(jdbcTemplate.queryForList(
+                        """
+                        SELECT permission_key
+                        FROM authorization_role_permissions
+                        WHERE role_key = 'auditor'
+                          AND permission_key LIKE 'evidence.export.%'
+                        ORDER BY permission_key
+                        """,
+                        String.class))
+                .containsExactly("evidence.export.access", "evidence.export.request");
         assertThat(jdbcTemplate.queryForObject(
                         "SELECT count(*) FROM authorization_operations WHERE status = 'reference'",
                         Integer.class))
@@ -2222,6 +2330,49 @@ class TenantRlsIntegrationTest {
                 var statement = connection.createStatement()) {
             statement.executeUpdate(sql);
         }
+    }
+
+    private void insertExportRequestAuditEvent(
+            UUID eventId, TenantAuthorizationRequest authorization, String correlationId)
+            throws SQLException {
+        var eventAuthorization = new TenantAuthorizationRequest(
+                authorization.organizationId(),
+                new AuthenticatedActorContext(
+                        authorization.actor().actorId(),
+                        authorization.actor().purpose(),
+                        correlationId),
+                authorization.requiredOperation(),
+                authorization.reason(),
+                authorization.recentAuthenticationAt(),
+                authorization.mfaAuthenticatedAt(),
+                null);
+        executeAsMigratorInTenant(
+                """
+                INSERT INTO audit_events(
+                    id,organization_id,actor_user_id,event_name,subject_type,subject_id,
+                    reason,payload,occurred_at,schema_version,purpose,correlation_id)
+                VALUES (
+                    '%s','%s','%s','evidence.export.requested','evidence_export','%s',
+                    'Capture an immutable audit export snapshot.',
+                    jsonb_build_object(
+                      'approvalId',null,
+                      'exportId','%s',
+                      'filterDigest','%s',
+                      'format','jsonl',
+                      'projection','audit-summary-v1',
+                      'purposeCode','security_investigation'),
+                    clock_timestamp(),1,'%s','%s')
+                ON CONFLICT (id) DO NOTHING
+                """.formatted(
+                        eventId,
+                        authorization.organizationId(),
+                        authorization.actor().actorId(),
+                        eventId,
+                        eventId,
+                        "d".repeat(64),
+                        authorization.actor().purpose(),
+                        correlationId),
+                eventAuthorization);
     }
 
     private void executeAsMigratorInTenant(

@@ -1,0 +1,3 @@
+package com.rootopathy.careos.administration.domain;
+import java.time.Instant;import java.util.List;import java.util.UUID;
+public record IdentifierSchemeDirectory(UUID organizationId,boolean canManage,boolean canActivate,boolean canRetire,List<Scheme> schemes,Instant evaluatedAt){public record Scheme(UUID schemeId,String schemeKey,String scopeType,UUID scopeId,String description,String status,long lockVersion,List<Version> versions){}public record Version(UUID versionId,int versionNumber,String prefix,String pattern,String alphabet,String checkDigitAlgorithm,long sequenceStart,int sequenceIncrement,int padding,List<String> previewSamples,Instant effectiveFrom,String status,long lockVersion){} }

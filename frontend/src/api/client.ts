@@ -2,6 +2,12 @@ import type {
   AcceptInvitationData,
   AcceptInvitationResponse,
   AcceptInvitationResponses,
+  ActivateOrganizationUnitData,
+  ActivateOrganizationUnitResponse,
+  ActivateOrganizationUnitResponses,
+  ActivateServiceLocationData,
+  ActivateServiceLocationResponse,
+  ActivateServiceLocationResponses,
   ApproveMfaAdministrativeResetData,
   ApproveMfaAdministrativeResetResponse,
   ApproveMfaAdministrativeResetResponses,
@@ -17,15 +23,51 @@ import type {
   CompletePasswordResetData,
   CompletePasswordResetResponse,
   CompletePasswordResetResponses,
+  CloseOrganizationUnitData,
+  CloseOrganizationUnitResponse,
+  CloseOrganizationUnitResponses,
+  CloseServiceLocationData,
+  CloseServiceLocationResponse,
+  CloseServiceLocationResponses,
   CreateFacilityDraftData,
   CreateFacilityDraftResponse,
   CreateFacilityDraftResponses,
+  CreateOrganizationUnitDraftData,
+  CreateOrganizationUnitDraftResponse,
+  CreateOrganizationUnitDraftResponses,
+  CreateServiceLocationDraftData,
+  CreateServiceLocationDraftResponse,
+  CreateServiceLocationDraftResponses,
+  UpdateServiceLocationDraftData,
+  UpdateServiceLocationDraftResponse,
+  UpdateServiceLocationDraftResponses,
+  ReparentServiceLocationData,
+  ReparentServiceLocationResponse,
+  ReparentServiceLocationResponses,
+  ReparentOrganizationUnitData,
+  ReparentOrganizationUnitResponse,
+  ReparentOrganizationUnitResponses,
+  ReactivateOrganizationUnitData,
+  ReactivateOrganizationUnitResponse,
+  ReactivateOrganizationUnitResponses,
+  ReactivateServiceLocationData,
+  ReactivateServiceLocationResponse,
+  ReactivateServiceLocationResponses,
+  UpdateOrganizationUnitDraftData,
+  UpdateOrganizationUnitDraftResponse,
+  UpdateOrganizationUnitDraftResponses,
   UpdateFacilityDraftData,
   UpdateFacilityDraftResponse,
   UpdateFacilityDraftResponses,
   SubmitFacilityDraftData,
   SubmitFacilityDraftResponse,
   SubmitFacilityDraftResponses,
+  SuspendOrganizationUnitData,
+  SuspendOrganizationUnitResponse,
+  SuspendOrganizationUnitResponses,
+  SuspendServiceLocationData,
+  SuspendServiceLocationResponse,
+  SuspendServiceLocationResponses,
   CreateOrganizationAddressData,
   CreateOrganizationAddressResponse,
   CreateOrganizationAddressResponses,
@@ -48,6 +90,7 @@ import type {
   EndOrganizationGovernanceResponsibilityData,
   EndOrganizationGovernanceResponsibilityResponse,
   EndOrganizationGovernanceResponsibilityResponses,
+  FacilityDirectory,
   ExecuteMfaAdministrativeResetData,
   ExecuteMfaAdministrativeResetResponse,
   ExecuteMfaAdministrativeResetResponses,
@@ -66,6 +109,12 @@ import type {
   GetFacilityDirectoryData,
   GetFacilityDirectoryResponse,
   GetFacilityDirectoryResponses,
+  GetOrganizationUnitDirectoryData,
+  GetOrganizationUnitDirectoryResponse,
+  GetOrganizationUnitDirectoryResponses,
+  GetServiceLocationDirectoryData,
+  GetServiceLocationDirectoryResponse,
+  GetServiceLocationDirectoryResponses,
   GetOrganizationProfileData,
   GetOrganizationProfileResponse,
   GetOrganizationProfileResponses,
@@ -105,6 +154,24 @@ import type {
   LogoutData,
   LogoutResponse,
   LogoutResponses,
+  AuditEvidenceDetail,
+  AuditEvidencePage,
+  ConfigurationActivationDirectory,
+  ConfigurationActivationRequest,
+  ConfigurationDecisionRequest,
+  ConfigurationHistoryPage,
+  ConfigurationResultRequest,
+  ConfigurationValidationRequest,
+  EvidenceExportAccessRequest,
+  EvidenceExportAccessResponse,
+  EvidenceExportDecisionRequest,
+  EvidenceExportDirectory,
+  EvidenceExportRequest,
+  IdentifierSchemeDirectory,
+  IdentifierSchemeWriteRequest,
+  OperatingHoursBatchRequest,
+  OperatingHoursDirectory,
+  OperatingHoursOverview,
   Problem,
   RegenerateRecoveryCodesData,
   RegenerateRecoveryCodesResponse,
@@ -129,6 +196,10 @@ import type {
   SelectOrganizationData,
   SelectOrganizationResponse,
   SelectOrganizationResponses,
+  ServiceAssignmentDirectory,
+  ServiceAssignmentWriteRequest,
+  ServiceCatalogue,
+  ServiceWriteRequest,
   ScheduleOrganizationInternationalSettingsData,
   ScheduleOrganizationInternationalSettingsResponse,
   ScheduleOrganizationInternationalSettingsResponses,
@@ -166,6 +237,19 @@ import type {
   VerifyRecentAuthenticationResponse,
   VerifyRecentAuthenticationResponses,
 } from './generated';
+import {
+  auditEvidenceDetailValidator,
+  auditEvidencePageValidator,
+  configurationActivationDirectoryValidator,
+  configurationHistoryPageValidator,
+  evidenceExportAccessValidator,
+  evidenceExportDirectoryValidator,
+  identifierSchemeDirectoryValidator,
+  operatingHoursDirectoryValidator,
+  operatingHoursOverviewValidator,
+  serviceAssignmentDirectoryValidator,
+  serviceCatalogueValidator,
+} from './live-administration-contracts';
 
 const ACCEPTED_RESPONSE_TYPES = 'application/json, application/problem+json';
 const CORRELATION_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -273,6 +357,78 @@ const endpoints = {
   getFacilityDirectory: {
     path: '/api/v1/organizations/{organizationId}/facilities' satisfies GetFacilityDirectoryData['url'],
     successStatuses: [200] satisfies readonly ResponseStatus<GetFacilityDirectoryResponses>[],
+  },
+  getOrganizationUnitDirectory: {
+    path: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/units' satisfies GetOrganizationUnitDirectoryData['url'],
+    successStatuses: [
+      200,
+    ] satisfies readonly ResponseStatus<GetOrganizationUnitDirectoryResponses>[],
+  },
+  getServiceLocationDirectory: {
+    path: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/locations' satisfies GetServiceLocationDirectoryData['url'],
+    successStatuses: [
+      200,
+    ] satisfies readonly ResponseStatus<GetServiceLocationDirectoryResponses>[],
+  },
+  createServiceLocationDraft: {
+    path: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/locations' satisfies CreateServiceLocationDraftData['url'],
+    successStatuses: [201] satisfies readonly ResponseStatus<CreateServiceLocationDraftResponses>[],
+  },
+  updateServiceLocationDraft: {
+    path: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/locations/{locationId}' satisfies UpdateServiceLocationDraftData['url'],
+    successStatuses: [200] satisfies readonly ResponseStatus<UpdateServiceLocationDraftResponses>[],
+  },
+  reparentServiceLocation: {
+    path: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/locations/{locationId}/reparentings' satisfies ReparentServiceLocationData['url'],
+    successStatuses: [200] satisfies readonly ResponseStatus<ReparentServiceLocationResponses>[],
+  },
+  activateServiceLocation: {
+    path: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/locations/{locationId}/activations' satisfies ActivateServiceLocationData['url'],
+    successStatuses: [200] satisfies readonly ResponseStatus<ActivateServiceLocationResponses>[],
+  },
+  suspendServiceLocation: {
+    path: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/locations/{locationId}/suspensions' satisfies SuspendServiceLocationData['url'],
+    successStatuses: [200] satisfies readonly ResponseStatus<SuspendServiceLocationResponses>[],
+  },
+  reactivateServiceLocation: {
+    path: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/locations/{locationId}/reactivations' satisfies ReactivateServiceLocationData['url'],
+    successStatuses: [200] satisfies readonly ResponseStatus<ReactivateServiceLocationResponses>[],
+  },
+  closeServiceLocation: {
+    path: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/locations/{locationId}/closures' satisfies CloseServiceLocationData['url'],
+    successStatuses: [200] satisfies readonly ResponseStatus<CloseServiceLocationResponses>[],
+  },
+  createOrganizationUnitDraft: {
+    path: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/units' satisfies CreateOrganizationUnitDraftData['url'],
+    successStatuses: [
+      201,
+    ] satisfies readonly ResponseStatus<CreateOrganizationUnitDraftResponses>[],
+  },
+  updateOrganizationUnitDraft: {
+    path: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/units/{unitId}' satisfies UpdateOrganizationUnitDraftData['url'],
+    successStatuses: [
+      200,
+    ] satisfies readonly ResponseStatus<UpdateOrganizationUnitDraftResponses>[],
+  },
+  reparentOrganizationUnit: {
+    path: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/units/{unitId}/reparentings' satisfies ReparentOrganizationUnitData['url'],
+    successStatuses: [200] satisfies readonly ResponseStatus<ReparentOrganizationUnitResponses>[],
+  },
+  activateOrganizationUnit: {
+    path: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/units/{unitId}/activations' satisfies ActivateOrganizationUnitData['url'],
+    successStatuses: [200] satisfies readonly ResponseStatus<ActivateOrganizationUnitResponses>[],
+  },
+  suspendOrganizationUnit: {
+    path: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/units/{unitId}/suspensions' satisfies SuspendOrganizationUnitData['url'],
+    successStatuses: [200] satisfies readonly ResponseStatus<SuspendOrganizationUnitResponses>[],
+  },
+  reactivateOrganizationUnit: {
+    path: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/units/{unitId}/reactivations' satisfies ReactivateOrganizationUnitData['url'],
+    successStatuses: [200] satisfies readonly ResponseStatus<ReactivateOrganizationUnitResponses>[],
+  },
+  closeOrganizationUnit: {
+    path: '/api/v1/organizations/{organizationId}/facilities/{facilityId}/units/{unitId}/closures' satisfies CloseOrganizationUnitData['url'],
+    successStatuses: [200] satisfies readonly ResponseStatus<CloseOrganizationUnitResponses>[],
   },
   createFacilityDraft: {
     path: '/api/v1/organizations/{organizationId}/facilities' satisfies CreateFacilityDraftData['url'],
@@ -512,6 +668,7 @@ type RequestDescriptor = {
   responseBody: 'empty' | 'json';
   signal?: AbortSignal;
   successStatuses: readonly number[];
+  validateResponse?: (value: unknown) => boolean;
 };
 
 function requireUuid(value: string, name: string): string {
@@ -925,9 +1082,9 @@ export class CareOsApiClient {
       );
     }
 
-    let data: T;
+    let parsed: unknown;
     try {
-      data = JSON.parse(text) as T;
+      parsed = JSON.parse(text) as unknown;
     } catch {
       return this.#contractFailure(
         response.status,
@@ -937,6 +1094,16 @@ export class CareOsApiClient {
         retryAfter,
       );
     }
+    if (descriptor.validateResponse && !descriptor.validateResponse(parsed)) {
+      return this.#contractFailure(
+        response.status,
+        descriptor.path,
+        correlationId,
+        'The API success response did not match the checked response contract.',
+        retryAfter,
+      );
+    }
+    const data = parsed as T;
 
     const etag = response.headers.get('ETag');
     return {
@@ -1571,6 +1738,431 @@ export class CareOsApiClient {
     });
   }
 
+  getOrganizationUnitDirectory(
+    organizationId: string,
+    facilityId: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.getOrganizationUnitDirectory.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace(
+        '{facilityId}',
+        requireUuid(facilityId, 'facilityId'),
+      ) as `/api/v1/organizations/${string}/facilities/${string}/units`;
+    return this.#request<GetOrganizationUnitDirectoryResponse>({
+      method: 'GET',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.getOrganizationUnitDirectory.successStatuses,
+    });
+  }
+
+  getServiceLocationDirectory(
+    organizationId: string,
+    facilityId: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.getServiceLocationDirectory.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace(
+        '{facilityId}',
+        requireUuid(facilityId, 'facilityId'),
+      ) as `/api/v1/organizations/${string}/facilities/${string}/locations`;
+    return this.#request<GetServiceLocationDirectoryResponse>({
+      method: 'GET',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.getServiceLocationDirectory.successStatuses,
+    });
+  }
+
+  createServiceLocationDraft(
+    organizationId: string,
+    facilityId: string,
+    body: CreateServiceLocationDraftData['body'],
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.createServiceLocationDraft.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace(
+        '{facilityId}',
+        requireUuid(facilityId, 'facilityId'),
+      ) as `/api/v1/organizations/${string}/facilities/${string}/locations`;
+    return this.#mutation<CreateServiceLocationDraftResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      method: 'POST',
+      path: relativeEndpointPath(path as `/api/${string}`),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.createServiceLocationDraft.successStatuses,
+    });
+  }
+
+  updateServiceLocationDraft(
+    organizationId: string,
+    facilityId: string,
+    locationId: string,
+    body: UpdateServiceLocationDraftData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.updateServiceLocationDraft.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace('{facilityId}', requireUuid(facilityId, 'facilityId'))
+      .replace(
+        '{locationId}',
+        requireUuid(locationId, 'locationId'),
+      ) as `/api/v1/organizations/${string}/facilities/${string}/locations/${string}`;
+    return this.#mutation<UpdateServiceLocationDraftResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'PUT',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.updateServiceLocationDraft.successStatuses,
+    });
+  }
+
+  reparentServiceLocation(
+    organizationId: string,
+    facilityId: string,
+    locationId: string,
+    body: ReparentServiceLocationData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.reparentServiceLocation.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace('{facilityId}', requireUuid(facilityId, 'facilityId'))
+      .replace(
+        '{locationId}',
+        requireUuid(locationId, 'locationId'),
+      ) as `/api/v1/organizations/${string}/facilities/${string}/locations/${string}/reparentings`;
+    return this.#mutation<ReparentServiceLocationResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.reparentServiceLocation.successStatuses,
+    });
+  }
+
+  activateServiceLocation(
+    organizationId: string,
+    facilityId: string,
+    locationId: string,
+    body: ActivateServiceLocationData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    return this.#serviceLocationLifecycle<ActivateServiceLocationResponse>(
+      'activateServiceLocation',
+      organizationId,
+      facilityId,
+      locationId,
+      body,
+      ifMatch,
+      idempotencyKey,
+      options,
+    );
+  }
+
+  suspendServiceLocation(
+    organizationId: string,
+    facilityId: string,
+    locationId: string,
+    body: SuspendServiceLocationData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    return this.#serviceLocationLifecycle<SuspendServiceLocationResponse>(
+      'suspendServiceLocation',
+      organizationId,
+      facilityId,
+      locationId,
+      body,
+      ifMatch,
+      idempotencyKey,
+      options,
+    );
+  }
+
+  reactivateServiceLocation(
+    organizationId: string,
+    facilityId: string,
+    locationId: string,
+    body: ReactivateServiceLocationData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    return this.#serviceLocationLifecycle<ReactivateServiceLocationResponse>(
+      'reactivateServiceLocation',
+      organizationId,
+      facilityId,
+      locationId,
+      body,
+      ifMatch,
+      idempotencyKey,
+      options,
+    );
+  }
+
+  closeServiceLocation(
+    organizationId: string,
+    facilityId: string,
+    locationId: string,
+    body: CloseServiceLocationData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    return this.#serviceLocationLifecycle<CloseServiceLocationResponse>(
+      'closeServiceLocation',
+      organizationId,
+      facilityId,
+      locationId,
+      body,
+      ifMatch,
+      idempotencyKey,
+      options,
+    );
+  }
+
+  #serviceLocationLifecycle<T>(
+    endpoint:
+      | 'activateServiceLocation'
+      | 'suspendServiceLocation'
+      | 'reactivateServiceLocation'
+      | 'closeServiceLocation',
+    organizationId: string,
+    facilityId: string,
+    locationId: string,
+    body: unknown,
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions,
+  ) {
+    const definition = endpoints[endpoint];
+    const path = definition.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace('{facilityId}', requireUuid(facilityId, 'facilityId'))
+      .replace('{locationId}', requireUuid(locationId, 'locationId'));
+    return this.#mutation<T>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: relativeEndpointPath(path as `/api/${string}`),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: definition.successStatuses,
+    });
+  }
+
+  createOrganizationUnitDraft(
+    organizationId: string,
+    facilityId: string,
+    body: CreateOrganizationUnitDraftData['body'],
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.createOrganizationUnitDraft.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace(
+        '{facilityId}',
+        requireUuid(facilityId, 'facilityId'),
+      ) as `/api/v1/organizations/${string}/facilities/${string}/units`;
+    return this.#mutation<CreateOrganizationUnitDraftResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      method: 'POST',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.createOrganizationUnitDraft.successStatuses,
+    });
+  }
+
+  updateOrganizationUnitDraft(
+    organizationId: string,
+    facilityId: string,
+    unitId: string,
+    body: UpdateOrganizationUnitDraftData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.updateOrganizationUnitDraft.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace('{facilityId}', requireUuid(facilityId, 'facilityId'))
+      .replace(
+        '{unitId}',
+        requireUuid(unitId, 'unitId'),
+      ) as `/api/v1/organizations/${string}/facilities/${string}/units/${string}`;
+    return this.#mutation<UpdateOrganizationUnitDraftResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'PUT',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.updateOrganizationUnitDraft.successStatuses,
+    });
+  }
+
+  reparentOrganizationUnit(
+    organizationId: string,
+    facilityId: string,
+    unitId: string,
+    body: ReparentOrganizationUnitData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const path = endpoints.reparentOrganizationUnit.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace('{facilityId}', requireUuid(facilityId, 'facilityId'))
+      .replace(
+        '{unitId}',
+        requireUuid(unitId, 'unitId'),
+      ) as `/api/v1/organizations/${string}/facilities/${string}/units/${string}/reparentings`;
+    return this.#mutation<ReparentOrganizationUnitResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: relativeEndpointPath(path),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoints.reparentOrganizationUnit.successStatuses,
+    });
+  }
+
+  activateOrganizationUnit(
+    organizationId: string,
+    facilityId: string,
+    unitId: string,
+    body: ActivateOrganizationUnitData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    return this.#organizationUnitLifecycleMutation<ActivateOrganizationUnitResponse>(
+      endpoints.activateOrganizationUnit,
+      organizationId,
+      facilityId,
+      unitId,
+      body,
+      ifMatch,
+      idempotencyKey,
+      options,
+    );
+  }
+
+  suspendOrganizationUnit(
+    organizationId: string,
+    facilityId: string,
+    unitId: string,
+    body: SuspendOrganizationUnitData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    return this.#organizationUnitLifecycleMutation<SuspendOrganizationUnitResponse>(
+      endpoints.suspendOrganizationUnit,
+      organizationId,
+      facilityId,
+      unitId,
+      body,
+      ifMatch,
+      idempotencyKey,
+      options,
+    );
+  }
+
+  reactivateOrganizationUnit(
+    organizationId: string,
+    facilityId: string,
+    unitId: string,
+    body: ReactivateOrganizationUnitData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    return this.#organizationUnitLifecycleMutation<ReactivateOrganizationUnitResponse>(
+      endpoints.reactivateOrganizationUnit,
+      organizationId,
+      facilityId,
+      unitId,
+      body,
+      ifMatch,
+      idempotencyKey,
+      options,
+    );
+  }
+
+  closeOrganizationUnit(
+    organizationId: string,
+    facilityId: string,
+    unitId: string,
+    body: CloseOrganizationUnitData['body'],
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    return this.#organizationUnitLifecycleMutation<CloseOrganizationUnitResponse>(
+      endpoints.closeOrganizationUnit,
+      organizationId,
+      facilityId,
+      unitId,
+      body,
+      ifMatch,
+      idempotencyKey,
+      options,
+    );
+  }
+
+  #organizationUnitLifecycleMutation<T>(
+    endpoint: { path: string; successStatuses: readonly number[] },
+    organizationId: string,
+    facilityId: string,
+    unitId: string,
+    body: unknown,
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions,
+  ) {
+    const path = endpoint.path
+      .replace('{organizationId}', requireUuid(organizationId, 'organizationId'))
+      .replace('{facilityId}', requireUuid(facilityId, 'facilityId'))
+      .replace('{unitId}', requireUuid(unitId, 'unitId'));
+    return this.#mutation<T>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: relativeEndpointPath(path as `/api/${string}`),
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: endpoint.successStatuses,
+    });
+  }
+
   createFacilityDraft(
     organizationId: string,
     body: CreateFacilityDraftData['body'],
@@ -2103,6 +2695,590 @@ export class CareOsApiClient {
       responseBody: 'json',
       signal: options.signal,
       successStatuses: endpoints.scheduleOrganizationInternationalSettings.successStatuses,
+    });
+  }
+
+  getOperatingHoursDirectory(organizationId: string, options: ApiRequestOptions = {}) {
+    const id = requireUuid(organizationId, 'organizationId');
+    return this.#request<OperatingHoursOverview>({
+      method: 'GET',
+      path: `/v1/organizations/${id}/operating-hours`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: operatingHoursOverviewValidator(id),
+    });
+  }
+
+  getOperatingHoursTarget(
+    organizationId: string,
+    targetType: 'facility' | 'location',
+    targetId: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const target = requireUuid(targetId, 'targetId');
+    return this.#request<OperatingHoursDirectory>({
+      method: 'GET',
+      path: `/v1/organizations/${organization}/operating-hours/${targetType}/${target}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: operatingHoursDirectoryValidator(organization, targetType, target),
+    });
+  }
+
+  replaceOperatingHours(
+    organizationId: string,
+    targetType: 'facility' | 'location',
+    targetId: string,
+    body: OperatingHoursBatchRequest,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const target = requireUuid(targetId, 'targetId');
+    return this.#mutation<OperatingHoursDirectory>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/operating-hours/${targetType}/${target}/batches`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [201],
+      validateResponse: operatingHoursDirectoryValidator(organization, targetType, target),
+    });
+  }
+
+  cancelOperatingHours(
+    organizationId: string,
+    targetType: 'facility' | 'location',
+    targetId: string,
+    batchId: string,
+    reason: string,
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const target = requireUuid(targetId, 'targetId');
+    const batch = requireUuid(batchId, 'batchId');
+    return this.#mutation<OperatingHoursDirectory>({
+      body: { reason },
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/operating-hours/${targetType}/${target}/batches/${batch}/cancellations`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: operatingHoursDirectoryValidator(organization, targetType, target),
+    });
+  }
+
+  transitionFacilityLifecycle(
+    organizationId: string,
+    facilityId: string,
+    action: 'activations' | 'suspensions' | 'reactivations' | 'closures',
+    body: { fromState: string; reason: string },
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const facility = requireUuid(facilityId, 'facilityId');
+    return this.#mutation<FacilityDirectory>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/facilities/${facility}/${action}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+    });
+  }
+
+  getServiceCatalogue(organizationId: string, options: ApiRequestOptions = {}) {
+    const id = requireUuid(organizationId, 'organizationId');
+    return this.#request<ServiceCatalogue>({
+      method: 'GET',
+      path: `/v1/organizations/${id}/services`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: serviceCatalogueValidator(id),
+    });
+  }
+
+  getServiceAssignmentDirectory(organizationId: string, options: ApiRequestOptions = {}) {
+    const id = requireUuid(organizationId, 'organizationId');
+    return this.#request<ServiceAssignmentDirectory>({
+      method: 'GET',
+      path: `/v1/organizations/${id}/service-assignments`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: serviceAssignmentDirectoryValidator(id),
+    });
+  }
+
+  getIdentifierSchemeDirectory(organizationId: string, options: ApiRequestOptions = {}) {
+    const id = requireUuid(organizationId, 'organizationId');
+    return this.#request<IdentifierSchemeDirectory>({
+      method: 'GET',
+      path: `/v1/organizations/${id}/identifier-schemes`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: identifierSchemeDirectoryValidator(id),
+    });
+  }
+
+  getConfigurationActivationDirectory(organizationId: string, options: ApiRequestOptions = {}) {
+    const id = requireUuid(organizationId, 'organizationId');
+    return this.#request<ConfigurationActivationDirectory>({
+      method: 'GET',
+      path: `/v1/organizations/${id}/configuration-activations`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: configurationActivationDirectoryValidator(id),
+    });
+  }
+
+  getConfigurationHistory(organizationId: string, options: ApiRequestOptions = {}) {
+    const id = requireUuid(organizationId, 'organizationId');
+    return this.#request<ConfigurationHistoryPage>({
+      method: 'GET',
+      path: `/v1/organizations/${id}/configuration-history`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: configurationHistoryPageValidator(id),
+    });
+  }
+
+  queryConfigurationHistory(
+    organizationId: string,
+    filters: Record<string, string | number | undefined>,
+    options: ApiRequestOptions = {},
+  ) {
+    const id = requireUuid(organizationId, 'organizationId');
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters))
+      if (value !== undefined && value !== '') query.set(key, String(value));
+    const suffix = query.size ? `?${query.toString()}` : '';
+    return this.#request<ConfigurationHistoryPage>({
+      method: 'GET',
+      path: `/v1/organizations/${id}/configuration-history${suffix}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: configurationHistoryPageValidator(id),
+    });
+  }
+
+  getAuditEvidence(organizationId: string, options: ApiRequestOptions = {}) {
+    const id = requireUuid(organizationId, 'organizationId');
+    return this.#request<AuditEvidencePage>({
+      method: 'GET',
+      path: `/v1/organizations/${id}/audit-evidence`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: auditEvidencePageValidator(id),
+    });
+  }
+
+  queryAuditEvidence(
+    organizationId: string,
+    filters: Record<string, string | number | undefined>,
+    options: ApiRequestOptions = {},
+  ) {
+    const id = requireUuid(organizationId, 'organizationId');
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters))
+      if (value !== undefined && value !== '') query.set(key, String(value));
+    const suffix = query.size ? `?${query.toString()}` : '';
+    return this.#request<AuditEvidencePage>({
+      method: 'GET',
+      path: `/v1/organizations/${id}/audit-evidence${suffix}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: auditEvidencePageValidator(id),
+    });
+  }
+
+  accessAuditEvidenceDetail(
+    organizationId: string,
+    eventId: string,
+    purposeCode: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const event = requireUuid(eventId, 'eventId');
+    return this.#mutation<AuditEvidenceDetail>({
+      body: { purposeCode },
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/audit-evidence/${event}/accesses`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: auditEvidenceDetailValidator(organization, event),
+    });
+  }
+
+  getEvidenceExportDirectory(
+    organizationId: string,
+    source: 'history' | 'audit',
+    options: ApiRequestOptions = {},
+  ) {
+    const id = requireUuid(organizationId, 'organizationId');
+    return this.#request<EvidenceExportDirectory>({
+      method: 'GET',
+      path: `/v1/organizations/${id}/evidence-exports?source=${source}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: evidenceExportDirectoryValidator(id),
+    });
+  }
+
+  createServiceDefinition(
+    organizationId: string,
+    body: ServiceWriteRequest,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const id = requireUuid(organizationId, 'organizationId');
+    return this.#mutation<ServiceCatalogue>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      method: 'POST',
+      path: `/v1/organizations/${id}/services`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [201],
+      validateResponse: serviceCatalogueValidator(id),
+    });
+  }
+
+  updateServiceDefinition(
+    organizationId: string,
+    serviceId: string,
+    body: ServiceWriteRequest,
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const service = requireUuid(serviceId, 'serviceId');
+    return this.#mutation<ServiceCatalogue>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'PUT',
+      path: `/v1/organizations/${organization}/services/${service}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: serviceCatalogueValidator(organization),
+    });
+  }
+
+  transitionServiceDefinition(
+    organizationId: string,
+    serviceId: string,
+    action: 'activations' | 'retirements',
+    reason: string,
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const service = requireUuid(serviceId, 'serviceId');
+    return this.#mutation<ServiceCatalogue>({
+      body: { reason },
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/services/${service}/${action}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: serviceCatalogueValidator(organization),
+    });
+  }
+
+  createServiceAssignment(
+    organizationId: string,
+    body: ServiceAssignmentWriteRequest,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const id = requireUuid(organizationId, 'organizationId');
+    return this.#mutation<ServiceAssignmentDirectory>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      method: 'POST',
+      path: `/v1/organizations/${id}/service-assignments`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [201],
+      validateResponse: serviceAssignmentDirectoryValidator(id),
+    });
+  }
+
+  updateServiceAssignment(
+    organizationId: string,
+    assignmentId: string,
+    body: ServiceAssignmentWriteRequest,
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const assignment = requireUuid(assignmentId, 'assignmentId');
+    return this.#mutation<ServiceAssignmentDirectory>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'PUT',
+      path: `/v1/organizations/${organization}/service-assignments/${assignment}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: serviceAssignmentDirectoryValidator(organization),
+    });
+  }
+
+  transitionServiceAssignment(
+    organizationId: string,
+    assignmentId: string,
+    action: 'activations' | 'suspensions' | 'endings' | 'cancellations',
+    fromState: string,
+    reason: string,
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const assignment = requireUuid(assignmentId, 'assignmentId');
+    return this.#mutation<ServiceAssignmentDirectory>({
+      body: { fromState, reason },
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/service-assignments/${assignment}/${action}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: serviceAssignmentDirectoryValidator(organization),
+    });
+  }
+
+  createIdentifierScheme(
+    organizationId: string,
+    body: IdentifierSchemeWriteRequest,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const id = requireUuid(organizationId, 'organizationId');
+    return this.#mutation<IdentifierSchemeDirectory>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      method: 'POST',
+      path: `/v1/organizations/${id}/identifier-schemes`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [201],
+      validateResponse: identifierSchemeDirectoryValidator(id),
+    });
+  }
+
+  createIdentifierSchemeVersion(
+    organizationId: string,
+    schemeId: string,
+    body: IdentifierSchemeWriteRequest,
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const scheme = requireUuid(schemeId, 'schemeId');
+    return this.#mutation<IdentifierSchemeDirectory>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/identifier-schemes/${scheme}/versions`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [201],
+      validateResponse: identifierSchemeDirectoryValidator(organization),
+    });
+  }
+
+  validateConfiguration(
+    organizationId: string,
+    body: ConfigurationValidationRequest,
+    idempotencyKey: string,
+    ifMatch?: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const id = requireUuid(organizationId, 'organizationId');
+    return this.#mutation<ConfigurationActivationDirectory>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch,
+      method: 'POST',
+      path: `/v1/organizations/${id}/configuration-validations`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [201],
+      validateResponse: configurationActivationDirectoryValidator(id),
+    });
+  }
+
+  submitConfiguration(
+    organizationId: string,
+    configurationId: string,
+    body: ConfigurationResultRequest,
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const configuration = requireUuid(configurationId, 'configurationId');
+    return this.#mutation<ConfigurationActivationDirectory>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/configurations/${configuration}/submissions`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: configurationActivationDirectoryValidator(organization),
+    });
+  }
+
+  decideConfiguration(
+    organizationId: string,
+    configurationId: string,
+    body: ConfigurationDecisionRequest,
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const configuration = requireUuid(configurationId, 'configurationId');
+    return this.#mutation<ConfigurationActivationDirectory>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/configurations/${configuration}/decisions`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: configurationActivationDirectoryValidator(organization),
+    });
+  }
+
+  activateConfiguration(
+    organizationId: string,
+    configurationId: string,
+    body: ConfigurationActivationRequest,
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const configuration = requireUuid(configurationId, 'configurationId');
+    return this.#mutation<ConfigurationActivationDirectory>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/configurations/${configuration}/activations`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: configurationActivationDirectoryValidator(organization),
+    });
+  }
+
+  requestEvidenceExport(
+    organizationId: string,
+    body: EvidenceExportRequest,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const id = requireUuid(organizationId, 'organizationId');
+    return this.#mutation<EvidenceExportDirectory>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      method: 'POST',
+      path: `/v1/organizations/${id}/evidence-exports`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [201],
+      validateResponse: evidenceExportDirectoryValidator(id),
+    });
+  }
+
+  decideEvidenceExport(
+    organizationId: string,
+    exportId: string,
+    authorize: boolean,
+    reason: string,
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const exportJob = requireUuid(exportId, 'exportId');
+    const body: EvidenceExportDecisionRequest = { authorize, reason };
+    return this.#mutation<EvidenceExportDirectory>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/evidence-exports/${exportJob}/decisions`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: evidenceExportDirectoryValidator(organization),
+    });
+  }
+
+  accessEvidenceExport(
+    organizationId: string,
+    exportId: string,
+    purposeCode: EvidenceExportAccessRequest['purposeCode'],
+    reason: string,
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const exportJob = requireUuid(exportId, 'exportId');
+    const body: EvidenceExportAccessRequest = { purposeCode, reason };
+    return this.#mutation<EvidenceExportAccessResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/evidence-exports/${exportJob}/accesses`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: evidenceExportAccessValidator(exportJob),
     });
   }
 

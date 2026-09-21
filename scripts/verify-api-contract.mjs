@@ -43,6 +43,22 @@ export const expectedOperations = [
   ["post", "/api/v1/organizations/{organizationId}/facilities", "createFacilityDraft"],
   ["put", "/api/v1/organizations/{organizationId}/facilities/{facilityId}", "updateFacilityDraft"],
   ["post", "/api/v1/organizations/{organizationId}/facilities/{facilityId}/submissions", "submitFacilityDraft"],
+  ["get", "/api/v1/organizations/{organizationId}/facilities/{facilityId}/units", "getOrganizationUnitDirectory"],
+  ["post", "/api/v1/organizations/{organizationId}/facilities/{facilityId}/units", "createOrganizationUnitDraft"],
+  ["put", "/api/v1/organizations/{organizationId}/facilities/{facilityId}/units/{unitId}", "updateOrganizationUnitDraft"],
+  ["post", "/api/v1/organizations/{organizationId}/facilities/{facilityId}/units/{unitId}/reparentings", "reparentOrganizationUnit"],
+  ["post", "/api/v1/organizations/{organizationId}/facilities/{facilityId}/units/{unitId}/activations", "activateOrganizationUnit"],
+  ["post", "/api/v1/organizations/{organizationId}/facilities/{facilityId}/units/{unitId}/suspensions", "suspendOrganizationUnit"],
+  ["post", "/api/v1/organizations/{organizationId}/facilities/{facilityId}/units/{unitId}/reactivations", "reactivateOrganizationUnit"],
+  ["post", "/api/v1/organizations/{organizationId}/facilities/{facilityId}/units/{unitId}/closures", "closeOrganizationUnit"],
+  ["get", "/api/v1/organizations/{organizationId}/facilities/{facilityId}/locations", "getServiceLocationDirectory"],
+  ["post", "/api/v1/organizations/{organizationId}/facilities/{facilityId}/locations", "createServiceLocationDraft"],
+  ["put", "/api/v1/organizations/{organizationId}/facilities/{facilityId}/locations/{locationId}", "updateServiceLocationDraft"],
+  ["post", "/api/v1/organizations/{organizationId}/facilities/{facilityId}/locations/{locationId}/reparentings", "reparentServiceLocation"],
+  ["post", "/api/v1/organizations/{organizationId}/facilities/{facilityId}/locations/{locationId}/activations", "activateServiceLocation"],
+  ["post", "/api/v1/organizations/{organizationId}/facilities/{facilityId}/locations/{locationId}/suspensions", "suspendServiceLocation"],
+  ["post", "/api/v1/organizations/{organizationId}/facilities/{facilityId}/locations/{locationId}/reactivations", "reactivateServiceLocation"],
+  ["post", "/api/v1/organizations/{organizationId}/facilities/{facilityId}/locations/{locationId}/closures", "closeServiceLocation"],
   ["get", "/api/v1/organizations/{organizationId}/governance-responsibilities", "getOrganizationGovernanceDirectory"],
   ["post", "/api/v1/organizations/{organizationId}/governance-responsibilities", "createOrganizationGovernanceResponsibility"],
   ["post", "/api/v1/organizations/{organizationId}/governance-responsibilities/{responsibilityId}/supersessions", "supersedeOrganizationGovernanceResponsibility"],
@@ -182,6 +198,35 @@ export const expectedOperations = [
     "/api/v1/organizations/{organizationId}/memberships/{membershipId}/owner-transfer-requests/{approvalId}/executions",
     "executeOrganizationOwnerTransfer",
   ],
+  ["post", "/api/v1/organizations/{organizationId}/facilities/{facilityId}/{action}", "transitionFacilityLifecycle"],
+  ["get", "/api/v1/organizations/{organizationId}/operating-hours", "getOperatingHoursOverview"],
+  ["get", "/api/v1/organizations/{organizationId}/operating-hours/{targetType}/{targetId}", "getOperatingHoursDirectory"],
+  ["post", "/api/v1/organizations/{organizationId}/operating-hours/{targetType}/{targetId}/batches", "replaceOperatingHoursBatch"],
+  ["post", "/api/v1/organizations/{organizationId}/operating-hours/{targetType}/{targetId}/batches/{batchId}/cancellations", "cancelOperatingHoursBatch"],
+  ["get", "/api/v1/organizations/{organizationId}/services", "getServiceCatalogue"],
+  ["post", "/api/v1/organizations/{organizationId}/services", "createServiceDefinition"],
+  ["put", "/api/v1/organizations/{organizationId}/services/{serviceId}", "updateServiceDefinition"],
+  ["post", "/api/v1/organizations/{organizationId}/services/{serviceId}/activations", "activateServiceDefinition"],
+  ["post", "/api/v1/organizations/{organizationId}/services/{serviceId}/retirements", "retireServiceDefinition"],
+  ["get", "/api/v1/organizations/{organizationId}/service-assignments", "getServiceAssignmentDirectory"],
+  ["post", "/api/v1/organizations/{organizationId}/service-assignments", "createServiceAssignment"],
+  ["put", "/api/v1/organizations/{organizationId}/service-assignments/{assignmentId}", "updateServiceAssignment"],
+  ["post", "/api/v1/organizations/{organizationId}/service-assignments/{assignmentId}/{action}", "transitionServiceAssignment"],
+  ["get", "/api/v1/organizations/{organizationId}/identifier-schemes", "getIdentifierSchemeDirectory"],
+  ["post", "/api/v1/organizations/{organizationId}/identifier-schemes", "createIdentifierScheme"],
+  ["post", "/api/v1/organizations/{organizationId}/identifier-schemes/{schemeId}/versions", "createIdentifierSchemeVersion"],
+  ["get", "/api/v1/organizations/{organizationId}/configuration-activations", "getConfigurationActivationDirectory"],
+  ["post", "/api/v1/organizations/{organizationId}/configuration-validations", "validateConfiguration"],
+  ["post", "/api/v1/organizations/{organizationId}/configurations/{configurationId}/submissions", "submitConfiguration"],
+  ["post", "/api/v1/organizations/{organizationId}/configurations/{configurationId}/decisions", "decideConfiguration"],
+  ["post", "/api/v1/organizations/{organizationId}/configurations/{configurationId}/activations", "activateConfiguration"],
+  ["get", "/api/v1/organizations/{organizationId}/configuration-history", "getConfigurationHistory"],
+  ["get", "/api/v1/organizations/{organizationId}/audit-evidence", "getAuditEvidence"],
+  ["post", "/api/v1/organizations/{organizationId}/audit-evidence/{eventId}/accesses", "accessAuditEvidenceDetail"],
+  ["get", "/api/v1/organizations/{organizationId}/evidence-exports", "getEvidenceExportDirectory"],
+  ["post", "/api/v1/organizations/{organizationId}/evidence-exports", "requestEvidenceExport"],
+  ["post", "/api/v1/organizations/{organizationId}/evidence-exports/{exportId}/decisions", "decideEvidenceExport"],
+  ["post", "/api/v1/organizations/{organizationId}/evidence-exports/{exportId}/accesses", "accessEvidenceExport"],
 ];
 
 const approvedReadinessGateKeys = [
@@ -651,6 +696,50 @@ export function verifyApiContract(contract) {
       organizationProfileUpdate?.properties?.reason?.minLength === 10 &&
       organizationProfileUpdate?.properties?.reason?.maxLength === 500,
     "OrganizationProfileUpdateRequest must require the exact approved mutable profile contract",
+  );
+
+  const organizationUnitDirectory =
+    contract.components?.schemas?.OrganizationUnitDirectory;
+  assert(
+    organizationUnitDirectory?.additionalProperties === false &&
+      [
+        "organizationId",
+        "facilityId",
+        "canManage",
+        "canManageLifecycle",
+        "units",
+        "evaluatedAt",
+      ].every((field) => organizationUnitDirectory?.required?.includes(field)) &&
+      organizationUnitDirectory?.properties?.canManage?.type === "boolean" &&
+      organizationUnitDirectory?.properties?.canManageLifecycle?.type === "boolean",
+    "OrganizationUnitDirectory must project draft and high-assurance lifecycle authority separately",
+  );
+  const serviceLocation = contract.components?.schemas?.ServiceLocation;
+  const serviceLocationDirectory = contract.components?.schemas?.ServiceLocationDirectory;
+  const serviceLocationCreate = contract.components?.schemas?.ServiceLocationCreateRequest;
+  const serviceLocationUpdate = contract.components?.schemas?.ServiceLocationUpdateRequest;
+  const serviceLocationReparent = contract.components?.schemas?.ServiceLocationReparentRequest;
+  assert(
+    serviceLocation?.additionalProperties === false &&
+      JSON.stringify(serviceLocation?.properties?.locationType?.enum) ===
+        JSON.stringify(["physical", "virtual"]) &&
+      serviceLocation?.properties?.capacity?.minimum === 1 &&
+      serviceLocation?.properties?.capacity?.maximum === 100000 &&
+      serviceLocationDirectory?.additionalProperties === false &&
+      ["organizationId", "facilityId", "canManage", "canManageLifecycle", "locations", "evaluatedAt"].every(
+        (field) => serviceLocationDirectory?.required?.includes(field),
+      ) &&
+      serviceLocationCreate?.additionalProperties === false &&
+      ["locationCode", "locationType", "name", "effectiveFrom", "reason"].every(
+        (field) => serviceLocationCreate?.required?.includes(field),
+      ) &&
+      serviceLocationCreate?.properties?.reason?.minLength === 10 &&
+      serviceLocationCreate?.properties?.reason?.maxLength === 500 &&
+      serviceLocationUpdate?.additionalProperties === false &&
+      serviceLocationUpdate?.properties?.parentId === undefined &&
+      serviceLocationReparent?.additionalProperties === false &&
+      ["parentId", "effectiveFrom", "reason"].every((field) => serviceLocationReparent?.required?.includes(field)),
+    "Service-location contracts must preserve physical/virtual, capacity, effective-range, and governed-write bounds",
   );
 
   const internationalSettings =

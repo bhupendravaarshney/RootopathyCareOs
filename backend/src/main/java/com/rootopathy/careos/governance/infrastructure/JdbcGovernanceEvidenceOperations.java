@@ -28,11 +28,12 @@ public class JdbcGovernanceEvidenceOperations implements GovernanceEvidenceOpera
         Objects.requireNonNull(evidence, "evidence");
         TenantTransactionContextVerifier.requireAuthorizedWriteTransaction(jdbcTemplate, context);
 
-        var auditId = UuidV7Generator.randomUuid();
-        var outboxId = UuidV7Generator.randomUuid();
+        var auditId = evidence.audit() == null ? null : UuidV7Generator.randomUuid();
+        var outboxId = evidence.outbox() == null ? null : UuidV7Generator.randomUuid();
         var occurredAt = Timestamp.from(clock.instant());
         var audit = evidence.audit();
-        jdbcTemplate.update(
+        if (audit != null) {
+            jdbcTemplate.update(
                 """
                 INSERT INTO audit_events
                     (id, organization_id, actor_user_id, event_name, schema_version,
@@ -51,9 +52,11 @@ public class JdbcGovernanceEvidenceOperations implements GovernanceEvidenceOpera
                 context.purpose(),
                 context.correlationId(),
                 occurredAt);
+        }
 
         var outbox = evidence.outbox();
-        jdbcTemplate.update(
+        if (outbox != null) {
+            jdbcTemplate.update(
                 """
                 INSERT INTO outbox_events
                     (id, organization_id, actor_user_id, event_name, schema_version,
@@ -73,6 +76,7 @@ public class JdbcGovernanceEvidenceOperations implements GovernanceEvidenceOpera
                 context.correlationId(),
                 occurredAt,
                 occurredAt);
+        }
         return new GovernanceEvidenceIds(auditId, outboxId);
     }
 }

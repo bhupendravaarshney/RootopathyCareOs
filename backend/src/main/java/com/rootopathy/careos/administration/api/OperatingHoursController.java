@@ -1,0 +1,24 @@
+package com.rootopathy.careos.administration.api;
+
+import com.rootopathy.careos.administration.application.OperatingHoursService;
+import com.rootopathy.careos.administration.domain.OperatingHoursDirectory;
+import com.rootopathy.careos.administration.domain.OperatingHoursOverview;
+import com.rootopathy.careos.shared.api.*;
+import com.rootopathy.careos.shared.domain.AuthenticatedActor;
+import jakarta.servlet.http.HttpServletRequest;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
+import org.springframework.http.*;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.*;
+
+@RestController public class OperatingHoursController {private final OperatingHoursService service;public OperatingHoursController(OperatingHoursService s){service=s;}
+ @GetMapping("/api/v1/organizations/{organizationId}/operating-hours") ResponseEntity<OperatingHoursOverview> overview(@PathVariable UUID organizationId,Authentication authentication,HttpServletRequest request){var a=actor(authentication);return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.overview(new OperatingHoursService.ReadOverview(organizationId,a.id(),CorrelationIdFilter.from(request))));}
+ @GetMapping("/api/v1/organizations/{organizationId}/operating-hours/{targetType}/{targetId}") ResponseEntity<OperatingHoursDirectory> directory(@PathVariable UUID organizationId,@PathVariable String targetType,@PathVariable UUID targetId,Authentication authentication,HttpServletRequest request){var a=actor(authentication);return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.directory(new OperatingHoursService.Read(organizationId,a.id(),CorrelationIdFilter.from(request),targetType,targetId)));}
+ @PostMapping("/api/v1/organizations/{organizationId}/operating-hours/{targetType}/{targetId}/batches") ResponseEntity<String> replace(@PathVariable UUID organizationId,@PathVariable String targetType,@PathVariable UUID targetId,@RequestHeader(value="Idempotency-Key",required=false)String key,@RequestBody Batch body,Authentication authentication,HttpServletRequest request){var a=actor(authentication);var intervals=body.intervals().stream().map(i->new OperatingHoursService.Interval(i.weekday(),i.startMinute(),i.endMinute(),i.endsNextDay())).toList();var exceptions=body.exceptions().stream().map(e->new OperatingHoursService.ExceptionDay(e.localDate(),e.closed(),e.label(),e.reasonCode(),e.intervals().stream().map(i->new OperatingHoursService.ExceptionInterval(i.startMinute(),i.endMinute(),i.endsNextDay())).toList())).toList();var r=service.replace(new OperatingHoursService.Replace(organizationId,a.id(),CorrelationIdFilter.from(request),key,targetType,targetId,body.timezone(),body.effectiveFrom(),body.effectiveTo(),intervals,exceptions,body.reason()));return response(r);}
+ @PostMapping("/api/v1/organizations/{organizationId}/operating-hours/{targetType}/{targetId}/batches/{batchId}/cancellations") ResponseEntity<String> cancel(@PathVariable UUID organizationId,@PathVariable String targetType,@PathVariable UUID targetId,@PathVariable UUID batchId,@RequestHeader(value=HttpHeaders.IF_MATCH,required=false)String etag,@RequestHeader(value="Idempotency-Key",required=false)String key,@RequestBody Cancellation body,Authentication authentication,HttpServletRequest request){var a=actor(authentication);return response(service.cancel(new OperatingHoursService.Cancel(organizationId,a.id(),CorrelationIdFilter.from(request),key,etag,targetType,targetId,batchId,body.reason())));}
+ private static ResponseEntity<String> response(com.rootopathy.careos.governance.domain.IdempotencyOutcome r){return ResponseEntity.status(r.response().statusCode()).cacheControl(CacheControl.noStore()).contentType(MediaType.APPLICATION_JSON).body(r.response().bodyJson());}private static AuthenticatedActor actor(Authentication a){if(a==null||!(a.getPrincipal() instanceof AuthenticatedActor actor))throw new ApiProblemException(HttpStatus.UNAUTHORIZED,"authentication-required","Authentication required","A valid authenticated session is required.");return actor;}
+ public record Batch(String timezone,Instant effectiveFrom,Instant effectiveTo,List<Interval> intervals,List<ExceptionDay> exceptions,String reason){public Batch{intervals=intervals==null?List.of():List.copyOf(intervals);exceptions=exceptions==null?List.of():List.copyOf(exceptions);}}public record Interval(int weekday,int startMinute,int endMinute,boolean endsNextDay){}public record ExceptionDay(LocalDate localDate,boolean closed,String label,String reasonCode,List<ExceptionInterval> intervals){public ExceptionDay{intervals=intervals==null?List.of():List.copyOf(intervals);}}public record ExceptionInterval(int startMinute,int endMinute,boolean endsNextDay){}public record Cancellation(String reason){}
+}

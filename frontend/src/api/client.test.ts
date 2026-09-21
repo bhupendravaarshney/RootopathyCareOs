@@ -1115,6 +1115,161 @@ describe('CareOsApiClient', () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it('sends checked organization-unit mutations through their distinct routes', async () => {
+    const organizationId = '22222222-2222-4222-8222-222222222222';
+    const facilityId = '33333333-3333-4333-8333-333333333333';
+    const unitId = '44444444-4444-4444-8444-444444444444';
+    const etag = `"organization-unit:${unitId}:3"`;
+    const csrfPayload = {
+      headerName: 'X-XSRF-TOKEN',
+      parameterName: '_csrf',
+      token: 'valid-csrf-token-123456',
+    };
+    const directory = {
+      organizationId,
+      facilityId,
+      canManage: true,
+      evaluatedAt: '2026-09-20T12:00:00Z',
+      units: [],
+    };
+    const fetcher = mockFetch(
+      jsonResponse(csrfPayload),
+      jsonResponse(directory),
+      jsonResponse(csrfPayload),
+      jsonResponse(directory),
+      jsonResponse(csrfPayload),
+      jsonResponse(directory),
+      jsonResponse(csrfPayload),
+      jsonResponse(directory),
+      jsonResponse(csrfPayload),
+      jsonResponse(directory),
+      jsonResponse(csrfPayload),
+      jsonResponse(directory),
+    );
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+
+    await expect(
+      client.updateOrganizationUnitDraft(
+        organizationId,
+        facilityId,
+        unitId,
+        {
+          parentId: null,
+          unitCode: 'CLINICAL',
+          unitType: 'department',
+          name: 'Clinical Operations',
+          effectiveFrom: '2026-09-20T00:00:00Z',
+          effectiveTo: null,
+          reason: 'Rename the approved clinical hierarchy draft',
+        },
+        etag,
+        'unit-update:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ ok: true, status: 200 });
+    await expect(
+      client.reparentOrganizationUnit(
+        organizationId,
+        facilityId,
+        unitId,
+        {
+          parentId: null,
+          effectiveFrom: '2026-09-20T12:00:00Z',
+          reason: 'Move the approved hierarchy draft to the root',
+        },
+        etag,
+        'unit-reparent:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ ok: true, status: 200 });
+    await expect(
+      client.activateOrganizationUnit(
+        organizationId,
+        facilityId,
+        unitId,
+        { reason: 'Activate the approved hierarchy in parent order' },
+        etag,
+        'unit-activate:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ ok: true, status: 200 });
+    await expect(
+      client.suspendOrganizationUnit(
+        organizationId,
+        facilityId,
+        unitId,
+        { reason: 'Suspend the approved hierarchy in descendant order' },
+        etag,
+        'unit-suspend:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ ok: true, status: 200 });
+    await expect(
+      client.reactivateOrganizationUnit(
+        organizationId,
+        facilityId,
+        unitId,
+        { reason: 'Reactivate the approved hierarchy in parent order' },
+        etag,
+        'unit-reactivate:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ ok: true, status: 200 });
+    await expect(
+      client.closeOrganizationUnit(
+        organizationId,
+        facilityId,
+        unitId,
+        {
+          effectiveTo: '2026-09-20T12:00:00Z',
+          reason: 'Close the approved hierarchy in descendant order',
+        },
+        etag,
+        'unit-close:11111111-1111-4111-8111-111111111111',
+      ),
+    ).resolves.toMatchObject({ ok: true, status: 200 });
+
+    const mutations = [
+      fetcher.mock.calls[1]!,
+      fetcher.mock.calls[3]!,
+      fetcher.mock.calls[5]!,
+      fetcher.mock.calls[7]!,
+      fetcher.mock.calls[9]!,
+      fetcher.mock.calls[11]!,
+    ];
+    expect(mutations.map(([url]) => url)).toEqual([
+      `/api/v1/organizations/${organizationId}/facilities/${facilityId}/units/${unitId}`,
+      `/api/v1/organizations/${organizationId}/facilities/${facilityId}/units/${unitId}/reparentings`,
+      `/api/v1/organizations/${organizationId}/facilities/${facilityId}/units/${unitId}/activations`,
+      `/api/v1/organizations/${organizationId}/facilities/${facilityId}/units/${unitId}/suspensions`,
+      `/api/v1/organizations/${organizationId}/facilities/${facilityId}/units/${unitId}/reactivations`,
+      `/api/v1/organizations/${organizationId}/facilities/${facilityId}/units/${unitId}/closures`,
+    ]);
+    expect(mutations.map(([, init]) => init?.method)).toEqual([
+      'PUT',
+      'POST',
+      'POST',
+      'POST',
+      'POST',
+      'POST',
+    ]);
+    expect(mutations.map(([, init]) => new Headers(init?.headers).get('If-Match'))).toEqual([
+      etag,
+      etag,
+      etag,
+      etag,
+      etag,
+      etag,
+    ]);
+    expect(mutations.map(([, init]) => new Headers(init?.headers).get('Idempotency-Key'))).toEqual([
+      'unit-update:11111111-1111-4111-8111-111111111111',
+      'unit-reparent:11111111-1111-4111-8111-111111111111',
+      'unit-activate:11111111-1111-4111-8111-111111111111',
+      'unit-suspend:11111111-1111-4111-8111-111111111111',
+      'unit-reactivate:11111111-1111-4111-8111-111111111111',
+      'unit-close:11111111-1111-4111-8111-111111111111',
+    ]);
+  });
+
   it('turns undocumented success payloads into safe contract failures', async () => {
     const fetcher = mockFetch(emptyResponse(200));
     const client = createCareOsApiClient({
@@ -1135,6 +1290,86 @@ describe('CareOsApiClient', () => {
       responseStatus: 200,
       status: 502,
     });
+  });
+
+  it('rejects malformed live-administration success bodies at the transport boundary', async () => {
+    const organizationId = '22222222-2222-4222-8222-222222222222';
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: mockFetch(
+        jsonResponse({
+          organizationId,
+          canManage: true,
+          batches: [],
+          evaluatedAt: 'not-an-instant',
+        }),
+      ),
+    });
+
+    const result = await client.getOperatingHoursDirectory(organizationId);
+
+    expect(result).toMatchObject({
+      kind: 'contract',
+      ok: false,
+      problem: {
+        code: 'invalid_api_response',
+        detail: 'The API success response did not match the checked response contract.',
+      },
+      responseStatus: 200,
+      status: 502,
+    });
+  });
+
+  it('accepts checked nullable identifier-scheme projections with preview samples', async () => {
+    const organizationId = '22222222-2222-4222-8222-222222222222';
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: mockFetch(
+        jsonResponse({
+          organizationId,
+          canManage: true,
+          canActivate: false,
+          canRetire: false,
+          schemes: [
+            {
+              schemeId: '33333333-3333-4333-8333-333333333333',
+              schemeKey: 'PATIENT_ID',
+              scopeType: 'organization',
+              scopeId: null,
+              description: null,
+              status: 'draft',
+              lockVersion: 0,
+              versions: [
+                {
+                  versionId: '44444444-4444-4444-8444-444444444444',
+                  versionNumber: 1,
+                  prefix: 'P',
+                  pattern: '^[A-Z0-9]+$',
+                  alphabet: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+                  checkDigitAlgorithm: null,
+                  sequenceStart: 1,
+                  sequenceIncrement: 1,
+                  padding: 8,
+                  previewSamples: ['P00000001'],
+                  effectiveFrom: '2026-09-21T12:00:00Z',
+                  status: 'draft',
+                  lockVersion: 0,
+                },
+              ],
+            },
+          ],
+          evaluatedAt: '2026-09-21T12:00:00Z',
+        }),
+      ),
+    });
+
+    const result = await client.getIdentifierSchemeDirectory(organizationId);
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    if (result.ok)
+      expect(result.data.schemes[0]?.versions[0]?.previewSamples).toEqual(['P00000001']);
   });
 
   it('does not leak transport exception details', async () => {

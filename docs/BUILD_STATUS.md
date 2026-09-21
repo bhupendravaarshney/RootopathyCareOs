@@ -697,6 +697,175 @@ Independent activation, hierarchy/hours/service-policy readiness, suspension/rea
 
 Independent maker-checker activation, hierarchy/hours/service-policy readiness, suspension/reactivation, closure impact, and final M1D/target acceptance remain open.
 
+## Verified during Phase 1AV M1-14 hierarchy persistence foundation (20 September 2026)
+
+- V33 creates forced-RLS facility-scoped organization units with UUIDv7 identity, constrained codes/types/names/effective ranges/lifecycle, same-facility parents, cycle rejection, and depth capped at eight.
+- Tenant-authorized GET and governed idempotent POST provide directory and draft creation with exact `network.unit.changed` audit/outbox evidence.
+- OpenAPI 0.23.0 verifies 57 operations; all 14 contract tests, generated drift, and strict frontend typecheck pass.
+- Backend compilation and fresh migration pass. The existing 35-test RLS run reached one expected UUIDv7 catalogue failure after discovering the new table; after updating that exact catalogue, the focused UUIDv7 test passes.
+
+M1-14 editing/reparenting/lifecycle/UI/attack coverage, M1-15, M1-16, M1-18, and facility activation remain open.
+
+## Verified during Phase 1AW M1-14 unit draft editing (20 September 2026)
+
+- Draft edits require a strong `organization-unit:{id}:{revision}` entity tag bound to the route unit, a fresh idempotency key, and a bounded reason.
+- Persistence increments exactly one revision and refuses changed parents, facilities, tenants, lifecycle states, creation evidence, stale revisions, and cross-unit entity tags.
+- OpenAPI 0.24.0 verifies 58 operations; all 14 contract tests, generated drift, and strict frontend typecheck pass.
+- The focused HTTP/security test proves read, creation, checked update, exact replay, stale/cross-unit rejection, and two exact six-key audit/outbox pairs against fresh PostgreSQL and Redis.
+
+Reparenting remains deliberately separate because it requires `network.unit.reparented` evidence and hierarchy impact handling. Lifecycle/UI/readiness and the remaining activation dependencies remain open.
+
+## Verified during Phase 1AX M1-14 unit reparenting foundation (20 September 2026)
+
+- V34 records every changed parent in a forced-RLS append-only history row bound to the unit revision, effective instant, and actor.
+- Checked reparenting enforces same-facility eligible parents, strong unit-bound revisions, idempotency, reason, cycle prevention, and total hierarchy depth no greater than eight.
+- OpenAPI 0.25.0 verifies 59 operations; all 14 contract tests, generated drift, and strict frontend typecheck pass.
+- The focused PostgreSQL/Redis browser-security test proves exact replay, cycle rejection, one history row, and one exact five-key `network.unit.reparented` audit/outbox pair.
+
+Scheduled reparenting, unit lifecycle/active-parent rules, live UI, broader hierarchy attacks, readiness, and remaining activation dependencies remain open.
+
+## Verified during Phase 1AY M1-14 unit activation foundation (20 September 2026)
+
+- V35 promotes the approved high-risk structure-lifecycle operation with MFA and ten-minute recent authentication and permits only checked `draft -> active` unit transitions.
+- Application and PostgreSQL guards require an eligible facility, current effective range, and parent-first activation while preserving immutable unit content and draft-management separation.
+- OpenAPI 0.26.0 verifies 60 operations; API contract verification, generated-client drift, strict frontend typecheck, and backend compilation pass.
+- The focused PostgreSQL/Redis browser-security proof covers child-before-parent rejection, parent-first activation, exact replay, stale rejection, and exact six-key lifecycle audit/outbox evidence.
+
+Suspension, reactivation, closure impact, live hierarchy UI, readiness integration, and remaining activation dependencies remain open.
+
+## Verified during Phase 1AZ M1-14 unit suspension/reactivation (20 September 2026)
+
+- V36 permits only checked `active -> suspended` and `suspended -> active` additions to the unit lifecycle matrix.
+- Application and PostgreSQL guards enforce descendant-first suspension and parent-first reactivation, including repeated facility/effective-range eligibility checks.
+- OpenAPI 0.27.0 verifies 62 operations; API contract tests, generated-client drift, strict frontend typecheck, and backend compilation pass.
+- The focused PostgreSQL/Redis browser-security proof covers blocked parent suspension, child/parent suspension order, blocked child reactivation, parent/child reactivation order, exact replay, stale rejection, and exact six-key evidence.
+
+Closure impact, live hierarchy UI, readiness integration, and remaining facility-activation dependencies remain open.
+
+## Verified during Phase 1BA M1-14 immediate unit closure (20 September 2026)
+
+- V37 permits terminal `active|suspended -> closed` transitions with a current effective end while rejecting all reopening and unrelated content changes.
+- Application and PostgreSQL guards enforce leaf-first closure across every non-closed descendant and preserve the actual source state in exact lifecycle evidence.
+- OpenAPI 0.28.0 verifies 63 operations; API contract tests, generated-client drift, strict frontend typecheck, and backend compilation pass.
+- The focused PostgreSQL/Redis browser-security proof covers blocked parent closure, child-first closure, exact replay, parent closure, terminal-state rejection, and exact six-key evidence.
+
+M1-18 assignment-impact blocking, live hierarchy UI, readiness integration, and remaining activation dependencies remain open.
+
+## Verified during Phase 1BB M1-14 hierarchy read/create UI (20 September 2026)
+
+- M1-14 is now a live facility-selected hierarchy view with validated nested unit projections and explicit loading, failure, empty, and permission-aware draft-create states.
+- The checked browser client implements typed unit-directory reads and idempotent draft creation without exposing lifecycle controls from the weaker draft-management capability.
+- The focused React proof verifies nested depth rendering and exact normalized creation arguments.
+- All 65 frontend unit tests, strict typecheck, lint, formatting, generated-client drift, production build, and all 105 five-viewport Playwright/Axe/overflow cases pass.
+
+## Verified during Phase 1BC M1-14 hierarchy readiness evaluation (20 September 2026)
+
+- `network.hierarchy.valid` now derives its result from forced-RLS facility and organization-unit persistence rather than an unavailable-evaluator placeholder.
+- Complete readiness requires full eligible-facility coverage plus a current, active, same-facility ancestor path to a root for every active unit, bounded to the approved maximum depth of eight.
+- Evidence exposes deterministic eligible-facility, covered-facility, active-unit, and valid-active-unit counts; missing coverage or any invalid active path blocks the gate.
+- Backend compilation and the focused PostgreSQL/Redis hierarchy lifecycle test pass, proving complete readiness with two active units and blocked readiness after both units close.
+
+Draft edit/reparent UI, lifecycle controls, assignment-impact enforcement, operating-hours/service-policy readiness, and final M1D/target acceptance remain open.
+
+## Verified during Phase 1BD M1-14 draft edit and reparent UI (20 September 2026)
+
+- The checked client implements distinct draft-update and reparent calls with strong unit-bound revisions and fresh idempotency keys.
+- Draft-only card actions provide normalized editing and cycle-aware parent selection while preserving server-side hierarchy enforcement and server-authoritative response replacement.
+- Direct client tests prove the exact PUT/POST routes, `If-Match`, and `Idempotency-Key` headers; the React test proves exact normalized edit and reparent arguments.
+- All 66 frontend tests, strict typecheck, lint, formatting, generated-client drift, production build, and 105 five-viewport Playwright/Axe/overflow cases pass.
+
+High-assurance lifecycle UI, assignment-impact enforcement, operating-hours/service-policy readiness, and final M1D/target acceptance remain open.
+
+## Verified during Phase 1BE M1-14 lifecycle UI (20 September 2026)
+
+- OpenAPI 0.29.0 separately projects effective `network.structure.lifecycle` authority as `canManageLifecycle`; draft-management permission cannot reveal these controls.
+- The checked client implements activation, suspension, reactivation, and closure with distinct routes, strong unit revisions, fresh idempotency keys, and governed reason payloads.
+- State-valid card controls use an explicit high-assurance confirmation view while retaining server-authoritative lifecycle ordering, eligibility, concurrency, and terminal-state enforcement.
+- Backend compilation, the focused PostgreSQL/Redis hierarchy lifecycle test, all 67 frontend tests, API contract/generated drift, strict typecheck, lint, formatting, production build, and 105 five-viewport Playwright/Axe/overflow cases pass.
+
+Assignment-impact enforcement, operating-hours/service-policy readiness, facility activation, and final M1D/target acceptance remain open.
+
+## Verified during Phase 1BF M1-15 service-location persistence foundation (20 September 2026)
+
+- V38 creates forced-RLS facility-scoped service locations with UUIDv7 IDs, constrained physical/virtual content, optional unit/location ancestry, capacity, accessibility notes, effective ranges, lifecycle, and revisions.
+- Database guards require governed `network.structure.manage` context and independently enforce draft-first writes, immutable tenant/facility identity, same-facility references, no cycles, and hierarchy depth no greater than eight.
+- The approved structure-management operation is bound to exact `network.location.changed` audit/outbox definitions.
+- A clean PostgreSQL 18 migration and focused UUIDv7 catalogue test pass with all 38 migrations.
+
+M1-15 API/application/evidence/UI/lifecycle/readiness and attack coverage remain open, along with M1-18 assignment-impact enforcement and the remaining facility-activation dependencies.
+
+## Verified during Phase 1BG M1-15 location directory and draft creation (20 September 2026)
+
+- OpenAPI 0.30.0 verifies 65 operations, including authorized facility location reads and governed idempotent draft creation.
+- The service enforces the approved normalized physical/virtual, capacity, accessibility, effective-range, reason, and idempotency contract before V38 persistence applies its independent tenant/reference/hierarchy guards.
+- The focused PostgreSQL/Redis browser-security test proves empty read, virtual draft creation, exact replay, safe projection, and one exact six-key audit/outbox pair.
+- Backend compilation, contract verification, generated-client drift/typecheck, and the focused integration proof pass against all 38 migrations.
+
+M1-15 UI/edit/reparent/lifecycle/readiness and broader attack coverage remain open.
+
+## Verified during Phase 1BH live M1-15 location UI (20 September 2026)
+
+- The checked browser client now exposes the two approved M1-15 operations: facility-scoped directory read and idempotent draft creation.
+- The live M1-15 route validates server responses at runtime, renders facility-selected nested location records, and exposes creation only when the exact management permission is projected.
+- Physical and virtual drafts use mutually exclusive conditional fields and replace browser state with the server-authoritative response after creation.
+- All 69 frontend tests, generated API drift, typecheck, lint, formatting, production build, repository contract checks, and 105 five-viewport Playwright/Axe/overflow cases pass.
+
+M1-15 edit/reparent/lifecycle/readiness, address/unit pickers, and broader attack coverage remain open.
+
+## Verified during Phase 1BI M1-15 draft editing and reparenting (20 September 2026)
+
+- OpenAPI 0.31.0 verifies 67 operations with checked conditional draft updates and immediate location reparenting.
+- V39 records every parent change in forced-RLS append-only history and registers exact `network.location.reparented` audit/outbox evidence.
+- PostgreSQL-backed application checks require draft state and a matching strong revision, reject cross-facility/ineligible parents, cycles, and total depth above eight, and keep ordinary edits separate from parent changes.
+- The live browser UI provides permission-gated draft edit/reparent controls with cycle-aware candidate filtering and server-authoritative response replacement.
+- Compilation, all 39 clean migrations, focused edit/reparent/history/evidence integration, 69 frontend tests, and the 67-operation contract suite pass.
+
+M1-15 lifecycle/readiness, address/unit pickers, and broader direct attack coverage remain open.
+
+## Verified during Phase 1BJ M1-15 lifecycle API (20 September 2026)
+
+- V40 adds database-enforced service-location activation, descendant-first suspension, parent-first reactivation, and leaf-first immediate closure under the approved high-assurance operation.
+- OpenAPI 0.32.0 verifies 71 operations and exposes lifecycle authority separately from draft management.
+- Every transition requires a strong revision, idempotency key, MFA, recent authentication, and explicit reason, and emits one exact six-key location-change audit/outbox pair.
+- Backend compilation and focused lifecycle integration pass against all 40 clean migrations; 69 frontend tests, generated API drift, typecheck, lint, formatting, and production build pass.
+
+Checked lifecycle browser methods/UI, location-aware readiness, address/unit pickers, and broader direct attack coverage remain open.
+
+## Verified during Phase 1BK M1-15 lifecycle UI (20 September 2026)
+
+- The checked browser client implements the four approved service-location lifecycle routes with strong location revisions, fresh idempotency keys, and governed reason payloads.
+- State-valid location controls are projected only from exact lifecycle authority and use an explicit MFA/recent-authentication confirmation boundary; draft management alone cannot expose them.
+- Runtime-valid server responses replace local state while backend and PostgreSQL ordering, eligibility, concurrency, and terminal-state enforcement remain authoritative.
+- All 70 frontend tests, generated API drift, strict typecheck, lint, formatting, production build, and 105 five-viewport Playwright/Axe/overflow cases pass.
+
+Location-aware readiness, address/unit pickers, broader direct attack coverage, and the remaining facility-activation dependencies remain open.
+
+## Verified during Phase 1BL location-aware hierarchy readiness (20 September 2026)
+
+- The live `network.hierarchy.valid` evaluator now checks active service-location effective ranges, active same-facility ancestor chains, depth, cycles, and optional valid active-unit ancestry.
+- A valid active unit or service-location hierarchy can cover an eligible facility, while every active unit and location must independently resolve to a valid current root path.
+- Evidence remains bounded to four references and separately reports active/valid unit and location counts; location failures route authorized users to M1-15.
+- Backend compilation and the focused clean PostgreSQL/Redis location lifecycle/readiness integration pass across all 40 migrations, proving active completion, suspended blocking, and reactivated completion.
+
+Address/unit pickers, broader direct RLS/hierarchy attacks, operating-hours/service-policy readiness, and the remaining facility-activation dependencies remain open.
+
+## Implemented during Phase 1BM M1-15 governed selectors (verified in Phase 1BQ)
+
+- Location create/edit forms now consume current active address records and selected-facility non-closed organization units through checked tenant APIs rather than requiring raw UUID entry.
+- Physical/virtual exclusivity is retained, facility changes discard stale hierarchy selections, and unavailable/empty dependency states are explicit.
+- This slice was initially held for the complete M1 test phase; its executable checks and regression coverage completed in Phase 1BQ.
+
+At this checkpoint the remaining implementation and direct-attack verification moved to the final M1 pass; Phase 1BQ records its completion and the remaining acceptance boundary.
+
+## Verified during Phase 1BQ complete organization-wide M1 implementation pass (21 September 2026)
+
+- Flyway now validates all 50 migrations. M1-16 through M1-19 provide forced-RLS atomic operating hours, service definitions, effective assignments, and immutable identifier-scheme versions with live tenant APIs/UI, database constraints, governed evidence, and readiness evaluators. Weekly and exception boundaries now deterministically reject ambiguous or nonexistent local times at timezone transitions.
+- M1-21 provides immutable 15-minute validation results, 30-minute independent decisions, exact baseline/result digests, maker/checker/activator separation, atomic configuration activation, prior-version preservation, and invalidation when authoritative configuration, membership, approval, or MFA state changes. Identifier activation/retirement is exposed only through this configuration workflow; the unreachable direct lifecycle HTTP surface was removed.
+- M1-22/M1-23 provide allow-listed minimum-necessary history/audit projections, tenant/filter/limit-bound signed cursors, purpose-bound audited detail, request-time repeatable export snapshots, exact approved policy digests, restricted-export separation, atomic artifact completion/cleanup, short-lived access grants, disposal/expiry mechanics, and bounded browser status polling that stops at terminal state.
+- The checked OpenAPI 3.1 contract is version 0.40.0 with 100 intentional operations. Generated TypeScript uses OpenAPI 3.1 nullable unions, and all M1-16 through M1-23 success responses pass strict runtime structural validation before entering UI state.
+- Full local verification passes: 205 backend tests in 28 suites with no skips, errors, or failures; all 50 migrations on disposable PostgreSQL 18 plus Redis/object-store dependencies; backend packaging; 72 frontend unit tests; generated-client drift, strict typecheck, lint, formatting, architecture checks, and production build; 110 Playwright/Axe/overflow cases over 1440/1024/768/390/320 viewports; the 79-screen and 100-operation contracts; every production/draft/candidate/facility-scope input verifier and negative test; and the CI-security verifier and its 13 tests.
+- The additive facility-scope candidate remains unapproved and unimplemented. Production export-worker identity/deployment/scheduling, other scheduled business automation, target provider/IAM/KMS/Redis acceptance, hosted CI/deployment evidence, and explicit slice/module owner acceptance remain outside this repository verification.
+
 ## Configured but not yet fully integration-verified
 
 - Remote GitHub Actions execution of both updated workflows, including dependency-graph access, CodeQL result upload, required-check/repository-rule enforcement, and SBOM artifact retention
@@ -704,8 +873,8 @@ Independent maker-checker activation, hierarchy/hours/service-policy readiness, 
 - Production object-store/IAM/KMS/versioning/Object-Lock, scanner/network/signature operations, Redis ACL/TLS/HA/persistence/restore acceptance, and notification key-management/backup/restore acceptance; governed promotion/signed-access/retention activation, hold release/disposal, notification consent/destination/provider delivery, worker, and scheduler behavior
 - Production service-credential provisioning/rotation, metric/log/trace collection, scraper/worker activation or private management boundary, service objectives, dashboards, alert delivery/on-call escalation, encrypted backups, and timed restore evidence
 
-The current Phase 0 repository work is complete mechanically. Phases 1R through 1Z established the organization-core boundary and exact candidate; Phase 1AA records unchanged approval, Phase 1AB promotes the checksum-bound interactive registry, Phase 1AC delivers the bounded M1-20 membership read, Phase 1AD delivers governed organization-wide non-owner role changes and revocation, Phase 1AE delivers final-owner-safe owner transfer, Phase 1AF freezes the non-authorizing facility-scope candidate, Phase 1AG enforces approved mandatory-role MFA, Phase 1AH supplies the approved M1-20 wide-table/drawer-card projection, Phase 1AI aligns the shared approved identity/access frame, Phase 1AJ supplies focused field-associated identity validation plus the exact M1-03 action, Phase 1AK starts M1C with exact readiness, Phase 1AL completes M1-07, Phase 1AM completes M1-08 identifiers, and Phase 1AN completes M1-09 effective addresses/masked contacts and live coverage readiness. Production remains fail-closed for unimplemented operations and unaccepted target infrastructure. Teams must define tenant provisioning, activate accepted providers/workers and target controls, capture hosted operational evidence, approve and implement the facility-scoped grant contract, finish separately authorized M1B work and the remaining M1C-M1G slices, and obtain slice/module acceptance before production release.
+The current Phase 0 mechanics and organization-wide Module 1 repository implementation are complete through Phase 1BQ and Flyway V50. Production remains fail-closed for unapproved facility scope and unaccepted target infrastructure. Teams must define tenant provisioning, activate accepted providers/workers and target controls, capture hosted operational evidence, approve and implement the facility-scoped grant contract, and obtain explicit slice/module owner acceptance before production release.
 
 ## Production status
 
-This checkpoint is intentionally a **reference foundation**. It is runnable, locally verified, and suitable for continuing approved Module 1 vertical slices. It is not production acceptance, a production release, a clinical-device claim, a security certification, or completion of Modules 1-13.
+This checkpoint is intentionally a **repository-verified implementation foundation**. It is runnable and suitable for target-environment and owner acceptance work. It is not production acceptance, a production release, a clinical-device claim, a security certification, or completion of Modules 2-13.

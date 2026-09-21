@@ -1,0 +1,22 @@
+CREATE OR REPLACE FUNCTION careos_validate_identifier_scheme() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE op text:=nullif(current_setting('app.current_operation_key',true),''); actor uuid:=nullif(current_setting('app.current_actor_id',true),'')::uuid; tenant uuid:=nullif(current_setting('app.current_organization_id',true),'')::uuid;
+BEGIN
+ IF current_user<>'${applicationRole}' THEN RETURN NEW; END IF;
+ IF NEW.organization_id IS DISTINCT FROM tenant OR actor IS NULL OR op NOT IN ('identifier.scheme.manage','identifier.scheme.version.create','identifier.scheme.activate','identifier.scheme.retire','configuration.activate') OR NEW.updated_by IS DISTINCT FROM actor OR char_length(coalesce(nullif(current_setting('app.current_authorization_reason',true),''),'')) NOT BETWEEN 10 AND 500 THEN RAISE EXCEPTION 'invalid scheme governance context' USING ERRCODE='42501'; END IF;
+ IF TG_OP='INSERT' AND (op<>'identifier.scheme.manage' OR NEW.status<>'draft' OR NEW.created_by<>actor) THEN RAISE EXCEPTION 'schemes begin draft' USING ERRCODE='23514'; END IF;
+ IF TG_OP='UPDATE' AND (NEW.id<>OLD.id OR NEW.organization_id<>OLD.organization_id OR NEW.scheme_key<>OLD.scheme_key OR NEW.scope_type<>OLD.scope_type OR NEW.scope_id IS DISTINCT FROM OLD.scope_id OR NEW.created_at<>OLD.created_at OR NEW.created_by<>OLD.created_by OR NEW.lock_version<>OLD.lock_version+1) THEN RAISE EXCEPTION 'invalid scheme revision' USING ERRCODE='23514'; END IF;
+ IF TG_OP='UPDATE' AND NOT ((op='identifier.scheme.manage' AND OLD.status='draft' AND NEW.status='draft') OR (op='identifier.scheme.version.create' AND OLD.status IN ('draft','active') AND NEW.status=OLD.status) OR (op IN ('identifier.scheme.activate','configuration.activate') AND OLD.status='draft' AND NEW.status='active') OR (op IN ('identifier.scheme.retire','configuration.activate') AND OLD.status='active' AND NEW.status='retired') OR (op='configuration.activate' AND OLD.status='active' AND NEW.status='active') OR (op='configuration.activate' AND OLD.status='retired' AND NEW.status='active')) THEN RAISE EXCEPTION 'invalid scheme transition' USING ERRCODE='23514'; END IF;
+ RETURN NEW;
+END $$;
+
+CREATE OR REPLACE FUNCTION careos_validate_identifier_scheme_version() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE op text:=nullif(current_setting('app.current_operation_key',true),''); actor uuid:=nullif(current_setting('app.current_actor_id',true),'')::uuid; tenant uuid:=nullif(current_setting('app.current_organization_id',true),'')::uuid;
+BEGIN
+ IF current_user<>'${applicationRole}' THEN RETURN NEW; END IF;
+ IF NEW.organization_id IS DISTINCT FROM tenant OR actor IS NULL OR op NOT IN ('identifier.scheme.version.create','identifier.scheme.activate','identifier.scheme.retire','configuration.activate') THEN RAISE EXCEPTION 'invalid scheme-version governance context' USING ERRCODE='42501'; END IF;
+ IF TG_OP='INSERT' AND (op<>'identifier.scheme.version.create' OR NEW.status<>'draft' OR NEW.created_by<>actor OR NEW.next_sequence<>NEW.sequence_start) THEN RAISE EXCEPTION 'invalid scheme version creation' USING ERRCODE='23514'; END IF;
+ IF TG_OP='UPDATE' AND op NOT IN ('identifier.scheme.activate','identifier.scheme.retire','configuration.activate') THEN RAISE EXCEPTION 'scheme versions are immutable' USING ERRCODE='23514'; END IF;
+ IF TG_OP='UPDATE' AND (NEW.id<>OLD.id OR NEW.organization_id<>OLD.organization_id OR NEW.scheme_id<>OLD.scheme_id OR NEW.version_number<>OLD.version_number OR NEW.prefix<>OLD.prefix OR NEW.pattern<>OLD.pattern OR NEW.alphabet<>OLD.alphabet OR NEW.check_digit_algorithm IS DISTINCT FROM OLD.check_digit_algorithm OR NEW.sequence_start<>OLD.sequence_start OR NEW.sequence_increment<>OLD.sequence_increment OR NEW.padding<>OLD.padding OR NEW.preview_samples<>OLD.preview_samples OR NEW.effective_from<>OLD.effective_from OR NEW.next_sequence<>OLD.next_sequence OR NEW.created_at<>OLD.created_at OR NEW.created_by<>OLD.created_by OR NEW.lock_version<>OLD.lock_version+1) THEN RAISE EXCEPTION 'scheme version content is immutable' USING ERRCODE='23514'; END IF;
+ IF TG_OP='UPDATE' AND NOT ((op IN ('identifier.scheme.activate','configuration.activate') AND OLD.status='draft' AND NEW.status='active' AND NEW.activated_by=actor AND NEW.activated_at IS NOT NULL) OR (op IN ('identifier.scheme.retire','configuration.activate') AND OLD.status='active' AND NEW.status='retired' AND NEW.retired_by=actor AND NEW.retired_at IS NOT NULL)) THEN RAISE EXCEPTION 'invalid scheme-version transition' USING ERRCODE='23514'; END IF;
+ RETURN NEW;
+END $$;

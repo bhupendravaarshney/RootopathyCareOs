@@ -2,6 +2,7 @@ package com.rootopathy.careos.administration.infrastructure;
 
 import com.rootopathy.careos.administration.application.OrganizationAdministrationException;
 import com.rootopathy.careos.administration.application.OrganizationAdministrationStore;
+import com.rootopathy.careos.administration.application.EvidenceExportArtifactStore;
 import com.rootopathy.careos.administration.application.OrganizationAdministrationStore.MembershipPageSlice;
 import com.rootopathy.careos.administration.application.OrganizationAdministrationStore.MembershipQuery;
 import com.rootopathy.careos.administration.domain.AdministrationReadiness;
@@ -17,14 +18,22 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.stereotype.Repository;
 
 @Repository
 public class JdbcOrganizationAdministrationStore implements OrganizationAdministrationStore {
     private final JdbcTemplate jdbcTemplate;
+    private final EvidenceExportArtifactStore exportArtifacts;
+    private final RedisConnectionFactory redisConnectionFactory;
 
-    public JdbcOrganizationAdministrationStore(JdbcTemplate jdbcTemplate) {
+    public JdbcOrganizationAdministrationStore(
+            JdbcTemplate jdbcTemplate,
+            EvidenceExportArtifactStore exportArtifacts,
+            RedisConnectionFactory redisConnectionFactory) {
         this.jdbcTemplate = jdbcTemplate;
+        this.exportArtifacts = exportArtifacts;
+        this.redisConnectionFactory = redisConnectionFactory;
     }
 
     @Override
@@ -230,6 +239,162 @@ public class JdbcOrganizationAdministrationStore implements OrganizationAdminist
                 """,
                 Integer.class,
                 context.organizationId());
+        var hierarchyReadiness = jdbcTemplate.queryForObject(
+                """
+                WITH RECURSIVE eligible_facilities AS (
+                    SELECT facilities.id
+                    FROM facilities
+                    JOIN organizations
+                      ON organizations.id = facilities.organization_id
+                    JOIN organization_addresses addresses
+                      ON addresses.organization_id = facilities.organization_id
+                     AND addresses.id = facilities.address_id
+                    WHERE facilities.organization_id = ?
+                      AND facilities.status IN ('under_review', 'active')
+                      AND (facilities.timezone IS NOT NULL OR organizations.timezone IS NOT NULL)
+                      AND addresses.validation_status = 'validated'
+                ), active_units AS (
+                    SELECT id, facility_id, parent_id, effective_from, effective_to
+                    FROM organization_units
+                    WHERE organization_id = ? AND status = 'active'
+                ), walks AS (
+                    SELECT units.id AS origin_id, units.facility_id, units.id AS current_id,
+                           units.parent_id, 1 AS depth, ARRAY[units.id] AS path
+                    FROM active_units units
+                    WHERE units.effective_from <= statement_timestamp()
+                      AND (units.effective_to IS NULL OR units.effective_to > statement_timestamp())
+                    UNION ALL
+                    SELECT walks.origin_id, walks.facility_id, parents.id, parents.parent_id,
+                           walks.depth + 1, walks.path || parents.id
+                    FROM walks
+                    JOIN organization_units parents
+                      ON parents.organization_id = ?
+                     AND parents.id = walks.parent_id
+                     AND parents.facility_id = walks.facility_id
+                     AND parents.status = 'active'
+                     AND parents.effective_from <= statement_timestamp()
+                     AND (parents.effective_to IS NULL OR parents.effective_to > statement_timestamp())
+                    WHERE walks.depth < 8 AND NOT parents.id = ANY(walks.path)
+                ), valid_units AS (
+                    SELECT DISTINCT origin_id, facility_id
+                    FROM walks
+                    WHERE parent_id IS NULL
+                ), active_locations AS (
+                    SELECT id, facility_id, unit_id, parent_id, effective_from, effective_to
+                    FROM service_locations
+                    WHERE organization_id = ? AND status = 'active'
+                ), location_walks AS (
+                    SELECT locations.id AS origin_id, locations.facility_id,
+                           locations.id AS current_id, locations.unit_id, locations.parent_id,
+                           1 AS depth, ARRAY[locations.id] AS path
+                    FROM active_locations locations
+                    WHERE locations.effective_from <= statement_timestamp()
+                      AND (locations.effective_to IS NULL OR locations.effective_to > statement_timestamp())
+                      AND (locations.unit_id IS NULL OR EXISTS (
+                          SELECT 1 FROM valid_units units
+                          WHERE units.origin_id = locations.unit_id
+                            AND units.facility_id = locations.facility_id))
+                    UNION ALL
+                    SELECT location_walks.origin_id, location_walks.facility_id,
+                           parents.id, parents.unit_id, parents.parent_id,
+                           location_walks.depth + 1, location_walks.path || parents.id
+                    FROM location_walks
+                    JOIN service_locations parents
+                      ON parents.organization_id = ?
+                     AND parents.id = location_walks.parent_id
+                     AND parents.facility_id = location_walks.facility_id
+                     AND parents.status = 'active'
+                     AND parents.effective_from <= statement_timestamp()
+                     AND (parents.effective_to IS NULL OR parents.effective_to > statement_timestamp())
+                    WHERE location_walks.depth < 8
+                      AND NOT parents.id = ANY(location_walks.path)
+                      AND (parents.unit_id IS NULL OR EXISTS (
+                          SELECT 1 FROM valid_units units
+                          WHERE units.origin_id = parents.unit_id
+                            AND units.facility_id = parents.facility_id))
+                ), valid_locations AS (
+                    SELECT DISTINCT origin_id, facility_id
+                    FROM location_walks
+                    WHERE parent_id IS NULL
+                ), covered_hierarchies AS (
+                    SELECT facility_id FROM valid_units
+                    UNION
+                    SELECT facility_id FROM valid_locations
+                )
+                SELECT (SELECT count(*) FROM eligible_facilities) AS eligible_facilities,
+                       (SELECT count(DISTINCT eligible_facilities.id)
+                        FROM eligible_facilities
+                        JOIN covered_hierarchies
+                          ON covered_hierarchies.facility_id = eligible_facilities.id)
+                           AS covered_facilities,
+                       (SELECT count(*) FROM active_units) AS active_units,
+                       (SELECT count(*) FROM valid_units) AS valid_active_units,
+                       (SELECT count(*) FROM active_locations) AS active_locations,
+                       (SELECT count(*) FROM valid_locations) AS valid_active_locations
+                """,
+                (resultSet, rowNumber) -> new HierarchyReadiness(
+                        resultSet.getInt("eligible_facilities"),
+                        resultSet.getInt("covered_facilities"),
+                        resultSet.getInt("active_units"),
+                        resultSet.getInt("valid_active_units"),
+                        resultSet.getInt("active_locations"),
+                        resultSet.getInt("valid_active_locations")),
+                context.organizationId(),
+                context.organizationId(),
+                context.organizationId(),
+                context.organizationId(),
+                context.organizationId());
+        var hoursCoveredFacilities = jdbcTemplate.queryForObject(
+                """
+                SELECT count(DISTINCT facilities.id)
+                FROM facilities
+                JOIN organizations ON organizations.id=facilities.organization_id
+                JOIN organization_addresses addresses
+                  ON addresses.organization_id=facilities.organization_id
+                 AND addresses.id=facilities.address_id
+                JOIN operating_hours_batches batches
+                  ON batches.organization_id=facilities.organization_id
+                 AND batches.target_type='facility' AND batches.target_id=facilities.id
+                 AND batches.status='active' AND batches.effective_from<=clock_timestamp()
+                 AND (batches.effective_to IS NULL OR batches.effective_to>clock_timestamp())
+                WHERE facilities.organization_id=? AND facilities.status IN ('under_review','active')
+                  AND (facilities.timezone IS NOT NULL OR organizations.timezone IS NOT NULL)
+                  AND addresses.validation_status='validated'
+                """,
+                Integer.class,
+                context.organizationId());
+        var serviceReadiness = jdbcTemplate.queryForMap(
+                """
+                SELECT count(*) FILTER (WHERE status='active') AS active_services,
+                       count(*) FILTER (WHERE status='active' AND owner_responsibility_id IS NOT NULL) AS owned_active_services,
+                       count(*) FILTER (WHERE status='active' AND EXISTS (
+                         SELECT 1 FROM service_assignments assignments
+                         WHERE assignments.organization_id=service_definitions.organization_id
+                           AND assignments.service_id=service_definitions.id
+                           AND assignments.status='active'
+                           AND assignments.effective_from<=clock_timestamp()
+                           AND (assignments.effective_to IS NULL OR assignments.effective_to>clock_timestamp()))) AS assigned_active_services
+                FROM service_definitions WHERE organization_id=?
+                """,
+                context.organizationId());
+        var schemeReadiness = jdbcTemplate.queryForMap(
+                """
+                SELECT count(*) AS schemes,
+                       count(*) FILTER (WHERE status='active' AND EXISTS (
+                         SELECT 1 FROM identifier_scheme_versions versions
+                         WHERE versions.organization_id=identifier_schemes.organization_id
+                           AND versions.scheme_id=identifier_schemes.id AND versions.status='active'
+                           AND versions.effective_from<=clock_timestamp())) AS active_schemes
+                FROM identifier_schemes WHERE organization_id=? AND status<>'retired'
+                """,
+                context.organizationId());
+        var activeConfiguration = Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM configuration_versions WHERE organization_id=? AND status='active')",
+                Boolean.class, context.organizationId()));
+        var activeRegistry = Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM authorization_registry_releases WHERE registry_version='m1-candidate-1' AND status='active')",
+                Boolean.class));
+        var redisReady = redisReady();
         var facilityCount = ((Number) facilityCounts.get("total")).intValue();
         var draftFacilityCount = ((Number) facilityCounts.get("drafts")).intValue();
         var eligibleFacilityCount = ((Number) facilityCounts.get("eligible")).intValue();
@@ -250,6 +415,18 @@ public class JdbcOrganizationAdministrationStore implements OrganizationAdminist
                         ? new ContactReadiness(0, 0, 0)
                         : contactReadiness,
                 governanceReadiness == null ? 0 : governanceReadiness,
+                hierarchyReadiness == null
+                        ? new HierarchyReadiness(0, 0, 0, 0, 0, 0)
+                        : hierarchyReadiness,
+                hoursCoveredFacilities == null ? 0 : hoursCoveredFacilities,
+                ((Number) serviceReadiness.get("active_services")).intValue(),
+                ((Number) serviceReadiness.get("owned_active_services")).intValue(),
+                ((Number) serviceReadiness.get("assigned_active_services")).intValue(),
+                ((Number) schemeReadiness.get("schemes")).intValue(),
+                ((Number) schemeReadiness.get("active_schemes")).intValue(),
+                activeConfiguration,
+                activeRegistry,
+                redisReady,
                 effectivePermissions);
         var evaluatedTimestamp = jdbcTemplate.queryForObject(
                 "SELECT clock_timestamp()", Timestamp.class);
@@ -554,7 +731,7 @@ public class JdbcOrganizationAdministrationStore implements OrganizationAdminist
         return (int) gates.stream().filter(gate -> outcome.equals(gate.outcome())).count();
     }
 
-    private static List<ReadinessGate> gates(
+    private List<ReadinessGate> gates(
             OrganizationProfile profile,
             int facilities,
             int draftFacilities,
@@ -566,6 +743,16 @@ public class JdbcOrganizationAdministrationStore implements OrganizationAdminist
             IdentifierReadiness identifierReadiness,
             ContactReadiness contactReadiness,
             int governanceCoveredTypes,
+            HierarchyReadiness hierarchyReadiness,
+            int hoursCoveredFacilities,
+            int activeServices,
+            int ownedActiveServices,
+            int assignedActiveServices,
+            int identifierSchemes,
+            int activeIdentifierSchemes,
+            boolean activeConfiguration,
+            boolean activeRegistry,
+            boolean redisReady,
             Set<String> effectivePermissions) {
         var ownerReady = effectiveOwners > pendingOwnerDemotions;
         var mfaReady = missingMandatoryMfa == 0 && expiredMfaResetApprovals == 0;
@@ -586,6 +773,18 @@ public class JdbcOrganizationAdministrationStore implements OrganizationAdminist
                 : !registeredAddressReady || !"draft".equals(profile.lifecycleStatus())
                         ? "blocked"
                         : "warning";
+        var hierarchyReady = hierarchyReadiness.eligibleFacilities() > 0
+                && hierarchyReadiness.coveredFacilities()
+                        == hierarchyReadiness.eligibleFacilities()
+                && hierarchyReadiness.activeUnits() == hierarchyReadiness.validActiveUnits()
+                && hierarchyReadiness.activeLocations()
+                        == hierarchyReadiness.validActiveLocations();
+        var hoursReady = eligibleFacilities > 0 && hoursCoveredFacilities == eligibleFacilities;
+        var servicesApplicable = !"administrative".equals(profile.organizationType());
+        var servicesReady = activeServices > 0 && activeServices == ownedActiveServices;
+        var assignmentsReady = activeServices > 0 && assignedActiveServices == activeServices;
+        var schemesApplicable = identifierSchemes > 0;
+        var schemesReady = schemesApplicable && activeIdentifierSchemes == identifierSchemes;
         return List.of(
                 gate(
                         "organization.profile.complete",
@@ -726,75 +925,117 @@ public class JdbcOrganizationAdministrationStore implements OrganizationAdminist
                 gate(
                         "network.hierarchy.valid",
                         "Network hierarchy",
-                        "blocked",
-                        "m1.readiness.hierarchy_evaluator_unavailable",
-                        "m1.remediation.configure_network_hierarchy",
-                        "The approved orphan, cycle, depth and effective-ancestor evaluator is not implemented.",
-                        List.of(),
-                        deepLink(effectivePermissions, "network.structure.read", "#/M1-14")),
+                        hierarchyReady ? "complete" : "blocked",
+                        hierarchyReady
+                                ? "m1.readiness.hierarchy_valid"
+                                : "m1.readiness.hierarchy_invalid",
+                        hierarchyReady
+                                ? "m1.remediation.none"
+                                : "m1.remediation.configure_network_hierarchy",
+                        hierarchyReady
+                                ? "Every eligible facility has a current active unit or location hierarchy with valid effective ancestor chains."
+                                : "Every eligible facility requires a current active unit or location hierarchy without orphaned, cyclic, over-depth, inactive, or ineffective ancestors.",
+                        List.of(
+                                "eligible-facility-count:"
+                                        + hierarchyReadiness.eligibleFacilities(),
+                                "hierarchy-covered-facility-count:"
+                                        + hierarchyReadiness.coveredFacilities(),
+                                "active-unit-count:"
+                                        + hierarchyReadiness.activeUnits()
+                                        + ";valid:"
+                                        + hierarchyReadiness.validActiveUnits(),
+                                "active-location-count:"
+                                        + hierarchyReadiness.activeLocations()
+                                        + ";valid:"
+                                        + hierarchyReadiness.validActiveLocations()),
+                        deepLink(
+                                effectivePermissions,
+                                "network.structure.read",
+                                hierarchyReadiness.activeLocations()
+                                                != hierarchyReadiness.validActiveLocations()
+                                        ? "#/M1-15"
+                                        : "#/M1-14")),
                 gate(
                         "network.hours.valid",
                         "Operating hours",
-                        "blocked",
-                        "m1.readiness.hours_evaluator_unavailable",
-                        "m1.remediation.activate_operating_hours",
-                        "No approved atomic operating-hours evaluation is available for eligible facilities.",
-                        List.of(),
+                        hoursReady ? "complete" : "blocked",
+                        hoursReady
+                                ? "m1.readiness.hours_valid"
+                                : "m1.readiness.hours_missing",
+                        hoursReady ? "m1.remediation.none" : "m1.remediation.activate_operating_hours",
+                        hoursReady
+                                ? "Every eligible facility has one current atomic operating-hours batch."
+                                : "Every eligible facility requires one current atomic operating-hours batch.",
+                        List.of(
+                                "eligible-facility-count:" + eligibleFacilities,
+                                "hours-covered-facility-count:" + hoursCoveredFacilities),
                         deepLink(effectivePermissions, "network.hours.read", "#/M1-16")),
                 gate(
                         "service.catalogue.active",
                         "Active service catalogue",
-                        "blocked",
-                        "m1.readiness.service_catalogue_unavailable",
-                        "m1.remediation.activate_service_catalogue",
-                        "Organization type and eligible active-service persistence are not available for evaluation.",
-                        List.of(),
+                        !servicesApplicable ? "not_applicable" : servicesReady ? "complete" : "blocked",
+                        !servicesApplicable ? "m1.readiness.service_catalogue_not_applicable" : servicesReady ? "m1.readiness.service_catalogue_active" : "m1.readiness.service_catalogue_missing",
+                        !servicesApplicable || servicesReady ? "m1.remediation.none" : "m1.remediation.activate_service_catalogue",
+                        !servicesApplicable ? "Service delivery is not applicable to an administrative organization." : servicesReady ? "Every active service has an eligible clinical owner." : "At least one active service is required and every active service must have an eligible clinical owner.",
+                        List.of("active-service-count:"+activeServices,"owned-active-service-count:"+ownedActiveServices),
                         deepLink(effectivePermissions, "service.catalog.read", "#/M1-17")),
                 gate(
                         "service.assignment.valid",
                         "Service assignments",
-                        "warning",
-                        "m1.readiness.delivery_not_declared",
-                        "m1.remediation.review_service_assignments",
-                        "Service delivery has not been declared; assignment validity must be resolved before delivery is enabled.",
-                        List.of(),
+                        !servicesApplicable ? "not_applicable" : assignmentsReady ? "complete" : activeServices==0 ? "warning" : "blocked",
+                        !servicesApplicable ? "m1.readiness.delivery_not_applicable" : assignmentsReady ? "m1.readiness.assignments_valid" : activeServices==0 ? "m1.readiness.delivery_not_declared" : "m1.readiness.assignments_missing",
+                        !servicesApplicable || assignmentsReady ? "m1.remediation.none" : "m1.remediation.review_service_assignments",
+                        !servicesApplicable ? "Service delivery is not applicable." : assignmentsReady ? "Every active service has a current valid delivery assignment." : activeServices==0 ? "Service delivery has not been declared." : "Every active service requires a current active delivery assignment.",
+                        List.of("active-service-count:"+activeServices,"assigned-active-service-count:"+assignedActiveServices),
                         deepLink(effectivePermissions, "service.assignment.read", "#/M1-18")),
                 gate(
                         "identifier.scheme.active",
                         "Identifier scheme",
-                        "not_applicable",
-                        "m1.readiness.identifier_issuance_not_declared",
-                        "m1.remediation.declare_identifier_issuance",
-                        "Identifier issuance is not declared for the current organization configuration.",
-                        List.of(),
+                        !schemesApplicable ? "not_applicable" : schemesReady ? "complete" : "blocked",
+                        !schemesApplicable ? "m1.readiness.identifier_issuance_not_declared" : schemesReady ? "m1.readiness.identifier_scheme_active" : "m1.readiness.identifier_scheme_incomplete",
+                        !schemesApplicable || schemesReady ? "m1.remediation.none" : "m1.remediation.activate_identifier_scheme",
+                        !schemesApplicable ? "Identifier issuance is not declared for the current organization configuration." : schemesReady ? "Every declared identifier scope has one active immutable scheme version." : "Every declared identifier scope requires one active immutable scheme version.",
+                        List.of("identifier-scheme-count:"+identifierSchemes,"active-identifier-scheme-count:"+activeIdentifierSchemes),
                         deepLink(effectivePermissions, "identifier.scheme.read", "#/M1-19")),
                 gate(
                         "configuration.integrity",
                         "Configuration integrity",
-                        "blocked",
-                        "m1.readiness.configuration_version_unavailable",
+                        activeConfiguration ? "complete" : "blocked",
+                        activeConfiguration ? "m1.readiness.configuration_version_active" : "m1.readiness.configuration_version_pending",
                         "m1.remediation.create_configuration_version",
-                        "A versioned configuration baseline, parent digest and conflict evaluation are not implemented.",
-                        List.of(),
+                        activeConfiguration ? "An activated configuration version anchors the current canonical baseline." : "No configuration version is active yet; validate and activate the initial candidate.",
+                        List.of("active-configuration:"+activeConfiguration),
                         configurationLink(effectivePermissions)),
                 gate(
                         "governance.registry.active",
                         "Governance registries",
-                        "blocked",
-                        "m1.readiness.registry_set_incomplete",
+                        activeRegistry ? "complete" : "blocked",
+                        activeRegistry ? "m1.readiness.registry_set_active" : "m1.readiness.registry_set_incomplete",
                         "m1.remediation.activate_governance_registries",
                         "The full approved operation, event, readiness, retention and export registry set is not active.",
-                        List.of("authorization-registry:m1-candidate-1"),
+                        List.of("authorization-registry:m1-candidate-1;active:"+activeRegistry),
                         configurationLink(effectivePermissions)),
                 gate(
                         "platform.dependencies.ready",
                         "Required platform dependencies",
-                        "blocked",
-                        "m1.readiness.dependency_projection_unavailable",
-                        "m1.remediation.verify_required_dependencies",
-                        "Fresh database, Redis and candidate-required provider readiness is not bound to this projection.",
-                        List.of(),
+                        redisReady ? "complete" : "blocked",
+                        redisReady ? "m1.readiness.platform_dependencies_ready" : "m1.readiness.redis_unavailable",
+                        redisReady ? "m1.remediation.none" : "m1.remediation.restore_redis",
+                        redisReady ? "The transactional database and Redis session dependency are ready; unused export storage remains optional." : "The required Redis session dependency is unavailable.",
+                        List.of(
+                                "postgresql:ready",
+                                "redis:" + (redisReady ? "ready" : "unavailable"),
+                                "evidence-export-storage:optional-"
+                                        + (exportArtifacts.available() ? "ready" : "unavailable")),
                         configurationLink(effectivePermissions)));
+    }
+
+    private boolean redisReady() {
+        try (var connection = redisConnectionFactory.getConnection()) {
+            return "PONG".equals(connection.commands().ping());
+        } catch (RuntimeException exception) {
+            return false;
+        }
     }
 
     private static String deepLink(
@@ -906,4 +1147,12 @@ public class JdbcOrganizationAdministrationStore implements OrganizationAdminist
             int registeredAddresses,
             int primaryOperationalContacts,
             int verifiedPrimaryOperationalContacts) {}
+
+    private record HierarchyReadiness(
+            int eligibleFacilities,
+            int coveredFacilities,
+            int activeUnits,
+            int validActiveUnits,
+            int activeLocations,
+            int validActiveLocations) {}
 }

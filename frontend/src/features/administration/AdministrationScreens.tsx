@@ -3,6 +3,16 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import type { ApiFailure } from '../../api/client';
 import type {
   AdministrationReadiness,
+  AuditEvidenceDetail,
+  AuditEvidenceItem,
+  AuditEvidencePage,
+  ConfigurationActivation,
+  ConfigurationActivationDirectory,
+  ConfigurationHistoryItem,
+  ConfigurationHistoryPage,
+  EvidenceExportDirectory,
+  EvidenceExportJob,
+  EvidenceExportRequest,
   MembershipChangeMutation,
   OrganizationAddress,
   OrganizationAddressWriteRequest,
@@ -18,6 +28,17 @@ import type {
   GovernanceResponsibilityWriteRequest,
   FacilityCreateRequest,
   FacilityDirectory,
+  IdentifierScheme,
+  IdentifierSchemeDirectory,
+  OperatingHoursOverview,
+  OrganizationUnitCreateRequest,
+  OrganizationUnitDirectory,
+  ServiceLocationCreateRequest,
+  ServiceLocationDirectory,
+  ServiceAssignment,
+  ServiceAssignmentDirectory,
+  ServiceCatalogue,
+  ServiceDefinition,
   OrganizationMembershipPage,
   OrganizationMembershipSummary,
   OrganizationProfile,
@@ -30,10 +51,37 @@ import type { AdministrationClient } from './administration-types';
 
 type AdministrationScreenProps = {
   client: AdministrationClient;
-  id: 'M1-05' | 'M1-06' | 'M1-07' | 'M1-08' | 'M1-09' | 'M1-10' | 'M1-11' | 'M1-12' | 'M1-20';
+  id:
+    | 'M1-05'
+    | 'M1-06'
+    | 'M1-07'
+    | 'M1-08'
+    | 'M1-09'
+    | 'M1-10'
+    | 'M1-11'
+    | 'M1-12'
+    | 'M1-13'
+    | 'M1-14'
+    | 'M1-15'
+    | 'M1-16'
+    | 'M1-17'
+    | 'M1-18'
+    | 'M1-19'
+    | 'M1-20'
+    | 'M1-21'
+    | 'M1-22'
+    | 'M1-23';
   organizationId: string;
   shell: ShellSessionProps;
 };
+
+const applicationStartedAt = Date.now();
+const exportPollDelays = [1_000, 2_000, 4_000, 8_000, 15_000, 15_000, 15_000, 15_000] as const;
+const activeExportStatuses = new Set<EvidenceExportJob['status']>([
+  'requested',
+  'authorized',
+  'running',
+]);
 
 type ReadinessScreenProps = Pick<AdministrationScreenProps, 'client' | 'organizationId'> & {
   id: 'M1-05' | 'M1-06';
@@ -935,8 +983,8 @@ function ReadinessContent({
           </span>
         </div>
         <div className="readiness-boundary" role="note">
-          This is a live server projection. Persisted validation, evidence review, and activation
-          remain unavailable until the M1-21 workflow is implemented.
+          This live server projection feeds the persisted M1-21 validation, evidence review, and
+          activation workflow.
         </div>
         <ReadinessList gates={readiness.gates} />
       </section>
@@ -4573,7 +4621,1735 @@ function validFacilityDirectory(value: FacilityDirectory, organizationId: string
   );
 }
 
-function FacilityScreen({ client, organizationId }: AdministrationScreenProps) {
+function validOrganizationUnitDirectory(
+  value: OrganizationUnitDirectory,
+  organizationId: string,
+  facilityId: string,
+) {
+  const ids = new Set(value.units.map((unit) => unit.unitId));
+  return (
+    value.organizationId === organizationId &&
+    value.facilityId === facilityId &&
+    typeof value.canManage === 'boolean' &&
+    typeof value.canManageLifecycle === 'boolean' &&
+    instant(value.evaluatedAt) !== null &&
+    value.units.every(
+      (unit) =>
+        uuidPattern.test(unit.unitId) &&
+        (unit.parentId == null || ids.has(unit.parentId)) &&
+        /^[A-Z0-9][A-Z0-9_-]{1,31}$/.test(unit.unitCode) &&
+        ['department', 'unit'].includes(unit.unitType) &&
+        ['draft', 'active', 'suspended', 'closed'].includes(unit.status) &&
+        instant(unit.effectiveFrom) !== null &&
+        (unit.effectiveTo == null || instant(unit.effectiveTo) !== null) &&
+        nonNegativeInteger(unit.lockVersion),
+    )
+  );
+}
+
+function unitDepth(unitId: string, directory: OrganizationUnitDirectory) {
+  const units = new Map(directory.units.map((unit) => [unit.unitId, unit]));
+  const seen = new Set<string>();
+  let current = units.get(unitId);
+  let depth = 0;
+  while (current?.parentId && depth < 8 && !seen.has(current.parentId)) {
+    seen.add(current.parentId);
+    depth += 1;
+    current = units.get(current.parentId);
+  }
+  return depth;
+}
+
+function unitDescendsFrom(
+  candidateId: string,
+  ancestorId: string,
+  directory: OrganizationUnitDirectory,
+) {
+  const units = new Map(directory.units.map((unit) => [unit.unitId, unit]));
+  const seen = new Set<string>();
+  let current = units.get(candidateId);
+  while (current?.parentId && !seen.has(current.parentId)) {
+    if (current.parentId === ancestorId) return true;
+    seen.add(current.parentId);
+    current = units.get(current.parentId);
+  }
+  return false;
+}
+
+function validServiceLocationDirectory(
+  value: ServiceLocationDirectory,
+  organizationId: string,
+  facilityId: string,
+) {
+  const ids = new Set(value.locations.map((location) => location.locationId));
+  return (
+    value.organizationId === organizationId &&
+    value.facilityId === facilityId &&
+    typeof value.canManage === 'boolean' &&
+    typeof value.canManageLifecycle === 'boolean' &&
+    instant(value.evaluatedAt) !== null &&
+    value.locations.every(
+      (location) =>
+        uuidPattern.test(location.locationId) &&
+        (location.unitId == null || uuidPattern.test(location.unitId)) &&
+        (location.parentId == null || ids.has(location.parentId)) &&
+        /^[A-Z0-9][A-Z0-9_-]{1,31}$/.test(location.locationCode) &&
+        ['physical', 'virtual'].includes(location.locationType) &&
+        ((location.locationType === 'physical' &&
+          location.addressId != null &&
+          uuidPattern.test(location.addressId) &&
+          location.virtualServiceType == null) ||
+          (location.locationType === 'virtual' &&
+            location.addressId == null &&
+            typeof location.virtualServiceType === 'string' &&
+            location.virtualServiceType.length > 0)) &&
+        (location.capacity == null ||
+          (Number.isInteger(location.capacity) &&
+            location.capacity >= 1 &&
+            location.capacity <= 100000)) &&
+        ['draft', 'active', 'suspended', 'closed'].includes(location.status) &&
+        instant(location.effectiveFrom) !== null &&
+        (location.effectiveTo == null || instant(location.effectiveTo) !== null) &&
+        instant(location.createdAt) !== null &&
+        instant(location.updatedAt) !== null &&
+        nonNegativeInteger(location.lockVersion),
+    )
+  );
+}
+
+function locationDepth(locationId: string, directory: ServiceLocationDirectory) {
+  const locations = new Map(directory.locations.map((location) => [location.locationId, location]));
+  const seen = new Set<string>();
+  let current = locations.get(locationId);
+  let depth = 0;
+  while (current?.parentId && depth < 8 && !seen.has(current.parentId)) {
+    seen.add(current.parentId);
+    depth += 1;
+    current = locations.get(current.parentId);
+  }
+  return depth;
+}
+
+function locationDescendsFrom(
+  candidateId: string,
+  ancestorId: string,
+  directory: ServiceLocationDirectory,
+) {
+  const locations = new Map(directory.locations.map((location) => [location.locationId, location]));
+  const seen = new Set<string>();
+  let current = locations.get(candidateId);
+  while (current?.parentId && !seen.has(current.parentId)) {
+    if (current.parentId === ancestorId) return true;
+    seen.add(current.parentId);
+    current = locations.get(current.parentId);
+  }
+  return false;
+}
+
+function LocationScreen({ client, organizationId }: AdministrationScreenProps) {
+  const now = new Date().toISOString();
+  const [attempt, setAttempt] = useState(0);
+  const [facilities, setFacilities] = useState<LoadState<FacilityDirectory>>({ phase: 'loading' });
+  const [facilityId, setFacilityId] = useState('');
+  const [directory, setDirectory] = useState<LoadState<ServiceLocationDirectory>>({
+    phase: 'loading',
+  });
+  const [units, setUnits] = useState<LoadState<OrganizationUnitDirectory>>({
+    phase: 'loading',
+  });
+  const [contacts, setContacts] = useState<ContactDirectoryState>({ phase: 'loading' });
+  const [busy, setBusy] = useState(false);
+  const [issue, setIssue] = useState('');
+  const [editingLocationId, setEditingLocationId] = useState<string | null>(null);
+  const [reparentingLocationId, setReparentingLocationId] = useState<string | null>(null);
+  const [locationLifecycle, setLocationLifecycle] = useState<{
+    action: 'activate' | 'suspend' | 'reactivate' | 'close';
+    locationId: string;
+  } | null>(null);
+  const [locationLifecycleReason, setLocationLifecycleReason] = useState('');
+  const [form, setForm] = useState<ServiceLocationCreateRequest>({
+    unitId: null,
+    parentId: null,
+    addressId: null,
+    locationCode: '',
+    locationType: 'physical',
+    name: '',
+    virtualServiceType: null,
+    capacity: null,
+    accessibilityNotes: null,
+    effectiveFrom: now,
+    effectiveTo: null,
+    reason: '',
+  });
+  const [editForm, setEditForm] = useState<ServiceLocationCreateRequest>(form);
+  const [reparentForm, setReparentForm] = useState({
+    parentId: null as string | null,
+    effectiveFrom: now,
+    reason: '',
+  });
+  useEffect(() => {
+    const controller = new AbortController();
+    void client
+      .getFacilityDirectory(organizationId, {}, { signal: controller.signal })
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        if (!result.ok) setFacilities({ phase: 'failure', issue: failureMessage(result) });
+        else if (!validFacilityDirectory(result.data, organizationId))
+          setFacilities({
+            phase: 'failure',
+            issue: 'The server returned an invalid facility directory.',
+          });
+        else {
+          setFacilities({ phase: 'ready', data: result.data });
+          setFacilityId((current) =>
+            result.data.facilities.some((facility) => facility.facilityId === current)
+              ? current
+              : (result.data.facilities[0]?.facilityId ?? ''),
+          );
+        }
+      });
+    return () => controller.abort();
+  }, [attempt, client, organizationId]);
+  useEffect(() => {
+    const controller = new AbortController();
+    void client
+      .listOrganizationContacts(organizationId, { signal: controller.signal })
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        if (!result.ok) setContacts({ phase: 'failure', issue: failureMessage(result) });
+        else if (!validContactCollection(result.data, organizationId))
+          setContacts({
+            phase: 'failure',
+            issue: 'The server returned an invalid address directory.',
+          });
+        else setContacts({ phase: 'ready', collection: result.data });
+      });
+    return () => controller.abort();
+  }, [attempt, client, organizationId]);
+  useEffect(() => {
+    if (!facilityId) return;
+    const controller = new AbortController();
+    void client
+      .getServiceLocationDirectory(organizationId, facilityId, { signal: controller.signal })
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        if (!result.ok) setDirectory({ phase: 'failure', issue: failureMessage(result) });
+        else if (!validServiceLocationDirectory(result.data, organizationId, facilityId))
+          setDirectory({
+            phase: 'failure',
+            issue: 'The server returned an invalid location directory.',
+          });
+        else setDirectory({ phase: 'ready', data: result.data });
+      });
+    return () => controller.abort();
+  }, [attempt, client, facilityId, organizationId]);
+  useEffect(() => {
+    if (!facilityId) return;
+    const controller = new AbortController();
+    void client
+      .getOrganizationUnitDirectory(organizationId, facilityId, { signal: controller.signal })
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        if (!result.ok) setUnits({ phase: 'failure', issue: failureMessage(result) });
+        else if (!validOrganizationUnitDirectory(result.data, organizationId, facilityId))
+          setUnits({
+            phase: 'failure',
+            issue: 'The server returned an invalid organization-unit directory.',
+          });
+        else setUnits({ phase: 'ready', data: result.data });
+      });
+    return () => controller.abort();
+  }, [attempt, client, facilityId, organizationId]);
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!facilityId || directory.phase !== 'ready' || !directory.data.canManage || busy) return;
+    setBusy(true);
+    setIssue('');
+    const physical = form.locationType === 'physical';
+    const result = await client.createServiceLocationDraft(
+      organizationId,
+      facilityId,
+      {
+        ...form,
+        addressId: physical ? form.addressId : null,
+        virtualServiceType: physical ? null : form.virtualServiceType?.trim(),
+        locationCode: form.locationCode.trim().toUpperCase(),
+        name: form.name.trim(),
+        accessibilityNotes: form.accessibilityNotes?.trim() || null,
+        reason: form.reason.trim(),
+      },
+      `location-draft:${globalThis.crypto.randomUUID()}`,
+    );
+    setBusy(false);
+    if (!result.ok) return setIssue(failureMessage(result));
+    if (!validServiceLocationDirectory(result.data, organizationId, facilityId))
+      return setIssue('The saved response did not preserve the location directory contract.');
+    setDirectory({ phase: 'ready', data: result.data });
+    setForm({ ...form, parentId: null, locationCode: '', name: '', reason: '' });
+  };
+  const submitEdit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!facilityId || directory.phase !== 'ready' || !editingLocationId || busy) return;
+    const location = directory.data.locations.find(
+      (candidate) => candidate.locationId === editingLocationId,
+    );
+    if (!location || location.status !== 'draft') return;
+    const physical = editForm.locationType === 'physical';
+    setBusy(true);
+    setIssue('');
+    const result = await client.updateServiceLocationDraft(
+      organizationId,
+      facilityId,
+      location.locationId,
+      {
+        unitId: editForm.unitId,
+        addressId: physical ? editForm.addressId : null,
+        locationCode: editForm.locationCode.trim().toUpperCase(),
+        locationType: editForm.locationType,
+        name: editForm.name.trim(),
+        virtualServiceType: physical ? null : editForm.virtualServiceType?.trim(),
+        capacity: editForm.capacity,
+        accessibilityNotes: editForm.accessibilityNotes?.trim() || null,
+        effectiveFrom: editForm.effectiveFrom,
+        effectiveTo: editForm.effectiveTo,
+        reason: editForm.reason.trim(),
+      },
+      `"service-location:${location.locationId}:${location.lockVersion}"`,
+      `location-update:${globalThis.crypto.randomUUID()}`,
+    );
+    setBusy(false);
+    if (!result.ok) return setIssue(failureMessage(result));
+    if (!validServiceLocationDirectory(result.data, organizationId, facilityId))
+      return setIssue('The saved response did not preserve the location directory contract.');
+    setDirectory({ phase: 'ready', data: result.data });
+    setEditingLocationId(null);
+  };
+  const submitReparent = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!facilityId || directory.phase !== 'ready' || !reparentingLocationId || busy) return;
+    const location = directory.data.locations.find(
+      (candidate) => candidate.locationId === reparentingLocationId,
+    );
+    if (!location || location.status !== 'draft') return;
+    setBusy(true);
+    setIssue('');
+    const result = await client.reparentServiceLocation(
+      organizationId,
+      facilityId,
+      location.locationId,
+      { ...reparentForm, reason: reparentForm.reason.trim() },
+      `"service-location:${location.locationId}:${location.lockVersion}"`,
+      `location-reparent:${globalThis.crypto.randomUUID()}`,
+    );
+    setBusy(false);
+    if (!result.ok) return setIssue(failureMessage(result));
+    if (!validServiceLocationDirectory(result.data, organizationId, facilityId))
+      return setIssue('The saved response did not preserve the location directory contract.');
+    setDirectory({ phase: 'ready', data: result.data });
+    setReparentingLocationId(null);
+  };
+  const submitLocationLifecycle = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!facilityId || directory.phase !== 'ready' || !locationLifecycle || busy) return;
+    const location = directory.data.locations.find(
+      (candidate) => candidate.locationId === locationLifecycle.locationId,
+    );
+    if (!location || !directory.data.canManageLifecycle) return;
+    const etag = `"service-location:${location.locationId}:${location.lockVersion}"`;
+    const key = `location-${locationLifecycle.action}:${globalThis.crypto.randomUUID()}`;
+    const reason = locationLifecycleReason.trim();
+    setBusy(true);
+    setIssue('');
+    const result =
+      locationLifecycle.action === 'activate'
+        ? await client.activateServiceLocation(
+            organizationId,
+            facilityId,
+            location.locationId,
+            { reason },
+            etag,
+            key,
+          )
+        : locationLifecycle.action === 'suspend'
+          ? await client.suspendServiceLocation(
+              organizationId,
+              facilityId,
+              location.locationId,
+              { reason },
+              etag,
+              key,
+            )
+          : locationLifecycle.action === 'reactivate'
+            ? await client.reactivateServiceLocation(
+                organizationId,
+                facilityId,
+                location.locationId,
+                { reason },
+                etag,
+                key,
+              )
+            : await client.closeServiceLocation(
+                organizationId,
+                facilityId,
+                location.locationId,
+                { effectiveTo: new Date().toISOString(), reason },
+                etag,
+                key,
+              );
+    setBusy(false);
+    if (!result.ok) return setIssue(failureMessage(result));
+    if (!validServiceLocationDirectory(result.data, organizationId, facilityId))
+      return setIssue('The saved response did not preserve the location directory contract.');
+    setDirectory({ phase: 'ready', data: result.data });
+    setLocationLifecycle(null);
+    setLocationLifecycleReason('');
+  };
+  const currentAddresses =
+    contacts.phase === 'ready'
+      ? contacts.collection.addresses.filter((address) => {
+          const effectiveFrom = instant(address.effectiveFrom);
+          const effectiveTo = address.effectiveTo == null ? null : instant(address.effectiveTo);
+          const currentTime = applicationStartedAt;
+          return (
+            address.status === 'active' &&
+            effectiveFrom !== null &&
+            effectiveFrom <= currentTime &&
+            (effectiveTo === null || effectiveTo > currentTime)
+          );
+        })
+      : [];
+  const selectableUnits =
+    units.phase === 'ready' ? units.data.units.filter((unit) => unit.status !== 'closed') : [];
+  return (
+    <>
+      <PageHeading id="M1-15" />
+      {facilities.phase === 'loading' ? (
+        <LoadingPanel />
+      ) : facilities.phase === 'failure' ? (
+        <FailurePanel issue={facilities.issue} onRetry={() => setAttempt((value) => value + 1)} />
+      ) : facilities.data.facilities.length === 0 ? (
+        <section className="content-panel">
+          <h2>No facility available</h2>
+          <p>Create a facility before defining service locations.</p>
+        </section>
+      ) : (
+        <>
+          <section className="content-panel">
+            <div className="section-heading">
+              <div>
+                <span className="eyebrow">Care network</span>
+                <h2>Service locations</h2>
+              </div>
+            </div>
+            <label>
+              Facility
+              <select
+                value={facilityId}
+                onChange={(event) => {
+                  setDirectory({ phase: 'loading' });
+                  setEditingLocationId(null);
+                  setReparentingLocationId(null);
+                  setLocationLifecycle(null);
+                  setUnits({ phase: 'loading' });
+                  setForm((current) => ({ ...current, unitId: null, parentId: null }));
+                  setFacilityId(event.target.value);
+                }}
+              >
+                {facilities.data.facilities.map((facility) => (
+                  <option key={facility.facilityId} value={facility.facilityId}>
+                    {facility.displayName} ({facility.status})
+                  </option>
+                ))}
+              </select>
+            </label>
+          </section>
+          {directory.phase === 'loading' ? (
+            <LoadingPanel />
+          ) : directory.phase === 'failure' ? (
+            <FailurePanel
+              issue={directory.issue}
+              onRetry={() => {
+                setDirectory({ phase: 'loading' });
+                setAttempt((value) => value + 1);
+              }}
+            />
+          ) : (
+            <>
+              {issue && <div className="inline-alert error-alert">{issue}</div>}
+              {units.phase === 'failure' && (
+                <div className="inline-alert error-alert">{units.issue}</div>
+              )}
+              {contacts.phase === 'failure' && (
+                <div className="inline-alert error-alert">{contacts.issue}</div>
+              )}
+              {directory.data.canManage &&
+                units.phase === 'ready' &&
+                units.data.units.length === 0 && (
+                  <div className="readiness-boundary" role="status">
+                    No organization units are available. Locations may still be created at the
+                    facility root.
+                  </div>
+                )}
+              {directory.data.canManage &&
+                contacts.phase === 'ready' &&
+                currentAddresses.length === 0 && (
+                  <div className="readiness-boundary" role="status">
+                    No current address is available for a physical location. Add or activate an
+                    address in M1-09, or create a virtual location.
+                  </div>
+                )}
+              <section className="content-panel">
+                <div className="section-heading">
+                  <h2>Location directory</h2>
+                  <span className="status-badge">{directory.data.locations.length} records</span>
+                </div>
+                {directory.data.locations.length === 0 ? (
+                  <p>No service locations have been defined.</p>
+                ) : (
+                  <div className="record-list">
+                    {directory.data.locations.map((location) => (
+                      <article
+                        className="record-card"
+                        key={location.locationId}
+                        style={{
+                          marginLeft: `${locationDepth(location.locationId, directory.data) * 20}px`,
+                        }}
+                      >
+                        <div>
+                          <strong>{location.name}</strong>
+                          <p>
+                            {location.locationCode} · {location.locationType} · {location.status}
+                          </p>
+                        </div>
+                        <div className="record-actions">
+                          <span className="status-badge">
+                            {location.capacity == null
+                              ? 'No capacity'
+                              : `Capacity ${location.capacity}`}
+                          </span>
+                          {directory.data.canManage && location.status === 'draft' && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingLocationId(location.locationId);
+                                  setReparentingLocationId(null);
+                                  setEditForm({
+                                    unitId: location.unitId ?? null,
+                                    parentId: location.parentId ?? null,
+                                    addressId: location.addressId ?? null,
+                                    locationCode: location.locationCode,
+                                    locationType: location.locationType,
+                                    name: location.name,
+                                    virtualServiceType: location.virtualServiceType ?? null,
+                                    capacity: location.capacity ?? null,
+                                    accessibilityNotes: location.accessibilityNotes ?? null,
+                                    effectiveFrom: location.effectiveFrom,
+                                    effectiveTo: location.effectiveTo ?? null,
+                                    reason: '',
+                                  });
+                                }}
+                              >
+                                Edit draft
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setReparentingLocationId(location.locationId);
+                                  setEditingLocationId(null);
+                                  setReparentForm({
+                                    parentId: location.parentId ?? null,
+                                    effectiveFrom: new Date().toISOString(),
+                                    reason: '',
+                                  });
+                                }}
+                              >
+                                Change parent
+                              </button>
+                            </>
+                          )}
+                          {directory.data.canManageLifecycle && location.status === 'draft' && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setLocationLifecycle({
+                                  action: 'activate',
+                                  locationId: location.locationId,
+                                })
+                              }
+                            >
+                              Activate
+                            </button>
+                          )}
+                          {directory.data.canManageLifecycle && location.status === 'active' && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setLocationLifecycle({
+                                    action: 'suspend',
+                                    locationId: location.locationId,
+                                  })
+                                }
+                              >
+                                Suspend
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setLocationLifecycle({
+                                    action: 'close',
+                                    locationId: location.locationId,
+                                  })
+                                }
+                              >
+                                Close
+                              </button>
+                            </>
+                          )}
+                          {directory.data.canManageLifecycle && location.status === 'suspended' && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setLocationLifecycle({
+                                    action: 'reactivate',
+                                    locationId: location.locationId,
+                                  })
+                                }
+                              >
+                                Reactivate
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setLocationLifecycle({
+                                    action: 'close',
+                                    locationId: location.locationId,
+                                  })
+                                }
+                              >
+                                Close
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+              {editingLocationId && (
+                <section className="content-panel">
+                  <h2>Edit location draft</h2>
+                  <form onSubmit={(event) => void submitEdit(event)}>
+                    <div className="form-grid">
+                      <label>
+                        Edit location code
+                        <input
+                          required
+                          pattern="[A-Z0-9][A-Z0-9_-]{1,31}"
+                          value={editForm.locationCode}
+                          onChange={(event) =>
+                            setEditForm({
+                              ...editForm,
+                              locationCode: event.target.value.toUpperCase(),
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Edit type
+                        <select
+                          value={editForm.locationType}
+                          onChange={(event) =>
+                            setEditForm({
+                              ...editForm,
+                              locationType: event.target.value as 'physical' | 'virtual',
+                              addressId: null,
+                              virtualServiceType: null,
+                            })
+                          }
+                        >
+                          <option value="physical">Physical</option>
+                          <option value="virtual">Virtual</option>
+                        </select>
+                      </label>
+                      <label>
+                        Edit name
+                        <input
+                          required
+                          minLength={2}
+                          maxLength={120}
+                          value={editForm.name}
+                          onChange={(event) =>
+                            setEditForm({ ...editForm, name: event.target.value })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Edit organization unit (optional)
+                        <select
+                          disabled={units.phase !== 'ready'}
+                          value={editForm.unitId ?? ''}
+                          onChange={(event) =>
+                            setEditForm({ ...editForm, unitId: event.target.value || null })
+                          }
+                        >
+                          <option value="">No organization unit</option>
+                          {selectableUnits.map((unit) => (
+                            <option key={unit.unitId} value={unit.unitId}>
+                              {unit.name} ({unit.unitCode}, {unit.status})
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      {editForm.locationType === 'physical' ? (
+                        <label>
+                          Edit physical address
+                          <select
+                            required
+                            disabled={contacts.phase !== 'ready'}
+                            value={editForm.addressId ?? ''}
+                            onChange={(event) =>
+                              setEditForm({ ...editForm, addressId: event.target.value || null })
+                            }
+                          >
+                            <option value="">Select a current address</option>
+                            {currentAddresses.map((address) => (
+                              <option key={address.addressId} value={address.addressId}>
+                                {address.addressType}: {address.addressLines.join(', ')},{' '}
+                                {address.locality}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : (
+                        <label>
+                          Edit virtual service type
+                          <input
+                            required
+                            minLength={2}
+                            maxLength={80}
+                            value={editForm.virtualServiceType ?? ''}
+                            onChange={(event) =>
+                              setEditForm({ ...editForm, virtualServiceType: event.target.value })
+                            }
+                          />
+                        </label>
+                      )}
+                      <label>
+                        Edit capacity (optional)
+                        <input
+                          type="number"
+                          min={1}
+                          max={100000}
+                          value={editForm.capacity ?? ''}
+                          onChange={(event) =>
+                            setEditForm({
+                              ...editForm,
+                              capacity: event.target.value ? Number(event.target.value) : null,
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Edit effective from
+                        <input
+                          required
+                          type="datetime-local"
+                          value={editForm.effectiveFrom.slice(0, 16)}
+                          onChange={(event) =>
+                            setEditForm({
+                              ...editForm,
+                              effectiveFrom: new Date(event.target.value).toISOString(),
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="full-width">
+                        Edit accessibility notes
+                        <textarea
+                          maxLength={500}
+                          value={editForm.accessibilityNotes ?? ''}
+                          onChange={(event) =>
+                            setEditForm({
+                              ...editForm,
+                              accessibilityNotes: event.target.value || null,
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="full-width">
+                        Edit reason
+                        <textarea
+                          required
+                          minLength={10}
+                          maxLength={500}
+                          value={editForm.reason}
+                          onChange={(event) =>
+                            setEditForm({ ...editForm, reason: event.target.value })
+                          }
+                        />
+                      </label>
+                    </div>
+                    <div className="form-actions">
+                      <button className="primary-button" disabled={busy}>
+                        {busy ? 'Saving...' : 'Save location draft'}
+                      </button>
+                      <button type="button" onClick={() => setEditingLocationId(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              )}
+              {reparentingLocationId && (
+                <section className="content-panel">
+                  <h2>Change location parent</h2>
+                  <form onSubmit={(event) => void submitReparent(event)}>
+                    <div className="form-grid">
+                      <label>
+                        New location parent
+                        <select
+                          value={reparentForm.parentId ?? ''}
+                          onChange={(event) =>
+                            setReparentForm({
+                              ...reparentForm,
+                              parentId: event.target.value || null,
+                            })
+                          }
+                        >
+                          <option value="">No parent</option>
+                          {directory.data.locations
+                            .filter(
+                              (location) =>
+                                location.status === 'draft' &&
+                                location.locationId !== reparentingLocationId &&
+                                !locationDescendsFrom(
+                                  location.locationId,
+                                  reparentingLocationId,
+                                  directory.data,
+                                ),
+                            )
+                            .map((location) => (
+                              <option key={location.locationId} value={location.locationId}>
+                                {location.name}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                      <label>
+                        Parent change effective from
+                        <input
+                          required
+                          type="datetime-local"
+                          value={reparentForm.effectiveFrom.slice(0, 16)}
+                          onChange={(event) =>
+                            setReparentForm({
+                              ...reparentForm,
+                              effectiveFrom: new Date(event.target.value).toISOString(),
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="full-width">
+                        Parent change reason
+                        <textarea
+                          required
+                          minLength={10}
+                          maxLength={500}
+                          value={reparentForm.reason}
+                          onChange={(event) =>
+                            setReparentForm({ ...reparentForm, reason: event.target.value })
+                          }
+                        />
+                      </label>
+                    </div>
+                    <div className="form-actions">
+                      <button className="primary-button" disabled={busy}>
+                        {busy ? 'Saving...' : 'Save location parent'}
+                      </button>
+                      <button type="button" onClick={() => setReparentingLocationId(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              )}
+              {locationLifecycle && (
+                <section className="content-panel">
+                  <h2>
+                    {locationLifecycle.action === 'close'
+                      ? 'Close service location'
+                      : `${locationLifecycle.action[0]!.toUpperCase()}${locationLifecycle.action.slice(1)} service location`}
+                  </h2>
+                  <p>
+                    This high-assurance change requires current MFA and recent authentication. The
+                    server enforces facility eligibility and parent/descendant ordering.
+                  </p>
+                  <form onSubmit={(event) => void submitLocationLifecycle(event)}>
+                    <label>
+                      Location lifecycle reason
+                      <textarea
+                        required
+                        minLength={10}
+                        maxLength={500}
+                        value={locationLifecycleReason}
+                        onChange={(event) => setLocationLifecycleReason(event.target.value)}
+                      />
+                    </label>
+                    <div className="form-actions">
+                      <button className="primary-button" disabled={busy}>
+                        {busy
+                          ? 'Saving...'
+                          : `Confirm ${locationLifecycle.action === 'close' ? 'closure' : locationLifecycle.action}`}
+                      </button>
+                      <button type="button" onClick={() => setLocationLifecycle(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              )}
+              {directory.data.canManage && (
+                <section className="content-panel">
+                  <h2>Add location draft</h2>
+                  <form onSubmit={(event) => void submit(event)}>
+                    <div className="form-grid">
+                      <label>
+                        Location code
+                        <input
+                          required
+                          pattern="[A-Z0-9][A-Z0-9_-]{1,31}"
+                          value={form.locationCode}
+                          onChange={(event) =>
+                            setForm({ ...form, locationCode: event.target.value.toUpperCase() })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Type
+                        <select
+                          value={form.locationType}
+                          onChange={(event) =>
+                            setForm({
+                              ...form,
+                              locationType: event.target.value as 'physical' | 'virtual',
+                              addressId: null,
+                              virtualServiceType: null,
+                            })
+                          }
+                        >
+                          <option value="physical">Physical</option>
+                          <option value="virtual">Virtual</option>
+                        </select>
+                      </label>
+                      <label>
+                        Name
+                        <input
+                          required
+                          minLength={2}
+                          maxLength={120}
+                          value={form.name}
+                          onChange={(event) => setForm({ ...form, name: event.target.value })}
+                        />
+                      </label>
+                      <label>
+                        Parent location
+                        <select
+                          value={form.parentId ?? ''}
+                          onChange={(event) =>
+                            setForm({ ...form, parentId: event.target.value || null })
+                          }
+                        >
+                          <option value="">No parent</option>
+                          {directory.data.locations
+                            .filter((location) => location.status === 'draft')
+                            .map((location) => (
+                              <option key={location.locationId} value={location.locationId}>
+                                {location.name}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                      <label>
+                        Organization unit (optional)
+                        <select
+                          disabled={units.phase !== 'ready'}
+                          value={form.unitId ?? ''}
+                          onChange={(event) =>
+                            setForm({ ...form, unitId: event.target.value || null })
+                          }
+                        >
+                          <option value="">No organization unit</option>
+                          {selectableUnits.map((unit) => (
+                            <option key={unit.unitId} value={unit.unitId}>
+                              {unit.name} ({unit.unitCode}, {unit.status})
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      {form.locationType === 'physical' ? (
+                        <label>
+                          Physical address
+                          <select
+                            required
+                            disabled={contacts.phase !== 'ready'}
+                            value={form.addressId ?? ''}
+                            onChange={(event) =>
+                              setForm({ ...form, addressId: event.target.value || null })
+                            }
+                          >
+                            <option value="">Select a current address</option>
+                            {currentAddresses.map((address) => (
+                              <option key={address.addressId} value={address.addressId}>
+                                {address.addressType}: {address.addressLines.join(', ')},{' '}
+                                {address.locality}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : (
+                        <label>
+                          Virtual service type
+                          <input
+                            required
+                            minLength={2}
+                            maxLength={80}
+                            value={form.virtualServiceType ?? ''}
+                            onChange={(event) =>
+                              setForm({ ...form, virtualServiceType: event.target.value })
+                            }
+                          />
+                        </label>
+                      )}
+                      <label>
+                        Capacity (optional)
+                        <input
+                          type="number"
+                          min={1}
+                          max={100000}
+                          value={form.capacity ?? ''}
+                          onChange={(event) =>
+                            setForm({
+                              ...form,
+                              capacity: event.target.value ? Number(event.target.value) : null,
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Effective from
+                        <input
+                          required
+                          type="datetime-local"
+                          value={form.effectiveFrom.slice(0, 16)}
+                          onChange={(event) =>
+                            setForm({
+                              ...form,
+                              effectiveFrom: new Date(event.target.value).toISOString(),
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="full-width">
+                        Accessibility notes
+                        <textarea
+                          maxLength={500}
+                          value={form.accessibilityNotes ?? ''}
+                          onChange={(event) =>
+                            setForm({ ...form, accessibilityNotes: event.target.value || null })
+                          }
+                        />
+                      </label>
+                      <label className="full-width">
+                        Creation reason
+                        <textarea
+                          required
+                          minLength={10}
+                          maxLength={500}
+                          value={form.reason}
+                          onChange={(event) => setForm({ ...form, reason: event.target.value })}
+                        />
+                      </label>
+                    </div>
+                    <div className="form-actions">
+                      <button className="primary-button" disabled={busy}>
+                        {busy ? 'Creating...' : 'Create location draft'}
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+function UnitHierarchyScreen({ client, organizationId }: AdministrationScreenProps) {
+  const [attempt, setAttempt] = useState(0);
+  const [facilities, setFacilities] = useState<LoadState<FacilityDirectory>>({ phase: 'loading' });
+  const [facilityId, setFacilityId] = useState('');
+  const [directory, setDirectory] = useState<LoadState<OrganizationUnitDirectory>>({
+    phase: 'loading',
+  });
+  const [busy, setBusy] = useState(false);
+  const [issue, setIssue] = useState('');
+  const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
+  const [reparentingUnitId, setReparentingUnitId] = useState<string | null>(null);
+  const [lifecycleChange, setLifecycleChange] = useState<{
+    action: 'activate' | 'suspend' | 'reactivate' | 'close';
+    unitId: string;
+  } | null>(null);
+  const [lifecycleReason, setLifecycleReason] = useState('');
+  const [form, setForm] = useState<OrganizationUnitCreateRequest>({
+    parentId: null,
+    unitCode: '',
+    unitType: 'department',
+    name: '',
+    effectiveFrom: new Date().toISOString(),
+    effectiveTo: null,
+    reason: '',
+  });
+  const [editForm, setEditForm] = useState<OrganizationUnitCreateRequest>(form);
+  const [reparentForm, setReparentForm] = useState({
+    parentId: null as string | null,
+    effectiveFrom: new Date().toISOString(),
+    reason: '',
+  });
+  useEffect(() => {
+    const controller = new AbortController();
+    void client
+      .getFacilityDirectory(organizationId, {}, { signal: controller.signal })
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        if (!result.ok) setFacilities({ phase: 'failure', issue: failureMessage(result) });
+        else if (!validFacilityDirectory(result.data, organizationId))
+          setFacilities({
+            phase: 'failure',
+            issue: 'The server returned an invalid facility directory.',
+          });
+        else {
+          setFacilities({ phase: 'ready', data: result.data });
+          setFacilityId((current) =>
+            result.data.facilities.some((facility) => facility.facilityId === current)
+              ? current
+              : (result.data.facilities[0]?.facilityId ?? ''),
+          );
+        }
+      });
+    return () => controller.abort();
+  }, [attempt, client, organizationId]);
+  useEffect(() => {
+    if (!facilityId) return;
+    const controller = new AbortController();
+    void client
+      .getOrganizationUnitDirectory(organizationId, facilityId, { signal: controller.signal })
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        if (!result.ok) setDirectory({ phase: 'failure', issue: failureMessage(result) });
+        else if (!validOrganizationUnitDirectory(result.data, organizationId, facilityId))
+          setDirectory({
+            phase: 'failure',
+            issue: 'The server returned an invalid unit hierarchy.',
+          });
+        else setDirectory({ phase: 'ready', data: result.data });
+      });
+    return () => controller.abort();
+  }, [attempt, client, facilityId, organizationId]);
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!facilityId || directory.phase !== 'ready' || !directory.data.canManage || busy) return;
+    setBusy(true);
+    setIssue('');
+    const result = await client.createOrganizationUnitDraft(
+      organizationId,
+      facilityId,
+      {
+        ...form,
+        unitCode: form.unitCode.trim().toUpperCase(),
+        name: form.name.trim(),
+        reason: form.reason.trim(),
+      },
+      `unit-draft:${globalThis.crypto.randomUUID()}`,
+    );
+    setBusy(false);
+    if (!result.ok) return setIssue(failureMessage(result));
+    if (!validOrganizationUnitDirectory(result.data, organizationId, facilityId))
+      return setIssue('The saved response did not preserve the unit hierarchy contract.');
+    setDirectory({ phase: 'ready', data: result.data });
+    setForm({ ...form, parentId: null, unitCode: '', name: '', reason: '' });
+  };
+  const submitEdit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!facilityId || directory.phase !== 'ready' || !editingUnitId || busy) return;
+    const unit = directory.data.units.find((candidate) => candidate.unitId === editingUnitId);
+    if (!unit || unit.status !== 'draft') return;
+    setBusy(true);
+    setIssue('');
+    const result = await client.updateOrganizationUnitDraft(
+      organizationId,
+      facilityId,
+      unit.unitId,
+      {
+        ...editForm,
+        parentId: unit.parentId ?? null,
+        unitCode: editForm.unitCode.trim().toUpperCase(),
+        name: editForm.name.trim(),
+        reason: editForm.reason.trim(),
+      },
+      `"organization-unit:${unit.unitId}:${unit.lockVersion}"`,
+      `unit-update:${globalThis.crypto.randomUUID()}`,
+    );
+    setBusy(false);
+    if (!result.ok) return setIssue(failureMessage(result));
+    if (!validOrganizationUnitDirectory(result.data, organizationId, facilityId))
+      return setIssue('The saved response did not preserve the unit hierarchy contract.');
+    setDirectory({ phase: 'ready', data: result.data });
+    setEditingUnitId(null);
+  };
+  const submitReparent = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!facilityId || directory.phase !== 'ready' || !reparentingUnitId || busy) return;
+    const unit = directory.data.units.find((candidate) => candidate.unitId === reparentingUnitId);
+    if (!unit || unit.status !== 'draft') return;
+    setBusy(true);
+    setIssue('');
+    const result = await client.reparentOrganizationUnit(
+      organizationId,
+      facilityId,
+      unit.unitId,
+      { ...reparentForm, reason: reparentForm.reason.trim() },
+      `"organization-unit:${unit.unitId}:${unit.lockVersion}"`,
+      `unit-reparent:${globalThis.crypto.randomUUID()}`,
+    );
+    setBusy(false);
+    if (!result.ok) return setIssue(failureMessage(result));
+    if (!validOrganizationUnitDirectory(result.data, organizationId, facilityId))
+      return setIssue('The saved response did not preserve the unit hierarchy contract.');
+    setDirectory({ phase: 'ready', data: result.data });
+    setReparentingUnitId(null);
+  };
+  const submitLifecycle = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!facilityId || directory.phase !== 'ready' || !lifecycleChange || busy) return;
+    const unit = directory.data.units.find(
+      (candidate) => candidate.unitId === lifecycleChange.unitId,
+    );
+    if (!unit || !directory.data.canManageLifecycle) return;
+    const etag = `"organization-unit:${unit.unitId}:${unit.lockVersion}"`;
+    const key = `unit-${lifecycleChange.action}:${globalThis.crypto.randomUUID()}`;
+    const reason = lifecycleReason.trim();
+    setBusy(true);
+    setIssue('');
+    const result =
+      lifecycleChange.action === 'activate'
+        ? await client.activateOrganizationUnit(
+            organizationId,
+            facilityId,
+            unit.unitId,
+            { reason },
+            etag,
+            key,
+          )
+        : lifecycleChange.action === 'suspend'
+          ? await client.suspendOrganizationUnit(
+              organizationId,
+              facilityId,
+              unit.unitId,
+              { reason },
+              etag,
+              key,
+            )
+          : lifecycleChange.action === 'reactivate'
+            ? await client.reactivateOrganizationUnit(
+                organizationId,
+                facilityId,
+                unit.unitId,
+                { reason },
+                etag,
+                key,
+              )
+            : await client.closeOrganizationUnit(
+                organizationId,
+                facilityId,
+                unit.unitId,
+                { effectiveTo: new Date().toISOString(), reason },
+                etag,
+                key,
+              );
+    setBusy(false);
+    if (!result.ok) return setIssue(failureMessage(result));
+    if (!validOrganizationUnitDirectory(result.data, organizationId, facilityId))
+      return setIssue('The saved response did not preserve the unit hierarchy contract.');
+    setDirectory({ phase: 'ready', data: result.data });
+    setLifecycleChange(null);
+    setLifecycleReason('');
+  };
+  return (
+    <>
+      <PageHeading id="M1-14" />
+      {facilities.phase === 'loading' ? (
+        <LoadingPanel />
+      ) : facilities.phase === 'failure' ? (
+        <FailurePanel issue={facilities.issue} onRetry={() => setAttempt((value) => value + 1)} />
+      ) : facilities.data.facilities.length === 0 ? (
+        <section className="content-panel">
+          <h2>No facility available</h2>
+          <p>Create a facility before defining departments and units.</p>
+        </section>
+      ) : (
+        <>
+          <section className="content-panel">
+            <div className="section-heading">
+              <div>
+                <span className="eyebrow">Care network</span>
+                <h2>Department and unit hierarchy</h2>
+              </div>
+            </div>
+            <label>
+              Facility
+              <select
+                value={facilityId}
+                onChange={(event) => {
+                  setDirectory({ phase: 'loading' });
+                  setEditingUnitId(null);
+                  setReparentingUnitId(null);
+                  setLifecycleChange(null);
+                  setFacilityId(event.target.value);
+                }}
+              >
+                {facilities.data.facilities.map((facility) => (
+                  <option key={facility.facilityId} value={facility.facilityId}>
+                    {facility.displayName} ({facility.status})
+                  </option>
+                ))}
+              </select>
+            </label>
+          </section>
+          {directory.phase === 'loading' ? (
+            <LoadingPanel />
+          ) : directory.phase === 'failure' ? (
+            <FailurePanel
+              issue={directory.issue}
+              onRetry={() => {
+                setDirectory({ phase: 'loading' });
+                setAttempt((value) => value + 1);
+              }}
+            />
+          ) : (
+            <>
+              {issue && <div className="inline-alert error-alert">{issue}</div>}
+              <section className="content-panel">
+                <div className="section-heading">
+                  <h2>Hierarchy</h2>
+                  <span className="status-badge">{directory.data.units.length} records</span>
+                </div>
+                {directory.data.units.length === 0 ? (
+                  <p>No departments or units have been created for this facility.</p>
+                ) : (
+                  <div className="record-grid">
+                    {directory.data.units.map((unit) => (
+                      <article className="record-card" key={unit.unitId}>
+                        <div className="record-card-head">
+                          <strong>
+                            {'— '.repeat(unitDepth(unit.unitId, directory.data))}
+                            {unit.name}
+                          </strong>
+                          <span className="status-badge">{unit.status}</span>
+                        </div>
+                        <p>
+                          {unit.unitCode} · {unit.unitType}
+                        </p>
+                        <small>
+                          Depth {unitDepth(unit.unitId, directory.data) + 1} · revision{' '}
+                          {unit.lockVersion}
+                        </small>
+                        {directory.data.canManage && unit.status === 'draft' && (
+                          <div className="form-actions">
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              onClick={() => {
+                                setReparentingUnitId(null);
+                                setEditingUnitId(unit.unitId);
+                                setEditForm({
+                                  parentId: unit.parentId ?? null,
+                                  unitCode: unit.unitCode,
+                                  unitType: unit.unitType,
+                                  name: unit.name,
+                                  effectiveFrom: unit.effectiveFrom,
+                                  effectiveTo: unit.effectiveTo ?? null,
+                                  reason: '',
+                                });
+                              }}
+                            >
+                              Edit draft
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              onClick={() => {
+                                setEditingUnitId(null);
+                                setReparentingUnitId(unit.unitId);
+                                setReparentForm({
+                                  parentId: unit.parentId ?? null,
+                                  effectiveFrom: new Date().toISOString(),
+                                  reason: '',
+                                });
+                              }}
+                            >
+                              Change parent
+                            </button>
+                          </div>
+                        )}
+                        {directory.data.canManageLifecycle && unit.status !== 'closed' && (
+                          <div className="form-actions">
+                            {unit.status === 'draft' && (
+                              <button
+                                type="button"
+                                className="secondary-button"
+                                onClick={() => {
+                                  setLifecycleReason('');
+                                  setLifecycleChange({ action: 'activate', unitId: unit.unitId });
+                                }}
+                              >
+                                Activate
+                              </button>
+                            )}
+                            {unit.status === 'active' && (
+                              <button
+                                type="button"
+                                className="secondary-button"
+                                onClick={() => {
+                                  setLifecycleReason('');
+                                  setLifecycleChange({ action: 'suspend', unitId: unit.unitId });
+                                }}
+                              >
+                                Suspend
+                              </button>
+                            )}
+                            {unit.status === 'suspended' && (
+                              <button
+                                type="button"
+                                className="secondary-button"
+                                onClick={() => {
+                                  setLifecycleReason('');
+                                  setLifecycleChange({ action: 'reactivate', unitId: unit.unitId });
+                                }}
+                              >
+                                Reactivate
+                              </button>
+                            )}
+                            {['active', 'suspended'].includes(unit.status) && (
+                              <button
+                                type="button"
+                                className="secondary-button"
+                                onClick={() => {
+                                  setLifecycleReason('');
+                                  setLifecycleChange({ action: 'close', unitId: unit.unitId });
+                                }}
+                              >
+                                Close
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+              {editingUnitId && (
+                <section className="content-panel">
+                  <h2>Edit hierarchy draft</h2>
+                  <form onSubmit={(event) => void submitEdit(event)}>
+                    <div className="form-grid">
+                      <label>
+                        Edit unit code
+                        <input
+                          required
+                          pattern="[A-Z0-9][A-Z0-9_-]{1,31}"
+                          value={editForm.unitCode}
+                          onChange={(event) =>
+                            setEditForm({ ...editForm, unitCode: event.target.value.toUpperCase() })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Edit type
+                        <select
+                          value={editForm.unitType}
+                          onChange={(event) =>
+                            setEditForm({
+                              ...editForm,
+                              unitType: event.target.value as 'department' | 'unit',
+                            })
+                          }
+                        >
+                          <option value="department">Department</option>
+                          <option value="unit">Unit</option>
+                        </select>
+                      </label>
+                      <label>
+                        Edit name
+                        <input
+                          required
+                          minLength={2}
+                          maxLength={120}
+                          value={editForm.name}
+                          onChange={(event) =>
+                            setEditForm({ ...editForm, name: event.target.value })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Edit effective from
+                        <input
+                          required
+                          type="datetime-local"
+                          value={editForm.effectiveFrom.slice(0, 16)}
+                          onChange={(event) =>
+                            setEditForm({
+                              ...editForm,
+                              effectiveFrom: new Date(event.target.value).toISOString(),
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="full-width">
+                        Edit reason
+                        <textarea
+                          required
+                          minLength={10}
+                          maxLength={500}
+                          value={editForm.reason}
+                          onChange={(event) =>
+                            setEditForm({ ...editForm, reason: event.target.value })
+                          }
+                        />
+                      </label>
+                    </div>
+                    <div className="form-actions">
+                      <button className="primary-button" disabled={busy}>
+                        {busy ? 'Saving...' : 'Save draft changes'}
+                      </button>
+                      <button type="button" onClick={() => setEditingUnitId(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              )}
+              {reparentingUnitId && (
+                <section className="content-panel">
+                  <h2>Change draft parent</h2>
+                  <form onSubmit={(event) => void submitReparent(event)}>
+                    <div className="form-grid">
+                      <label>
+                        New parent
+                        <select
+                          value={reparentForm.parentId ?? ''}
+                          onChange={(event) =>
+                            setReparentForm({
+                              ...reparentForm,
+                              parentId: event.target.value || null,
+                            })
+                          }
+                        >
+                          <option value="">No parent</option>
+                          {directory.data.units
+                            .filter(
+                              (unit) =>
+                                unit.status === 'draft' &&
+                                unit.unitId !== reparentingUnitId &&
+                                !unitDescendsFrom(unit.unitId, reparentingUnitId, directory.data),
+                            )
+                            .map((unit) => (
+                              <option key={unit.unitId} value={unit.unitId}>
+                                {unit.name}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                      <label>
+                        Parent change effective from
+                        <input
+                          required
+                          type="datetime-local"
+                          value={reparentForm.effectiveFrom.slice(0, 16)}
+                          onChange={(event) =>
+                            setReparentForm({
+                              ...reparentForm,
+                              effectiveFrom: new Date(event.target.value).toISOString(),
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="full-width">
+                        Parent change reason
+                        <textarea
+                          required
+                          minLength={10}
+                          maxLength={500}
+                          value={reparentForm.reason}
+                          onChange={(event) =>
+                            setReparentForm({ ...reparentForm, reason: event.target.value })
+                          }
+                        />
+                      </label>
+                    </div>
+                    <div className="form-actions">
+                      <button className="primary-button" disabled={busy}>
+                        {busy ? 'Saving...' : 'Save parent change'}
+                      </button>
+                      <button type="button" onClick={() => setReparentingUnitId(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              )}
+              {lifecycleChange && (
+                <section className="content-panel">
+                  <h2>
+                    {lifecycleChange.action === 'close'
+                      ? 'Close organization unit'
+                      : `${lifecycleChange.action[0]!.toUpperCase()}${lifecycleChange.action.slice(1)} organization unit`}
+                  </h2>
+                  <p>
+                    This high-assurance change requires current MFA and recent authentication. The
+                    server will enforce parent/descendant ordering and facility eligibility.
+                  </p>
+                  <form onSubmit={(event) => void submitLifecycle(event)}>
+                    <label>
+                      Lifecycle reason
+                      <textarea
+                        required
+                        minLength={10}
+                        maxLength={500}
+                        value={lifecycleReason}
+                        onChange={(event) => setLifecycleReason(event.target.value)}
+                      />
+                    </label>
+                    <div className="form-actions">
+                      <button className="primary-button" disabled={busy}>
+                        {busy
+                          ? 'Saving...'
+                          : `Confirm ${lifecycleChange.action === 'close' ? 'closure' : lifecycleChange.action}`}
+                      </button>
+                      <button type="button" onClick={() => setLifecycleChange(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              )}
+              {directory.data.canManage && (
+                <section className="content-panel">
+                  <h2>Add hierarchy draft</h2>
+                  <form onSubmit={(event) => void submit(event)}>
+                    <div className="form-grid">
+                      <label>
+                        Unit code
+                        <input
+                          required
+                          pattern="[A-Z0-9][A-Z0-9_-]{1,31}"
+                          value={form.unitCode}
+                          onChange={(event) =>
+                            setForm({ ...form, unitCode: event.target.value.toUpperCase() })
+                          }
+                        />
+                      </label>
+                      <label>
+                        Type
+                        <select
+                          value={form.unitType}
+                          onChange={(event) =>
+                            setForm({
+                              ...form,
+                              unitType: event.target.value as 'department' | 'unit',
+                            })
+                          }
+                        >
+                          <option value="department">Department</option>
+                          <option value="unit">Unit</option>
+                        </select>
+                      </label>
+                      <label>
+                        Name
+                        <input
+                          required
+                          minLength={2}
+                          maxLength={120}
+                          value={form.name}
+                          onChange={(event) => setForm({ ...form, name: event.target.value })}
+                        />
+                      </label>
+                      <label>
+                        Parent
+                        <select
+                          value={form.parentId ?? ''}
+                          onChange={(event) =>
+                            setForm({ ...form, parentId: event.target.value || null })
+                          }
+                        >
+                          <option value="">No parent</option>
+                          {directory.data.units
+                            .filter((unit) => unit.status === 'draft')
+                            .map((unit) => (
+                              <option key={unit.unitId} value={unit.unitId}>
+                                {unit.name}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                      <label>
+                        Effective from
+                        <input
+                          required
+                          type="datetime-local"
+                          value={form.effectiveFrom.slice(0, 16)}
+                          onChange={(event) =>
+                            setForm({
+                              ...form,
+                              effectiveFrom: new Date(event.target.value).toISOString(),
+                            })
+                          }
+                        />
+                      </label>
+                      <label className="full-width">
+                        Reason
+                        <textarea
+                          required
+                          minLength={10}
+                          maxLength={500}
+                          value={form.reason}
+                          onChange={(event) => setForm({ ...form, reason: event.target.value })}
+                        />
+                      </label>
+                    </div>
+                    <div className="form-actions">
+                      <button className="primary-button" disabled={busy}>
+                        {busy ? 'Creating...' : 'Add hierarchy draft'}
+                      </button>
+                    </div>
+                  </form>
+                </section>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+function FacilityScreen({ client, id, organizationId }: AdministrationScreenProps) {
   const [attempt, setAttempt] = useState(0);
   const [query, setQuery] = useState('');
   const [state, setState] = useState<LoadState<FacilityDirectory>>({ phase: 'loading' });
@@ -4582,6 +6358,11 @@ function FacilityScreen({ client, organizationId }: AdministrationScreenProps) {
   const [editingFacilityId, setEditingFacilityId] = useState<string | null>(null);
   const [submittingFacilityId, setSubmittingFacilityId] = useState<string | null>(null);
   const [submissionReason, setSubmissionReason] = useState('');
+  const [lifecycleChange, setLifecycleChange] = useState<{
+    facilityId: string;
+    action: 'suspensions' | 'reactivations' | 'closures';
+  } | null>(null);
+  const [lifecycleReason, setLifecycleReason] = useState('');
   const [form, setForm] = useState<FacilityCreateRequest>({
     facilityCode: '',
     legalName: '',
@@ -4683,9 +6464,40 @@ function FacilityScreen({ client, organizationId }: AdministrationScreenProps) {
     setSubmittingFacilityId(null);
     setSubmissionReason('');
   };
+  const submitLifecycle = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (state.phase !== 'ready' || !state.data.canManageLifecycle || busy || !lifecycleChange)
+      return;
+    const facility = state.data.facilities.find(
+      (candidate) => candidate.facilityId === lifecycleChange.facilityId,
+    );
+    if (!facility) return;
+    setBusy(true);
+    setIssue('');
+    const result = await client.transitionFacilityLifecycle(
+      organizationId,
+      facility.facilityId,
+      lifecycleChange.action,
+      { fromState: facility.status, reason: lifecycleReason.trim() },
+      `"facility:${facility.facilityId}:${facility.lockVersion}"`,
+      `facility-${lifecycleChange.action}:${globalThis.crypto.randomUUID()}`,
+    );
+    setBusy(false);
+    if (!result.ok) {
+      setIssue(failureMessage(result));
+      return;
+    }
+    if (!validFacilityDirectory(result.data, organizationId)) {
+      setIssue('The lifecycle response did not preserve the facility contract.');
+      return;
+    }
+    setState({ phase: 'ready', data: result.data });
+    setLifecycleChange(null);
+    setLifecycleReason('');
+  };
   return (
     <>
-      <PageHeading id="M1-12" />
+      <PageHeading id={id === 'M1-13' ? 'M1-13' : 'M1-12'} />
       {state.phase === 'loading' ? (
         <LoadingPanel />
       ) : state.phase === 'failure' ? (
@@ -4725,6 +6537,52 @@ function FacilityScreen({ client, organizationId }: AdministrationScreenProps) {
                     <small>
                       {f.facilityCode} · {f.facilityType} · {f.timezone ?? 'Inherited timezone'}
                     </small>
+                    {id === 'M1-13' && state.data.canManageLifecycle && f.status !== 'closed' && (
+                      <div className="form-actions">
+                        {f.status === 'under_review' && (
+                          <span className="status-badge">Activate through M1-21 approval</span>
+                        )}
+                        {f.status === 'active' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLifecycleChange({
+                                facilityId: f.facilityId,
+                                action: 'suspensions',
+                              });
+                              setLifecycleReason('');
+                            }}
+                          >
+                            Suspend
+                          </button>
+                        )}
+                        {f.status === 'suspended' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLifecycleChange({
+                                facilityId: f.facilityId,
+                                action: 'reactivations',
+                              });
+                              setLifecycleReason('');
+                            }}
+                          >
+                            Reactivate
+                          </button>
+                        )}
+                        {(f.status === 'active' || f.status === 'suspended') && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLifecycleChange({ facilityId: f.facilityId, action: 'closures' });
+                              setLifecycleReason('');
+                            }}
+                          >
+                            Close
+                          </button>
+                        )}
+                      </div>
+                    )}
                     {state.data.canCreate && f.status === 'draft' && (
                       <div className="form-actions">
                         <button
@@ -4801,6 +6659,35 @@ function FacilityScreen({ client, organizationId }: AdministrationScreenProps) {
               )}
             </div>
           </section>
+          {id === 'M1-13' && lifecycleChange && (
+            <section className="content-panel">
+              <h2>Confirm facility lifecycle change</h2>
+              <p>
+                This high-assurance action requires current MFA and recent authentication. The
+                server rechecks address, hierarchy, operating hours, and assignment impact.
+              </p>
+              <form onSubmit={(event) => void submitLifecycle(event)}>
+                <label>
+                  Lifecycle reason
+                  <textarea
+                    required
+                    minLength={10}
+                    maxLength={500}
+                    value={lifecycleReason}
+                    onChange={(event) => setLifecycleReason(event.target.value)}
+                  />
+                </label>
+                <div className="form-actions">
+                  <button className="primary-button" disabled={busy}>
+                    {busy ? 'Saving...' : 'Confirm lifecycle change'}
+                  </button>
+                  <button type="button" disabled={busy} onClick={() => setLifecycleChange(null)}>
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </section>
+          )}
           {state.data.canCreate && (
             <section className="content-panel">
               <h2>{editingFacilityId ? 'Edit facility draft' : 'Add facility draft'}</h2>
@@ -4912,6 +6799,2723 @@ function FacilityScreen({ client, organizationId }: AdministrationScreenProps) {
   );
 }
 
+type HoursTarget = {
+  type: 'facility' | 'location';
+  id: string;
+  label: string;
+  facilityId?: string;
+};
+type HoursIntervalDraft = { weekday: number; start: string; end: string; endsNextDay: boolean };
+type HoursExceptionDraft = {
+  localDate: string;
+  closed: boolean;
+  label: string;
+  reasonCode: string;
+  start: string;
+  end: string;
+  endsNextDay: boolean;
+};
+
+function minutes(value: string) {
+  const [hour, minute] = value.split(':').map(Number);
+  return hour! * 60 + minute!;
+}
+
+function OperatingHoursScreen({ client, organizationId }: AdministrationScreenProps) {
+  const [attempt, setAttempt] = useState(0);
+  const [state, setState] = useState<
+    LoadState<{ overview: OperatingHoursOverview; targets: HoursTarget[] }>
+  >({ phase: 'loading' });
+  const [targetKey, setTargetKey] = useState('');
+  const [timezone, setTimezone] = useState(
+    Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+  );
+  const [effectiveFrom, setEffectiveFrom] = useState(
+    new Date(applicationStartedAt + 180000).toISOString().slice(0, 16),
+  );
+  const [effectiveTo, setEffectiveTo] = useState('');
+  const [intervals, setIntervals] = useState<HoursIntervalDraft[]>([
+    { weekday: 1, start: '09:00', end: '17:00', endsNextDay: false },
+  ]);
+  const [exceptions, setExceptions] = useState<HoursExceptionDraft[]>([]);
+  const [reason, setReason] = useState('');
+  const [issue, setIssue] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    const options = { signal: controller.signal };
+    void Promise.all([
+      client.getOperatingHoursDirectory(organizationId, options),
+      client.getFacilityDirectory(organizationId, {}, options),
+    ]).then(async ([overview, facilities]) => {
+      if (controller.signal.aborted) return;
+      if (!overview.ok) {
+        setState({ phase: 'failure', issue: failureMessage(overview) });
+        return;
+      }
+      if (!facilities.ok) {
+        setState({ phase: 'failure', issue: failureMessage(facilities) });
+        return;
+      }
+      const targets: HoursTarget[] = facilities.data.facilities.map((facility) => ({
+        type: 'facility',
+        id: facility.facilityId,
+        label: `Facility · ${facility.displayName}`,
+      }));
+      const locationResults = await Promise.all(
+        facilities.data.facilities.map((facility) =>
+          client.getServiceLocationDirectory(organizationId, facility.facilityId, options),
+        ),
+      );
+      if (controller.signal.aborted) return;
+      for (const [index, result] of locationResults.entries())
+        if (result.ok)
+          for (const location of result.data.locations)
+            if (location.status !== 'closed')
+              targets.push({
+                type: 'location',
+                id: location.locationId,
+                label: `Location · ${location.name}`,
+                facilityId: facilities.data.facilities[index]?.facilityId,
+              });
+      setState({ phase: 'ready', data: { overview: overview.data, targets } });
+      setTargetKey(
+        (current) => current || (targets[0] ? `${targets[0].type}:${targets[0].id}` : ''),
+      );
+    });
+    return () => controller.abort();
+  }, [attempt, client, organizationId]);
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (state.phase !== 'ready' || busy) return;
+    const target = state.data.targets.find(
+      (candidate) => `${candidate.type}:${candidate.id}` === targetKey,
+    );
+    if (!target) return;
+    setBusy(true);
+    setIssue('');
+    const body = {
+      timezone: timezone.trim(),
+      effectiveFrom: new Date(effectiveFrom).toISOString(),
+      effectiveTo: effectiveTo ? new Date(effectiveTo).toISOString() : null,
+      intervals: intervals.map((item) => ({
+        weekday: item.weekday,
+        startMinute: minutes(item.start),
+        endMinute: minutes(item.end),
+        endsNextDay: item.endsNextDay,
+      })),
+      exceptions: exceptions.map((item) => ({
+        localDate: item.localDate,
+        closed: item.closed,
+        label: item.label.trim(),
+        reasonCode: item.reasonCode.trim(),
+        intervals: item.closed
+          ? []
+          : [
+              {
+                startMinute: minutes(item.start),
+                endMinute: minutes(item.end),
+                endsNextDay: item.endsNextDay,
+              },
+            ],
+      })),
+      reason: reason.trim(),
+    };
+    const result = await client.replaceOperatingHours(
+      organizationId,
+      target.type,
+      target.id,
+      body,
+      `hours-replace:${globalThis.crypto.randomUUID()}`,
+    );
+    setBusy(false);
+    if (!result.ok) {
+      setIssue(failureMessage(result));
+      return;
+    }
+    setReason('');
+    setAttempt((value) => value + 1);
+    setState({ phase: 'loading' });
+  };
+  const batches = state.phase === 'ready' ? state.data.overview.batches : [];
+  return (
+    <>
+      <PageHeading id="M1-16" />
+      {state.phase === 'loading' ? (
+        <LoadingPanel />
+      ) : state.phase === 'failure' ? (
+        <FailurePanel
+          issue={state.issue}
+          onRetry={() => {
+            setState({ phase: 'loading' });
+            setAttempt((value) => value + 1);
+          }}
+        />
+      ) : (
+        <>
+          {issue && <div className="inline-alert error-alert">{issue}</div>}
+          <section className="content-panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Atomic operating-hours batches</h2>
+                <p>Weekly intervals and dated exceptions commit as one governed batch.</p>
+              </div>
+              <span className="status-badge">{batches.length} batches</span>
+            </div>
+            {batches.length === 0 ? (
+              <p className="empty-state">No operating-hours batch exists yet.</p>
+            ) : (
+              <div className="record-grid">
+                {batches.map((batch, index) => (
+                  <LiveRecord key={String(batch.batchId ?? index)} value={batch} />
+                ))}
+              </div>
+            )}
+          </section>
+          {Boolean(state.data.overview.canManage) && (
+            <section className="content-panel">
+              <h2>Save hours batch</h2>
+              <form onSubmit={(event) => void submit(event)}>
+                <div className="form-grid">
+                  <label>
+                    Target
+                    <select
+                      required
+                      value={targetKey}
+                      onChange={(event) => setTargetKey(event.target.value)}
+                    >
+                      <option value="">Select target</option>
+                      {state.data.targets.map((target) => (
+                        <option
+                          key={`${target.type}:${target.id}`}
+                          value={`${target.type}:${target.id}`}
+                        >
+                          {target.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Timezone
+                    <input
+                      required
+                      value={timezone}
+                      onChange={(event) => setTimezone(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Effective from
+                    <input
+                      required
+                      type="datetime-local"
+                      value={effectiveFrom}
+                      onChange={(event) => setEffectiveFrom(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Effective to
+                    <input
+                      type="datetime-local"
+                      value={effectiveTo}
+                      onChange={(event) => setEffectiveTo(event.target.value)}
+                    />
+                  </label>
+                </div>
+                <h3>Weekly intervals</h3>
+                {intervals.map((item, index) => (
+                  <div className="form-grid" key={index}>
+                    <label>
+                      Weekday
+                      <select
+                        value={item.weekday}
+                        onChange={(event) =>
+                          setIntervals((current) =>
+                            current.map((value, position) =>
+                              position === index
+                                ? { ...value, weekday: Number(event.target.value) }
+                                : value,
+                            ),
+                          )
+                        }
+                      >
+                        {[
+                          'Monday',
+                          'Tuesday',
+                          'Wednesday',
+                          'Thursday',
+                          'Friday',
+                          'Saturday',
+                          'Sunday',
+                        ].map((day, position) => (
+                          <option key={day} value={position + 1}>
+                            {day}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Start
+                      <input
+                        required
+                        type="time"
+                        value={item.start}
+                        onChange={(event) =>
+                          setIntervals((current) =>
+                            current.map((value, position) =>
+                              position === index ? { ...value, start: event.target.value } : value,
+                            ),
+                          )
+                        }
+                      />
+                    </label>
+                    <label>
+                      End
+                      <input
+                        required
+                        type="time"
+                        value={item.end}
+                        onChange={(event) =>
+                          setIntervals((current) =>
+                            current.map((value, position) =>
+                              position === index ? { ...value, end: event.target.value } : value,
+                            ),
+                          )
+                        }
+                      />
+                    </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={item.endsNextDay}
+                        onChange={(event) =>
+                          setIntervals((current) =>
+                            current.map((value, position) =>
+                              position === index
+                                ? { ...value, endsNextDay: event.target.checked }
+                                : value,
+                            ),
+                          )
+                        }
+                      />{' '}
+                      Ends next day
+                    </label>
+                    <button
+                      type="button"
+                      disabled={intervals.length === 1}
+                      onClick={() =>
+                        setIntervals((current) =>
+                          current.filter((_, position) => position !== index),
+                        )
+                      }
+                    >
+                      Remove interval
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setIntervals((current) => [
+                      ...current,
+                      { weekday: 1, start: '09:00', end: '17:00', endsNextDay: false },
+                    ])
+                  }
+                >
+                  Add interval
+                </button>
+                <h3>Holiday exceptions</h3>
+                {exceptions.map((item, index) => (
+                  <div className="form-grid" key={index}>
+                    <label>
+                      Date
+                      <input
+                        required
+                        type="date"
+                        value={item.localDate}
+                        onChange={(event) =>
+                          setExceptions((current) =>
+                            current.map((value, position) =>
+                              position === index
+                                ? { ...value, localDate: event.target.value }
+                                : value,
+                            ),
+                          )
+                        }
+                      />
+                    </label>
+                    <label>
+                      Label
+                      <input
+                        required
+                        value={item.label}
+                        onChange={(event) =>
+                          setExceptions((current) =>
+                            current.map((value, position) =>
+                              position === index ? { ...value, label: event.target.value } : value,
+                            ),
+                          )
+                        }
+                      />
+                    </label>
+                    <label>
+                      Reason code
+                      <input
+                        required
+                        pattern="[a-z][a-z0-9_]*(\.[a-z0-9_]+)+"
+                        value={item.reasonCode}
+                        onChange={(event) =>
+                          setExceptions((current) =>
+                            current.map((value, position) =>
+                              position === index
+                                ? { ...value, reasonCode: event.target.value }
+                                : value,
+                            ),
+                          )
+                        }
+                      />
+                    </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={item.closed}
+                        onChange={(event) =>
+                          setExceptions((current) =>
+                            current.map((value, position) =>
+                              position === index
+                                ? { ...value, closed: event.target.checked }
+                                : value,
+                            ),
+                          )
+                        }
+                      />{' '}
+                      Closed all day
+                    </label>
+                    {!item.closed && (
+                      <>
+                        <label>
+                          Start
+                          <input
+                            required
+                            type="time"
+                            value={item.start}
+                            onChange={(event) =>
+                              setExceptions((current) =>
+                                current.map((value, position) =>
+                                  position === index
+                                    ? { ...value, start: event.target.value }
+                                    : value,
+                                ),
+                              )
+                            }
+                          />
+                        </label>
+                        <label>
+                          End
+                          <input
+                            required
+                            type="time"
+                            value={item.end}
+                            onChange={(event) =>
+                              setExceptions((current) =>
+                                current.map((value, position) =>
+                                  position === index
+                                    ? { ...value, end: event.target.value }
+                                    : value,
+                                ),
+                              )
+                            }
+                          />
+                        </label>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExceptions((current) =>
+                          current.filter((_, position) => position !== index),
+                        )
+                      }
+                    >
+                      Remove exception
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExceptions((current) => [
+                      ...current,
+                      {
+                        localDate: '',
+                        closed: true,
+                        label: '',
+                        reasonCode: 'hours.holiday',
+                        start: '09:00',
+                        end: '17:00',
+                        endsNextDay: false,
+                      },
+                    ])
+                  }
+                >
+                  Add exception
+                </button>
+                <label>
+                  Reason
+                  <textarea
+                    required
+                    minLength={10}
+                    maxLength={500}
+                    value={reason}
+                    onChange={(event) => setReason(event.target.value)}
+                  />
+                </label>
+                <div className="form-actions">
+                  <button className="primary-button" disabled={busy || !targetKey}>
+                    {busy ? 'Saving...' : 'Save hours batch'}
+                  </button>
+                </div>
+              </form>
+            </section>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+function ServiceCatalogueScreen({ client, organizationId }: AdministrationScreenProps) {
+  const [attempt, setAttempt] = useState(0);
+  const [state, setState] = useState<
+    LoadState<{
+      directory: ServiceCatalogue;
+      governance: OrganizationGovernanceDirectory;
+    }>
+  >({ phase: 'loading' });
+  const [form, setForm] = useState({
+    serviceCode: '',
+    displayName: '',
+    clinicalName: '',
+    description: '',
+    codingSystem: '',
+    codingCode: '',
+    ownerResponsibilityId: '',
+    reason: '',
+  });
+  const [busy, setBusy] = useState(false);
+  const [issue, setIssue] = useState('');
+  const [editing, setEditing] = useState<ServiceDefinition | null>(null);
+  const [action, setAction] = useState<{
+    record: ServiceDefinition;
+    kind: 'activations' | 'retirements';
+  } | null>(null);
+  const [actionReason, setActionReason] = useState('');
+  useEffect(() => {
+    const controller = new AbortController();
+    const options = { signal: controller.signal };
+    void Promise.all([
+      client.getServiceCatalogue(organizationId, options),
+      client.getOrganizationGovernanceDirectory(organizationId, options),
+    ]).then(([directory, governance]) => {
+      if (controller.signal.aborted) return;
+      if (!directory.ok) {
+        setState({
+          phase: 'failure',
+          issue: failureMessage(directory),
+        });
+        return;
+      }
+      if (!governance.ok) {
+        setState({ phase: 'failure', issue: failureMessage(governance) });
+        return;
+      }
+      setState({
+        phase: 'ready',
+        data: { directory: directory.data, governance: governance.data },
+      });
+    });
+    return () => controller.abort();
+  }, [attempt, client, organizationId]);
+  const save = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (state.phase !== 'ready' || busy || !state.data.directory.canManage) return;
+    setBusy(true);
+    setIssue('');
+    const body = {
+      ...form,
+      serviceCode: form.serviceCode.trim().toUpperCase(),
+      displayName: form.displayName.trim(),
+      clinicalName: form.clinicalName.trim() || null,
+      description: form.description.trim() || null,
+      codingSystem: form.codingSystem.trim() || null,
+      codingCode: form.codingCode.trim() || null,
+      ownerResponsibilityId: form.ownerResponsibilityId || null,
+      reason: form.reason.trim(),
+    };
+    const result = editing
+      ? await client.updateServiceDefinition(
+          organizationId,
+          editing.serviceId,
+          body,
+          `"service:${editing.serviceId}:${editing.lockVersion}"`,
+          `service-update:${globalThis.crypto.randomUUID()}`,
+        )
+      : await client.createServiceDefinition(
+          organizationId,
+          body,
+          `service-create:${globalThis.crypto.randomUUID()}`,
+        );
+    setBusy(false);
+    if (!result.ok) {
+      setIssue(failureMessage(result));
+      return;
+    }
+    setForm({
+      ...form,
+      serviceCode: '',
+      displayName: '',
+      clinicalName: '',
+      description: '',
+      codingSystem: '',
+      codingCode: '',
+      reason: '',
+    });
+    setEditing(null);
+    setState({ phase: 'loading' });
+    setAttempt((v) => v + 1);
+  };
+  const transition = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!action || busy) return;
+    setBusy(true);
+    setIssue('');
+    const result = await client.transitionServiceDefinition(
+      organizationId,
+      action.record.serviceId,
+      action.kind,
+      actionReason.trim(),
+      `"service:${action.record.serviceId}:${action.record.lockVersion}"`,
+      `service-${action.kind}:${globalThis.crypto.randomUUID()}`,
+    );
+    setBusy(false);
+    if (!result.ok) {
+      setIssue(failureMessage(result));
+      return;
+    }
+    setAction(null);
+    setActionReason('');
+    setState({ phase: 'loading' });
+    setAttempt((v) => v + 1);
+  };
+  const services = state.phase === 'ready' ? state.data.directory.services : [];
+  return (
+    <>
+      <PageHeading id="M1-17" />
+      {state.phase === 'loading' ? (
+        <LoadingPanel />
+      ) : state.phase === 'failure' ? (
+        <FailurePanel
+          issue={state.issue}
+          onRetry={() => {
+            setState({ phase: 'loading' });
+            setAttempt((v) => v + 1);
+          }}
+        />
+      ) : (
+        <>
+          {issue && <div className="inline-alert error-alert">{issue}</div>}
+          <section className="content-panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Service catalogue</h2>
+                <p>Stable coded definitions with clinical ownership and governed lifecycle.</p>
+              </div>
+              <span className="status-badge">{services.length} services</span>
+            </div>
+            <div className="record-grid">
+              {services.map((service) => (
+                <article className="record-card" key={service.serviceId}>
+                  <div className="record-card-head">
+                    <strong>{service.displayName}</strong>
+                    <span className="status-badge">{service.status}</span>
+                  </div>
+                  <p>
+                    {service.serviceCode}
+                    {service.clinicalName ? ` · ${service.clinicalName}` : ''}
+                  </p>
+                  <small>
+                    {service.codingSystem && service.codingCode
+                      ? `${service.codingSystem}: ${service.codingCode}`
+                      : 'No external coding'}
+                  </small>
+                  {Boolean(state.data.directory.canManage) && service.status === 'draft' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditing(service);
+                        setForm({
+                          serviceCode: service.serviceCode,
+                          displayName: service.displayName,
+                          clinicalName: service.clinicalName ?? '',
+                          description: service.description ?? '',
+                          codingSystem: service.codingSystem ?? '',
+                          codingCode: service.codingCode ?? '',
+                          ownerResponsibilityId: service.ownerResponsibilityId ?? '',
+                          reason: '',
+                        });
+                      }}
+                    >
+                      Edit draft
+                    </button>
+                  )}
+                  {Boolean(state.data.directory.canManageLifecycle) && (
+                    <div className="form-actions">
+                      {service.status === 'draft' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAction({ record: service, kind: 'activations' });
+                            setActionReason('');
+                          }}
+                        >
+                          Activate
+                        </button>
+                      )}
+                      {service.status === 'active' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAction({ record: service, kind: 'retirements' });
+                            setActionReason('');
+                          }}
+                        >
+                          Retire
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </article>
+              ))}
+            </div>
+          </section>
+          {action && (
+            <section className="content-panel">
+              <h2>{action.kind === 'activations' ? 'Activate' : 'Retire'} service</h2>
+              <form onSubmit={(event) => void transition(event)}>
+                <label>
+                  Impact reason
+                  <textarea
+                    required
+                    minLength={10}
+                    maxLength={500}
+                    value={actionReason}
+                    onChange={(event) => setActionReason(event.target.value)}
+                  />
+                </label>
+                <div className="form-actions">
+                  <button className="primary-button" disabled={busy}>
+                    Confirm
+                  </button>
+                  <button type="button" onClick={() => setAction(null)}>
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </section>
+          )}
+          {Boolean(state.data.directory.canManage) && (
+            <section className="content-panel">
+              <h2>{editing ? 'Edit service draft' : 'Add service'}</h2>
+              <form onSubmit={(event) => void save(event)}>
+                <div className="form-grid">
+                  <label>
+                    Service code
+                    <input
+                      required
+                      pattern="[A-Z][A-Z0-9_.-]{1,39}"
+                      value={form.serviceCode}
+                      onChange={(event) =>
+                        setForm({ ...form, serviceCode: event.target.value.toUpperCase() })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Display name
+                    <input
+                      required
+                      minLength={2}
+                      maxLength={120}
+                      value={form.displayName}
+                      onChange={(event) => setForm({ ...form, displayName: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    Clinical name
+                    <input
+                      maxLength={160}
+                      value={form.clinicalName}
+                      onChange={(event) => setForm({ ...form, clinicalName: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    Coding system
+                    <input
+                      maxLength={80}
+                      value={form.codingSystem}
+                      onChange={(event) => setForm({ ...form, codingSystem: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    Coding code
+                    <input
+                      maxLength={80}
+                      value={form.codingCode}
+                      onChange={(event) => setForm({ ...form, codingCode: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    Clinical owner
+                    <select
+                      value={form.ownerResponsibilityId}
+                      onChange={(event) =>
+                        setForm({ ...form, ownerResponsibilityId: event.target.value })
+                      }
+                    >
+                      <option value="">No clinical owner</option>
+                      {state.data.governance.responsibilities
+                        .filter(
+                          (item) =>
+                            item.responsibilityType === 'clinical' && item.status === 'active',
+                        )
+                        .map((item) => (
+                          <option key={item.responsibilityId} value={item.responsibilityId}>
+                            {item.assigneeDisplay}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <label className="full-width">
+                    Description
+                    <textarea
+                      maxLength={500}
+                      value={form.description}
+                      onChange={(event) => setForm({ ...form, description: event.target.value })}
+                    />
+                  </label>
+                  <label className="full-width">
+                    Reason
+                    <textarea
+                      required
+                      minLength={10}
+                      maxLength={500}
+                      value={form.reason}
+                      onChange={(event) => setForm({ ...form, reason: event.target.value })}
+                    />
+                  </label>
+                </div>
+                <div className="form-actions">
+                  <button className="primary-button" disabled={busy}>
+                    {busy ? 'Saving...' : editing ? 'Save draft' : 'Add service'}
+                  </button>
+                  {editing && (
+                    <button type="button" onClick={() => setEditing(null)}>
+                      Cancel edit
+                    </button>
+                  )}
+                </div>
+              </form>
+            </section>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+function ServiceAssignmentScreen({ client, organizationId }: AdministrationScreenProps) {
+  const [attempt, setAttempt] = useState(0);
+  const [state, setState] = useState<
+    LoadState<{
+      directory: ServiceAssignmentDirectory;
+      services: ServiceDefinition[];
+      facilities: FacilityDirectory;
+      locations: HoursTarget[];
+    }>
+  >({ phase: 'loading' });
+  const [form, setForm] = useState({
+    serviceId: '',
+    facilityId: '',
+    locationId: '',
+    capacity: '',
+    availabilityNotes: '',
+    prerequisites: [] as string[],
+    effectiveFrom: new Date(applicationStartedAt + 180000).toISOString().slice(0, 16),
+    effectiveTo: '',
+    reason: '',
+  });
+  const [busy, setBusy] = useState(false);
+  const [issue, setIssue] = useState('');
+  const [editing, setEditing] = useState<ServiceAssignment | null>(null);
+  const [action, setAction] = useState<{
+    record: ServiceAssignment;
+    kind: 'activations' | 'suspensions' | 'endings' | 'cancellations';
+  } | null>(null);
+  const [actionReason, setActionReason] = useState('');
+  useEffect(() => {
+    const controller = new AbortController();
+    const options = { signal: controller.signal };
+    void Promise.all([
+      client.getServiceAssignmentDirectory(organizationId, options),
+      client.getServiceCatalogue(organizationId, options),
+      client.getFacilityDirectory(organizationId, {}, options),
+    ]).then(async ([directory, catalogue, facilities]) => {
+      if (controller.signal.aborted) return;
+      if (!directory.ok) {
+        setState({
+          phase: 'failure',
+          issue: failureMessage(directory),
+        });
+        return;
+      }
+      if (!catalogue.ok) {
+        setState({ phase: 'failure', issue: failureMessage(catalogue) });
+        return;
+      }
+      if (!facilities.ok) {
+        setState({ phase: 'failure', issue: failureMessage(facilities) });
+        return;
+      }
+      const locations: HoursTarget[] = [];
+      for (const facility of facilities.data.facilities) {
+        const result = await client.getServiceLocationDirectory(
+          organizationId,
+          facility.facilityId,
+          options,
+        );
+        if (result.ok)
+          for (const location of result.data.locations)
+            if (location.status === 'active')
+              locations.push({
+                type: 'location',
+                id: location.locationId,
+                facilityId: facility.facilityId,
+                label: `${facility.displayName} · ${location.name}`,
+              });
+      }
+      if (controller.signal.aborted) return;
+      const services = catalogue.data.services;
+      setState({
+        phase: 'ready',
+        data: { directory: directory.data, services, facilities: facilities.data, locations },
+      });
+      setForm((current) => ({
+        ...current,
+        serviceId:
+          current.serviceId || services.find((item) => item.status === 'active')?.serviceId || '',
+        facilityId:
+          current.facilityId ||
+          facilities.data.facilities.find((item) => item.status === 'active')?.facilityId ||
+          '',
+      }));
+    });
+    return () => controller.abort();
+  }, [attempt, client, organizationId]);
+  const save = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (state.phase !== 'ready' || busy || !state.data.directory.canManage) return;
+    setBusy(true);
+    setIssue('');
+    const body = {
+      serviceId: form.serviceId,
+      facilityId: form.facilityId,
+      locationId: form.locationId || null,
+      capacity: form.capacity ? Number(form.capacity) : null,
+      availabilityNotes: form.availabilityNotes.trim() || null,
+      prerequisites: form.prerequisites,
+      effectiveFrom: new Date(form.effectiveFrom).toISOString(),
+      effectiveTo: form.effectiveTo ? new Date(form.effectiveTo).toISOString() : null,
+      reason: form.reason.trim(),
+    };
+    const result = editing
+      ? await client.updateServiceAssignment(
+          organizationId,
+          editing.assignmentId,
+          body,
+          `"service-assignment:${editing.assignmentId}:${editing.lockVersion}"`,
+          `assignment-update:${globalThis.crypto.randomUUID()}`,
+        )
+      : await client.createServiceAssignment(
+          organizationId,
+          body,
+          `assignment-create:${globalThis.crypto.randomUUID()}`,
+        );
+    setBusy(false);
+    if (!result.ok) {
+      setIssue(failureMessage(result));
+      return;
+    }
+    setForm({ ...form, capacity: '', availabilityNotes: '', prerequisites: [], reason: '' });
+    setEditing(null);
+    setState({ phase: 'loading' });
+    setAttempt((value) => value + 1);
+  };
+  const transition = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!action || busy) return;
+    setBusy(true);
+    setIssue('');
+    const result = await client.transitionServiceAssignment(
+      organizationId,
+      action.record.assignmentId,
+      action.kind,
+      action.record.status,
+      actionReason.trim(),
+      `"service-assignment:${action.record.assignmentId}:${action.record.lockVersion}"`,
+      `assignment-${action.kind}:${globalThis.crypto.randomUUID()}`,
+    );
+    setBusy(false);
+    if (!result.ok) {
+      setIssue(failureMessage(result));
+      return;
+    }
+    setAction(null);
+    setActionReason('');
+    setState({ phase: 'loading' });
+    setAttempt((value) => value + 1);
+  };
+  const assignments = state.phase === 'ready' ? state.data.directory.assignments : [];
+  const serviceName = (id: string) =>
+    state.phase === 'ready'
+      ? (state.data.services.find((item) => item.serviceId === id)?.displayName ?? id)
+      : id;
+  const facilityName = (id: string) =>
+    state.phase === 'ready'
+      ? (state.data.facilities.facilities.find((item) => item.facilityId === id)?.displayName ?? id)
+      : id;
+  return (
+    <>
+      <PageHeading id="M1-18" />
+      {state.phase === 'loading' ? (
+        <LoadingPanel />
+      ) : state.phase === 'failure' ? (
+        <FailurePanel
+          issue={state.issue}
+          onRetry={() => {
+            setState({ phase: 'loading' });
+            setAttempt((value) => value + 1);
+          }}
+        />
+      ) : (
+        <>
+          {issue && <div className="inline-alert error-alert">{issue}</div>}
+          <section className="content-panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Facility services</h2>
+                <p>
+                  Effective, non-overlapping delivery assignments to eligible facilities and
+                  locations.
+                </p>
+              </div>
+              <span className="status-badge">{assignments.length} assignments</span>
+            </div>
+            <div className="record-grid">
+              {assignments.map((record) => (
+                <article className="record-card" key={record.assignmentId}>
+                  <div className="record-card-head">
+                    <strong>{serviceName(record.serviceId)}</strong>
+                    <span className="status-badge">{record.status}</span>
+                  </div>
+                  <p>
+                    {facilityName(record.facilityId)}
+                    {record.locationId ? ' · selected location' : ''}
+                  </p>
+                  <small>
+                    {record.capacity == null ? 'Unbounded capacity' : `Capacity ${record.capacity}`}{' '}
+                    · {new Date(record.effectiveFrom).toLocaleString()}
+                  </small>
+                  {Boolean(state.data.directory.canManage) && record.status === 'scheduled' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditing(record);
+                        setForm({
+                          serviceId: record.serviceId,
+                          facilityId: record.facilityId,
+                          locationId: record.locationId ?? '',
+                          capacity: record.capacity?.toString() ?? '',
+                          availabilityNotes: record.availabilityNotes ?? '',
+                          prerequisites: record.prerequisites,
+                          effectiveFrom: new Date(record.effectiveFrom).toISOString().slice(0, 16),
+                          effectiveTo: record.effectiveTo
+                            ? new Date(record.effectiveTo).toISOString().slice(0, 16)
+                            : '',
+                          reason: '',
+                        });
+                      }}
+                    >
+                      Edit scheduled assignment
+                    </button>
+                  )}
+                  {Boolean(state.data.directory.canManageLifecycle) && (
+                    <div className="form-actions">
+                      {record.status === 'scheduled' && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setAction({ record, kind: 'activations' })}
+                          >
+                            Activate now
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAction({ record, kind: 'cancellations' })}
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      )}
+                      {record.status === 'active' && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setAction({ record, kind: 'suspensions' })}
+                          >
+                            Suspend
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAction({ record, kind: 'endings' })}
+                          >
+                            End
+                          </button>
+                        </>
+                      )}
+                      {record.status === 'suspended' && (
+                        <button
+                          type="button"
+                          onClick={() => setAction({ record, kind: 'endings' })}
+                        >
+                          End
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </article>
+              ))}
+            </div>
+          </section>
+          {action && (
+            <section className="content-panel">
+              <h2>Confirm assignment lifecycle change</h2>
+              <p>
+                An ended or cancelled assignment is terminal. Recovery from suspension requires a
+                new effective assignment.
+              </p>
+              <form onSubmit={(event) => void transition(event)}>
+                <label>
+                  Impact reason
+                  <textarea
+                    required
+                    minLength={10}
+                    maxLength={500}
+                    value={actionReason}
+                    onChange={(event) => setActionReason(event.target.value)}
+                  />
+                </label>
+                <div className="form-actions">
+                  <button className="primary-button" disabled={busy}>
+                    Confirm
+                  </button>
+                  <button type="button" onClick={() => setAction(null)}>
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </section>
+          )}
+          {Boolean(state.data.directory.canManage) && (
+            <section className="content-panel">
+              <h2>{editing ? 'Edit scheduled assignment' : 'Assign service'}</h2>
+              <form onSubmit={(event) => void save(event)}>
+                <div className="form-grid">
+                  <label>
+                    Active service
+                    <select
+                      required
+                      value={form.serviceId}
+                      onChange={(event) => setForm({ ...form, serviceId: event.target.value })}
+                    >
+                      <option value="">Select service</option>
+                      {state.data.services
+                        .filter((item) => item.status === 'active')
+                        .map((item) => (
+                          <option key={item.serviceId} value={item.serviceId}>
+                            {item.displayName}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <label>
+                    Active facility
+                    <select
+                      required
+                      value={form.facilityId}
+                      onChange={(event) =>
+                        setForm({ ...form, facilityId: event.target.value, locationId: '' })
+                      }
+                    >
+                      <option value="">Select facility</option>
+                      {state.data.facilities.facilities
+                        .filter((item) => item.status === 'active')
+                        .map((item) => (
+                          <option key={item.facilityId} value={item.facilityId}>
+                            {item.displayName}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <label>
+                    Location
+                    <select
+                      value={form.locationId}
+                      onChange={(event) => setForm({ ...form, locationId: event.target.value })}
+                    >
+                      <option value="">Entire facility</option>
+                      {state.data.locations
+                        .filter((item) => item.facilityId === form.facilityId)
+                        .map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.label}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <label>
+                    Capacity
+                    <input
+                      type="number"
+                      min="1"
+                      value={form.capacity}
+                      onChange={(event) => setForm({ ...form, capacity: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    Effective from
+                    <input
+                      required
+                      type="datetime-local"
+                      value={form.effectiveFrom}
+                      onChange={(event) => setForm({ ...form, effectiveFrom: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    Effective to
+                    <input
+                      type="datetime-local"
+                      value={form.effectiveTo}
+                      onChange={(event) => setForm({ ...form, effectiveTo: event.target.value })}
+                    />
+                  </label>
+                  <label className="full-width">
+                    Availability notes
+                    <textarea
+                      maxLength={500}
+                      value={form.availabilityNotes}
+                      onChange={(event) =>
+                        setForm({ ...form, availabilityNotes: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label className="full-width">
+                    Prerequisites
+                    <select
+                      multiple
+                      value={form.prerequisites}
+                      onChange={(event) =>
+                        setForm({
+                          ...form,
+                          prerequisites: Array.from(
+                            event.target.selectedOptions,
+                            (option) => option.value,
+                          ),
+                        })
+                      }
+                    >
+                      <option value="appointment_required">Appointment required</option>
+                      <option value="referral_required">Referral required</option>
+                      <option value="authorization_required">Authorization required</option>
+                      <option value="age_restriction">Age restriction</option>
+                      <option value="accessibility_review">Accessibility review</option>
+                    </select>
+                  </label>
+                  <label className="full-width">
+                    Reason
+                    <textarea
+                      required
+                      minLength={10}
+                      maxLength={500}
+                      value={form.reason}
+                      onChange={(event) => setForm({ ...form, reason: event.target.value })}
+                    />
+                  </label>
+                </div>
+                <div className="form-actions">
+                  <button className="primary-button" disabled={busy}>
+                    {busy ? 'Saving...' : editing ? 'Save assignment' : 'Assign service'}
+                  </button>
+                  {editing && (
+                    <button type="button" onClick={() => setEditing(null)}>
+                      Cancel edit
+                    </button>
+                  )}
+                </div>
+              </form>
+            </section>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+function IdentifierSchemeScreen({ client, organizationId }: AdministrationScreenProps) {
+  const [attempt, setAttempt] = useState(0);
+  const [state, setState] = useState<
+    LoadState<{
+      directory: IdentifierSchemeDirectory;
+      facilities: FacilityDirectory;
+      services: ServiceDefinition[];
+    }>
+  >({ phase: 'loading' });
+  const [form, setForm] = useState({
+    schemeKey: '',
+    scopeType: 'organization',
+    scopeId: '',
+    description: '',
+    prefix: '',
+    pattern: '^[A-Z0-9]+$',
+    alphabet: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+    checkDigitAlgorithm: '',
+    sequenceStart: '1',
+    sequenceIncrement: '1',
+    padding: '8',
+    effectiveFrom: new Date(applicationStartedAt + 180000).toISOString().slice(0, 16),
+    reason: '',
+  });
+  const [busy, setBusy] = useState(false);
+  const [issue, setIssue] = useState('');
+  const [versioning, setVersioning] = useState<IdentifierScheme | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    const options = { signal: controller.signal };
+    void Promise.all([
+      client.getIdentifierSchemeDirectory(organizationId, options),
+      client.getFacilityDirectory(organizationId, {}, options),
+      client.getServiceCatalogue(organizationId, options),
+    ]).then(([directory, facilities, services]) => {
+      if (controller.signal.aborted) return;
+      if (!directory.ok) {
+        setState({
+          phase: 'failure',
+          issue: failureMessage(directory),
+        });
+        return;
+      }
+      if (!facilities.ok) {
+        setState({ phase: 'failure', issue: failureMessage(facilities) });
+        return;
+      }
+      if (!services.ok) {
+        setState({ phase: 'failure', issue: failureMessage(services) });
+        return;
+      }
+      setState({
+        phase: 'ready',
+        data: {
+          directory: directory.data,
+          facilities: facilities.data,
+          services: services.data.services,
+        },
+      });
+    });
+    return () => controller.abort();
+  }, [attempt, client, organizationId]);
+  const save = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (state.phase !== 'ready' || busy || !state.data.directory.canManage) return;
+    const start = Number(form.sequenceStart),
+      increment = Number(form.sequenceIncrement),
+      padding = Number(form.padding);
+    setBusy(true);
+    setIssue('');
+    const body = {
+      versionId: versioning?.versions[0]?.versionId ?? null,
+      schemeKey: form.schemeKey.trim().toUpperCase(),
+      scopeType: form.scopeType,
+      scopeId: form.scopeType === 'organization' ? null : form.scopeId,
+      description: form.description.trim() || null,
+      prefix: form.prefix.trim(),
+      pattern: form.pattern.trim(),
+      alphabet: form.alphabet.trim(),
+      checkDigitAlgorithm: form.checkDigitAlgorithm || null,
+      sequenceStart: start,
+      sequenceIncrement: increment,
+      padding,
+      effectiveFrom: new Date(form.effectiveFrom).toISOString(),
+      reason: form.reason.trim(),
+    };
+    const latest = versioning?.versions[0];
+    const result =
+      versioning && latest
+        ? await client.createIdentifierSchemeVersion(
+            organizationId,
+            versioning.schemeId,
+            body,
+            `"identifier-scheme:${versioning.schemeId}:${versioning.lockVersion}:${latest.versionId}:${latest.lockVersion}"`,
+            `scheme-version-create:${globalThis.crypto.randomUUID()}`,
+          )
+        : await client.createIdentifierScheme(
+            organizationId,
+            body,
+            `scheme-create:${globalThis.crypto.randomUUID()}`,
+          );
+    setBusy(false);
+    if (!result.ok) {
+      setIssue(failureMessage(result));
+      return;
+    }
+    setForm({ ...form, schemeKey: '', description: '', reason: '' });
+    setVersioning(null);
+    setState({ phase: 'loading' });
+    setAttempt((value) => value + 1);
+  };
+  const schemes = state.phase === 'ready' ? state.data.directory.schemes : [];
+  return (
+    <>
+      <PageHeading id="M1-19" />
+      {state.phase === 'loading' ? (
+        <LoadingPanel />
+      ) : state.phase === 'failure' ? (
+        <FailurePanel
+          issue={state.issue}
+          onRetry={() => {
+            setState({ phase: 'loading' });
+            setAttempt((value) => value + 1);
+          }}
+        />
+      ) : (
+        <>
+          {issue && <div className="inline-alert error-alert">{issue}</div>}
+          <section className="content-panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Identifier schemes</h2>
+                <p>
+                  Immutable, scoped sequence versions. Activation is completed only through
+                  independent M1-21 approval.
+                </p>
+              </div>
+              <span className="status-badge">{schemes.length} schemes</span>
+            </div>
+            <div className="record-grid">
+              {schemes.map((scheme) => (
+                <article className="record-card" key={scheme.schemeId}>
+                  <div className="record-card-head">
+                    <strong>{scheme.schemeKey}</strong>
+                    <span className="status-badge">{scheme.status}</span>
+                  </div>
+                  <p>
+                    {scheme.scopeType}
+                    {scheme.description ? ` · ${scheme.description}` : ''}
+                  </p>
+                  {scheme.versions.map((version) => (
+                    <div key={version.versionId}>
+                      <small>
+                        v{version.versionNumber} · {version.status} ·{' '}
+                        {version.previewSamples.join(', ')}
+                      </small>
+                    </div>
+                  ))}
+                  {Boolean(state.data.directory.canManage) &&
+                    scheme.status !== 'retired' &&
+                    !scheme.versions.some((version) => version.status === 'draft') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const latest = scheme.versions[0];
+                          setVersioning(scheme);
+                          setForm({
+                            schemeKey: scheme.schemeKey,
+                            scopeType: scheme.scopeType,
+                            scopeId: scheme.scopeId ?? '',
+                            description: scheme.description ?? '',
+                            prefix: latest?.prefix ?? '',
+                            pattern: latest?.pattern ?? '^[A-Z0-9]+$',
+                            alphabet: latest?.alphabet ?? '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+                            checkDigitAlgorithm: latest?.checkDigitAlgorithm ?? '',
+                            sequenceStart: latest
+                              ? String(latest.sequenceStart + latest.sequenceIncrement)
+                              : '1',
+                            sequenceIncrement: String(latest?.sequenceIncrement ?? 1),
+                            padding: String(latest?.padding ?? 8),
+                            effectiveFrom: new Date(Date.now() + 180000).toISOString().slice(0, 16),
+                            reason: '',
+                          });
+                        }}
+                      >
+                        Create next version
+                      </button>
+                    )}
+                </article>
+              ))}
+            </div>
+          </section>
+          {Boolean(state.data.directory.canManage) && (
+            <section className="content-panel">
+              <h2>
+                {versioning
+                  ? `Create next ${versioning.schemeKey} version`
+                  : 'Create scheme and first version'}
+              </h2>
+              <form onSubmit={(event) => void save(event)}>
+                <div className="form-grid">
+                  <label>
+                    Scheme key
+                    <input
+                      required
+                      disabled={Boolean(versioning)}
+                      pattern="[A-Z][A-Z0-9_.-]{1,39}"
+                      value={form.schemeKey}
+                      onChange={(event) =>
+                        setForm({ ...form, schemeKey: event.target.value.toUpperCase() })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Scope
+                    <select
+                      disabled={Boolean(versioning)}
+                      value={form.scopeType}
+                      onChange={(event) =>
+                        setForm({ ...form, scopeType: event.target.value, scopeId: '' })
+                      }
+                    >
+                      <option value="organization">Organization</option>
+                      <option value="facility">Facility</option>
+                      <option value="service">Service</option>
+                    </select>
+                  </label>
+                  {form.scopeType !== 'organization' && (
+                    <label>
+                      Scope record
+                      <select
+                        required
+                        value={form.scopeId}
+                        onChange={(event) => setForm({ ...form, scopeId: event.target.value })}
+                      >
+                        <option value="">Select scope</option>
+                        {form.scopeType === 'facility'
+                          ? state.data.facilities.facilities.map((item) => (
+                              <option key={item.facilityId} value={item.facilityId}>
+                                {item.displayName}
+                              </option>
+                            ))
+                          : state.data.services.map((item) => (
+                              <option key={item.serviceId} value={item.serviceId}>
+                                {item.displayName}
+                              </option>
+                            ))}
+                      </select>
+                    </label>
+                  )}
+                  <label>
+                    Prefix
+                    <input
+                      maxLength={20}
+                      value={form.prefix}
+                      onChange={(event) => setForm({ ...form, prefix: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    Validation pattern
+                    <input
+                      required
+                      value={form.pattern}
+                      onChange={(event) => setForm({ ...form, pattern: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    Alphabet
+                    <input
+                      required
+                      value={form.alphabet}
+                      onChange={(event) => setForm({ ...form, alphabet: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    Check digit
+                    <select
+                      value={form.checkDigitAlgorithm}
+                      onChange={(event) =>
+                        setForm({ ...form, checkDigitAlgorithm: event.target.value })
+                      }
+                    >
+                      <option value="">None</option>
+                      <option value="luhn_mod_n">Luhn mod N</option>
+                      <option value="mod_11">Mod 11</option>
+                    </select>
+                  </label>
+                  <label>
+                    Sequence start
+                    <input
+                      required
+                      type="number"
+                      min="0"
+                      value={form.sequenceStart}
+                      onChange={(event) => setForm({ ...form, sequenceStart: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    Increment
+                    <input
+                      required
+                      type="number"
+                      min="1"
+                      max="1000000"
+                      value={form.sequenceIncrement}
+                      onChange={(event) =>
+                        setForm({ ...form, sequenceIncrement: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Padding
+                    <input
+                      required
+                      type="number"
+                      min="1"
+                      max="20"
+                      value={form.padding}
+                      onChange={(event) => setForm({ ...form, padding: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    Effective from
+                    <input
+                      required
+                      type="datetime-local"
+                      value={form.effectiveFrom}
+                      onChange={(event) => setForm({ ...form, effectiveFrom: event.target.value })}
+                    />
+                  </label>
+                  <label className="full-width">
+                    Description
+                    <textarea
+                      maxLength={500}
+                      value={form.description}
+                      onChange={(event) => setForm({ ...form, description: event.target.value })}
+                    />
+                  </label>
+                  <label className="full-width">
+                    Reason
+                    <textarea
+                      required
+                      minLength={10}
+                      maxLength={500}
+                      value={form.reason}
+                      onChange={(event) => setForm({ ...form, reason: event.target.value })}
+                    />
+                  </label>
+                </div>
+                <div className="form-actions">
+                  <button className="primary-button" disabled={busy}>
+                    {busy ? 'Creating...' : versioning ? 'Create version' : 'Create scheme version'}
+                  </button>
+                  {versioning && (
+                    <button type="button" onClick={() => setVersioning(null)}>
+                      Cancel version
+                    </button>
+                  )}
+                </div>
+              </form>
+            </section>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+function ConfigurationActivationScreen({ client, organizationId }: AdministrationScreenProps) {
+  const [attempt, setAttempt] = useState(0);
+  const [state, setState] = useState<LoadState<ConfigurationActivationDirectory>>({
+    phase: 'loading',
+  });
+  const [form, setForm] = useState({
+    changeSummary: '',
+    reason: '',
+    requestedEffectiveAt: new Date(applicationStartedAt + 180000).toISOString().slice(0, 16),
+  });
+  const [action, setAction] = useState<{
+    record: ConfigurationActivation;
+    kind: 'submit' | 'approve' | 'reject' | 'activate';
+  } | null>(null);
+  const [actionReason, setActionReason] = useState('');
+  const [selectedChanges, setSelectedChanges] = useState<string[]>([]);
+  const [decisionCode, setDecisionCode] = useState('configuration.reviewed');
+  const [effectiveFrom, setEffectiveFrom] = useState(
+    new Date(applicationStartedAt + 180000).toISOString().slice(0, 16),
+  );
+  const [busy, setBusy] = useState(false);
+  const [issue, setIssue] = useState('');
+  useEffect(() => {
+    const controller = new AbortController();
+    void client
+      .getConfigurationActivationDirectory(organizationId, { signal: controller.signal })
+      .then((result) => {
+        if (controller.signal.aborted) return;
+        if (!result.ok) setState({ phase: 'failure', issue: failureMessage(result) });
+        else {
+          setState({ phase: 'ready', data: result.data });
+          setSelectedChanges(
+            result.data.pendingChanges
+              .filter((item) => item.changeType === 'activated')
+              .map((item) => `${item.subjectType}:${item.subjectId}`),
+          );
+        }
+      });
+    return () => controller.abort();
+  }, [attempt, client, organizationId]);
+  const reload = () => {
+    setState({ phase: 'loading' });
+    setAttempt((value) => value + 1);
+  };
+  const validate = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (state.phase !== 'ready' || busy || !state.data.canValidate) return;
+    const changeItems = state.data.pendingChanges
+      .filter((item) => selectedChanges.includes(`${item.subjectType}:${item.subjectId}`))
+      .map(({ subjectType, subjectId, expectedRevision, changeType }) => ({
+        subjectType,
+        subjectId,
+        expectedRevision,
+        changeType,
+      }));
+    if (changeItems.length === 0) {
+      setIssue('Select at least one typed business revision to validate.');
+      return;
+    }
+    setBusy(true);
+    setIssue('');
+    const result = await client.validateConfiguration(
+      organizationId,
+      {
+        changeSummary: form.changeSummary.trim(),
+        reason: form.reason.trim(),
+        requestedEffectiveAt: new Date(form.requestedEffectiveAt).toISOString(),
+        changeItems,
+      },
+      `configuration-validate:${globalThis.crypto.randomUUID()}`,
+    );
+    setBusy(false);
+    if (!result.ok) {
+      setIssue(failureMessage(result));
+      return;
+    }
+    setForm({ ...form, changeSummary: '', reason: '' });
+    reload();
+  };
+  const execute = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!action || busy) return;
+    const { approvalId, resultDigest, validationResultId } = action.record;
+    if (!validationResultId || !resultDigest) return;
+    if (action.kind === 'activate' && !approvalId) return;
+    setBusy(true);
+    setIssue('');
+    const record = action.record;
+    const etag = `"configuration:${record.configurationId}:${record.lockVersion}"`;
+    const key = `configuration-${action.kind}:${globalThis.crypto.randomUUID()}`;
+    let result;
+    if (action.kind === 'submit')
+      result = await client.submitConfiguration(
+        organizationId,
+        record.configurationId,
+        {
+          resultId: validationResultId,
+          resultDigest,
+          reason: actionReason.trim(),
+        },
+        etag,
+        key,
+      );
+    else if (action.kind === 'activate') {
+      if (!approvalId) {
+        setBusy(false);
+        return;
+      }
+      result = await client.activateConfiguration(
+        organizationId,
+        record.configurationId,
+        {
+          approvalId,
+          resultDigest,
+          effectiveFrom: new Date(effectiveFrom).toISOString(),
+          reason: actionReason.trim(),
+        },
+        etag,
+        key,
+      );
+    } else
+      result = await client.decideConfiguration(
+        organizationId,
+        record.configurationId,
+        {
+          resultId: validationResultId,
+          resultDigest,
+          approve: action.kind === 'approve',
+          decisionCode: decisionCode.trim(),
+          reason: actionReason.trim(),
+        },
+        etag,
+        key,
+      );
+    setBusy(false);
+    if (!result.ok) {
+      setIssue(failureMessage(result));
+      return;
+    }
+    setAction(null);
+    setActionReason('');
+    reload();
+  };
+  const configurations = state.phase === 'ready' ? state.data.configurations : [];
+  return (
+    <>
+      <PageHeading id="M1-21" />
+      {state.phase === 'loading' ? (
+        <LoadingPanel />
+      ) : state.phase === 'failure' ? (
+        <FailurePanel issue={state.issue} onRetry={reload} />
+      ) : (
+        <>
+          {issue && <div className="inline-alert error-alert">{issue}</div>}
+          <section className="content-panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Review and activate</h2>
+                <p>
+                  Validation, maker submission, independent decision, and activation remain bound to
+                  one exact digest.
+                </p>
+              </div>
+              <span className="status-badge">{configurations.length} versions</span>
+            </div>
+            <div className="record-grid">
+              {configurations.map((record) => (
+                <article className="record-card" key={record.configurationId}>
+                  <div className="record-card-head">
+                    <strong>{record.displayNumber}</strong>
+                    <span className="status-badge">{record.status}</span>
+                  </div>
+                  <p>{record.changeSummary}</p>
+                  <small>
+                    {record.blockerCount ?? 0} blockers · {record.warningCount ?? 0} warnings
+                    {record.validationExpiresAt
+                      ? ` · validation expires ${new Date(record.validationExpiresAt).toLocaleString()}`
+                      : ''}
+                  </small>
+                  <div className="form-actions">
+                    {record.canSubmit && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAction({ record, kind: 'submit' });
+                          setActionReason('');
+                        }}
+                      >
+                        Submit for approval
+                      </button>
+                    )}
+                    {record.canApprove && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAction({ record, kind: 'approve' });
+                            setActionReason('');
+                          }}
+                        >
+                          Approve
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAction({ record, kind: 'reject' });
+                            setActionReason('');
+                          }}
+                        >
+                          Reject
+                        </button>
+                      </>
+                    )}
+                    {record.canActivate && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAction({ record, kind: 'activate' });
+                          setActionReason('');
+                        }}
+                      >
+                        Activate
+                      </button>
+                    )}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+          {action && (
+            <section className="content-panel">
+              <h2>
+                {action.kind === 'submit'
+                  ? 'Submit configuration'
+                  : action.kind === 'activate'
+                    ? 'Activate configuration'
+                    : action.kind === 'approve'
+                      ? 'Approve configuration'
+                      : 'Reject configuration'}
+              </h2>
+              <p>
+                MFA, recent authentication, actor separation, digest freshness, parent state, and
+                readiness are rechecked by the server.
+              </p>
+              <form onSubmit={(event) => void execute(event)}>
+                {(action.kind === 'approve' || action.kind === 'reject') && (
+                  <label>
+                    Decision code
+                    <input
+                      required
+                      pattern="[a-z][a-z0-9._:-]*"
+                      value={decisionCode}
+                      onChange={(event) => setDecisionCode(event.target.value)}
+                    />
+                  </label>
+                )}
+                {action.kind === 'activate' && (
+                  <label>
+                    Effective from
+                    <input
+                      required
+                      type="datetime-local"
+                      value={effectiveFrom}
+                      onChange={(event) => setEffectiveFrom(event.target.value)}
+                    />
+                  </label>
+                )}
+                <label>
+                  Reason and warning acknowledgement
+                  <textarea
+                    required
+                    minLength={10}
+                    maxLength={500}
+                    value={actionReason}
+                    onChange={(event) => setActionReason(event.target.value)}
+                  />
+                </label>
+                <div className="form-actions">
+                  <button className="primary-button" disabled={busy}>
+                    Confirm
+                  </button>
+                  <button type="button" onClick={() => setAction(null)}>
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </section>
+          )}
+          {Boolean(state.data.canValidate) && (
+            <section className="content-panel">
+              <h2>Validate configuration candidate</h2>
+              <p>
+                The server derives the active parent, canonical tenant baseline, revisions, and
+                result digest. The browser cannot provide them.
+              </p>
+              <form onSubmit={(event) => void validate(event)}>
+                <fieldset>
+                  <legend>Business revisions to transition atomically</legend>
+                  {state.data.pendingChanges.map((item) => {
+                    const key = `${item.subjectType}:${item.subjectId}`;
+                    return (
+                      <label key={key}>
+                        <input
+                          type="checkbox"
+                          checked={selectedChanges.includes(key)}
+                          onChange={(event) =>
+                            setSelectedChanges((current) =>
+                              event.target.checked
+                                ? [...current, key]
+                                : current.filter((value) => value !== key),
+                            )
+                          }
+                        />{' '}
+                        {item.label} · {humanize(item.subjectType)} · {item.currentStatus} →{' '}
+                        {item.changeType}
+                      </label>
+                    );
+                  })}
+                </fieldset>
+                <label>
+                  Change summary
+                  <input
+                    required
+                    minLength={2}
+                    maxLength={500}
+                    value={form.changeSummary}
+                    onChange={(event) => setForm({ ...form, changeSummary: event.target.value })}
+                  />
+                </label>
+                <label>
+                  Requested effective time
+                  <input
+                    required
+                    type="datetime-local"
+                    value={form.requestedEffectiveAt}
+                    onChange={(event) =>
+                      setForm({ ...form, requestedEffectiveAt: event.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Validation reason
+                  <textarea
+                    required
+                    minLength={10}
+                    maxLength={500}
+                    value={form.reason}
+                    onChange={(event) => setForm({ ...form, reason: event.target.value })}
+                  />
+                </label>
+                <button className="primary-button" disabled={busy}>
+                  {busy ? 'Validating...' : 'Run validation'}
+                </button>
+              </form>
+            </section>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+type EvidenceItem = ConfigurationHistoryItem | AuditEvidenceItem;
+
+function EvidenceScreen({
+  client,
+  id,
+  organizationId,
+}: AdministrationScreenProps & { id: 'M1-22' | 'M1-23' }) {
+  const [a, setAttempt] = useState(0);
+  const exportPoll = useRef({ attempts: 0, signature: '' });
+  const [state, setState] = useState<
+    LoadState<{
+      page: ConfigurationHistoryPage | AuditEvidencePage;
+      exports: EvidenceExportDirectory;
+    }>
+  >({ phase: 'loading' });
+  const [filters, setFilters] = useState({
+    from: new Date(applicationStartedAt - 30 * 86400000).toISOString().slice(0, 16),
+    to: new Date().toISOString().slice(0, 16),
+    status: '',
+    changeType: '',
+    actorId: '',
+    subjectType: '',
+    subjectId: '',
+    operation: '',
+    eventName: '',
+    schemaVersion: '',
+    outcome: '',
+    risk: '',
+    correlationId: '',
+  });
+  const [cursor, setCursor] = useState('');
+  const [selected, setSelected] = useState<string[]>([]);
+  const [purpose, setPurpose] =
+    useState<EvidenceExportRequest['purposeCode']>('configuration_review');
+  const [legalBasis, setLegalBasis] = useState('governance.module1');
+  const [format, setFormat] = useState<EvidenceExportRequest['format']>('csv');
+  const [detailProjection, setDetailProjection] = useState(false);
+  const [reason, setReason] = useState('');
+  const [detail, setDetail] = useState<AuditEvidenceDetail | null>(null);
+  const [download, setDownload] = useState<{
+    url: string;
+    filename: string;
+    expiresAt: string;
+  } | null>(null);
+  const [action, setAction] = useState<{ job: EvidenceExportJob; authorize: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [pausedExportSignature, setPausedExportSignature] = useState('');
+  const [issue, setIssue] = useState('');
+  useEffect(() => {
+    const controller = new AbortController();
+    const query: Record<string, string | number | undefined> = {
+      from: filters.from ? new Date(filters.from).toISOString() : undefined,
+      to: filters.to ? new Date(filters.to).toISOString() : undefined,
+      correlationId: filters.correlationId || undefined,
+      actorId: filters.actorId || undefined,
+      subjectType: filters.subjectType || undefined,
+      subjectId: filters.subjectId || undefined,
+      limit: 25,
+      cursor: cursor || undefined,
+      ...(id === 'M1-22'
+        ? {
+            status: filters.status || undefined,
+            changeType: filters.changeType || undefined,
+          }
+        : {
+            operation: filters.operation || undefined,
+            eventName: filters.eventName || undefined,
+            schemaVersion: filters.schemaVersion ? Number(filters.schemaVersion) : undefined,
+            outcome: filters.outcome || undefined,
+            risk: filters.risk || undefined,
+          }),
+    };
+    const page =
+      id === 'M1-22'
+        ? client.queryConfigurationHistory(organizationId, query, { signal: controller.signal })
+        : client.queryAuditEvidence(organizationId, query, { signal: controller.signal });
+    void Promise.all([
+      page,
+      client.getEvidenceExportDirectory(organizationId, id === 'M1-23' ? 'audit' : 'history', {
+        signal: controller.signal,
+      }),
+    ]).then(([projection, exports]) => {
+      if (controller.signal.aborted) return;
+      if (!projection.ok) {
+        setState({
+          phase: 'failure',
+          issue: failureMessage(projection),
+        });
+        return;
+      }
+      if (!exports.ok) {
+        setState({ phase: 'failure', issue: failureMessage(exports) });
+        return;
+      }
+      setState({ phase: 'ready', data: { page: projection.data, exports: exports.data } });
+    });
+    return () => controller.abort();
+  }, [a, client, cursor, filters, id, organizationId]);
+  useEffect(() => {
+    if (state.phase !== 'ready') return;
+    const activeJobs = state.data.exports.jobs.filter((job) =>
+      activeExportStatuses.has(job.status),
+    );
+    if (activeJobs.length === 0) {
+      exportPoll.current = { attempts: 0, signature: '' };
+      return;
+    }
+    const signature = activeJobs
+      .map((job) => `${job.exportId}:${job.status}:${job.lockVersion}`)
+      .sort()
+      .join('|');
+    if (signature !== exportPoll.current.signature) exportPoll.current = { attempts: 0, signature };
+    const delay = exportPollDelays[exportPoll.current.attempts];
+    if (delay === undefined) return;
+    const timer = globalThis.setTimeout(() => {
+      exportPoll.current.attempts += 1;
+      if (exportPoll.current.attempts >= exportPollDelays.length)
+        setPausedExportSignature(signature);
+      setAttempt((value) => value + 1);
+    }, delay);
+    return () => globalThis.clearTimeout(timer);
+  }, [state]);
+  const apply = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setCursor('');
+    setAttempt((value) => value + 1);
+  };
+  const requestExport = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (busy) return;
+    if (!filters.from || !filters.to) {
+      setIssue('Choose both export boundary timestamps.');
+      return;
+    }
+    setBusy(true);
+    setIssue('');
+    const projection: EvidenceExportRequest['projection'] =
+      id === 'M1-22'
+        ? detailProjection
+          ? 'history-detail-v1'
+          : 'history-summary-v1'
+        : detailProjection
+          ? 'audit-detail-v1'
+          : 'audit-summary-v1';
+    const exportFilters: EvidenceExportRequest['filters'] = {
+      from: new Date(filters.from).toISOString(),
+      to: new Date(filters.to).toISOString(),
+    };
+    if (filters.actorId) exportFilters.actorId = filters.actorId;
+    if (filters.subjectType) exportFilters.subjectType = filters.subjectType;
+    if (filters.subjectId) exportFilters.subjectId = filters.subjectId;
+    if (filters.correlationId) exportFilters.correlationId = filters.correlationId;
+    if (id === 'M1-22') {
+      if (filters.status) exportFilters.status = filters.status;
+      if (filters.changeType) exportFilters.changeType = filters.changeType;
+    } else {
+      if (filters.operation) exportFilters.operation = filters.operation;
+      if (filters.eventName) exportFilters.eventName = filters.eventName;
+      if (filters.schemaVersion) exportFilters.schemaVersion = Number(filters.schemaVersion);
+      if (filters.outcome === 'success' || filters.outcome === 'failure')
+        exportFilters.outcome = filters.outcome;
+      if (filters.risk === 'standard' || filters.risk === 'high' || filters.risk === 'restricted')
+        exportFilters.risk = filters.risk;
+    }
+    const result = await client.requestEvidenceExport(
+      organizationId,
+      {
+        projection,
+        format,
+        filters: exportFilters,
+        purposeCode: purpose,
+        legalBasisKey: legalBasis.trim(),
+        reason: reason.trim(),
+      },
+      `evidence-export:${globalThis.crypto.randomUUID()}`,
+    );
+    setBusy(false);
+    if (!result.ok) {
+      setIssue(failureMessage(result));
+      return;
+    }
+    setReason('');
+    setAttempt((value) => value + 1);
+  };
+  const openDetail = async (item: EvidenceItem) => {
+    if (!('eventId' in item) || busy) return;
+    setBusy(true);
+    setIssue('');
+    const result = await client.accessAuditEvidenceDetail(
+      organizationId,
+      item.eventId,
+      purpose,
+      `audit-detail:${globalThis.crypto.randomUUID()}`,
+    );
+    setBusy(false);
+    if (!result.ok) {
+      setIssue(failureMessage(result));
+      return;
+    }
+    setDetail(result.data);
+  };
+  const decide = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!action || busy) return;
+    setBusy(true);
+    setIssue('');
+    const result = await client.decideEvidenceExport(
+      organizationId,
+      action.job.exportId,
+      action.authorize,
+      reason.trim(),
+      `"evidence-export:${action.job.exportId}:${action.job.lockVersion}"`,
+      `export-decision:${globalThis.crypto.randomUUID()}`,
+    );
+    setBusy(false);
+    if (!result.ok) {
+      setIssue(failureMessage(result));
+      return;
+    }
+    setAction(null);
+    setReason('');
+    setAttempt((value) => value + 1);
+  };
+  const accessExport = async (job: EvidenceExportJob) => {
+    if (busy || !reason.trim()) {
+      setIssue('Enter a bounded access reason before requesting the download grant.');
+      return;
+    }
+    setBusy(true);
+    setIssue('');
+    const result = await client.accessEvidenceExport(
+      organizationId,
+      job.exportId,
+      purpose,
+      reason.trim(),
+      `"evidence-export:${job.exportId}:${job.lockVersion}"`,
+      `export-access:${globalThis.crypto.randomUUID()}`,
+    );
+    setBusy(false);
+    if (!result.ok) {
+      setIssue(failureMessage(result));
+      return;
+    }
+    setDownload({
+      url: result.data.downloadUrl,
+      filename: result.data.filename,
+      expiresAt: result.data.expiresAt,
+    });
+    setReason('');
+  };
+  const items: EvidenceItem[] = state.phase === 'ready' ? state.data.page.items : [];
+  const jobs = state.phase === 'ready' ? state.data.exports.jobs : [];
+  const hasActiveExports = jobs.some((job) => activeExportStatuses.has(job.status));
+  const activeExportSignature = jobs
+    .filter((job) => activeExportStatuses.has(job.status))
+    .map((job) => `${job.exportId}:${job.status}:${job.lockVersion}`)
+    .sort()
+    .join('|');
+  const pollingPaused = hasActiveExports && pausedExportSignature === activeExportSignature;
+  const refreshExportStatuses = () => {
+    exportPoll.current = { attempts: 0, signature: '' };
+    setPausedExportSignature('');
+    setAttempt((value) => value + 1);
+  };
+  const compare = selected
+    .map((key) =>
+      items.find(
+        (item) => ('configurationId' in item ? item.configurationId : item.eventId) === key,
+      ),
+    )
+    .filter((item): item is EvidenceItem => item !== undefined);
+  return (
+    <>
+      <PageHeading id={id} />
+      {state.phase === 'loading' ? (
+        <LoadingPanel />
+      ) : state.phase === 'failure' ? (
+        <FailurePanel issue={state.issue} onRetry={() => setAttempt((value) => value + 1)} />
+      ) : (
+        <>
+          {issue && <div className="inline-alert error-alert">{issue}</div>}
+          <section className="content-panel">
+            <h2>{id === 'M1-22' ? 'Configuration history' : 'Audit evidence'}</h2>
+            <form onSubmit={apply}>
+              <div className="form-grid">
+                <label>
+                  From
+                  <input
+                    type="datetime-local"
+                    value={filters.from}
+                    onChange={(event) => setFilters({ ...filters, from: event.target.value })}
+                  />
+                </label>
+                <label>
+                  To
+                  <input
+                    type="datetime-local"
+                    value={filters.to}
+                    onChange={(event) => setFilters({ ...filters, to: event.target.value })}
+                  />
+                </label>
+                {id === 'M1-22' ? (
+                  <>
+                    <label>
+                      Status
+                      <select
+                        value={filters.status}
+                        onChange={(event) => setFilters({ ...filters, status: event.target.value })}
+                      >
+                        <option value="">All</option>
+                        {[
+                          'draft',
+                          'validated',
+                          'submitted',
+                          'approved',
+                          'rejected',
+                          'active',
+                          'superseded',
+                        ].map((value) => (
+                          <option key={value}>{value}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Change type
+                      <select
+                        value={filters.changeType}
+                        onChange={(event) =>
+                          setFilters({ ...filters, changeType: event.target.value })
+                        }
+                      >
+                        <option value="">All</option>
+                        {['activated', 'closed', 'retired', 'ended'].map((value) => (
+                          <option key={value}>{value}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </>
+                ) : (
+                  <>
+                    <label>
+                      Operation
+                      <input
+                        value={filters.operation}
+                        onChange={(event) =>
+                          setFilters({ ...filters, operation: event.target.value })
+                        }
+                      />
+                    </label>
+                    <label>
+                      Event
+                      <input
+                        value={filters.eventName}
+                        onChange={(event) =>
+                          setFilters({ ...filters, eventName: event.target.value })
+                        }
+                      />
+                    </label>
+                    <label>
+                      Schema version
+                      <input
+                        type="number"
+                        min="1"
+                        value={filters.schemaVersion}
+                        onChange={(event) =>
+                          setFilters({ ...filters, schemaVersion: event.target.value })
+                        }
+                      />
+                    </label>
+                    <label>
+                      Outcome
+                      <select
+                        value={filters.outcome}
+                        onChange={(event) =>
+                          setFilters({ ...filters, outcome: event.target.value })
+                        }
+                      >
+                        <option value="">All</option>
+                        <option value="success">Success</option>
+                        <option value="failure">Failure</option>
+                      </select>
+                    </label>
+                    <label>
+                      Risk
+                      <select
+                        value={filters.risk}
+                        onChange={(event) => setFilters({ ...filters, risk: event.target.value })}
+                      >
+                        <option value="">All</option>
+                        <option value="standard">Standard</option>
+                        <option value="high">High</option>
+                        <option value="restricted">Restricted</option>
+                      </select>
+                    </label>
+                  </>
+                )}
+                <label>
+                  Actor ID
+                  <input
+                    value={filters.actorId}
+                    onChange={(event) => setFilters({ ...filters, actorId: event.target.value })}
+                  />
+                </label>
+                <label>
+                  Subject type
+                  <input
+                    value={filters.subjectType}
+                    onChange={(event) =>
+                      setFilters({ ...filters, subjectType: event.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  Subject ID
+                  <input
+                    value={filters.subjectId}
+                    onChange={(event) => setFilters({ ...filters, subjectId: event.target.value })}
+                  />
+                </label>
+                <label>
+                  Correlation ID
+                  <input
+                    value={filters.correlationId}
+                    onChange={(event) =>
+                      setFilters({ ...filters, correlationId: event.target.value })
+                    }
+                  />
+                </label>
+              </div>
+              <button className="secondary-button">Apply filters</button>
+            </form>
+            <div className="record-grid">
+              {items.length === 0 ? (
+                <p className="empty-state">No evidence matches these filters.</p>
+              ) : (
+                items.map((item, index) => {
+                  const key =
+                    ('configurationId' in item ? item.configurationId : item.eventId) ||
+                    String(index);
+                  return (
+                    <article className="record-card" key={key}>
+                      <LiveRecord value={item} />
+                      <div className="form-actions">
+                        {id === 'M1-22' && (
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={selected.includes(key)}
+                              disabled={!selected.includes(key) && selected.length >= 2}
+                              onChange={(event) =>
+                                setSelected((current) =>
+                                  event.target.checked
+                                    ? [...current, key]
+                                    : current.filter((value) => value !== key),
+                                )
+                              }
+                            />{' '}
+                            Compare
+                          </label>
+                        )}
+                        {id === 'M1-23' && (
+                          <button type="button" onClick={() => void openDetail(item)}>
+                            Open purpose-bound detail
+                          </button>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })
+              )}
+            </div>
+            {Boolean(state.data.page.hasMore) && (
+              <button
+                type="button"
+                onClick={() => setCursor(String(state.data.page.nextCursor ?? ''))}
+              >
+                Next page
+              </button>
+            )}
+          </section>
+          {id === 'M1-22' && compare.length === 2 && (
+            <section className="content-panel">
+              <h2>Semantic comparison</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Field</th>
+                    <th>Earlier</th>
+                    <th>Later</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from(new Set(compare.flatMap(Object.keys)))
+                    .filter((key) => !['organizationId'].includes(key))
+                    .map((key) => (
+                      <tr key={key}>
+                        <th>{humanize(key)}</th>
+                        <td>{JSON.stringify(objectField(compare[0]!, key))}</td>
+                        <td>{JSON.stringify(objectField(compare[1]!, key))}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </section>
+          )}
+          {detail && (
+            <section className="content-panel">
+              <h2>Audit detail</h2>
+              <LiveRecord value={detail} />
+              <button type="button" onClick={() => setDetail(null)}>
+                Close detail
+              </button>
+            </section>
+          )}
+          <section className="content-panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Purpose-bound exports</h2>
+                {hasActiveExports && (
+                  <p aria-live="polite">
+                    {pollingPaused
+                      ? 'Automatic status refresh paused after the bounded retry window.'
+                      : 'Export status will refresh automatically with bounded backoff.'}
+                  </p>
+                )}
+              </div>
+              <button type="button" onClick={refreshExportStatuses} disabled={busy}>
+                Refresh statuses
+              </button>
+            </div>
+            <div className="record-grid">
+              {jobs.map((job) => (
+                <article className="record-card" key={job.exportId}>
+                  <div className="record-card-head">
+                    <strong>{job.projection}</strong>
+                    <span className="status-badge">{job.status}</span>
+                  </div>
+                  <p>
+                    {job.format} · {job.purposeCode}
+                  </p>
+                  {job.canApprove && (
+                    <div className="form-actions">
+                      <button type="button" onClick={() => setAction({ job, authorize: true })}>
+                        Authorize
+                      </button>
+                      <button type="button" onClick={() => setAction({ job, authorize: false })}>
+                        Deny
+                      </button>
+                    </div>
+                  )}
+                  {job.canAccess && (
+                    <button type="button" onClick={() => void accessExport(job)} disabled={busy}>
+                      Create 10-minute download
+                    </button>
+                  )}
+                </article>
+              ))}
+            </div>
+            {download && (
+              <div className="inline-alert success-alert">
+                <a href={download.url} download={download.filename} rel="noreferrer">
+                  Download {download.filename}
+                </a>{' '}
+                before {new Date(download.expiresAt).toLocaleTimeString()}.
+              </div>
+            )}
+            {action ? (
+              <form onSubmit={(event) => void decide(event)}>
+                <label>
+                  Decision reason
+                  <textarea
+                    required
+                    minLength={10}
+                    maxLength={500}
+                    value={reason}
+                    onChange={(event) => setReason(event.target.value)}
+                  />
+                </label>
+                <button className="primary-button" disabled={busy}>
+                  Confirm {action.authorize ? 'authorization' : 'denial'}
+                </button>
+                <button type="button" onClick={() => setAction(null)}>
+                  Cancel
+                </button>
+              </form>
+            ) : (
+              Boolean(state.data.exports.canRequest) && (
+                <form onSubmit={(event) => void requestExport(event)}>
+                  <div className="form-grid">
+                    <label>
+                      Purpose
+                      <select
+                        value={purpose}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          if (
+                            value === 'configuration_review' ||
+                            value === 'regulatory_evidence' ||
+                            value === 'security_investigation' ||
+                            value === 'data_correction'
+                          )
+                            setPurpose(value);
+                        }}
+                      >
+                        {[
+                          'configuration_review',
+                          'regulatory_evidence',
+                          'security_investigation',
+                          'data_correction',
+                        ].map((value) => (
+                          <option key={value}>{value}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Legal basis
+                      <input
+                        required
+                        pattern="[a-z][a-z0-9._:-]{1,79}"
+                        value={legalBasis}
+                        onChange={(event) => setLegalBasis(event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Format
+                      <select
+                        value={format}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          if (value === 'csv' || value === 'jsonl') setFormat(value);
+                        }}
+                      >
+                        <option value="csv">CSV</option>
+                        <option value="jsonl">JSON Lines</option>
+                      </select>
+                    </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={detailProjection}
+                        onChange={(event) => setDetailProjection(event.target.checked)}
+                      />{' '}
+                      Restricted detail projection
+                    </label>
+                    <label className="full-width">
+                      Reason
+                      <textarea
+                        required
+                        minLength={10}
+                        maxLength={500}
+                        value={reason}
+                        onChange={(event) => setReason(event.target.value)}
+                      />
+                    </label>
+                  </div>
+                  <button className="primary-button" disabled={busy}>
+                    Request export
+                  </button>
+                </form>
+              )
+            )}
+          </section>
+        </>
+      )}
+    </>
+  );
+}
+
+function humanize(key: string) {
+  return key.replace(/([A-Z])/g, ' $1').replace(/^./, (value) => value.toUpperCase());
+}
+
+function objectField(value: object, key: string): unknown {
+  return Object.entries(value).find(([field]) => field === key)?.[1];
+}
+
+function LiveRecord({ value }: { value: object }) {
+  const entries = Object.entries(value).filter(
+    ([, field]) => field === null || ['boolean', 'number', 'string'].includes(typeof field),
+  );
+  const title = entries.find(([key]) => /name|displayNumber|code|eventName|schemeKey/i.test(key));
+  const status = entries.find(([key]) => /status|outcome|risk/i.test(key));
+  return (
+    <article className="record-card">
+      <div className="record-card-head">
+        <strong>{String(title?.[1] ?? entries[0]?.[1] ?? 'Governed record')}</strong>
+        {status && <span className="status-badge">{String(status[1])}</span>}
+      </div>
+      <dl className="record-details">
+        {entries.slice(0, 10).map(([key, field]) => (
+          <div key={key}>
+            <dt>{humanize(key)}</dt>
+            <dd>
+              {field === null
+                ? 'Not set'
+                : typeof field === 'boolean'
+                  ? field
+                    ? 'Yes'
+                    : 'No'
+                  : String(field)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </article>
+  );
+}
+
 export function AdministrationScreen(props: AdministrationScreenProps) {
   return (
     <Shell currentId={props.id} {...props.shell}>
@@ -4929,6 +9533,24 @@ export function AdministrationScreen(props: AdministrationScreenProps) {
         <GovernanceScreen {...props} />
       ) : props.id === 'M1-12' ? (
         <FacilityScreen {...props} />
+      ) : props.id === 'M1-13' ? (
+        <FacilityScreen {...props} />
+      ) : props.id === 'M1-14' ? (
+        <UnitHierarchyScreen {...props} />
+      ) : props.id === 'M1-15' ? (
+        <LocationScreen {...props} />
+      ) : props.id === 'M1-16' ? (
+        <OperatingHoursScreen {...props} />
+      ) : props.id === 'M1-17' ? (
+        <ServiceCatalogueScreen {...props} />
+      ) : props.id === 'M1-18' ? (
+        <ServiceAssignmentScreen {...props} />
+      ) : props.id === 'M1-19' ? (
+        <IdentifierSchemeScreen {...props} />
+      ) : props.id === 'M1-21' ? (
+        <ConfigurationActivationScreen {...props} />
+      ) : props.id === 'M1-22' || props.id === 'M1-23' ? (
+        <EvidenceScreen {...props} id={props.id} />
       ) : (
         <ReadinessScreen
           client={props.client}
