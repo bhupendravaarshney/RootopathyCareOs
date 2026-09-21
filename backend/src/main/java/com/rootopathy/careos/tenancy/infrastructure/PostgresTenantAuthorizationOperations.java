@@ -98,10 +98,23 @@ public final class PostgresTenantAuthorizationOperations implements TenantAuthor
                           AND (memberships.effective_to IS NULL OR memberships.effective_to > ?)
                           AND permissions.permission_key = ?
                           AND permissions.registry_version = ?
-                          AND roles.registry_version = ?
                           AND roles.interactive
-                          AND (roles.status = 'active' OR (? AND roles.status = 'reference'))
-                          AND (permissions.status = 'active' OR (? AND permissions.status = 'reference'))
+                          AND (
+                              (roles.status = 'active' AND EXISTS (
+                                  SELECT 1 FROM authorization_registry_releases role_release
+                                  WHERE role_release.registry_version = roles.registry_version
+                                    AND role_release.status = 'active'
+                              ))
+                              OR (? AND roles.status = 'reference')
+                          )
+                          AND (
+                              (permissions.status = 'active' AND EXISTS (
+                                  SELECT 1 FROM authorization_registry_releases permission_release
+                                  WHERE permission_release.registry_version = permissions.registry_version
+                                    AND permission_release.status = 'active'
+                              ))
+                              OR (? AND permissions.status = 'reference')
+                          )
                     )
                     """,
                     Boolean.class,
@@ -110,7 +123,6 @@ public final class PostgresTenantAuthorizationOperations implements TenantAuthor
                     now,
                     now,
                     operation.permissionKey().value(),
-                    operation.registryVersion(),
                     operation.registryVersion(),
                     referencePolicyEnabled,
                     referencePolicyEnabled));
@@ -145,8 +157,14 @@ public final class PostgresTenantAuthorizationOperations implements TenantAuthor
                   ON permissions.permission_key = operations.permission_key
                  AND permissions.registry_version = operations.registry_version
                 WHERE operations.operation_key = ?
-                  AND (operations.status = 'active' OR (? AND operations.status = 'reference'))
-                  AND (permissions.status = 'active' OR (? AND permissions.status = 'reference'))
+                  AND (
+                      (operations.status = 'active' AND permissions.status = 'active' AND EXISTS (
+                          SELECT 1 FROM authorization_registry_releases release
+                          WHERE release.registry_version = operations.registry_version
+                            AND release.status = 'active'
+                      ))
+                      OR (? AND operations.status = 'reference' AND permissions.status = 'reference')
+                  )
                 """,
                 (result, rowNumber) -> new OperationPolicy(
                         new PermissionKey(result.getString("permission_key")),
@@ -159,7 +177,6 @@ public final class PostgresTenantAuthorizationOperations implements TenantAuthor
                         result.getBoolean("maker_checker_required"),
                         result.getString("registry_version")),
                 request.requiredOperation().value(),
-                referencePolicyEnabled,
                 referencePolicyEnabled);
         if (policies.size() != 1) {
             throw new TenantAuthorizationException(

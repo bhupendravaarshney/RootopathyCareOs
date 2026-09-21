@@ -1,0 +1,116 @@
+{
+  "$schema": "./module-2-input-gate.schema.json",
+  "schemaVersion": 1,
+  "module": "M2",
+  "status": "APPROVED",
+  "candidateVersion": "m2-candidate-1",
+  "basis": {
+    "acceptedModule1Commit": "2ba6c9b3b567d0371c8523e6f18945ec33138ae4",
+    "buildSpecification": {
+      "path": "docs/CareOS_Complete_Build_Specification_Java_Spring_Boot_React_Node_Edition.pdf",
+      "sha256": "2c8f9f020c7c1a21678c795df57fd8be1b659f2141ab7c8747b5dec973db0bfe"
+    },
+    "candidatePackageSha256": "2e64bd4e1ac5192a9a4783abf58f4578b8bceda60c21c2e835a910e6760d0f8f"
+  },
+  "requiredArtifacts": [
+    "screen-mockups",
+    "design-system",
+    "data-dictionary-and-validation",
+    "lifecycle-and-transition-matrix",
+    "authorization-policy",
+    "audit-and-event-registry",
+    "readiness-and-activation-policy",
+    "history-and-export-policy"
+  ],
+  "artifacts": [
+    {
+      "kind": "screen-mockups",
+      "version": "m2-candidate-1",
+      "path": "approved-inputs/module-2/01-screen-mockups.html",
+      "sha256": "68b97874c90a5ad4b9aa95c6998c768389e977b8866b35e1ae08f320e8d6b480"
+    },
+    {
+      "kind": "design-system",
+      "version": "m2-candidate-1",
+      "path": "approved-inputs/module-2/02-design-system.md",
+      "sha256": "8f568171a88e0db4f97dda0983c22a41e2e456ad1be5e2d1af0f5644b6c0e3db"
+    },
+    {
+      "kind": "data-dictionary-and-validation",
+      "version": "m2-candidate-1",
+      "path": "approved-inputs/module-2/03-data-dictionary-and-validation.md",
+      "sha256": "d5112ac8a4c48caeded94896504a6820a3d3e77280f2c94c5cace5810d6ba6b5"
+    },
+    {
+      "kind": "lifecycle-and-transition-matrix",
+      "version": "m2-candidate-1",
+      "path": "approved-inputs/module-2/04-lifecycle-and-transition-matrix.md",
+      "sha256": "22ecc28073312e4ca193b211e6c0cef062b07ea45bc249fd7b7e8c868efdfaa6"
+    },
+    {
+      "kind": "authorization-policy",
+      "version": "m2-candidate-1",
+      "path": "approved-inputs/module-2/05-authorization-policy.md",
+      "sha256": "143f01aafc2a8f2a6f2bfade2365006ac8b781472696f1db233a1307b122ca32"
+    },
+    {
+      "kind": "audit-and-event-registry",
+      "version": "m2-candidate-1",
+      "path": "approved-inputs/module-2/06-audit-and-event-registry.md",
+      "sha256": "1c02b0ffc7ce542f7240a78955eca487b3d707c70b128e673fa322a1997706f0"
+    },
+    {
+      "kind": "readiness-and-activation-policy",
+      "version": "m2-candidate-1",
+      "path": "approved-inputs/module-2/07-readiness-and-activation-policy.md",
+      "sha256": "e7a41272e07717a2b8e8888968c64521f8ef6921f7c8ccd8728b5c600b59575b"
+    },
+    {
+      "kind": "history-and-export-policy",
+      "version": "m2-candidate-1",
+      "path": "approved-inputs/module-2/08-history-and-export-policy.md",
+      "sha256": "ad7879507b3009dd07c45786d1f7820c1ba2e7331c95eee29c1c17a206b6e5b6"
+    }
+  ],
+  "approval": {
+    "decision": "APPROVED",
+    "recordId": "M2-APPROVAL-20260921-01",
+    "approvedBy": "bhupendra, developer",
+    "approvedAt": "2026-09-21T13:43:43.843Z",
+    "screens": [
+      "M2-01",
+      "M2-02",
+      "M2-03",
+      "M2-04",
+      "M2-05",
+      "M2-06",
+      "M2-07",
+      "M2-08",
+      "M2-09",
+      "M2-10",
+      "M2-11",
+      "M2-12",
+      "M2-13",
+      "M2-14",
+      "M2-15",
+      "M2-16",
+      "M2-17",
+      "M2-18",
+      "M2-19",
+      "M2-20",
+      "M2-21",
+      "M2-22",
+      "M2-23",
+      "M2-24",
+      "M2-25",
+      "M2-26",
+      "M2-27",
+      "M2-28",
+      "M2-29"
+    ],
+    "tableCount": 44,
+    "packageSha256": "624df2edc0024526040271911d43a1b33a12e723fefb3beb3e985264cef89521",
+    "evidencePath": "approved-inputs/module-2/approval-record-m2-candidate-1.md",
+    "evidenceSha256": "57676a269fee327d5a1f8c7458c901343c8b222af398025a98ca41c6b9aadbbe"
+  }
+}

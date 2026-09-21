@@ -40,6 +40,7 @@ public final class PostgresServiceIdentityAuthorizationOperations
         this.jdbcTemplate = Objects.requireNonNull(jdbcTemplate, "jdbcTemplate");
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.transactionTemplate.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
         this.enabled = properties.enabled();
         this.referencePolicyEnabled = referencePolicyEnabled;
         this.credentialPepper = properties.credentialPepper().getBytes(StandardCharsets.UTF_8);

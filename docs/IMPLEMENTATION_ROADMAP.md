@@ -996,6 +996,18 @@ This completed the planned M1-15 browser input controls; the retained final veri
 - [x] Deliver M1D facilities, hierarchy, locations, and atomic hours for M1-12 to M1-16.
 - [x] Deliver M1E services, assignments, and identifier schemes for M1-17 to M1-19.
 - [x] Deliver M1F maker-checker activation, history, audit, and purpose-bound export mechanics for M1-21 to M1-23.
-- [ ] Run the full M1 security/accessibility/browser/regression suite and obtain owner acceptance before Module 2.
+- [x] Run the full M1 security/accessibility/browser/regression suite and obtain owner acceptance before Module 2. The user accepted commit `2ba6c9b` as the predecessor baseline on 21 September 2026; this does not constitute target-environment production acceptance.
 
-The exact input checklist, per-screen status, architecture, and exit conditions are authoritative in `MODULE_1_IMPLEMENTATION_PLAN.md`. The approval gate and organization-wide repository implementation/verification now pass. Facility-scope approval, production worker/provider operations, target-environment evidence, and explicit slice/module owner acceptance remain separate exit conditions; authorization and local verification are not production acceptance.
+The exact input checklist, per-screen status, architecture, and exit conditions are authoritative in `MODULE_1_IMPLEMENTATION_PLAN.md`. The approval gate, organization-wide repository implementation/verification, and accepted Module 2 predecessor baseline now pass. Facility-scope approval, production worker/provider operations, target-environment evidence, and production owner acceptance remain separate exit conditions; repository acceptance is not production acceptance.
+
+### Phase 2A - checksum-bound Module 2 input candidate (completed 21 September 2026)
+
+- [x] Bind Module 2 planning to the user-accepted M1 commit `2ba6c9b3b567d0371c8523e6f18945ec33138ae4` and build-specification digest `2c8f9f020c7c1a21678c795df57fd8be1b659f2141ab7c8747b5dec973db0bfe`.
+- [x] Create one self-contained responsive review mockup covering M2-01 through M2-29, ten explicit UI-state families, the 1440/1024/768/390/320 matrix, mobile record cards, dialog focus behavior, and conspicuous synthetic/no-production-action boundaries.
+- [x] Define the exact 44-table data/validation baseline; credential/document, scope, assignment, availability, readiness, activation, lifecycle, configuration, registry, legal-hold, notification, eligibility, and export boundaries; and reuse of the canonical M1 identity/RBAC/platform sources.
+- [x] Define additive deny-by-default roles/permissions/scopes/assurance, exact audit/outbox event families and consumers, clinical/non-clinical readiness, point-in-time eligibility, no-override behavior, expiry milestones, minimum-necessary history/audit/timeline projections, retention, and safe exports.
+- [x] Add a path-safe verifier binding the exact eight artifacts, all 29 screen IDs, all 44 table names, accepted baseline, build specification bytes, required decision topics, self-contained mockup boundary, and non-authorizing status.
+- [x] Run the end-of-phase integrity gate: the verifier reports eight artifacts, 29 screens, 44 tables, package digest `2e64bd4e1ac5192a9a4783abf58f4578b8bceda60c21c2e835a910e6760d0f8f`, and `implementationAuthorized: false`; all ten positive/negative verifier tests, five exact-viewport Playwright/Axe/overflow cases, frontend formatting, and the updated 13-test CI-security contract pass.
+- [ ] Obtain accountable review/approval of the exact candidate digest and promote byte-identical artifacts plus distinct approval evidence before writing Module 2 production migrations or runtime behavior.
+
+The dependency-ordered M2A-M2H implementation, screen traceability, architecture boundaries, deferred end-of-module testing rule, and exit criteria are authoritative in `MODULE_2_IMPLEMENTATION_PLAN.md`. Current M2 runtime pages remain synthetic and disabled; the completed candidate supplies decisions for review but grants no implementation authority.

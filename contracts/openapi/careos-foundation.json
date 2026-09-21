@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "ROOTOPATHY CareOS Foundation API",
-    "version": "0.40.0",
-    "description": "Checked contract for the complete approved Module 1 administration, identity/access, organization, network, services, identifier schemes, configuration activation, history, audit, and purpose-bound export API surface."
+    "version": "0.41.0",
+    "description": "Checked contract for the approved Module 1 foundation and approved Module 2 workforce, credentialing, readiness, lifecycle, governance, and purpose-bound export API surface."
   },
   "servers": [
     {
@@ -7461,6 +7461,347 @@
           }
         }
       }
+    },
+    "/api/v1/organizations/{organizationId}/workforce/screens/{screenId}": {
+      "get": {
+        "operationId": "getWorkforceScreen",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          },
+          {
+            "name": "screenId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^M2-(0[1-9]|1[0-9]|2[0-9])$"
+            }
+          },
+          {
+            "name": "memberId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 120
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized minimum-necessary Module 2 screen projection",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkforceScreen"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/workforce/screens/{screenId}/actions/{actionKey}": {
+      "post": {
+        "operationId": "performWorkforceAction",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          },
+          {
+            "name": "screenId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^M2-(0[1-9]|1[0-9]|2[0-9])$"
+            }
+          },
+          {
+            "name": "actionKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          },
+          {
+            "$ref": "#/components/parameters/OptionalIfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkforceActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful governed workforce action",
+            "headers": {
+              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
+              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkforceScreen"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Successful governed workforce creation",
+            "headers": {
+              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
+              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkforceScreen"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "428": {
+            "$ref": "#/components/responses/PreconditionRequired"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/workforce/exports/{exportId}/accesses": {
+      "post": {
+        "operationId": "accessWorkforceExport",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          {
+            "name": "exportId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          { "$ref": "#/components/parameters/BrowserOrigin" },
+          { "$ref": "#/components/parameters/IfMatch" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "security": [
+          { "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/WorkforceExportAccessRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A purpose-bound, short-lived private GET grant for a ready workforce export",
+            "headers": {
+              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
+              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/WorkforceExportAccessResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "412": { "$ref": "#/components/responses/PreconditionFailed" },
+          "428": { "$ref": "#/components/responses/PreconditionRequired" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/workforce/credentials/{credentialId}/documents": {
+      "post": {
+        "operationId": "uploadWorkforceCredentialDocument",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/OrganizationId"
+          },
+          {
+            "name": "credentialId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/BrowserOrigin"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "metadata",
+                  "file"
+                ],
+                "properties": {
+                  "metadata": {
+                    "$ref": "#/components/schemas/CredentialDocumentMetadata"
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Credential document accepted into private quarantine",
+            "headers": {
+              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
+              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkforceScreen"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -7614,6 +7955,16 @@
         "in": "header",
         "required": true,
         "description": "Strong entity tag from the latest representation. Required for protected updates and deletes.",
+        "schema": {
+          "type": "string",
+          "pattern": "^\"[A-Za-z0-9._:-]{1,128}\"$"
+        }
+      },
+      "OptionalIfMatch": {
+        "name": "If-Match",
+        "in": "header",
+        "required": false,
+        "description": "Strong entity tag required only when the server-projected workforce action declares a revision precondition.",
         "schema": {
           "type": "string",
           "pattern": "^\"[A-Za-z0-9._:-]{1,128}\"$"
@@ -7919,6 +8270,420 @@
       }
     },
     "schemas": {
+      "WorkforceScreen": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "organizationId",
+          "screenId",
+          "title",
+          "purpose",
+          "generatedAt",
+          "metrics",
+          "columns",
+          "rows",
+          "actions",
+          "notices"
+        ],
+        "properties": {
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "screenId": {
+            "type": "string",
+            "pattern": "^M2-(0[1-9]|1[0-9]|2[0-9])$"
+          },
+          "title": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "metrics": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkforceMetric"
+            }
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkforceColumn"
+            }
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkforceRow"
+            }
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkforceAction"
+            }
+          },
+          "notices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkforceNotice"
+            }
+          }
+        }
+      },
+      "WorkforceMetric": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "label",
+          "value",
+          "tone"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tone": {
+            "type": "string",
+            "enum": [
+              "neutral",
+              "info",
+              "success",
+              "warning"
+            ]
+          }
+        }
+      },
+      "WorkforceColumn": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "label"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkforceRow": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "revision",
+          "etag",
+          "values"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "memberId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "etag": {
+            "type": "string",
+            "pattern": "^\"m2:M2-[0-9]{2}:[0-9a-fA-F-]{36}:[0-9]+\"$"
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "WorkforceAction": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "label",
+          "style",
+          "targetRequired",
+          "ifMatchRequired",
+          "reasonRequired",
+          "fields"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "primary",
+              "link"
+            ]
+          },
+          "targetRequired": {
+            "type": "boolean"
+          },
+          "ifMatchRequired": {
+            "type": "boolean"
+          },
+          "reasonRequired": {
+            "type": "boolean"
+          },
+          "href": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkforceField"
+            }
+          }
+        }
+      },
+      "WorkforceField": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "label",
+          "inputType",
+          "required",
+          "options"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "inputType": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "help": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkforceOption"
+            }
+          }
+        }
+      },
+      "WorkforceOption": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "value",
+          "label"
+        ],
+        "properties": {
+          "value": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkforceNotice": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "tone",
+          "title",
+          "detail"
+        ],
+        "properties": {
+          "tone": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkforceActionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fields",
+          "evidenceIds"
+        ],
+        "properties": {
+          "targetId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "memberId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "decision": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 80
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          },
+          "fields": {
+            "type": "object",
+            "maxProperties": 64,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 2000
+            }
+          },
+          "evidenceIds": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      },
+      "WorkforceExportAccessRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["purposeKey", "reason"],
+        "properties": {
+          "purposeKey": {
+            "type": "string",
+            "enum": [
+              "workforce_operations",
+              "credentialing_review",
+              "regulatory_evidence",
+              "security_investigation",
+              "employment_record_request",
+              "data_correction"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 500
+          }
+        }
+      },
+      "WorkforceExportAccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "exportId",
+          "downloadUrl",
+          "expiresAt",
+          "artifactDigest",
+          "contentType",
+          "filename"
+        ],
+        "properties": {
+          "exportId": { "type": "string", "format": "uuid" },
+          "downloadUrl": { "type": "string", "format": "uri" },
+          "expiresAt": { "type": "string", "format": "date-time" },
+          "artifactDigest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "contentType": {
+            "type": "string",
+            "enum": ["text/csv", "application/x-ndjson"]
+          },
+          "filename": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,126}[A-Za-z0-9]$"
+          }
+        }
+      },
+      "CredentialDocumentMetadata": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sha256",
+          "retentionClass",
+          "reason"
+        ],
+        "properties": {
+          "memberId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "retentionClass": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 500
+          }
+        }
+      },
       "PrototypeScreen": {
         "type": "object",
         "additionalProperties": false,

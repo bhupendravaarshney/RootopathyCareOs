@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://careos.rootopathy.com/contracts/module-2-input-gate.schema.json",
+  "title": "CareOS Module 2 implementation input gate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "module",
+    "status",
+    "candidateVersion",
+    "basis",
+    "requiredArtifacts",
+    "artifacts",
+    "approval"
+  ],
+  "properties": {
+    "$schema": { "const": "./module-2-input-gate.schema.json" },
+    "schemaVersion": { "const": 1 },
+    "module": { "const": "M2" },
+    "status": { "enum": ["BLOCKED_INPUT", "APPROVED"] },
+    "candidateVersion": { "const": "m2-candidate-1" },
+    "basis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["acceptedModule1Commit", "buildSpecification", "candidatePackageSha256"],
+      "properties": {
+        "acceptedModule1Commit": {
+          "const": "2ba6c9b3b567d0371c8523e6f18945ec33138ae4"
+        },
+        "buildSpecification": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "sha256"],
+          "properties": {
+            "path": {
+              "const": "docs/CareOS_Complete_Build_Specification_Java_Spring_Boot_React_Node_Edition.pdf"
+            },
+            "sha256": {
+              "const": "2c8f9f020c7c1a21678c795df57fd8be1b659f2141ab7c8747b5dec973db0bfe"
+            }
+          }
+        },
+        "candidatePackageSha256": {
+          "const": "2e64bd4e1ac5192a9a4783abf58f4578b8bceda60c21c2e835a910e6760d0f8f"
+        }
+      }
+    },
+    "requiredArtifacts": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "prefixItems": [
+        { "const": "screen-mockups" },
+        { "const": "design-system" },
+        { "const": "data-dictionary-and-validation" },
+        { "const": "lifecycle-and-transition-matrix" },
+        { "const": "authorization-policy" },
+        { "const": "audit-and-event-registry" },
+        { "const": "readiness-and-activation-policy" },
+        { "const": "history-and-export-policy" }
+      ],
+      "items": false
+    },
+    "artifacts": {
+      "type": "array",
+      "maxItems": 8,
+      "items": { "$ref": "#/$defs/artifact" }
+    },
+    "approval": {
+      "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/approval" }]
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "version", "path", "sha256"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "screen-mockups",
+            "design-system",
+            "data-dictionary-and-validation",
+            "lifecycle-and-transition-matrix",
+            "authorization-policy",
+            "audit-and-event-registry",
+            "readiness-and-activation-policy",
+            "history-and-export-policy"
+          ]
+        },
+        "version": { "const": "m2-candidate-1" },
+        "path": {
+          "type": "string",
+          "pattern": "^approved-inputs/module-2/[A-Za-z0-9][A-Za-z0-9._/-]{0,479}$"
+        },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision",
+        "recordId",
+        "approvedBy",
+        "approvedAt",
+        "screens",
+        "tableCount",
+        "packageSha256",
+        "evidencePath",
+        "evidenceSha256"
+      ],
+      "properties": {
+        "decision": { "const": "APPROVED" },
+        "recordId": { "const": "M2-APPROVAL-20260921-01" },
+        "approvedBy": { "type": "string", "minLength": 3, "maxLength": 200 },
+        "approvedAt": { "type": "string", "format": "date-time" },
+        "screens": {
+          "type": "array",
+          "minItems": 29,
+          "maxItems": 29,
+          "prefixItems": [
+            { "const": "M2-01" }, { "const": "M2-02" }, { "const": "M2-03" },
+            { "const": "M2-04" }, { "const": "M2-05" }, { "const": "M2-06" },
+            { "const": "M2-07" }, { "const": "M2-08" }, { "const": "M2-09" },
+            { "const": "M2-10" }, { "const": "M2-11" }, { "const": "M2-12" },
+            { "const": "M2-13" }, { "const": "M2-14" }, { "const": "M2-15" },
+            { "const": "M2-16" }, { "const": "M2-17" }, { "const": "M2-18" },
+            { "const": "M2-19" }, { "const": "M2-20" }, { "const": "M2-21" },
+            { "const": "M2-22" }, { "const": "M2-23" }, { "const": "M2-24" },
+            { "const": "M2-25" }, { "const": "M2-26" }, { "const": "M2-27" },
+            { "const": "M2-28" }, { "const": "M2-29" }
+          ],
+          "items": false
+        },
+        "tableCount": { "const": 44 },
+        "packageSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "evidencePath": {
+          "type": "string",
+          "pattern": "^approved-inputs/module-2/[A-Za-z0-9][A-Za-z0-9._/-]{0,479}$"
+        },
+        "evidenceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "BLOCKED_INPUT" } }, "required": ["status"] },
+      "then": { "properties": { "approval": { "type": "null" } } }
+    },
+    {
+      "if": { "properties": { "status": { "const": "APPROVED" } }, "required": ["status"] },
+      "then": {
+        "properties": {
+          "artifacts": { "minItems": 8 },
+          "approval": { "$ref": "#/$defs/approval" }
+        }
+      }
+    }
+  ]
+}

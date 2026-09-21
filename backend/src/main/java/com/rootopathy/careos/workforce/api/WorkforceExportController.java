@@ -1,0 +1,84 @@
+package com.rootopathy.careos.workforce.api;
+
+import com.rootopathy.careos.governance.domain.IdempotencyOutcome;
+import com.rootopathy.careos.identity.api.AuthenticationSessionState;
+import com.rootopathy.careos.shared.api.ApiProblemException;
+import com.rootopathy.careos.shared.api.CorrelationIdFilter;
+import com.rootopathy.careos.shared.domain.AuthenticatedActor;
+import com.rootopathy.careos.workforce.application.WorkforceExportAccessService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
+import java.time.Instant;
+import java.util.UUID;
+import org.springframework.http.CacheControl;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RestController;
+
+@Validated
+@RestController
+public final class WorkforceExportController {
+    private static final String IDEMPOTENCY_PATTERN="[A-Za-z0-9._:-]{16,128}";
+    private final WorkforceExportAccessService service;
+
+    public WorkforceExportController(WorkforceExportAccessService service) {
+        this.service=service;
+    }
+
+    @PostMapping("/api/v1/organizations/{organizationId}/workforce/exports/{exportId}/accesses")
+    ResponseEntity<String> access(
+            @PathVariable UUID organizationId,
+            @PathVariable UUID exportId,
+            @RequestHeader(HttpHeaders.IF_MATCH) String ifMatch,
+            @RequestHeader("Idempotency-Key")
+                    @Pattern(regexp=IDEMPOTENCY_PATTERN) String idempotencyKey,
+            @Valid @RequestBody AccessRequest body,
+            Authentication authentication,
+            HttpServletRequest request) {
+        var actor=actor(authentication);
+        var session=request.getSession(false);
+        return response(service.access(new WorkforceExportAccessService.Command(
+                organizationId,actor.id(),CorrelationIdFilter.from(request),exportId,
+                body.purposeKey(),body.reason(),ifMatch,idempotencyKey,
+                assurance(session,AuthenticationSessionState.RECENT_AUTHENTICATION_AT),
+                assurance(session,AuthenticationSessionState.MFA_AUTHENTICATED_AT))));
+    }
+
+    private static ResponseEntity<String> response(IdempotencyOutcome outcome) {
+        return ResponseEntity.status(outcome.response().statusCode())
+                .cacheControl(CacheControl.noStore())
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(outcome.response().bodyJson());
+    }
+
+    private static AuthenticatedActor actor(Authentication authentication) {
+        if (authentication==null || !authentication.isAuthenticated()
+                || !(authentication.getPrincipal() instanceof AuthenticatedActor actor)) {
+            throw new ApiProblemException(
+                    HttpStatus.UNAUTHORIZED,"authentication-required","Authentication required",
+                    "A valid authenticated session is required.");
+        }
+        return actor;
+    }
+
+    private static Instant assurance(HttpSession session,String key) {
+        var value=session==null?null:session.getAttribute(key);
+        return value instanceof Long millis?Instant.ofEpochMilli(millis):null;
+    }
+
+    public record AccessRequest(
+            @NotBlank @Size(max=80) String purposeKey,
+            @NotBlank @Size(min=10,max=500) String reason) {}
+}

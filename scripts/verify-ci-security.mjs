@@ -64,13 +64,17 @@ export function validateWorkflowText(name, text) {
       "node --test scripts/tests/verify-module-1-candidate-inputs.test.mjs",
       "node scripts/verify-module-1-facility-scope-candidate.mjs",
       "node --test scripts/tests/verify-module-1-facility-scope-candidate.test.mjs",
+      "node scripts/verify-module-2-candidate-inputs.mjs",
+      "node --test scripts/tests/verify-module-2-candidate-inputs.test.mjs",
+      "node scripts/verify-module-2-inputs.mjs --require-approved",
+      "node --test scripts/tests/verify-module-2-inputs.test.mjs",
     ];
     for (const command of requiredModuleInputCommands) {
       if (
         !text.split(/\r?\n/).some((line) => line.trim() === `- run: ${command}`)
       ) {
         errors.push(
-          `${name}: contracts job must run the Module 1 input/review/candidate/facility-scope command: ${command}`,
+          `${name}: contracts job must run the required module input command: ${command}`,
         );
       }
     }

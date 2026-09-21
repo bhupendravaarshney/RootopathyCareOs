@@ -4,6 +4,91 @@ export type ClientOptions = {
   baseUrl: 'http://localhost:8080' | (string & {});
 };
 
+export type WorkforceScreen = {
+  organizationId: string;
+  screenId: string;
+  title: string;
+  purpose: string;
+  generatedAt: string;
+  metrics: Array<WorkforceMetric>;
+  columns: Array<WorkforceColumn>;
+  rows: Array<WorkforceRow>;
+  actions: Array<WorkforceAction>;
+  notices: Array<WorkforceNotice>;
+};
+
+export type WorkforceMetric = {
+  key: string;
+  label: string;
+  value: number;
+  tone: 'neutral' | 'info' | 'success' | 'warning';
+};
+
+export type WorkforceColumn = {
+  key: string;
+  label: string;
+};
+
+export type WorkforceRow = {
+  id: string;
+  memberId?: string | null;
+  status: string;
+  revision: number;
+  etag: string;
+  values: {
+    [key: string]: string;
+  };
+};
+
+export type WorkforceAction = {
+  key: string;
+  label: string;
+  style: 'primary' | 'link';
+  targetRequired: boolean;
+  ifMatchRequired: boolean;
+  reasonRequired: boolean;
+  href?: string | null;
+  fields: Array<WorkforceField>;
+};
+
+export type WorkforceField = {
+  key: string;
+  label: string;
+  inputType: string;
+  required: boolean;
+  help?: string | null;
+  options: Array<WorkforceOption>;
+};
+
+export type WorkforceOption = {
+  value: string;
+  label: string;
+};
+
+export type WorkforceNotice = {
+  tone: string;
+  title: string;
+  detail: string;
+};
+
+export type WorkforceActionRequest = {
+  targetId?: string | null;
+  memberId?: string | null;
+  decision?: string | null;
+  reason?: string | null;
+  fields: {
+    [key: string]: string;
+  };
+  evidenceIds: Array<string>;
+};
+
+export type CredentialDocumentMetadata = {
+  memberId?: string | null;
+  sha256: string;
+  retentionClass: string;
+  reason: string;
+};
+
 export type PrototypeScreen = {
   id: string;
   module: 'M1' | 'M2' | 'COS';
@@ -7772,3 +7857,202 @@ export type CancelOperatingHoursBatchResponses = {
 
 export type CancelOperatingHoursBatchResponse =
   CancelOperatingHoursBatchResponses[keyof CancelOperatingHoursBatchResponses];
+
+export type GetWorkforceScreenData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    screenId: string;
+  };
+  query?: {
+    memberId?: string;
+    q?: string;
+    status?: string;
+    limit?: number;
+  };
+  url: '/api/v1/organizations/{organizationId}/workforce/screens/{screenId}';
+};
+
+export type GetWorkforceScreenErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type GetWorkforceScreenError = GetWorkforceScreenErrors[keyof GetWorkforceScreenErrors];
+
+export type GetWorkforceScreenResponses = {
+  /**
+   * Authorized minimum-necessary Module 2 screen projection
+   */
+  200: WorkforceScreen;
+};
+
+export type GetWorkforceScreenResponse =
+  GetWorkforceScreenResponses[keyof GetWorkforceScreenResponses];
+
+export type PerformWorkforceActionData = {
+  body: WorkforceActionRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    screenId: string;
+    actionKey: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/workforce/screens/{screenId}/actions/{actionKey}';
+};
+
+export type PerformWorkforceActionErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type PerformWorkforceActionError =
+  PerformWorkforceActionErrors[keyof PerformWorkforceActionErrors];
+
+export type PerformWorkforceActionResponses = {
+  /**
+   * Successful governed workforce action
+   */
+  200: WorkforceScreen;
+  /**
+   * Successful governed workforce creation
+   */
+  201: WorkforceScreen;
+};
+
+export type PerformWorkforceActionResponse =
+  PerformWorkforceActionResponses[keyof PerformWorkforceActionResponses];
+
+export type UploadWorkforceCredentialDocumentData = {
+  body: {
+    metadata: CredentialDocumentMetadata;
+    file: Blob | File;
+  };
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    credentialId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/workforce/credentials/{credentialId}/documents';
+};
+
+export type UploadWorkforceCredentialDocumentErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type UploadWorkforceCredentialDocumentError =
+  UploadWorkforceCredentialDocumentErrors[keyof UploadWorkforceCredentialDocumentErrors];
+
+export type UploadWorkforceCredentialDocumentResponses = {
+  /**
+   * Credential document accepted into private quarantine
+   */
+  201: WorkforceScreen;
+};
+
+export type UploadWorkforceCredentialDocumentResponse =
+  UploadWorkforceCredentialDocumentResponses[keyof UploadWorkforceCredentialDocumentResponses];

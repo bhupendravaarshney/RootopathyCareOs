@@ -127,6 +127,8 @@ import type {
   GetSystemSummaryData,
   GetSystemSummaryResponse,
   GetSystemSummaryResponses,
+  GetWorkforceScreenData,
+  GetWorkforceScreenResponse,
   IssueCsrfTokenData,
   IssueCsrfTokenResponse,
   IssueCsrfTokenResponses,
@@ -162,6 +164,7 @@ import type {
   ConfigurationHistoryPage,
   ConfigurationResultRequest,
   ConfigurationValidationRequest,
+  CredentialDocumentMetadata,
   EvidenceExportAccessRequest,
   EvidenceExportAccessResponse,
   EvidenceExportDecisionRequest,
@@ -172,6 +175,7 @@ import type {
   OperatingHoursBatchRequest,
   OperatingHoursDirectory,
   OperatingHoursOverview,
+  PerformWorkforceActionResponse,
   Problem,
   RegenerateRecoveryCodesData,
   RegenerateRecoveryCodesResponse,
@@ -236,6 +240,8 @@ import type {
   VerifyRecentAuthenticationData,
   VerifyRecentAuthenticationResponse,
   VerifyRecentAuthenticationResponses,
+  WorkforceActionRequest,
+  WorkforceScreen,
 } from './generated';
 import {
   auditEvidenceDetailValidator,
@@ -250,6 +256,12 @@ import {
   serviceAssignmentDirectoryValidator,
   serviceCatalogueValidator,
 } from './live-administration-contracts';
+import {
+  workforceExportAccessValidator,
+  workforceScreenValidator,
+  type WorkforceExportAccessRequest,
+  type WorkforceExportAccessResponse,
+} from './workforce-contracts';
 
 const ACCEPTED_RESPONSE_TYPES = 'application/json, application/problem+json';
 const CORRELATION_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -664,6 +676,7 @@ type RequestDescriptor = {
   idempotencyKey?: string;
   ifMatch?: string;
   method: 'GET' | 'POST' | 'PUT';
+  multipartBody?: FormData;
   path: string;
   responseBody: 'empty' | 'json';
   signal?: AbortSignal;
@@ -692,6 +705,51 @@ function requireStrongEtag(value: string): string {
     throw new Error('If-Match must contain a strong entity tag from the latest response.');
   }
   return value;
+}
+
+type WorkforceScreenQuery = NonNullable<GetWorkforceScreenData['query']>;
+
+function requireWorkforceScreenId(value: string): string {
+  if (!/^M2-(0[1-9]|1[0-9]|2[0-9])$/.test(value)) {
+    throw new Error('screenId must identify a Module 2 screen from M2-01 through M2-29.');
+  }
+  return value;
+}
+
+function requireWorkforceActionKey(value: string): string {
+  if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(value)) {
+    throw new Error('actionKey has an invalid format.');
+  }
+  return value;
+}
+
+function workforceScreenQuery(query: WorkforceScreenQuery): string {
+  const parameters = new URLSearchParams();
+  if (query.memberId !== undefined) {
+    parameters.set('memberId', requireUuid(query.memberId, 'memberId'));
+  }
+  if (query.q !== undefined) {
+    if (typeof query.q !== 'string' || Array.from(query.q).length > 120) {
+      throw new Error('Workforce search must contain at most 120 characters.');
+    }
+    const normalized = query.q.trim().normalize('NFC');
+    if (normalized) parameters.set('q', normalized);
+  }
+  if (query.status !== undefined) {
+    if (typeof query.status !== 'string' || Array.from(query.status).length > 40) {
+      throw new Error('Workforce status must contain at most 40 characters.');
+    }
+    const normalized = query.status.trim().normalize('NFC');
+    if (normalized) parameters.set('status', normalized);
+  }
+  if (query.limit !== undefined) {
+    if (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > 100) {
+      throw new Error('Workforce page limit must be an integer from 1 to 100.');
+    }
+    parameters.set('limit', String(query.limit));
+  }
+  const serialized = parameters.toString();
+  return serialized ? `?${serialized}` : '';
 }
 
 type OrganizationMembershipQuery = NonNullable<ListOrganizationMembershipsData['query']>;
@@ -1169,6 +1227,9 @@ export class CareOsApiClient {
   async #mutation<T>(
     descriptor: Omit<RequestDescriptor, 'method'> & { method?: 'POST' | 'PUT' },
   ): Promise<ApiResult<T>> {
+    if (descriptor.body !== undefined && descriptor.multipartBody !== undefined) {
+      throw new Error('A mutation cannot contain both JSON and multipart bodies.');
+    }
     const csrf = await this.issueCsrfToken({ signal: descriptor.signal });
     if (!csrf.ok) {
       return csrf;
@@ -1206,7 +1267,9 @@ export class CareOsApiClient {
       const method = descriptor.method ?? 'POST';
       const requestStartedAt = this.#now();
       const response = await this.#fetch(`${this.#baseUrl}${descriptor.path}`, {
-        body: descriptor.body === undefined ? undefined : JSON.stringify(descriptor.body),
+        body:
+          descriptor.multipartBody ??
+          (descriptor.body === undefined ? undefined : JSON.stringify(descriptor.body)),
         credentials: 'include',
         headers,
         method,
@@ -3279,6 +3342,131 @@ export class CareOsApiClient {
       signal: options.signal,
       successStatuses: [200],
       validateResponse: evidenceExportAccessValidator(exportJob),
+    });
+  }
+
+  getWorkforceScreen(
+    organizationId: string,
+    screenId: string,
+    query: WorkforceScreenQuery = {},
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requireWorkforceScreenId(screenId);
+    return this.#request<GetWorkforceScreenResponse>({
+      method: 'GET',
+      path: `/v1/organizations/${organization}/workforce/screens/${screen}${workforceScreenQuery(query)}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: workforceScreenValidator(organization, screen),
+    });
+  }
+
+  performWorkforceAction(
+    organizationId: string,
+    screenId: string,
+    actionKey: string,
+    body: WorkforceActionRequest,
+    ifMatch: string | undefined,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requireWorkforceScreenId(screenId);
+    const action = requireWorkforceActionKey(actionKey);
+    return this.#mutation<PerformWorkforceActionResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ...(ifMatch === undefined ? {} : { ifMatch: requireStrongEtag(ifMatch) }),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/workforce/screens/${screen}/actions/${action}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200, 201],
+      validateResponse: workforceScreenValidator(organization, screen),
+    });
+  }
+
+  accessWorkforceExport(
+    organizationId: string,
+    exportId: string,
+    body: WorkforceExportAccessRequest,
+    ifMatch: string,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const exportJob = requireUuid(exportId, 'exportId');
+    const purposeKey = body.purposeKey.trim();
+    const reason = body.reason.trim().normalize('NFC');
+    if (!/^[a-z][a-z0-9_]{1,79}$/.test(purposeKey)) {
+      throw new Error('Workforce export purposeKey is invalid.');
+    }
+    const reasonLength = Array.from(reason).length;
+    if (reasonLength < 10 || reasonLength > 500) {
+      throw new Error('Workforce export access reason must contain 10 to 500 characters.');
+    }
+    return this.#mutation<WorkforceExportAccessResponse>({
+      body: { purposeKey, reason },
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/workforce/exports/${exportJob}/accesses`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: workforceExportAccessValidator(exportJob),
+    });
+  }
+
+  uploadWorkforceCredentialDocument(
+    organizationId: string,
+    credentialId: string,
+    metadata: CredentialDocumentMetadata,
+    file: Blob | File,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const credential = requireUuid(credentialId, 'credentialId');
+    if (metadata.memberId !== undefined && metadata.memberId !== null) {
+      requireUuid(metadata.memberId, 'memberId');
+    }
+    if (!/^[0-9a-f]{64}$/.test(metadata.sha256)) {
+      throw new Error('Credential document sha256 must be a lower-case SHA-256 digest.');
+    }
+    if (!metadata.retentionClass.trim() || Array.from(metadata.retentionClass).length > 80) {
+      throw new Error('Credential document retentionClass must contain 1 to 80 characters.');
+    }
+    const reasonLength = Array.from(metadata.reason.trim()).length;
+    if (reasonLength < 10 || reasonLength > 500) {
+      throw new Error('Credential document reason must contain 10 to 500 characters.');
+    }
+    if (file.size < 1) {
+      throw new Error('Credential document file must not be empty.');
+    }
+
+    const formData = new FormData();
+    formData.append(
+      'metadata',
+      new Blob([JSON.stringify(metadata)], { type: 'application/json' }),
+    );
+    formData.append(
+      'file',
+      file,
+      typeof File !== 'undefined' && file instanceof File ? file.name : 'credential-document',
+    );
+
+    return this.#mutation<WorkforceScreen>({
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      method: 'POST',
+      multipartBody: formData,
+      path: `/v1/organizations/${organization}/workforce/credentials/${credential}/documents`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [201],
+      validateResponse: workforceScreenValidator(organization, 'M2-10'),
     });
   }
 

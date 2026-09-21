@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "module": "M2",
+  "status": "CANDIDATE_FOR_APPROVAL",
+  "candidateVersion": "m2-candidate-1",
+  "basis": {
+    "acceptedModule1Commit": "2ba6c9b3b567d0371c8523e6f18945ec33138ae4",
+    "buildSpecification": {
+      "path": "docs/CareOS_Complete_Build_Specification_Java_Spring_Boot_React_Node_Edition.pdf",
+      "sha256": "2c8f9f020c7c1a21678c795df57fd8be1b659f2141ab7c8747b5dec973db0bfe"
+    }
+  },
+  "artifacts": [
+    {
+      "kind": "screen-mockups",
+      "version": "m2-candidate-1",
+      "path": "candidate-inputs/module-2/01-screen-mockups.html"
+    },
+    {
+      "kind": "design-system",
+      "version": "m2-candidate-1",
+      "path": "candidate-inputs/module-2/02-design-system.md"
+    },
+    {
+      "kind": "data-dictionary-and-validation",
+      "version": "m2-candidate-1",
+      "path": "candidate-inputs/module-2/03-data-dictionary-and-validation.md"
+    },
+    {
+      "kind": "lifecycle-and-transition-matrix",
+      "version": "m2-candidate-1",
+      "path": "candidate-inputs/module-2/04-lifecycle-and-transition-matrix.md"
+    },
+    {
+      "kind": "authorization-policy",
+      "version": "m2-candidate-1",
+      "path": "candidate-inputs/module-2/05-authorization-policy.md"
+    },
+    {
+      "kind": "audit-and-event-registry",
+      "version": "m2-candidate-1",
+      "path": "candidate-inputs/module-2/06-audit-and-event-registry.md"
+    },
+    {
+      "kind": "readiness-and-activation-policy",
+      "version": "m2-candidate-1",
+      "path": "candidate-inputs/module-2/07-readiness-and-activation-policy.md"
+    },
+    {
+      "kind": "history-and-export-policy",
+      "version": "m2-candidate-1",
+      "path": "candidate-inputs/module-2/08-history-and-export-policy.md"
+    }
+  ]
+}

@@ -878,3 +878,14 @@ The current Phase 0 mechanics and organization-wide Module 1 repository implemen
 ## Production status
 
 This checkpoint is intentionally a **repository-verified implementation foundation**. It is runnable and suitable for target-environment and owner acceptance work. It is not production acceptance, a production release, a clinical-device claim, a security certification, or completion of Modules 2-13.
+
+## Prepared during Phase 2A Module 2 input candidate (21 September 2026)
+
+- The user accepted commit `2ba6c9b3b567d0371c8523e6f18945ec33138ae4` as the exact Module 1 predecessor baseline. This records repository-baseline acceptance only; target-environment and production acceptance remain separate.
+- `candidate-inputs/module-2/` now contains eight internally consistent `m2-candidate-1` artifacts: a self-contained 29-screen interactive review prototype, inherited Design System extension, exact 44-table data/validation dictionary, lifecycle matrix, authorization policy, audit/outbox registry, readiness/eligibility/activation policy, and history/audit/timeline/export policy.
+- The candidate keeps Person/User/Workforce/Engagement/Practitioner/Credential/Scope/Assignment/Service/Availability/Access independent, reuses canonical M1 RBAC and platform ports, requires private fail-closed credential evidence, and defines no readiness or eligibility override.
+- `contracts/module-2-candidate-inputs.json` binds the candidate to the accepted M1 commit and build-specification digest `2c8f9f020c7c1a21678c795df57fd8be1b659f2141ab7c8747b5dec973db0bfe`.
+- The path-safe candidate verifier reports eight artifacts, 29 screens, 44 tables, exact package digest `2e64bd4e1ac5192a9a4783abf58f4578b8bceda60c21c2e835a910e6760d0f8f`, and `implementationAuthorized: false`. All ten positive/negative verifier tests, five exact-viewport Playwright/Axe/overflow cases, frontend formatting, and the updated 13-test CI-security contract pass.
+- `MODULE_2_IMPLEMENTATION_PLAN.md` defines the M2A-M2H dependency order, screen traceability, architecture boundaries, end-only executable testing instruction, and completion criteria.
+
+No Module 2 migration, endpoint, worker, permission release, generated API, or production screen was enabled. The existing M2 routes remain synthetic until an accountable reviewer approves the exact candidate digest and byte-identical artifacts are promoted with distinct approval evidence.

@@ -35,7 +35,7 @@ jobs:
   assert.deepEqual(validateWorkflowText("secure.yml", workflow), []);
 });
 
-test("requires every Module 1 input and additive-candidate check in the quality workflow", () => {
+test("requires every approved and candidate module-input check in the quality workflow", () => {
   const workflow = `name: quality
 on: push
 permissions:
@@ -56,6 +56,10 @@ jobs:
       - run: node --test scripts/tests/verify-module-1-candidate-inputs.test.mjs
       - run: node scripts/verify-module-1-facility-scope-candidate.mjs
       - run: node --test scripts/tests/verify-module-1-facility-scope-candidate.test.mjs
+      - run: node scripts/verify-module-2-candidate-inputs.mjs
+      - run: node --test scripts/tests/verify-module-2-candidate-inputs.test.mjs
+      - run: node scripts/verify-module-2-inputs.mjs --require-approved
+      - run: node --test scripts/tests/verify-module-2-inputs.test.mjs
 `;
   assert.deepEqual(validateWorkflowText("quality.yml", workflow), []);
 
@@ -65,13 +69,31 @@ jobs:
   );
   assert.match(
     validateWorkflowText("quality.yml", weakened).join("\n"),
-    /contracts job must run the Module 1 input\/review\/candidate\/facility-scope command/,
+    /contracts job must run the required module input command/,
+  );
+
+  const module2Weakened = workflow.replace(
+    "      - run: node --test scripts/tests/verify-module-2-candidate-inputs.test.mjs\n",
+    "",
+  );
+  assert.match(
+    validateWorkflowText("quality.yml", module2Weakened).join("\n"),
+    /contracts job must run the required module input command/,
+  );
+
+  const module2ApprovalWeakened = workflow.replace(
+    "      - run: node scripts/verify-module-2-inputs.mjs --require-approved\n",
+    "",
+  );
+  assert.match(
+    validateWorkflowText("quality.yml", module2ApprovalWeakened).join("\n"),
+    /contracts job must run the required module input command/,
   );
 
   const approvalWeakened = workflow.replace(" --require-approved", "");
   assert.match(
     validateWorkflowText("quality.yml", approvalWeakened).join("\n"),
-    /contracts job must run the Module 1 input\/review\/candidate\/facility-scope command/,
+    /contracts job must run the required module input command/,
   );
 });
 

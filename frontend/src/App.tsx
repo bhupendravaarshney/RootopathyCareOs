@@ -23,6 +23,8 @@ import {
   SessionLoadingScreen,
 } from './features/session/SessionScreens';
 import { SessionIssueAlert } from './features/session/SessionIssueAlert';
+import { WorkforceScreenPage } from './features/workforce/WorkforceScreens';
+import type { WorkforceClient } from './features/workforce/workforce-types';
 import { PrototypeScreenPage } from './pages/PrototypeScreenPage';
 import { RouteNotFoundPage } from './pages/RouteNotFoundPage';
 
@@ -45,9 +47,15 @@ function readHashRoute(hash = window.location.hash): HashRoute {
 
 const identityRoutes = new Set(['M1-01', 'M1-02', 'M1-03', 'M1-04']);
 const registeredScreenIds = new Set(screens.map((screen) => screen.id));
-type ApplicationClient = SessionClient & AdministrationClient;
+type ApplicationClient = SessionClient & AdministrationClient & WorkforceClient;
 
-function RoutedApp({ administrationClient }: { administrationClient: AdministrationClient }) {
+function RoutedApp({
+  administrationClient,
+  workforceClient,
+}: {
+  administrationClient: AdministrationClient;
+  workforceClient: WorkforceClient;
+}) {
   const [route, setRoute] = useState<HashRoute>(readHashRoute);
   const invitationTokenRetired = useRef(false);
   const resetTokenRetired = useRef(false);
@@ -277,6 +285,17 @@ function RoutedApp({ administrationClient }: { administrationClient: Administrat
   if (!registeredScreenIds.has(screenId)) {
     return <RouteNotFoundPage shell={shell} />;
   }
+  if (screenId.startsWith('M2-')) {
+    return (
+      <WorkforceScreenPage
+        key={`${machine.selectedOrganization.id}:${screenId}`}
+        client={workforceClient}
+        id={screenId}
+        organizationId={machine.selectedOrganization.id}
+        shell={shell}
+      />
+    );
+  }
   if (
     screenId === 'M1-05' ||
     screenId === 'M1-06' ||
@@ -315,7 +334,7 @@ export default function App({ client }: { client?: ApplicationClient }) {
   const resolvedClient = client ?? careOsApi;
   return (
     <SessionProvider client={resolvedClient}>
-      <RoutedApp administrationClient={resolvedClient} />
+      <RoutedApp administrationClient={resolvedClient} workforceClient={resolvedClient} />
     </SessionProvider>
   );
 }

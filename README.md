@@ -13,6 +13,8 @@ This repository is the verified **from-scratch engineering foundation** for Care
 > The original proposal remains under `candidate-inputs/module-1/` as non-authorizing provenance. Its exact accepted bytes were promoted to `approved-inputs/module-1/`; authority comes only from the production manifest and approval record, never from the candidate verifier.
 >
 > The approved base package did not define exact facility-scope storage or enforcement. The additive `m1-facility-scope-candidate-1` contract now supplies an approval-ready proposal at digest `76a3f7a2c63cef0cab02b8a1d38a66220eee0abb99c9be0a82b64eaa8941fddb`. It remains `CANDIDATE_FOR_APPROVAL`, reports `implementationAuthorized: false`, and does not change runtime behavior until separately approved.
+>
+> The user accepted commit `2ba6c9b` as the Module 1 predecessor baseline on 21 September 2026. Module 2 now has a complete eight-artifact `m2-candidate-1` review package covering M2-01 through M2-29 and the exact 44-table specification baseline. Its verified package digest is `2e64bd4e1ac5192a9a4783abf58f4578b8bceda60c21c2e835a910e6760d0f8f`; it remains `CANDIDATE_FOR_APPROVAL` with `implementationAuthorized: false`, so current M2 runtime routes remain synthetic until the exact candidate receives separate approval.
 
 ## Runtime stack
 
@@ -176,15 +178,17 @@ node scripts/verify-module-1-candidate-inputs.mjs
 node --test scripts/tests/verify-module-1-candidate-inputs.test.mjs
 node scripts/verify-module-1-facility-scope-candidate.mjs
 node --test scripts/tests/verify-module-1-facility-scope-candidate.test.mjs
+node scripts/verify-module-2-candidate-inputs.mjs
+node --test scripts/tests/verify-module-2-candidate-inputs.test.mjs
 node scripts/verify-ci-security.mjs
 node --test scripts/tests/verify-ci-security.test.mjs
 ```
 
-The checked Module 1 production command verifies all eight approved artifacts plus approval record `M1-APPROVAL-20260916-01`; add `--require-approved` when authorizing implementation or release work. The review-draft, retained input-candidate, and additive facility-scope candidate commands remain non-authorizing and report `implementationAuthorized: false`. Any change to an approved artifact changes its checksum and must fail the production gate until a new accountable approval binds the replacement package, all 23 screen IDs, and distinct approval evidence. Facility-scope implementation separately requires approval bound to its exact additive candidate digest.
+The checked Module 1 production command verifies all eight approved artifacts plus approval record `M1-APPROVAL-20260916-01`; add `--require-approved` when authorizing implementation or release work. The review-draft, retained input-candidate, additive facility-scope candidate, and Module 2 candidate commands remain non-authorizing and report `implementationAuthorized: false`. Any change to an approved artifact changes its checksum and must fail the production gate until a new accountable approval binds the replacement package, full screen scope, and distinct approval evidence. Facility-scope implementation and Module 2 implementation separately require approval bound to their exact candidate digests.
 
 Backend tests require Docker because Testcontainers creates and removes isolated PostgreSQL 18 `careos_test`, Redis 8, and pinned object-storage instances. UUID tests verify RFC 9562 layout and process-local monotonic behavior, while PostgreSQL catalog tests verify native `uuidv7()` defaults. The suite attacks approved/reference authorization, delegation/final-owner controls, checksum-bound release evidence, identity/MFA workflows, organization and network boundaries, operating-hours/service/assignment/scheme constraints, configuration activation/invalidation, history/audit projection, export snapshot/lifecycle/access, cross-tenant isolation, concurrency, idempotency, evidence, and readiness behavior. Redis queue, PostgreSQL notification, document evidence, Object Lock, consumer inbox, and deterministic ClamD tests cover their respective integrity, isolation, replay, retry, and fail-closed contracts. Tests do not use development infrastructure. Never point automated tests at development or production services.
 
-Current local verification on 21 September 2026 passes 205 backend tests across 28 suites, 72 frontend unit tests, 110 Playwright/Axe cases across five exact viewport profiles, the packaged backend JAR, the frontend production build and static gates, the 79-screen registry, the 100-operation OpenAPI contract, every Module 1 input/candidate/facility-scope verifier, and the CI-security contract.
+Current local verification on 21 September 2026 passes 205 backend tests across 28 suites, 72 frontend unit tests, 110 runtime Playwright/Axe cases across five exact viewport profiles, the packaged backend JAR, the frontend production build and static gates, the 79-screen registry, the 100-operation OpenAPI contract, every Module 1 input/candidate/facility-scope verifier, and the CI-security contract. The later Module 2 candidate closeout separately passes its ten integrity/negative tests, five exact-viewport Playwright/Axe/overflow cases, frontend formatting, and the updated 13-test CI-security contract.
 
 ## Security baseline already represented
 
@@ -256,10 +260,10 @@ Platform capabilities are explicitly unavailable by default until tested adapter
 ```text
 backend/                 Spring Boot modular-monolith foundation
 frontend/                React/TypeScript session boundary and 79 route states
-candidate-inputs/        Retained Module 1 provenance plus the non-authorizing facility-scope candidate
+candidate-inputs/        Retained M1 provenance plus non-authorizing M1 facility-scope and M2 candidates
 approved-inputs/         Checksum-bound approved Module 1 artifacts and approval evidence
-contracts/               Checked API/input contracts plus M1 production/draft/candidate manifests
-docs/                    architecture, operations, screen register, M1 review drafts and delivery status
+contracts/               Checked API/input contracts plus M1 and M2 input manifests
+docs/                    architecture, operations, screen register, module plans, review drafts and delivery status
 scripts/                 verification helpers
 compose.yaml             local PostgreSQL, Redis, MinIO, Mailpit and apps
 compose.scanner.yaml     optional pinned ClamAV/quarantine compatibility overlay
