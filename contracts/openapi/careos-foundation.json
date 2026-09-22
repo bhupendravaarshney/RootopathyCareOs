@@ -7932,6 +7932,69 @@
         }
       }
     },
+    "/api/v1/organizations/{organizationId}/workforce/credentials/{credentialId}/documents/{documentId}/accesses/{accessIntentId}": {
+      "get": {
+        "operationId": "openWorkforceCredentialDocumentAccess",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          {
+            "name": "credentialId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "accessIntentId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "purposeCode",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "credentialing_review",
+                "regulatory_evidence",
+                "security_investigation",
+                "employment_record_request",
+                "data_correction"
+              ]
+            }
+          }
+        ],
+        "security": [
+          { "sessionCookie": [] }
+        ],
+        "responses": {
+          "307": {
+            "description": "No-store redirect to a newly minted provider URL for the existing actor-bound access grant",
+            "headers": {
+              "Location": {
+                "required": true,
+                "schema": { "type": "string", "format": "uri" }
+              },
+              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
+              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
     "/api/v1/organizations/{organizationId}/workforce/credentials/{credentialId}/documents": {
       "post": {
         "operationId": "uploadWorkforceCredentialDocument",
@@ -9027,7 +9090,11 @@
           "credentialId": { "type": "string", "format": "uuid" },
           "documentId": { "type": "string", "format": "uuid" },
           "accessIntentId": { "type": "string", "format": "uuid" },
-          "readUrl": { "type": "string", "format": "uri" },
+          "readUrl": {
+            "type": "string",
+            "format": "uri-reference",
+            "pattern": "^/api/v1/organizations/[0-9a-f-]{36}/workforce/credentials/[0-9a-f-]{36}/documents/[0-9a-f-]{36}/accesses/[0-9a-f-]{36}\\?purposeCode=[a-z][a-z0-9_]+$"
+          },
           "expiresAt": { "type": "string", "format": "date-time" },
           "mediaType": {
             "type": "string",

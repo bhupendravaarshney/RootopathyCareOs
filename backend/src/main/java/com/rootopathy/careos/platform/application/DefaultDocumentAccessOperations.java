@@ -90,6 +90,51 @@ public final class DefaultDocumentAccessOperations implements DocumentAccessOper
         return signed;
     }
 
+    @Override
+    public SignedDocumentAccess reopenReadAccess(
+            AuthorizedTenantContext context,
+            DocumentObjectReference document,
+            UUID accessGrantId) {
+        Objects.requireNonNull(context, "context");
+        Objects.requireNonNull(document, "document");
+        Objects.requireNonNull(accessGrantId, "accessGrantId");
+        if (!context.organizationId().equals(document.organizationId())) {
+            throw rejected(TENANT_MISMATCH);
+        }
+        var grant = evidence.findAccessGrant(context, document, accessGrantId)
+                .orElseThrow(() -> rejected("document-access-grant-not-found"));
+        var now = clock.instant();
+        if (!context.actorId().equals(grant.actorId())
+                || !context.purpose().equals(grant.purpose())
+                || !policy.policyKey().equals(grant.policyKey())
+                || !policy.acceptedPurposes().equals(grant.acceptedPurposes())
+                || !grant.expiresAt().isAfter(now)) {
+            throw rejected("document-access-grant-unavailable");
+        }
+        var remainingSeconds = java.time.Duration.between(now, grant.expiresAt()).getSeconds();
+        if (remainingSeconds < 1) {
+            throw rejected("document-access-grant-unavailable");
+        }
+        var authorization = new DocumentAccessAuthorization(
+                grant.accessGrantId(),
+                grant.promotionEvidence(),
+                grant.policyKey(),
+                grant.acceptedPurposes(),
+                Duration.ofSeconds(remainingSeconds),
+                grant.maximumTtl(),
+                grant.maximumAuthorizationAge(),
+                grant.maximumFutureSkew(),
+                grant.purpose(),
+                now);
+        var signed = access.createReadAccess(context, authorization);
+        if (!grant.accessGrantId().equals(signed.accessGrantId())
+                || !document.equals(signed.document())
+                || signed.expiresAt().isAfter(grant.expiresAt())) {
+            throw rejected(RESPONSE_MISMATCH);
+        }
+        return signed;
+    }
+
     private static boolean matches(
             DocumentAccessGrantEvidence recorded,
             DocumentAccessAuthorization authorization,

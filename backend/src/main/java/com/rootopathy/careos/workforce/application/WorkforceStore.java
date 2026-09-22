@@ -126,8 +126,50 @@ public interface WorkforceStore {
             Map<String, Object> auditPayload,
             Map<String, Object> outboxPayload,
             int statusCode,
-            long revision) {
+            long revision,
+            List<MutationEvidence> additionalEvidence) {
+        public MutationResult(
+                UUID subjectId,
+                String subjectType,
+                String auditEvent,
+                String outboxEvent,
+                String aggregateType,
+                Map<String, Object> auditPayload,
+                Map<String, Object> outboxPayload,
+                int statusCode,
+                long revision) {
+            this(
+                    subjectId,
+                    subjectType,
+                    auditEvent,
+                    outboxEvent,
+                    aggregateType,
+                    auditPayload,
+                    outboxPayload,
+                    statusCode,
+                    revision,
+                    List.of());
+        }
+
         public MutationResult {
+            auditPayload = java.util.Collections.unmodifiableMap(
+                    new java.util.LinkedHashMap<>(auditPayload == null ? Map.of() : auditPayload));
+            outboxPayload = java.util.Collections.unmodifiableMap(
+                    new java.util.LinkedHashMap<>(outboxPayload == null ? Map.of() : outboxPayload));
+            additionalEvidence = List.copyOf(
+                    additionalEvidence == null ? List.of() : additionalEvidence);
+        }
+    }
+
+    record MutationEvidence(
+            UUID subjectId,
+            String subjectType,
+            String auditEvent,
+            String outboxEvent,
+            String aggregateType,
+            Map<String, Object> auditPayload,
+            Map<String, Object> outboxPayload) {
+        public MutationEvidence {
             auditPayload = java.util.Collections.unmodifiableMap(
                     new java.util.LinkedHashMap<>(auditPayload == null ? Map.of() : auditPayload));
             outboxPayload = java.util.Collections.unmodifiableMap(

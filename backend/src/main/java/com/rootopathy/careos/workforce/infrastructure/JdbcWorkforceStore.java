@@ -13,6 +13,7 @@ import com.rootopathy.careos.workforce.application.WorkforceMatchKeyCodec;
 import com.rootopathy.careos.workforce.application.WorkforceOffboardingStore;
 import com.rootopathy.careos.workforce.application.WorkforceSensitiveValueCodec;
 import com.rootopathy.careos.workforce.application.WorkforceStore;
+import com.rootopathy.careos.workforce.application.WorkforceStore.MutationEvidence;
 import com.rootopathy.careos.workforce.application.WorkforceWorkerStore;
 import com.rootopathy.careos.workforce.domain.WorkforceScreen;
 import java.nio.charset.StandardCharsets;
@@ -819,16 +820,27 @@ public final class JdbcWorkforceStore
         if (updated != 1) {
             throw conflict("Credential document evidence could not be bound.");
         }
-        jdbc.update(
+        var credentialChanged = jdbc.update(
                 """
                 UPDATE practitioner_credentials
                 SET status = CASE WHEN status='draft' THEN 'evidence_pending' ELSE status END,
                     lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
-                WHERE organization_id=? AND id=?
+                WHERE organization_id=? AND id=? AND lock_version=?
+                  AND status IN ('draft','evidence_pending')
                 """,
                 context.actorId(),
                 context.organizationId(),
-                command.credentialId());
+                command.credentialId(),
+                credential.revision());
+        requireChanged(credentialChanged, "The credential changed before document evidence was bound.");
+        var evidenceCount = Objects.requireNonNull(jdbc.queryForObject(
+                """
+                SELECT count(*) FROM credential_documents
+                WHERE organization_id=? AND practitioner_credential_id=?
+                """,
+                Integer.class,
+                context.organizationId(),
+                command.credentialId()));
         var audit = ordered(
                 "credentialId", command.credentialId(),
                 "documentId", documentId,
@@ -841,6 +853,27 @@ public final class JdbcWorkforceStore
                 "documentId", documentId,
                 "digest", command.sha256(),
                 "state", "quarantined");
+        var intentPayload = ordered(
+                "credentialId", command.credentialId(),
+                "documentId", documentId,
+                "declaredType", command.mediaType(),
+                "declaredSize", command.declaredSize(),
+                "digest", command.sha256(),
+                "state", "intent_created");
+        var uploadedPayload = ordered(
+                "credentialId", command.credentialId(),
+                "documentId", documentId,
+                "declaredType", command.mediaType(),
+                "declaredSize", command.declaredSize(),
+                "digest", command.sha256(),
+                "state", "uploaded");
+        var credentialPayload = ordered(
+                "practitionerId", credential.practitionerId(),
+                "credentialId", credential.id(),
+                "fromState", credential.status(),
+                "toState", credential.status().equals("draft") ? "evidence_pending" : credential.status(),
+                "evidenceCount", evidenceCount,
+                "revision", credential.revision() + 1);
         return result(
                 documentId,
                 "credential_document",
@@ -850,7 +883,32 @@ public final class JdbcWorkforceStore
                 audit,
                 outbox,
                 201,
-                0);
+                0,
+                List.of(
+                        new MutationEvidence(
+                                documentId,
+                                "credential_document",
+                                "credential.document.intent_created",
+                                null,
+                                null,
+                                intentPayload,
+                                Map.of()),
+                        new MutationEvidence(
+                                documentId,
+                                "credential_document",
+                                "credential.document.uploaded",
+                                null,
+                                null,
+                                uploadedPayload,
+                                Map.of()),
+                        new MutationEvidence(
+                                credential.id(),
+                                "practitioner_credential",
+                                "credential.record.updated",
+                                null,
+                                null,
+                                credentialPayload,
+                                Map.of())));
     }
 
     @Override
@@ -908,7 +966,9 @@ public final class JdbcWorkforceStore
             throw conflict("Clean scan evidence must be promoted before it can be bound.");
         }
         if (!scan.result().document().equals(document.object())
-                || !scan.result().sha256().equals(document.declaredDigest())) {
+                || (scan.result().verdict()
+                                != com.rootopathy.careos.platform.domain.MalwareScanVerdict.ERROR
+                        && !scan.result().sha256().equals(document.declaredDigest()))) {
             throw conflict("The scan evidence does not match the declared document object.");
         }
         var failureCode = outcome.equals("failed") ? "scanner_error" : null;
@@ -3562,7 +3622,6 @@ public final class JdbcWorkforceStore
         var engagementId = UuidV7Generator.randomUuid();
         var effectiveFrom = instant(command, "effectiveFrom");
         var effectiveTo = optionalInstant(command, "effectiveTo");
-        var supersedesId = optionalUuid(command,"supersedesId");
         requireRange(effectiveFrom, effectiveTo);
         requireRegistryEntryKey(
                 context, required(command, "employmentCategoryKey"), "employment_category", effectiveFrom);
@@ -3979,6 +4038,23 @@ public final class JdbcWorkforceStore
         if (isSubjectActor(context, credential.memberId())) {
             throw conflict("A workforce member cannot claim their own credential review.");
         }
+        var expiredLease = jdbc.query(
+                """
+                SELECT reviewer_id,review_lease_expires_at
+                FROM practitioner_credentials
+                WHERE organization_id=? AND id=? AND lock_version=?
+                  AND status='in_review'
+                  AND review_lease_expires_at<=clock_timestamp()
+                FOR UPDATE
+                """,
+                resultSet -> resultSet.next()
+                        ? new ReviewLease(
+                                resultSet.getObject("reviewer_id", UUID.class),
+                                resultSet.getTimestamp("review_lease_expires_at").toInstant())
+                        : null,
+                context.organizationId(),
+                credentialId,
+                revision);
         var leaseExpiry = command.now().plusSeconds(900);
         var changed = jdbc.update(
                 """
@@ -4011,6 +4087,21 @@ public final class JdbcWorkforceStore
                 "reviewerId", context.actorId(),
                 "leaseExpiry", leaseExpiry,
                 "state", "claimed");
+        var additionalEvidence = expiredLease == null
+                ? List.<MutationEvidence>of()
+                : List.of(new MutationEvidence(
+                        credentialId,
+                        "practitioner_credential",
+                        "credential.review.lease_expired",
+                        null,
+                        null,
+                        ordered(
+                                "credentialId", credentialId,
+                                "queueItemId", credentialId,
+                                "reviewerId", expiredLease.reviewerId(),
+                                "leaseExpiry", expiredLease.expiresAt(),
+                                "state", "expired"),
+                        Map.of()));
         return result(
                 credentialId,
                 "practitioner_credential",
@@ -4020,7 +4111,8 @@ public final class JdbcWorkforceStore
                 payload,
                 Map.of(),
                 200,
-                revision + 1);
+                revision + 1,
+                additionalEvidence);
     }
 
     private MutationResult decideCredential(
@@ -4093,6 +4185,43 @@ public final class JdbcWorkforceStore
                     WorkforceException.Reason.EVIDENCE_NOT_CLEAN,
                     "Every selected credential document must have clean promotion evidence.");
         }
+        CredentialPredecessor predecessor = null;
+        if (decision.equals("verified") && credential.supersedesId() != null) {
+            var candidate = jdbc.query(
+                    """
+                    SELECT practitioner_profile_id,status,lock_version
+                    FROM practitioner_credentials
+                    WHERE organization_id=? AND id=? AND workforce_member_id=?
+                      AND credential_type_entry_id=(
+                          SELECT credential_type_entry_id FROM practitioner_credentials
+                          WHERE organization_id=? AND id=?)
+                    FOR UPDATE
+                    """,
+                    resultSet -> resultSet.next()
+                            ? new CredentialPredecessor(
+                                    resultSet.getObject("practitioner_profile_id", UUID.class),
+                                    resultSet.getString("status"),
+                                    resultSet.getLong("lock_version"))
+                            : null,
+                    context.organizationId(),
+                    credential.supersedesId(),
+                    credential.memberId(),
+                    context.organizationId(),
+                    credentialId);
+            if (candidate == null) {
+                throw stale("The credential predecessor changed before supersession.");
+            }
+            if (Set.of(
+                            "verified",
+                            "more_information_required",
+                            "returned_for_correction",
+                            "suspended")
+                    .contains(candidate.status())) {
+                predecessor = candidate;
+            } else if (!candidate.status().equals("expired")) {
+                throw stale("The credential predecessor changed before supersession.");
+            }
+        }
         var evidenceDigest = digest(evidenceIds.stream().sorted().map(UUID::toString).reduce("", (a, b) -> a + "|" + b));
         var verificationId = UuidV7Generator.randomUuid();
         jdbc.update(
@@ -4134,30 +4263,22 @@ public final class JdbcWorkforceStore
                 revision,
                 context.actorId());
         requireChanged(changed, "The credential changed while the decision was being recorded.");
-        if (decision.equals("verified") && credential.supersedesId() != null) {
+        if (predecessor != null) {
             var superseded = jdbc.update(
                     """
                     UPDATE practitioner_credentials
                     SET status='superseded',lock_version=lock_version+1,
                         updated_at=clock_timestamp(),updated_by=?
                     WHERE organization_id=? AND id=? AND workforce_member_id=?
-                      AND credential_type_entry_id=(
-                          SELECT credential_type_entry_id FROM practitioner_credentials
-                          WHERE organization_id=? AND id=?)
-                      AND status IN ('verified','more_information_required',
-                                     'returned_for_correction','suspended')
+                      AND status=? AND lock_version=?
                     """,
-                    context.actorId(),context.organizationId(),credential.supersedesId(),
-                    credential.memberId(),context.organizationId(),credentialId);
-            if (superseded==0 && !exists(
-                    """
-                    SELECT EXISTS(SELECT 1 FROM practitioner_credentials
-                    WHERE organization_id=? AND id=? AND workforce_member_id=?
-                      AND status='expired')
-                    """,
-                    context.organizationId(),credential.supersedesId(),credential.memberId())) {
-                throw stale("The credential predecessor changed before supersession.");
-            }
+                    context.actorId(),
+                    context.organizationId(),
+                    credential.supersedesId(),
+                    credential.memberId(),
+                    predecessor.status(),
+                    predecessor.revision());
+            requireChanged(superseded, "The credential predecessor changed before supersession.");
         }
         var event = "credential.review." + decision;
         var audit = ordered(
@@ -4174,6 +4295,28 @@ public final class JdbcWorkforceStore
                 "verificationId", verificationId,
                 "decisionCode", decision,
                 "revision", revision + 1);
+        var additionalEvidence = predecessor == null
+                ? List.<MutationEvidence>of()
+                : List.of(new MutationEvidence(
+                        credential.supersedesId(),
+                        "practitioner_credential",
+                        "credential.record.superseded",
+                        "credential.record.superseded",
+                        "practitioner_credential",
+                        ordered(
+                                "practitionerId", predecessor.practitionerId(),
+                                "credentialId", credential.supersedesId(),
+                                "fromState", predecessor.status(),
+                                "toState", "superseded",
+                                "effectiveTime", command.now(),
+                                "revision", predecessor.revision() + 1),
+                        ordered(
+                                "practitionerId", predecessor.practitionerId(),
+                                "credentialId", credential.supersedesId(),
+                                "fromState", predecessor.status(),
+                                "toState", "superseded",
+                                "effectiveTime", command.now(),
+                                "revision", predecessor.revision() + 1)));
         return result(
                 credentialId,
                 "practitioner_credential",
@@ -4183,7 +4326,8 @@ public final class JdbcWorkforceStore
                 audit,
                 outbox,
                 200,
-                revision + 1);
+                revision + 1,
+                additionalEvidence);
     }
 
     private MutationResult addSpecialty(
@@ -4473,19 +4617,44 @@ public final class JdbcWorkforceStore
         if (decision.equals("approved") && !scopeRequirementsMet(context,scope,command.now())) {
             throw conflict("The active scope-definition requirements are no longer met.");
         }
+        if (decision.equals("approved") && scope.effectiveFrom().isAfter(command.now())) {
+            throw conflict("A future-dated scope of practice cannot be approved yet.");
+        }
+        LifecyclePredecessor predecessor = null;
         if (decision.equals("approved") && scope.supersedesId()!=null) {
+            predecessor = jdbc.query(
+                    """
+                    SELECT lifecycle_state,lock_version FROM scopes_of_practice
+                    WHERE organization_id=? AND id=? AND practitioner_profile_id=?
+                      AND scope_definition_id=? AND lifecycle_state IN ('approved','suspended')
+                      AND effective_from<? AND (effective_to IS NULL OR effective_to>?)
+                    FOR UPDATE
+                    """,
+                    resultSet -> resultSet.next()
+                            ? new LifecyclePredecessor(
+                                    resultSet.getString("lifecycle_state"),
+                                    resultSet.getLong("lock_version"))
+                            : null,
+                    context.organizationId(),
+                    scope.supersedesId(),
+                    scope.practitionerId(),
+                    scope.definitionId(),
+                    Timestamp.from(scope.effectiveFrom()),
+                    Timestamp.from(scope.effectiveFrom()));
+            if (predecessor == null) {
+                throw stale("The scope predecessor changed before supersession.");
+            }
             var superseded=jdbc.update(
                     """
                     UPDATE scopes_of_practice
                     SET lifecycle_state='superseded',status='superseded',effective_to=?,
                         lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
                     WHERE organization_id=? AND id=? AND practitioner_profile_id=?
-                      AND scope_definition_id=? AND lifecycle_state IN ('approved','suspended')
-                      AND effective_from<? AND (effective_to IS NULL OR effective_to>?)
+                      AND lifecycle_state=? AND lock_version=?
                     """,
                     Timestamp.from(scope.effectiveFrom()),context.actorId(),context.organizationId(),
-                    scope.supersedesId(),scope.practitionerId(),scope.definitionId(),
-                    Timestamp.from(scope.effectiveFrom()),Timestamp.from(scope.effectiveFrom()));
+                    scope.supersedesId(),scope.practitionerId(),
+                    predecessor.status(),predecessor.revision());
             requireChanged(superseded,"The scope predecessor changed before supersession.");
         }
         var decisionId = UuidV7Generator.randomUuid();
@@ -4520,6 +4689,28 @@ public final class JdbcWorkforceStore
                 "decisionId", decisionId,
                 "decisionCode", decision,
                 "revision", revision + 1);
+        var additionalEvidence = predecessor == null
+                ? List.<MutationEvidence>of()
+                : List.of(new MutationEvidence(
+                        scope.supersedesId(),
+                        "scope_of_practice",
+                        "practitioner.scope.superseded",
+                        "practitioner.scope.superseded",
+                        "scope_of_practice",
+                        ordered(
+                                "practitionerId", scope.practitionerId(),
+                                "scopeId", scope.supersedesId(),
+                                "fromState", predecessor.status(),
+                                "toState", "superseded",
+                                "effectiveTime", scope.effectiveFrom(),
+                                "revision", predecessor.revision() + 1),
+                        ordered(
+                                "practitionerId", scope.practitionerId(),
+                                "scopeId", scope.supersedesId(),
+                                "fromState", predecessor.status(),
+                                "toState", "superseded",
+                                "effectiveTime", scope.effectiveFrom(),
+                                "revision", predecessor.revision() + 1)));
         return result(
                 scopeId,
                 "scope_of_practice",
@@ -4529,7 +4720,8 @@ public final class JdbcWorkforceStore
                 audit,
                 outbox,
                 200,
-                revision + 1);
+                revision + 1,
+                additionalEvidence);
     }
 
     private MutationResult saveAssignment(
@@ -5101,6 +5293,33 @@ public final class JdbcWorkforceStore
         if (Objects.equals(row.get("updated_by"), context.actorId())) {
             throw conflict("The qualification submitter cannot record its verification decision.");
         }
+        var predecessorId = (UUID) row.get("supersedes_id");
+        LifecyclePredecessor predecessor = null;
+        if (decision.equals("verified") && predecessorId != null) {
+            predecessor = jdbc.query(
+                    """
+                    SELECT status,lock_version FROM qualifications
+                    WHERE organization_id=? AND id=? AND workforce_member_id=?
+                      AND qualification_entry_id=(
+                          SELECT qualification_entry_id FROM qualifications
+                          WHERE organization_id=? AND id=?)
+                      AND status IN ('verified','returned_for_correction')
+                    FOR UPDATE
+                    """,
+                    resultSet -> resultSet.next()
+                            ? new LifecyclePredecessor(
+                                    resultSet.getString("status"),
+                                    resultSet.getLong("lock_version"))
+                            : null,
+                    context.organizationId(),
+                    predecessorId,
+                    row.get("workforce_member_id"),
+                    context.organizationId(),
+                    id);
+            if (predecessor == null) {
+                throw stale("The qualification predecessor changed before supersession.");
+            }
+        }
         var changed = jdbc.update(
                 """
                 UPDATE qualifications SET status=?,verification_reference_id=?,
@@ -5110,20 +5329,21 @@ public final class JdbcWorkforceStore
                 decision, UuidV7Generator.randomUuid(), context.actorId(),
                 context.organizationId(), id, revision);
         requireChanged(changed, "The qualification decision is stale or invalid.");
-        if (decision.equals("verified") && row.get("supersedes_id") != null) {
+        if (predecessor != null) {
             var superseded = jdbc.update(
                     """
                     UPDATE qualifications
                     SET status='superseded',lock_version=lock_version+1,
                         updated_at=clock_timestamp(),updated_by=?
                     WHERE organization_id=? AND id=? AND workforce_member_id=?
-                      AND qualification_entry_id=(
-                          SELECT qualification_entry_id FROM qualifications
-                          WHERE organization_id=? AND id=?)
-                      AND status IN ('verified','returned_for_correction')
+                      AND status=? AND lock_version=?
                     """,
-                    context.actorId(),context.organizationId(),row.get("supersedes_id"),
-                    row.get("workforce_member_id"),context.organizationId(),id);
+                    context.actorId(),
+                    context.organizationId(),
+                    predecessorId,
+                    row.get("workforce_member_id"),
+                    predecessor.status(),
+                    predecessor.revision());
             requireChanged(superseded, "The qualification predecessor changed before supersession.");
         }
         var eventSuffix = decision.equals("returned_for_correction") ? "returned" : decision;
@@ -5133,8 +5353,28 @@ public final class JdbcWorkforceStore
         var outbox = ordered(
                 "memberId", row.get("workforce_member_id"), "qualificationId", id,
                 "toState", decision, "revision", revision + 1);
+        var additionalEvidence = predecessor == null
+                ? List.<MutationEvidence>of()
+                : List.of(new MutationEvidence(
+                        predecessorId,
+                        "qualification",
+                        "credential.qualification.superseded",
+                        "credential.qualification.changed",
+                        "qualification",
+                        ordered(
+                                "memberId", row.get("workforce_member_id"),
+                                "qualificationId", predecessorId,
+                                "fromState", predecessor.status(),
+                                "toState", "superseded",
+                                "revision", predecessor.revision() + 1),
+                        ordered(
+                                "memberId", row.get("workforce_member_id"),
+                                "qualificationId", predecessorId,
+                                "toState", "superseded",
+                                "revision", predecessor.revision() + 1)));
         return result(id, "qualification", "credential.qualification." + eventSuffix,
-                "credential.qualification.changed", "qualification", audit, outbox, 200, revision + 1);
+                "credential.qualification.changed", "qualification", audit, outbox, 200,
+                revision + 1, additionalEvidence);
     }
 
     private MutationResult transitionRegistration(
@@ -5147,7 +5387,8 @@ public final class JdbcWorkforceStore
         var row = jdbc.queryForMap(
                 """
                 SELECT registration.practitioner_profile_id,registration.status,
-                       registration.expires_on,registration.updated_by,registration.supersedes_id,
+                       registration.valid_from,registration.expires_on,
+                       registration.updated_by,registration.supersedes_id,
                        practitioner.workforce_member_id
                 FROM professional_registrations registration
                 JOIN practitioner_profiles practitioner
@@ -5160,6 +5401,11 @@ public final class JdbcWorkforceStore
         if (to.equals("verified")
                 && isSubjectActor(context, (UUID) row.get("workforce_member_id"))) {
             throw conflict("A workforce member cannot verify their own registration.");
+        }
+        if (to.equals("verified")
+                && localDateValue(row.get("valid_from"))
+                        .isAfter(command.now().atZone(ZoneOffset.UTC).toLocalDate())) {
+            throw conflict("A future-dated professional registration cannot be verified yet.");
         }
         if (to.equals("verified")
                 && localDateValue(row.get("expires_on")) != null
@@ -5186,6 +5432,43 @@ public final class JdbcWorkforceStore
         if (to.equals("verified") && Objects.equals(row.get("updated_by"), context.actorId())) {
             throw conflict("The registration submitter cannot verify its own registration.");
         }
+        var predecessorId = (UUID) row.get("supersedes_id");
+        RegistrationPredecessor predecessor = null;
+        if (to.equals("verified") && predecessorId != null) {
+            var candidate = jdbc.query(
+                    """
+                    SELECT status,expires_on,lock_version FROM professional_registrations
+                    WHERE organization_id=? AND id=? AND practitioner_profile_id=?
+                      AND regulator_entry_id=(
+                          SELECT regulator_entry_id FROM professional_registrations
+                          WHERE organization_id=? AND id=?)
+                      AND registration_type_entry_id=(
+                          SELECT registration_type_entry_id FROM professional_registrations
+                          WHERE organization_id=? AND id=?)
+                    FOR UPDATE
+                    """,
+                    resultSet -> resultSet.next()
+                            ? new RegistrationPredecessor(
+                                    resultSet.getString("status"),
+                                    resultSet.getObject("expires_on", LocalDate.class),
+                                    resultSet.getLong("lock_version"))
+                            : null,
+                    context.organizationId(),
+                    predecessorId,
+                    row.get("practitioner_profile_id"),
+                    context.organizationId(),
+                    id,
+                    context.organizationId(),
+                    id);
+            if (candidate == null) {
+                throw stale("The registration predecessor changed before supersession.");
+            }
+            if (Set.of("verified", "suspended").contains(candidate.status())) {
+                predecessor = candidate;
+            } else if (!candidate.status().equals("expired")) {
+                throw stale("The registration predecessor changed before supersession.");
+            }
+        }
         var decisionReference = to.equals("verified") ? UuidV7Generator.randomUuid() : null;
         var changed = jdbc.update(
                 """
@@ -5196,34 +5479,22 @@ public final class JdbcWorkforceStore
                 """,
                 to, decisionReference, context.actorId(), context.organizationId(), id, from, revision);
         requireChanged(changed, "The registration transition is stale or invalid.");
-        if (to.equals("verified") && row.get("supersedes_id") != null) {
+        if (predecessor != null) {
             var superseded = jdbc.update(
                     """
                     UPDATE professional_registrations
                     SET status='superseded',lock_version=lock_version+1,
                         updated_at=clock_timestamp(),updated_by=?
                     WHERE organization_id=? AND id=? AND practitioner_profile_id=?
-                      AND regulator_entry_id=(
-                          SELECT regulator_entry_id FROM professional_registrations
-                          WHERE organization_id=? AND id=?)
-                      AND registration_type_entry_id=(
-                          SELECT registration_type_entry_id FROM professional_registrations
-                          WHERE organization_id=? AND id=?)
-                      AND status IN ('verified','suspended')
+                      AND status=? AND lock_version=?
                     """,
-                    context.actorId(),context.organizationId(),row.get("supersedes_id"),
-                    row.get("practitioner_profile_id"),context.organizationId(),id,
-                    context.organizationId(),id);
-            if (superseded==0 && !exists(
-                    """
-                    SELECT EXISTS(SELECT 1 FROM professional_registrations
-                    WHERE organization_id=? AND id=? AND practitioner_profile_id=?
-                      AND status='expired')
-                    """,
-                    context.organizationId(),row.get("supersedes_id"),
-                    row.get("practitioner_profile_id"))) {
-                throw stale("The registration predecessor changed before supersession.");
-            }
+                    context.actorId(),
+                    context.organizationId(),
+                    predecessorId,
+                    row.get("practitioner_profile_id"),
+                    predecessor.status(),
+                    predecessor.revision());
+            requireChanged(superseded, "The registration predecessor changed before supersession.");
         }
         var payload = ordered(
                 "practitionerId", row.get("practitioner_profile_id"),
@@ -5232,8 +5503,31 @@ public final class JdbcWorkforceStore
                 "toState", to,
                 "expiryDate", row.get("expires_on"),
                 "revision", revision + 1);
+        var additionalEvidence = predecessor == null
+                ? List.<MutationEvidence>of()
+                : List.of(new MutationEvidence(
+                        predecessorId,
+                        "professional_registration",
+                        "credential.registration.superseded",
+                        "credential.registration.superseded",
+                        "professional_registration",
+                        ordered(
+                                "practitionerId", row.get("practitioner_profile_id"),
+                                "registrationId", predecessorId,
+                                "fromState", predecessor.status(),
+                                "toState", "superseded",
+                                "expiryDate", predecessor.expiresOn(),
+                                "revision", predecessor.revision() + 1),
+                        ordered(
+                                "practitionerId", row.get("practitioner_profile_id"),
+                                "registrationId", predecessorId,
+                                "fromState", predecessor.status(),
+                                "toState", "superseded",
+                                "expiryDate", predecessor.expiresOn(),
+                                "revision", predecessor.revision() + 1)));
         return result(id, "professional_registration", "credential.registration." + to,
-                "credential.registration." + to, "professional_registration", payload, payload, 200, revision + 1);
+                "credential.registration." + to, "professional_registration", payload, payload, 200,
+                revision + 1, additionalEvidence);
     }
 
     private MutationResult transitionRegistrationLifecycle(
@@ -5338,17 +5632,43 @@ public final class JdbcWorkforceStore
                 context, (UUID) row.get("specialty_entry_id"),
                 (UUID) row.get("specialty_version_id"), "specialty",
                 instantValue(row.get("effective_from")), instantValue(row.get("effective_to")));
+        SpecialtyPredecessor predecessor = null;
         if (row.get("supersedes_id")!=null) {
+            predecessor = jdbc.query(
+                    """
+                    SELECT specialty_version_id,designation,effective_from,effective_to,
+                           status,lock_version
+                    FROM practitioner_specialties
+                    WHERE organization_id=? AND id=? AND practitioner_profile_id=?
+                      AND status IN ('scheduled','active') AND effective_to=?
+                    FOR UPDATE
+                    """,
+                    resultSet -> resultSet.next()
+                            ? new SpecialtyPredecessor(
+                                    resultSet.getObject("specialty_version_id", UUID.class),
+                                    resultSet.getString("designation"),
+                                    resultSet.getTimestamp("effective_from").toInstant(),
+                                    resultSet.getTimestamp("effective_to").toInstant(),
+                                    resultSet.getString("status"),
+                                    resultSet.getLong("lock_version"))
+                            : null,
+                    context.organizationId(),
+                    row.get("supersedes_id"),
+                    row.get("practitioner_profile_id"),
+                    row.get("effective_from"));
+            if (predecessor == null) {
+                throw stale("The specialty predecessor changed before activation.");
+            }
             var superseded=jdbc.update(
                     """
                     UPDATE practitioner_specialties
                     SET status='superseded',lock_version=lock_version+1,
                         updated_at=clock_timestamp(),updated_by=?
                     WHERE organization_id=? AND id=? AND practitioner_profile_id=?
-                      AND status IN ('scheduled','active') AND effective_to=?
+                      AND status=? AND lock_version=?
                     """,
                     context.actorId(),context.organizationId(),row.get("supersedes_id"),
-                    row.get("practitioner_profile_id"),row.get("effective_from"));
+                    row.get("practitioner_profile_id"),predecessor.status(),predecessor.revision());
             requireChanged(superseded,"The specialty predecessor changed before activation.");
         }
         var changed = jdbc.update(
@@ -5370,8 +5690,30 @@ public final class JdbcWorkforceStore
                 "practitionerId", row.get("practitioner_profile_id"), "specialtyId", id,
                 "specialtyVersionId", row.get("specialty_version_id"),
                 "effectiveFrom", instantValue(row.get("effective_from")), "effectiveTo", instantValue(row.get("effective_to")));
+        var additionalEvidence = predecessor == null
+                ? List.<MutationEvidence>of()
+                : List.of(new MutationEvidence(
+                        (UUID) row.get("supersedes_id"),
+                        "practitioner_specialty",
+                        "practitioner.specialty.superseded",
+                        "practitioner.specialty.changed",
+                        "practitioner_specialty",
+                        ordered(
+                                "practitionerId", row.get("practitioner_profile_id"),
+                                "specialtyId", row.get("supersedes_id"),
+                                "specialtyVersionId", predecessor.versionId(),
+                                "designation", predecessor.designation(),
+                                "effectiveFrom", predecessor.effectiveFrom(),
+                                "effectiveTo", predecessor.effectiveTo()),
+                        ordered(
+                                "practitionerId", row.get("practitioner_profile_id"),
+                                "specialtyId", row.get("supersedes_id"),
+                                "specialtyVersionId", predecessor.versionId(),
+                                "effectiveFrom", predecessor.effectiveFrom(),
+                                "effectiveTo", predecessor.effectiveTo())));
         return result(id, "practitioner_specialty", "practitioner.specialty.activated",
-                "practitioner.specialty.changed", "practitioner_specialty", audit, outbox, 200, revision + 1);
+                "practitioner.specialty.changed", "practitioner_specialty", audit, outbox, 200,
+                revision + 1, additionalEvidence);
     }
 
     private MutationResult endSpecialty(
@@ -5747,7 +6089,33 @@ public final class JdbcWorkforceStore
                 """,
                 context.organizationId(), id);
         requireMember(context, (UUID) row.get("workforce_member_id"));
-        jdbc.update(
+        var predecessors = jdbc.queryForList(
+                """
+                SELECT current_profile.id,current_profile.timezone,
+                       current_profile.effective_from,current_profile.lock_version,
+                       (SELECT count(*) FROM availability_periods period
+                        WHERE period.organization_id=current_profile.organization_id
+                          AND period.availability_profile_id=current_profile.id
+                          AND period.status='active') AS interval_count,
+                       (SELECT count(*) FROM availability_exceptions exception
+                        WHERE exception.organization_id=current_profile.organization_id
+                          AND exception.availability_profile_id=current_profile.id
+                          AND exception.status='active') AS exception_count
+                FROM availability_profiles current_profile
+                WHERE current_profile.organization_id=?
+                  AND current_profile.workforce_member_id=?
+                  AND current_profile.id<>?
+                  AND current_profile.lifecycle_state='active'
+                  AND current_profile.effective_from<?::timestamptz
+                  AND COALESCE(current_profile.effective_to,?::timestamptz)<=clock_timestamp()
+                FOR UPDATE OF current_profile
+                """,
+                context.organizationId(),
+                row.get("workforce_member_id"),
+                id,
+                row.get("effective_from"),
+                row.get("effective_from"));
+        var superseded = jdbc.update(
                 """
                 UPDATE availability_profiles current_profile
                 SET lifecycle_state='superseded',status='superseded',
@@ -5764,6 +6132,9 @@ public final class JdbcWorkforceStore
                 row.get("effective_from"), row.get("effective_from"), context.actorId(),
                 context.organizationId(), row.get("workforce_member_id"), id,
                 row.get("effective_from"), row.get("effective_from"));
+        if (superseded != predecessors.size()) {
+            throw stale("An active availability profile changed before supersession.");
+        }
         var changed = jdbc.update(
                 """
                 UPDATE availability_profiles SET lifecycle_state='active',status='active',
@@ -5779,8 +6150,29 @@ public final class JdbcWorkforceStore
                 "intervalCount", ((Number) row.get("interval_count")).intValue(),
                 "exceptionCount", ((Number) row.get("exception_count")).intValue(),
                 "revision", revision + 1);
+        var additionalEvidence = predecessors.stream()
+                .map(predecessor -> {
+                    var predecessorPayload = ordered(
+                            "memberId", row.get("workforce_member_id"),
+                            "profileId", predecessor.get("id"),
+                            "timezone", predecessor.get("timezone"),
+                            "effectiveFrom", instantValue(predecessor.get("effective_from")),
+                            "intervalCount", ((Number) predecessor.get("interval_count")).intValue(),
+                            "exceptionCount", ((Number) predecessor.get("exception_count")).intValue(),
+                            "revision", ((Number) predecessor.get("lock_version")).longValue() + 1);
+                    return new MutationEvidence(
+                            (UUID) predecessor.get("id"),
+                            "availability_profile",
+                            "workforce.availability.superseded",
+                            "workforce.availability.superseded",
+                            "availability_profile",
+                            predecessorPayload,
+                            predecessorPayload);
+                })
+                .toList();
         return result(id, "availability_profile", "workforce.availability.activated",
-                "workforce.availability.activated", "availability_profile", payload, payload, 200, revision + 1);
+                "workforce.availability.activated", "availability_profile", payload, payload, 200,
+                revision + 1, additionalEvidence);
     }
 
     private MutationResult runReadiness(
@@ -7008,21 +7400,28 @@ public final class JdbcWorkforceStore
         if (!currentImpact.equals(request.impactDigest())) {
             throw conflict("The offboarding impact changed and must be reviewed again.");
         }
-        var changed = jdbc.update(
+        var approvedState = jdbc.query(
                 """
                 UPDATE workforce_offboarding_requests
-                SET checker_id=?,status='approved',lock_version=lock_version+1,
+                SET checker_id=?,
+                    status=CASE WHEN effective_at>statement_timestamp()
+                                THEN 'scheduled' ELSE 'approved' END,
+                    lock_version=lock_version+1,
                     updated_at=clock_timestamp(),updated_by=?
                 WHERE organization_id=? AND id=? AND status='submitted' AND lock_version=?
                   AND maker_id<>?
+                RETURNING status
                 """,
+                resultSet -> resultSet.next() ? resultSet.getString("status") : null,
                 context.actorId(),
                 context.actorId(),
                 context.organizationId(),
                 requestId,
                 revision,
                 context.actorId());
-        requireChanged(changed, "The offboarding request is stale or violates reviewer separation.");
+        if (approvedState == null) {
+            throw stale("The offboarding request is stale or violates reviewer separation.");
+        }
         var audit = ordered(
                 "memberId", request.memberId(),
                 "offboardingRequestId", requestId,
@@ -7036,6 +7435,22 @@ public final class JdbcWorkforceStore
                 "impactDigest", request.impactDigest(),
                 "effectiveTime", request.effectiveAt(),
                 "state", "approved");
+        var additionalEvidence = approvedState.equals("scheduled")
+                ? List.of(new MutationEvidence(
+                        requestId,
+                        "workforce_offboarding_request",
+                        "workforce.offboarding.scheduled",
+                        null,
+                        null,
+                        ordered(
+                                "memberId", request.memberId(),
+                                "offboardingRequestId", requestId,
+                                "impactDigest", request.impactDigest(),
+                                "effectiveTime", request.effectiveAt(),
+                                "state", "scheduled",
+                                "failureCode", null),
+                        Map.of()))
+                : List.<MutationEvidence>of();
         return result(
                 requestId,
                 "workforce_offboarding_request",
@@ -7045,7 +7460,8 @@ public final class JdbcWorkforceStore
                 audit,
                 outbox,
                 200,
-                revision + 1);
+                revision + 1,
+                additionalEvidence);
     }
 
     private MutationResult executeOffboarding(
@@ -7072,21 +7488,7 @@ public final class JdbcWorkforceStore
         if (!currentImpact.equals(request.impactDigest())) {
             throw conflict("The approved offboarding impact is no longer current.");
         }
-        var activeAccess = Objects.requireNonNull(jdbc.queryForObject(
-                """
-                SELECT count(*) FROM access_assignment_scopes scope
-                JOIN organization_memberships membership ON membership.organization_id=scope.organization_id
-                  AND membership.id=scope.access_assignment_id
-                WHERE scope.organization_id=? AND scope.workforce_member_id=?
-                  AND scope.status IN ('approved','active') AND membership.status='active'
-                """,
-                Integer.class,
-                context.organizationId(),
-                request.memberId()));
-        if (activeAccess > 0) {
-            throw conflict(
-                    "Canonical access remains active. Complete the governed M1 membership revocation before offboarding execution.");
-        }
+        var accessEvidence = reconcileOffboardingAccess(context,request,command.now());
         var member = requireMember(context, request.memberId());
         if (!Set.of("active", "suspended").contains(member.status())) {
             throw conflict("The member cannot enter offboarding from the current lifecycle state.");
@@ -7270,7 +7672,101 @@ public final class JdbcWorkforceStore
                 audit,
                 outbox,
                 200,
-                finalRevision);
+                finalRevision,
+                accessEvidence);
+    }
+
+    private List<MutationEvidence> reconcileOffboardingAccess(
+            AuthorizedTenantContext context, Offboarding request, Instant now) {
+        var impact=offboardingAccessImpact(context,request.memberId());
+        if (impact.finalOwnerMemberships()>0) {
+            throw conflict(
+                    "A linked final-owner role requires a governed M1 owner transfer before offboarding can execute.");
+        }
+        if (impact.otherLiveMemberLinks()>0) {
+            throw conflict(
+                    "The linked account is also assigned to another live workforce member and cannot be revoked by this plan.");
+        }
+        if (request.accessAction().equals("none")) {
+            if (impact.activeMemberships()>0) {
+                throw conflict(
+                        "Canonical access remains active and the approved plan contains no access revocation action.");
+            }
+            return List.of();
+        }
+
+        jdbc.queryForObject(
+                "SELECT set_config('app.current_offboarding_request_id',?,true)",
+                String.class,
+                request.id().toString());
+        var memberships=jdbc.query(
+                """
+                WITH target_users AS (
+                    SELECT DISTINCT linked_membership.user_id
+                    FROM access_assignment_scopes linked_scope
+                    JOIN organization_memberships linked_membership
+                      ON linked_membership.organization_id=linked_scope.organization_id
+                     AND linked_membership.id=linked_scope.access_assignment_id
+                    WHERE linked_scope.organization_id=?
+                      AND linked_scope.workforce_member_id=?
+                      AND linked_scope.status IN ('approved','active')
+                )
+                SELECT membership.id,membership.user_id,membership.role_key,
+                       membership.lock_version
+                FROM organization_memberships membership
+                JOIN target_users target ON target.user_id=membership.user_id
+                JOIN authorization_roles role ON role.role_key=membership.role_key
+                WHERE membership.organization_id=? AND membership.status='active'
+                  AND NOT role.final_owner
+                ORDER BY membership.id
+                FOR UPDATE OF membership
+                """,
+                (resultSet,rowNumber) -> new OffboardingMembership(
+                        resultSet.getObject("id",UUID.class),
+                        resultSet.getObject("user_id",UUID.class),
+                        resultSet.getString("role_key"),
+                        resultSet.getLong("lock_version")),
+                context.organizationId(),request.memberId(),context.organizationId());
+        var evidence=new ArrayList<MutationEvidence>();
+        var affectedUsers=new java.util.LinkedHashSet<UUID>();
+        for (var membership : memberships) {
+            var changed=jdbc.update(
+                    """
+                    UPDATE organization_memberships
+                    SET status='revoked',
+                        effective_to=CASE WHEN effective_from>=?
+                            THEN effective_from+interval '1 microsecond' ELSE ? END,
+                        lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
+                    WHERE organization_id=? AND id=? AND status='active' AND lock_version=?
+                    """,
+                    Timestamp.from(now),Timestamp.from(now),request.checkerId(),
+                    context.organizationId(),membership.id(),membership.revision());
+            requireChanged(changed,"Canonical membership changed before offboarding revocation.");
+            affectedUsers.add(membership.userId());
+            var payload=ordered(
+                    "approvalId",request.id(),
+                    "changeType","revoke",
+                    "fromRole",membership.roleKey(),
+                    "lockVersion",membership.revision()+1,
+                    "membershipId",membership.id(),
+                    "toRole",null);
+            evidence.add(new MutationEvidence(
+                    membership.id(),"membership","identity.membership.revoked",
+                    "identity.membership.revoked","membership",payload,payload));
+        }
+        for (var userId : affectedUsers) {
+            jdbc.update(
+                    """
+                    UPDATE user_sessions
+                    SET revoked_at=?,revocation_reason='workforce_offboarding'
+                    WHERE user_id=? AND revoked_at IS NULL
+                    """,
+                    Timestamp.from(now),userId);
+        }
+        if (offboardingAccessImpact(context,request.memberId()).activeMemberships()>0) {
+            throw conflict("Canonical organization access remained active after revocation.");
+        }
+        return List.copyOf(evidence);
     }
 
     private MutationResult escalateExpiry(
@@ -8293,18 +8789,24 @@ public final class JdbcWorkforceStore
         }
         var activeVersionId = version.id();
         var activeNumber = version.versionNumber();
-        var previousVersionId = jdbc.query(
+        var previousVersion = jdbc.query(
                 """
-                SELECT id FROM workforce_registry_versions
+                SELECT id,version_digest,lock_version FROM workforce_registry_versions
                 WHERE organization_id=? AND registry_entry_id=?
                   AND status='active' AND superseded_at IS NULL
                 ORDER BY effective_from DESC,id DESC LIMIT 1
                 FOR UPDATE
                 """,
-                resultSet -> resultSet.next() ? resultSet.getObject(1, UUID.class) : null,
+                resultSet -> resultSet.next()
+                        ? new RegistryPredecessor(
+                                resultSet.getObject("id", UUID.class),
+                                resultSet.getString("version_digest"),
+                                resultSet.getLong("lock_version"))
+                        : null,
                 context.organizationId(),
                 version.entryId());
-        if (previousVersionId != null) {
+        var previousVersionId = previousVersion == null ? null : previousVersion.id();
+        if (previousVersion != null) {
             var superseded = jdbc.update(
                     """
                     UPDATE workforce_registry_versions
@@ -8312,14 +8814,15 @@ public final class JdbcWorkforceStore
                         superseded_at=?,lock_version=lock_version+1,
                         updated_at=clock_timestamp(),updated_by=?
                     WHERE organization_id=? AND id=? AND status='active'
-                      AND superseded_at IS NULL AND effective_from<?
+                      AND superseded_at IS NULL AND effective_from<? AND lock_version=?
                     """,
                     Timestamp.from(command.now()),
                     Timestamp.from(command.now()),
                     context.actorId(),
                     context.organizationId(),
                     previousVersionId,
-                    Timestamp.from(command.now()));
+                    Timestamp.from(command.now()),
+                    previousVersion.revision());
             requireChanged(superseded, "The current registry version changed before activation.");
         }
         var activated=jdbc.update(
@@ -8398,14 +8901,23 @@ public final class JdbcWorkforceStore
         requireChanged(itemChanged, "The registry change item changed before activation committed.");
         var parent = jdbc.query(
                 """
-                SELECT id FROM workforce_configuration_snapshots
+                SELECT id,parent_snapshot_id,snapshot_digest,lock_version
+                FROM workforce_configuration_snapshots
                 WHERE organization_id=? AND status='active' AND superseded_at IS NULL
                 ORDER BY effective_at DESC,id DESC LIMIT 1
+                FOR UPDATE
                 """,
-                resultSet -> resultSet.next() ? resultSet.getObject(1, UUID.class) : null,
+                resultSet -> resultSet.next()
+                        ? new ConfigurationPredecessor(
+                                resultSet.getObject("id", UUID.class),
+                                resultSet.getObject("parent_snapshot_id", UUID.class),
+                                resultSet.getString("snapshot_digest"),
+                                resultSet.getLong("lock_version"))
+                        : null,
                 context.organizationId());
+        var parentId = parent == null ? null : parent.id();
         var snapshotId = UuidV7Generator.randomUuid();
-        var snapshotDigest = digest(Objects.toString(parent, "root")
+        var snapshotDigest = digest(Objects.toString(parentId, "root")
                 + "|"
                 + activeVersionId
                 + "|"
@@ -8431,13 +8943,14 @@ public final class JdbcWorkforceStore
                     SET status='superseded',superseded_at=?,lock_version=lock_version+1,
                         updated_at=clock_timestamp(),updated_by=?
                     WHERE organization_id=? AND id=? AND status='active'
-                      AND superseded_at IS NULL AND effective_at<?
+                      AND superseded_at IS NULL AND effective_at<? AND lock_version=?
                     """,
                     Timestamp.from(command.now()),
                     context.actorId(),
                     context.organizationId(),
-                    parent,
-                    Timestamp.from(command.now()));
+                    parentId,
+                    Timestamp.from(command.now()),
+                    parent.revision());
             requireChanged(superseded, "The active workforce configuration changed before activation.");
         }
         jdbc.update(
@@ -8453,7 +8966,7 @@ public final class JdbcWorkforceStore
                 snapshotId,
                 context.organizationId(),
                 displayNumber,
-                parent,
+                parentId,
                 snapshotDigest,
                 version.makerId(),
                 version.checkerId(),
@@ -8475,6 +8988,54 @@ public final class JdbcWorkforceStore
                 "versionId", activeVersionId,
                 "previousVersionId", previousVersionId,
                 "resultDigest", version.digest());
+        var additionalEvidence = new ArrayList<MutationEvidence>();
+        if (previousVersion != null) {
+            additionalEvidence.add(new MutationEvidence(
+                    previousVersion.id(),
+                    "workforce_registry_version",
+                    "workforce.registry.superseded",
+                    null,
+                    null,
+                    ordered(
+                            "definitionId", version.definitionId(),
+                            "entryId", version.entryId(),
+                            "versionId", previousVersion.id(),
+                            "changeRequestId", change.requestId(),
+                            "fromState", "active",
+                            "toState", "superseded",
+                            "resultDigest", previousVersion.digest()),
+                    Map.of()));
+        }
+        if (parent != null) {
+            var supersededSnapshotPayload = ordered(
+                    "snapshotId", parent.id(),
+                    "previousSnapshotId", parent.parentId(),
+                    "changeRequestId", change.requestId(),
+                    "resultDigest", parent.digest(),
+                    "effectiveTime", command.now());
+            additionalEvidence.add(new MutationEvidence(
+                    parent.id(),
+                    "workforce_configuration_snapshot",
+                    "workforce.configuration.superseded",
+                    "workforce.configuration.superseded",
+                    "workforce_configuration_snapshot",
+                    supersededSnapshotPayload,
+                    supersededSnapshotPayload));
+        }
+        var activatedSnapshotPayload = ordered(
+                "snapshotId", snapshotId,
+                "previousSnapshotId", parentId,
+                "changeRequestId", change.requestId(),
+                "resultDigest", snapshotDigest,
+                "effectiveTime", command.now());
+        additionalEvidence.add(new MutationEvidence(
+                snapshotId,
+                "workforce_configuration_snapshot",
+                "workforce.configuration.activated",
+                "workforce.configuration.activated",
+                "workforce_configuration_snapshot",
+                activatedSnapshotPayload,
+                activatedSnapshotPayload));
         return result(
                 activeVersionId,
                 "workforce_registry_version",
@@ -8484,7 +9045,8 @@ public final class JdbcWorkforceStore
                 audit,
                 outbox,
                 200,
-                expectedRevision+1);
+                expectedRevision+1,
+                additionalEvidence);
     }
 
     private Member requireMember(AuthorizedTenantContext context, UUID memberId) {
@@ -9103,7 +9665,7 @@ public final class JdbcWorkforceStore
         var request = jdbc.query(
                 """
                 SELECT id,workforce_member_id,impact_digest,engagement_end_at,effective_at,
-                       access_action,status,lock_version
+                       access_action,checker_id,status,lock_version
                 FROM workforce_offboarding_requests WHERE organization_id=? AND id=?
                 """,
                 resultSet -> resultSet.next()
@@ -9114,6 +9676,7 @@ public final class JdbcWorkforceStore
                                 resultSet.getTimestamp("engagement_end_at").toInstant(),
                                 resultSet.getTimestamp("effective_at").toInstant(),
                                 resultSet.getString("access_action"),
+                                resultSet.getObject("checker_id",UUID.class),
                                 resultSet.getString("status"),
                                 resultSet.getLong("lock_version"))
                         : null,
@@ -10370,6 +10933,11 @@ public final class JdbcWorkforceStore
         if (!Set.of("revoke_at_effective","revoke_immediately","none").contains(accessAction)) {
             throw invalid("The offboarding access action is not supported.");
         }
+        if (accessAction.equals("revoke_immediately")
+                && effectiveAt.isAfter(command.now().plusSeconds(5))) {
+            throw invalid(
+                    "Immediate access revocation requires an effective time at or before the current authorization boundary.");
+        }
         requireRegistryCategory(context,uuid(command,"reasonEntryId"),uuid(command,"reasonVersionId"),
                 "offboarding_reason",command.now(),effectiveAt);
         var counts=jdbc.queryForMap(
@@ -10406,9 +10974,11 @@ public final class JdbcWorkforceStore
         var practitioners=((Number) counts.get("practitioner_count")).intValue();
         var availability=((Number) counts.get("availability_count")).intValue();
         var access=((Number) counts.get("access_count")).intValue();
+        var accessImpact=offboardingAccessImpact(context,memberId);
         var impactDigest=offboardingImpactDigest(
                 context,memberId,engagementEndAt,effectiveAt,accessAction);
-        return new ImpactAnalysis(impactDigest,List.of(
+        var items=new ArrayList<ImpactItem>();
+        items.addAll(List.of(
                 new ImpactItem("engagements_ended","impact",
                         "Current engagements will end at the governed boundary.",engagements),
                 new ImpactItem("assignments_ended","impact",
@@ -10418,11 +10988,30 @@ public final class JdbcWorkforceStore
                 new ImpactItem("practitioner_profiles_ended","impact",
                         "Current practitioner profiles will end prospectively.",practitioners),
                 new ImpactItem("availability_cancelled","impact",
-                        "Current and scheduled availability will end or cancel.",availability),
-                new ImpactItem("access_requires_m1_governance",access>0?"warning":"impact",
-                        "Canonical application access must complete through the governed M1 workflow.",access),
+                        "Current and scheduled availability will end or cancel.",availability)));
+        items.add(new ImpactItem(
+                "access_requires_m1_governance",
+                accessImpact.activeMemberships()>0 && accessAction.equals("none")
+                        ? "blocker"
+                        : accessImpact.activeMemberships()>0 ? "warning" : "impact",
+                accessImpact.activeMemberships()>0 && accessAction.equals("none")
+                        ? "Active canonical organization access requires an explicit revocation action."
+                        : "Canonical organization access and sessions will be revoked through the governed M1 boundary.",
+                Math.max(access,accessImpact.activeMemberships())));
+        items.add(new ImpactItem(
+                "final_owner_transfer_required",
+                accessImpact.finalOwnerMemberships()>0 ? "blocker" : "impact",
+                "A linked final-owner role must complete the governed M1 owner-transfer workflow before offboarding.",
+                accessImpact.finalOwnerMemberships()));
+        items.add(new ImpactItem(
+                "shared_account_link_conflict",
+                accessImpact.otherLiveMemberLinks()>0 ? "blocker" : "impact",
+                "An account linked to another live workforce member cannot be revoked by this plan.",
+                accessImpact.otherLiveMemberLinks()));
+        items.add(
                 new ImpactItem("historical_attribution_preserved","impact",
-                        "Historical workforce and clinical attribution is retained.",1)));
+                        "Historical workforce and clinical attribution is retained.",1));
+        return new ImpactAnalysis(impactDigest,items);
     }
 
     private void requireCurrentImpact(MutationCommand command, ImpactAnalysis analysis) {
@@ -10489,6 +11078,24 @@ public final class JdbcWorkforceStore
                            AND access_scope.workforce_member_id=member.id
                            AND access_scope.status IN ('requested','approved','active')
                            AND (access_scope.effective_to IS NULL OR access_scope.effective_to>?)) AS access_scopes
+                       ,(SELECT coalesce(string_agg(access_evidence.evidence,','
+                                                   ORDER BY access_evidence.evidence),'none')
+                           FROM (
+                               SELECT DISTINCT all_membership.id::text||':'
+                                   ||all_membership.lock_version::text||':'
+                                   ||all_membership.role_key AS evidence
+                               FROM access_assignment_scopes linked_scope
+                               JOIN organization_memberships linked_membership
+                                 ON linked_membership.organization_id=linked_scope.organization_id
+                                AND linked_membership.id=linked_scope.access_assignment_id
+                               JOIN organization_memberships all_membership
+                                 ON all_membership.organization_id=linked_membership.organization_id
+                                AND all_membership.user_id=linked_membership.user_id
+                               WHERE linked_scope.organization_id=member.organization_id
+                                 AND linked_scope.workforce_member_id=member.id
+                                 AND linked_scope.status IN ('approved','active')
+                                 AND all_membership.status='active'
+                           ) access_evidence) AS access_memberships
                 FROM workforce_members member
                 WHERE member.organization_id=? AND member.id=?
                 """,
@@ -10508,9 +11115,59 @@ public final class JdbcWorkforceStore
                 + "|" + impact.get("service_assignments")
                 + "|" + impact.get("practitioner_profiles")
                 + "|" + impact.get("availability_profiles")
-                + "|" + (accessAction.startsWith("revoke_")
-                    ? "approved_revoke_plan"
-                    : impact.get("access_scopes")));
+                + "|" + impact.get("access_scopes")
+                + "|" + impact.get("access_memberships")
+                + "|" + offboardingAccessImpact(context,memberId));
+    }
+
+    private OffboardingAccessImpact offboardingAccessImpact(
+            AuthorizedTenantContext context, UUID memberId) {
+        return jdbc.query(
+                """
+                WITH target_users AS (
+                    SELECT DISTINCT linked_membership.user_id
+                    FROM access_assignment_scopes linked_scope
+                    JOIN organization_memberships linked_membership
+                      ON linked_membership.organization_id=linked_scope.organization_id
+                     AND linked_membership.id=linked_scope.access_assignment_id
+                    WHERE linked_scope.organization_id=?
+                      AND linked_scope.workforce_member_id=?
+                      AND linked_scope.status IN ('approved','active')
+                ), active_memberships AS (
+                    SELECT membership.id,membership.role_key
+                    FROM organization_memberships membership
+                    JOIN target_users target ON target.user_id=membership.user_id
+                    WHERE membership.organization_id=? AND membership.status='active'
+                )
+                SELECT count(*) AS active_memberships,
+                       count(*) FILTER (WHERE role.final_owner) AS final_owner_memberships,
+                       (SELECT count(DISTINCT other_scope.workforce_member_id)
+                          FROM access_assignment_scopes other_scope
+                          JOIN organization_memberships other_membership
+                            ON other_membership.organization_id=other_scope.organization_id
+                           AND other_membership.id=other_scope.access_assignment_id
+                          JOIN target_users target ON target.user_id=other_membership.user_id
+                          JOIN workforce_members other_member
+                            ON other_member.organization_id=other_scope.organization_id
+                           AND other_member.id=other_scope.workforce_member_id
+                         WHERE other_scope.organization_id=?
+                           AND other_scope.workforce_member_id<>?
+                           AND other_scope.status IN ('approved','active')
+                           AND other_member.lifecycle_state<>'offboarded') AS other_live_member_links
+                FROM active_memberships membership
+                JOIN authorization_roles role ON role.role_key=membership.role_key
+                """,
+                resultSet -> {
+                    if (!resultSet.next()) {
+                        throw new IllegalStateException("Unable to calculate offboarding access impact.");
+                    }
+                    return new OffboardingAccessImpact(
+                            resultSet.getInt("active_memberships"),
+                            resultSet.getInt("final_owner_memberships"),
+                            resultSet.getInt("other_live_member_links"));
+                },
+                context.organizationId(),memberId,context.organizationId(),
+                context.organizationId(),memberId);
     }
 
     private EligibilityEvidenceSnapshot eligibilityEvidenceSnapshot(
@@ -11256,6 +11913,30 @@ public final class JdbcWorkforceStore
                 revision);
     }
 
+    private static MutationResult result(
+            UUID subjectId,
+            String subjectType,
+            String auditEvent,
+            String outboxEvent,
+            String aggregateType,
+            Map<String, Object> auditPayload,
+            Map<String, Object> outboxPayload,
+            int statusCode,
+            long revision,
+            List<MutationEvidence> additionalEvidence) {
+        return new MutationResult(
+                subjectId,
+                subjectType,
+                auditEvent,
+                outboxEvent,
+                aggregateType,
+                auditPayload,
+                outboxPayload,
+                statusCode,
+                revision,
+                additionalEvidence);
+    }
+
     private static void requireChanged(int changed, String message) {
         if (changed != 1) {
             throw stale(message);
@@ -11343,6 +12024,24 @@ public final class JdbcWorkforceStore
             LocalDate expiresOn,
             UUID supersedesId) {}
 
+    private record ReviewLease(UUID reviewerId, Instant expiresAt) {}
+
+    private record CredentialPredecessor(
+            UUID practitionerId, String status, long revision) {}
+
+    private record LifecyclePredecessor(String status, long revision) {}
+
+    private record RegistrationPredecessor(
+            String status, LocalDate expiresOn, long revision) {}
+
+    private record SpecialtyPredecessor(
+            UUID versionId,
+            String designation,
+            Instant effectiveFrom,
+            Instant effectiveTo,
+            String status,
+            long revision) {}
+
     private record Scope(
             UUID id,
             UUID practitionerId,
@@ -11402,8 +12101,17 @@ public final class JdbcWorkforceStore
             Instant engagementEndAt,
             Instant effectiveAt,
             String accessAction,
+            UUID checkerId,
             String status,
             long revision) {}
+
+    private record OffboardingMembership(
+            UUID id, UUID userId, String roleKey, long revision) {}
+
+    private record OffboardingAccessImpact(
+            int activeMemberships,
+            int finalOwnerMemberships,
+            int otherLiveMemberLinks) {}
 
     private record ExportJob(
             UUID id,
@@ -11517,6 +12225,11 @@ public final class JdbcWorkforceStore
             UUID checkerId,
             String status,
             long revision) {}
+
+    private record RegistryPredecessor(UUID id, String digest, long revision) {}
+
+    private record ConfigurationPredecessor(
+            UUID id, UUID parentId, String digest, long revision) {}
 
     private record RegistryEntryContext(
             String entryLabel,

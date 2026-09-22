@@ -13,6 +13,7 @@ import com.rootopathy.careos.tenancy.domain.OperationKey;
 import com.rootopathy.careos.tenancy.domain.ServiceIdentityAuthorizationRequest;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
@@ -71,6 +72,21 @@ public final class CredentialDocumentScanWorkerService {
             com.rootopathy.careos.tenancy.domain.AuthorizedTenantContext context,
             WorkforceWorkerStore.DocumentBinding binding,
             String scannerPolicyVersion) {
+        evidence.record(
+                context,
+                GovernanceEvidence.auditOnly(new AuditRecord(
+                        "credential.document.scan_started",
+                        1,
+                        "credential_document",
+                        binding.documentId(),
+                        null,
+                        json(ordered(
+                                "credentialId", binding.credentialId(),
+                                "documentId", binding.documentId(),
+                                "scanAttemptId", binding.scanAttemptId(),
+                                "scannerPolicyVersion", scannerPolicyVersion,
+                                "outcome", "started",
+                                "failureCode", null)))));
         var event = switch (binding.outcome()) {
             case "clean" -> "credential.document.clean";
             case "infected" -> "credential.document.infected";
@@ -83,7 +99,7 @@ public final class CredentialDocumentScanWorkerService {
                 "scannerPolicyVersion", scannerPolicyVersion,
                 "outcome", binding.outcome(),
                 "failureCode", binding.failureCode());
-        if (binding.outcome().equals("clean")) {
+        if (Set.of("clean", "infected").contains(binding.outcome())) {
             var outbox = ordered(
                     "credentialId", binding.credentialId(),
                     "documentId", binding.documentId(),
@@ -94,7 +110,9 @@ public final class CredentialDocumentScanWorkerService {
                     new GovernanceEvidence(
                             new AuditRecord(event, 1, "credential_document", binding.documentId(), null, json(audit)),
                             new OutboxRecord(
-                                    event,
+                                    binding.outcome().equals("clean")
+                                            ? "credential.document.clean"
+                                            : "credential.document.rejected",
                                     1,
                                     "credential_document",
                                     binding.documentId(),

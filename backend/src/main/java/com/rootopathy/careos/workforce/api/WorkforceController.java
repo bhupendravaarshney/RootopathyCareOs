@@ -19,6 +19,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.io.IOException;
+import java.net.URI;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -220,16 +221,19 @@ public final class WorkforceController {
             path = "/api/v1/organizations/{organizationId}/workforce/credentials/{credentialId}/documents/{documentId}/accesses",
             consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE)
-    ResponseEntity<WorkforceCredentialDocumentAccessService.Response> accessCredentialDocument(
+    ResponseEntity<String> accessCredentialDocument(
             @PathVariable UUID organizationId,
             @PathVariable UUID credentialId,
             @PathVariable UUID documentId,
+            @RequestHeader("Idempotency-Key")
+                    @Pattern(regexp = IDEMPOTENCY_PATTERN)
+                    String idempotencyKey,
             @Valid @RequestBody CredentialDocumentAccessRequest body,
             Authentication authentication,
             HttpServletRequest request) {
         var actor = actor(authentication);
         var session = request.getSession(false);
-        var response = credentialDocumentAccess.access(
+        var outcome = credentialDocumentAccess.access(
                 new WorkforceCredentialDocumentAccessService.Command(
                         organizationId,
                         actor.id(),
@@ -238,9 +242,42 @@ public final class WorkforceController {
                         documentId,
                         body.purposeCode(),
                         body.reason(),
+                        idempotencyKey,
                         assurance(session, AuthenticationSessionState.RECENT_AUTHENTICATION_AT),
                         assurance(session, AuthenticationSessionState.MFA_AUTHENTICATED_AT)));
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);
+        return response(outcome);
+    }
+
+    @GetMapping(
+            path = "/api/v1/organizations/{organizationId}/workforce/credentials/{credentialId}/documents/{documentId}/accesses/{accessIntentId}")
+    ResponseEntity<Void> openCredentialDocument(
+            @PathVariable UUID organizationId,
+            @PathVariable UUID credentialId,
+            @PathVariable UUID documentId,
+            @PathVariable UUID accessIntentId,
+            @RequestParam
+                    @Pattern(regexp = "credentialing_review|regulatory_evidence|security_investigation|employment_record_request|data_correction")
+                    String purposeCode,
+            Authentication authentication,
+            HttpServletRequest request) {
+        var actor = actor(authentication);
+        var session = request.getSession(false);
+        var redirect = credentialDocumentAccess.open(
+                new WorkforceCredentialDocumentAccessService.OpenCommand(
+                        organizationId,
+                        actor.id(),
+                        CorrelationIdFilter.from(request),
+                        credentialId,
+                        documentId,
+                        accessIntentId,
+                        purposeCode,
+                        assurance(session, AuthenticationSessionState.RECENT_AUTHENTICATION_AT),
+                        assurance(session, AuthenticationSessionState.MFA_AUTHENTICATED_AT)));
+        return ResponseEntity.status(HttpStatus.TEMPORARY_REDIRECT)
+                .location(URI.create(redirect.readUrl()))
+                .cacheControl(CacheControl.noStore())
+                .header("Referrer-Policy", "no-referrer")
+                .build();
     }
 
     private static ResponseEntity<String> response(IdempotencyOutcome outcome) {

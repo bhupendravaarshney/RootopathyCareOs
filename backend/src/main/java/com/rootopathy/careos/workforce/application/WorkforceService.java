@@ -1,6 +1,7 @@
 package com.rootopathy.careos.workforce.application;
 
 import com.rootopathy.careos.governance.application.GovernedMutationExecutor;
+import com.rootopathy.careos.governance.application.GovernanceEvidenceOperations;
 import com.rootopathy.careos.governance.domain.AuditRecord;
 import com.rootopathy.careos.governance.domain.GovernanceEvidence;
 import com.rootopathy.careos.governance.domain.GovernedMutation;
@@ -16,7 +17,9 @@ import com.rootopathy.careos.tenancy.domain.AuthenticatedActorContext;
 import com.rootopathy.careos.tenancy.domain.OperationKey;
 import com.rootopathy.careos.tenancy.domain.TenantAuthorizationRequest;
 import com.rootopathy.careos.workforce.domain.WorkforceScreen;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.PushbackInputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.text.Normalizer;
@@ -28,6 +31,7 @@ import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -70,6 +74,7 @@ public final class WorkforceService {
 
     private final TenantAuthorizationOperations authorization;
     private final GovernedMutationExecutor governedMutations;
+    private final GovernanceEvidenceOperations governanceEvidence;
     private final WorkforceStore store;
     private final WorkforceImpactTokenCodec impactTokens;
     private final WorkforceScreenCursorCodec screenCursors;
@@ -80,6 +85,7 @@ public final class WorkforceService {
     public WorkforceService(
             TenantAuthorizationOperations authorization,
             GovernedMutationExecutor governedMutations,
+            GovernanceEvidenceOperations governanceEvidence,
             WorkforceStore store,
             WorkforceImpactTokenCodec impactTokens,
             WorkforceScreenCursorCodec screenCursors,
@@ -88,6 +94,7 @@ public final class WorkforceService {
             Clock clock) {
         this.authorization = authorization;
         this.governedMutations = governedMutations;
+        this.governanceEvidence = governanceEvidence;
         this.store = store;
         this.impactTokens = impactTokens;
         this.screenCursors = screenCursors;
@@ -187,6 +194,7 @@ public final class WorkforceService {
                 idempotency,
                 context -> {
                     var result = store.mutate(context, mutation);
+                    recordAdditionalEvidence(context, result, reason);
                     var memberId = command.memberId();
                     if ((memberId == null || command.actionKey().equals("record-match-decision"))
                             && "workforce_member".equals(result.subjectType())) {
@@ -243,12 +251,14 @@ public final class WorkforceService {
         var reason = requireReason(command.reason());
         var fileName = requireSafeFileName(command.fileName());
         var mediaType = requireMediaType(command.mediaType());
+        requireAllowedDocumentName(fileName, mediaType);
+        var content = requireDocumentSignature(command.content(), mediaType);
         var digest = command.sha256() == null ? "" : command.sha256().strip().toLowerCase();
         if (!SHA256.matcher(digest).matches()) {
             throw invalid("sha256 must contain a lowercase SHA-256 digest.");
         }
-        if (command.declaredSize() < 1 || command.declaredSize() > 26_214_400L) {
-            throw invalid("declaredSize must be between 1 byte and 25 MiB.");
+        if (command.declaredSize() < 1 || command.declaredSize() > 20_971_520L) {
+            throw invalid("declaredSize must be between 1 byte and 20 MiB.");
         }
         var now = clock.instant();
         var documentId = UuidV7Generator.randomUuid();
@@ -262,7 +272,7 @@ public final class WorkforceService {
                 digest,
                 requireToken(command.retentionClass(), "retentionClass", 2, 80),
                 reason,
-                command.content(),
+                content,
                 now);
         var idempotency = new IdempotencyCommand(
                 "credential.document.upload",
@@ -298,13 +308,14 @@ public final class WorkforceService {
                                     command.declaredSize(),
                                     mediaType,
                                     digest),
-                            command.content());
+                            content);
                     var result = store.bindCredentialDocument(
                             context,
                             storeCommand,
                             evidence.document().documentId(),
                             evidence.document().objectVersionId(),
                             evidence.quarantinedAt());
+                    recordAdditionalEvidence(context, result, reason);
                     var response = project(
                             context,
                             WorkforceScreenCatalogue.screen("M2-10"),
@@ -514,6 +525,32 @@ public final class WorkforceService {
                 new IdempotentResponse(result.statusCode(), JSON, json(response)), evidence);
     }
 
+    private void recordAdditionalEvidence(
+            com.rootopathy.careos.tenancy.domain.AuthorizedTenantContext context,
+            WorkforceStore.MutationResult result,
+            String reason) {
+        for (var item : result.additionalEvidence()) {
+            var audit = new AuditRecord(
+                    item.auditEvent(),
+                    1,
+                    item.subjectType(),
+                    item.subjectId(),
+                    reason,
+                    json(item.auditPayload()));
+            var evidence = item.outboxEvent() == null
+                    ? GovernanceEvidence.auditOnly(audit)
+                    : new GovernanceEvidence(
+                            audit,
+                            new OutboxRecord(
+                                    item.outboxEvent(),
+                                    1,
+                                    item.aggregateType(),
+                                    item.subjectId(),
+                                    json(item.outboxPayload())));
+            governanceEvidence.record(context, evidence);
+        }
+    }
+
     private PagedQuery pagedQuery(ReadCommand command) {
         var search = normalizeSearch(command.search());
         var status = normalizeStatus(command.status());
@@ -660,7 +697,8 @@ public final class WorkforceService {
     }
 
     private static String requireSafeFileName(String value) {
-        var normalized = requireToken(value, "fileName", 1, 255);
+        var normalized = Normalizer.normalize(
+                requireToken(value, "fileName", 1, 255), Normalizer.Form.NFC);
         if (normalized.indexOf('/') >= 0
                 || normalized.indexOf('\\') >= 0
                 || normalized.codePoints().anyMatch(Character::isISOControl)) {
@@ -675,6 +713,56 @@ public final class WorkforceService {
             throw invalid("mediaType has an unsupported format.");
         }
         return normalized;
+    }
+
+    private static void requireAllowedDocumentName(String fileName, String mediaType) {
+        var lowerName = fileName.toLowerCase(Locale.ROOT);
+        var accepted = switch (mediaType) {
+            case "application/pdf" -> lowerName.endsWith(".pdf");
+            case "image/jpeg" -> lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg");
+            case "image/png" -> lowerName.endsWith(".png");
+            default -> false;
+        };
+        if (!accepted) {
+            throw invalid("The document name and media type must identify a PDF, JPEG, or PNG file.");
+        }
+    }
+
+    private static InputStream requireDocumentSignature(InputStream source, String mediaType) {
+        var content = new PushbackInputStream(source, 8);
+        var header = new byte[8];
+        int count;
+        try {
+            count = content.read(header);
+            if (count > 0) {
+                content.unread(header, 0, count);
+            }
+        } catch (IOException exception) {
+            throw invalid("The credential document could not be inspected.");
+        }
+        var accepted = switch (mediaType) {
+            case "application/pdf" -> startsWith(header, count, 0x25, 0x50, 0x44, 0x46, 0x2d);
+            case "image/jpeg" -> startsWith(header, count, 0xff, 0xd8, 0xff);
+            case "image/png" -> startsWith(
+                    header, count, 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a);
+            default -> false;
+        };
+        if (!accepted) {
+            throw invalid("The document content does not match its declared media type.");
+        }
+        return content;
+    }
+
+    private static boolean startsWith(byte[] source, int sourceLength, int... prefix) {
+        if (sourceLength < prefix.length) {
+            return false;
+        }
+        for (var index = 0; index < prefix.length; index++) {
+            if (Byte.toUnsignedInt(source[index]) != prefix[index]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static String requireToken(String value, String name, int min, int max) {

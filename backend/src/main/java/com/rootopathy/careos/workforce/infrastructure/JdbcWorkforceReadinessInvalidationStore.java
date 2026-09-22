@@ -24,9 +24,9 @@ public final class JdbcWorkforceReadinessInvalidationStore
             String invalidationCode) {
         var memberIds = affectedMemberIds(context, aggregateType, aggregateId);
         for (var memberId : memberIds) {
-            jdbc.queryForObject(
+            jdbc.query(
                     "select careos_invalidate_member_readiness(?,?,?)",
-                    Object.class,
+                    ignored -> null,
                     context.organizationId(),
                     memberId,
                     invalidationCode);

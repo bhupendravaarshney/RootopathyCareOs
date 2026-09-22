@@ -737,7 +737,7 @@ function workforceScreenQuery(query: WorkforceScreenQuery): string {
     parameters.set('memberId', requireUuid(query.memberId, 'memberId'));
   }
   if (query.q !== undefined) {
-    if (typeof query.q !== 'string' || Array.from(query.q).length > 120) {
+    if (typeof query.q !== 'string' || Array.from(query.q).length > 100) {
       throw new Error('Workforce search must contain at most 100 characters.');
     }
     const normalized = query.q.trim().normalize('NFC');
@@ -3525,6 +3525,7 @@ export class CareOsApiClient {
     credentialId: string,
     documentId: string,
     body: WorkforceCredentialDocumentAccessRequest,
+    idempotencyKey: string,
     options: ApiRequestOptions = {},
   ) {
     const organization = requireUuid(organizationId, 'organizationId');
@@ -3547,6 +3548,7 @@ export class CareOsApiClient {
     }
     return this.#mutation<WorkforceCredentialDocumentAccessResponse>({
       body: { purposeCode: body.purposeCode, reason },
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
       method: 'POST',
       path: `/v1/organizations/${organization}/workforce/credentials/${credential}/documents/${document}/accesses`,
       responseBody: 'json',
@@ -3579,8 +3581,23 @@ export class CareOsApiClient {
     if (reasonLength < 10 || reasonLength > 500) {
       throw new Error('Credential document reason must contain 10 to 500 characters.');
     }
-    if (file.size < 1) {
-      throw new Error('Credential document file must not be empty.');
+    if (file.size < 1 || file.size > 20 * 1024 * 1024) {
+      throw new Error('Credential document file must contain 1 byte to 20 MiB.');
+    }
+    const permittedDocumentTypes = new Map([
+      ['application/pdf', ['.pdf']],
+      ['image/jpeg', ['.jpg', '.jpeg']],
+      ['image/png', ['.png']],
+    ]);
+    const permittedExtensions = permittedDocumentTypes.get(file.type);
+    if (!permittedExtensions) {
+      throw new Error('Credential document file must be a PDF, JPEG, or PNG.');
+    }
+    const suppliedName = typeof File !== 'undefined' && file instanceof File
+      ? file.name.normalize('NFC')
+      : `credential-document${permittedExtensions[0]}`;
+    if (!permittedExtensions.some((extension) => suppliedName.toLowerCase().endsWith(extension))) {
+      throw new Error('Credential document name does not match its declared media type.');
     }
 
     const formData = new FormData();
@@ -3591,7 +3608,7 @@ export class CareOsApiClient {
     formData.append(
       'file',
       file,
-      typeof File !== 'undefined' && file instanceof File ? file.name : 'credential-document',
+      suppliedName,
     );
 
     return this.#mutation<WorkforceScreen>({

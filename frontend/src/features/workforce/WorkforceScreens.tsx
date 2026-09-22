@@ -48,7 +48,7 @@ type ActionSubmission = {
 };
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const maximumDocumentBytes = 25 * 1024 * 1024;
+const maximumDocumentBytes = 20 * 1024 * 1024;
 const impactActions = new Set([
   'request-person-merge',
   'suspend-registration',
@@ -409,7 +409,7 @@ function ActionDialog({
                   setImpactPreview(null);
                 }}
               />
-              <small>PDF, JPEG or PNG; maximum 25 MiB. The file enters private quarantine.</small>
+              <small>PDF, JPEG or PNG; maximum 20 MiB. The file enters private quarantine.</small>
             </label>
           )}
 
@@ -735,7 +735,7 @@ export function WorkforceScreenPage({
       if (activeAction.key === 'upload-document') {
         if (!submission.file) throw new Error('Choose an evidence file.');
         if (submission.file.size < 1 || submission.file.size > maximumDocumentBytes) {
-          throw new Error('Evidence files must contain 1 byte to 25 MiB.');
+          throw new Error('Evidence files must contain 1 byte to 20 MiB.');
         }
         if (!['application/pdf', 'image/jpeg', 'image/png'].includes(submission.file.type)) {
           throw new Error('Evidence must be a PDF, JPEG or PNG file with a declared media type.');
@@ -808,6 +808,7 @@ export function WorkforceScreenPage({
           selected.id,
           documentId,
           { purposeCode, reason },
+          key,
         );
         if (!accessResult.ok) {
           setMutationIssue(issueFromFailure(accessResult));

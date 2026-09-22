@@ -180,7 +180,9 @@ export function workforceCredentialDocumentAccessValidator(
       !isUuid(value.accessIntentId) ||
       !isDateTime(value.expiresAt) ||
       typeof value.readUrl !== 'string' ||
-      !/^https?:\/\//.test(value.readUrl) ||
+      !/^\/api\/v1\/organizations\/[0-9a-f-]{36}\/workforce\/credentials\/[0-9a-f-]{36}\/documents\/[0-9a-f-]{36}\/accesses\/[0-9a-f-]{36}\?purposeCode=[a-z][a-z0-9_]+$/i.test(
+        value.readUrl,
+      ) ||
       typeof value.mediaType !== 'string' ||
       !/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(value.mediaType) ||
       !Number.isSafeInteger(value.byteCount) ||

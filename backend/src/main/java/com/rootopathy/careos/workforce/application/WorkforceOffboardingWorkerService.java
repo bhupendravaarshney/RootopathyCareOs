@@ -98,6 +98,21 @@ public final class WorkforceOffboardingWorkerService {
                         completed.subjectId(),
                         "Execute the independently approved offboarding plan.",
                         startedPayload)));
+        for (var item : completed.additionalEvidence()) {
+            var audit = new AuditRecord(
+                    item.auditEvent(),1,item.subjectType(),item.subjectId(),
+                    "Execute the independently approved offboarding plan.",
+                    json(item.auditPayload()));
+            evidence.record(
+                    context,
+                    item.outboxEvent()==null
+                            ? GovernanceEvidence.auditOnly(audit)
+                            : new GovernanceEvidence(
+                                    audit,
+                                    new OutboxRecord(
+                                            item.outboxEvent(),1,item.aggregateType(),item.subjectId(),
+                                            json(item.outboxPayload()))));
+        }
         var completedPayload = json(completed.auditPayload());
         evidence.record(
                 context,
