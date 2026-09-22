@@ -77,27 +77,26 @@ public final class WorkforceExportRetentionService {
         });
     }
 
-    public Result consume(
-            OutboxEnvelope envelope, long revision, String presentedCredential) {
+    public Result consume(OutboxEnvelope envelope, String presentedCredential) {
         if (!"workforce.export.disposal_requested".equals(envelope.eventName())
                 || envelope.schemaVersion() != 1
                 || !"workforce_export".equals(envelope.aggregateType())) {
             throw new IllegalArgumentException("unsupported workforce-retention event");
         }
-        var command = new Command(
+        var request = new ServiceIdentityAuthorizationRequest(
                 envelope.organizationId(),
-                envelope.aggregateId(),
-                revision,
                 presentedCredential,
-                envelope.correlationId());
-        return authorization.execute(request(command), context -> {
+                SERVICE_IDENTITY,
+                envelope.correlationId(),
+                new OperationKey("m2.retention.dispose"));
+        return authorization.execute(request, context -> {
             var result = new Result[1];
             inbox.execute(
                     context,
                     InboundOutboxEvent.from(CONSUMER, envelope),
-                    () -> result[0] = dispose(context, command));
+                    () -> result[0] = disposeCurrent(context, envelope.aggregateId()));
             return result[0] == null
-                    ? new Result(command.exportId(), "duplicate", command.revision())
+                    ? new Result(envelope.aggregateId(), "duplicate", null)
                     : result[0];
         });
     }
@@ -108,6 +107,15 @@ public final class WorkforceExportRetentionService {
 
     private Result dispose(AuthorizedTenantContext context, Command command) {
         var work = store.forDisposal(context, command.exportId(), command.revision());
+        return dispose(context, work);
+    }
+
+    private Result disposeCurrent(AuthorizedTenantContext context, UUID exportId) {
+        return dispose(context, store.forDisposal(context, exportId));
+    }
+
+    private Result dispose(
+            AuthorizedTenantContext context, WorkforceExportStore.Work work) {
         if (work.legalHold()) {
             throw new IllegalArgumentException("legal hold blocks workforce export disposal");
         }
@@ -175,5 +183,5 @@ public final class WorkforceExportRetentionService {
             String presentedCredential,
             String correlationId) {}
 
-    public record Result(UUID exportId, String status, long revision) {}
+    public record Result(UUID exportId, String status, Long revision) {}
 }

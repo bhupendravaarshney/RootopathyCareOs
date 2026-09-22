@@ -9,7 +9,7 @@ CREATE TABLE workforce_registry_definitions (
     UNIQUE (organization_id,id), UNIQUE (organization_id,registry_key),
     FOREIGN KEY (organization_id,owner_membership_id) REFERENCES organization_memberships(organization_id,id),
     CHECK (registry_key ~ '^[a-z][a-z0-9_]*([.:-][a-z0-9_]+)*$'),
-    CHECK (category IN ('profession','specialty','qualification_type','regulator','registration_type','credential_type','credential_risk_tier','scope_activity','scope_restriction','scope_requirement','employment_category','assignment_type','position','supervision_mode','offboarding_reason','notification_milestone','notification_template_metadata','export_legal_basis')),
+    CHECK (category IN ('profession','specialty','qualification_type','regulator','registration_type','credential_type','credential_risk_tier','scope_activity','scope_restriction','scope_requirement','employment_category','assignment_type','position','supervision_mode','offboarding_reason','notification_milestone','notification_template_metadata')),
     CHECK (char_length(btrim(display_name)) BETWEEN 2 AND 160),
     CHECK (jsonb_typeof(value_schema)='object' AND pg_column_size(value_schema)<=65536),
     CHECK (review_cadence_days BETWEEN 30 AND 3660),

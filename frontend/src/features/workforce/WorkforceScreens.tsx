@@ -17,10 +17,18 @@ import {
   useState,
 } from 'react';
 import type { ApiFailure, ApiResult } from '../../api/client';
-import type { WorkforceExportAccessResponse } from '../../api/workforce-contracts';
+import type {
+  WorkforceCredentialDocumentAccessRequest,
+  WorkforceCredentialDocumentAccessResponse,
+  WorkforceEvidenceAccessRequest,
+  WorkforceEvidenceAccessResponse,
+  WorkforceExportAccessResponse,
+  WorkforceImpactPreviewResponse,
+} from '../../api/workforce-contracts';
 import type {
   WorkforceAction,
   WorkforceField,
+  WorkforceOption,
   WorkforceRow,
   WorkforceScreen,
 } from '../../api/generated';
@@ -31,14 +39,32 @@ import type { WorkforceClient } from './workforce-types';
 type ScreenFilters = { q?: string; status?: string; limit: number };
 type UiIssue = { title: string; detail: string; correlationId?: string; status?: number };
 type ActionSubmission = {
+  evidenceIds: string[];
   fields: Record<string, string>;
   file: File | null;
+  impactToken?: string;
   reason: string;
   targetId: string | null;
 };
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const maximumDocumentBytes = 25 * 1024 * 1024;
+const impactActions = new Set([
+  'request-person-merge',
+  'suspend-registration',
+  'revoke-registration',
+  'suspend-credential',
+  'revoke-credential',
+  'suspend-scope',
+  'end-scope',
+  'transfer-assignment',
+  'suspend-assignment',
+  'reactivate-assignment',
+  'end-assignment',
+  'suspend-member',
+  'reactivate-member',
+  'request-offboarding',
+]);
 
 function issueFromFailure(failure: ApiFailure): UiIssue {
   return {
@@ -68,6 +94,17 @@ function statusTone(status: string) {
 
 function humanize(value: string) {
   return value.replaceAll('_', ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function evidenceValue(value: unknown) {
+  if (value === null || value === undefined) return '—';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  if (Array.isArray(value) && value.every((entry) => ['string', 'number', 'boolean'].includes(typeof entry))) {
+    return value.map(String).join(', ');
+  }
+  return 'Structured evidence retained';
 }
 
 function idempotencyKey(actionKey: string) {
@@ -106,18 +143,46 @@ function normalizedFields(action: WorkforceAction, values: Record<string, string
   );
 }
 
+function personMatchOptions(selected: WorkforceRow | undefined): WorkforceOption[] {
+  if (!selected) return [];
+  const options: WorkforceOption[] = [];
+  for (let index = 0; ; index += 1) {
+    const value = selected.values[`candidate.${index}.value`];
+    const label = selected.values[`candidate.${index}.label`];
+    if (!value || !label) break;
+    options.push({ value, label });
+  }
+  return options;
+}
+
+function credentialEvidenceOptions(selected: WorkforceRow | undefined): WorkforceOption[] {
+  if (!selected) return [];
+  const options: WorkforceOption[] = [];
+  for (let index = 0; ; index += 1) {
+    const value = selected.values[`evidence.${index}.id`];
+    const label = selected.values[`evidence.${index}.label`];
+    if (!value || !label) break;
+    options.push({ value, label });
+  }
+  return options;
+}
+
 function ActionDialog({
   action,
   busy,
+  defaultFieldValues,
   issue,
   onClose,
+  onPreview,
   onSubmit,
   selected,
 }: {
   action: WorkforceAction;
   busy: boolean;
+  defaultFieldValues: Record<string, string>;
   issue: UiIssue | null;
   onClose(): void;
+  onPreview(submission: ActionSubmission): Promise<WorkforceImpactPreviewResponse | null>;
   onSubmit(submission: ActionSubmission): Promise<void>;
   selected: WorkforceRow | undefined;
 }) {
@@ -130,15 +195,23 @@ function ActionDialog({
   const [targetId, setTargetId] = useState(selected?.id ?? '');
   const [reason, setReason] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [impactPreview, setImpactPreview] = useState<WorkforceImpactPreviewResponse | null>(null);
+  const matchOptions = personMatchOptions(selected);
+  const evidenceOptions = credentialEvidenceOptions(selected);
+  const [selectedEvidenceIds, setSelectedEvidenceIds] = useState<string[]>(() =>
+    evidenceOptions.map((option) => option.value),
+  );
   const [fields, setFields] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       action.fields.map((field) => [
         field.key,
         field.key === 'matchRunId' && selected
-          ? selected.id
+          ? selected.values.matchRunId ?? ''
           : field.key === 'candidateReference' && selected
-            ? selected.values.context ?? ''
-            : field.options[0]?.value ?? '',
+            ? selected.values.candidateReference ?? ''
+            : field.key === 'documentId' && evidenceOptions.length > 0
+              ? evidenceOptions[0].value
+              : defaultFieldValues[field.key] ?? field.options[0]?.value ?? '',
       ]),
     ),
   );
@@ -157,7 +230,7 @@ function ActionDialog({
       if (event.key !== 'Tab') return;
       const focusable = Array.from(
         dialog.current?.querySelectorAll<HTMLElement>(
-          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
         ) ?? [],
       ).filter((element) => element.getAttribute('aria-hidden') !== 'true');
       if (focusable.length === 0) {
@@ -181,6 +254,12 @@ function ActionDialog({
       previouslyFocused?.focus();
     };
   }, [action.key]);
+
+  useEffect(() => {
+    if (issue && impactPreview && !busy) {
+      setImpactPreview(null);
+    }
+  }, [busy, impactPreview, issue]);
 
   const needsSelectedRevision = action.ifMatchRequired && !selected;
 
@@ -221,11 +300,22 @@ function ActionDialog({
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            void onSubmit({
+            const submission: ActionSubmission = {
+              evidenceIds: selectedEvidenceIds,
               fields,
               file,
               reason,
               targetId: action.targetRequired ? targetId : null,
+            };
+            if (impactActions.has(action.key) && impactPreview === null) {
+              void onPreview(submission).then((preview) => {
+                if (preview) setImpactPreview(preview);
+              });
+              return;
+            }
+            void onSubmit({
+              ...submission,
+              ...(impactPreview ? { impactToken: impactPreview.token } : {}),
             });
           }}
         >
@@ -238,7 +328,10 @@ function ActionDialog({
                 readOnly={Boolean(selected)}
                 required
                 value={targetId}
-                onChange={(event) => setTargetId(event.target.value)}
+                onChange={(event) => {
+                  setTargetId(event.target.value);
+                  setImpactPreview(null);
+                }}
               />
               <small>
                 {selected
@@ -249,17 +342,60 @@ function ActionDialog({
           )}
 
           <div className="workforce-action-fields">
-            {action.fields.map((field) => (
-              <ActionField
-                field={field}
-                key={field.key}
-                value={fields[field.key] ?? ''}
-                onChange={(value) =>
-                  setFields((current) => ({ ...current, [field.key]: value }))
-                }
-              />
-            ))}
+            {action.fields.map((field) => {
+              const projectedField: WorkforceField =
+                field.key === 'candidateReference' && matchOptions.length > 0
+                  ? { ...field, inputType: 'select' as const, options: matchOptions }
+                  : field.key === 'documentId' && evidenceOptions.length > 0
+                    ? { ...field, inputType: 'select' as const, options: evidenceOptions }
+                  : field;
+              return (
+                <ActionField
+                  field={projectedField}
+                  key={field.key}
+                  value={fields[field.key] ?? ''}
+                  onChange={(value) => {
+                    setFields((current) => {
+                      if (action.key === 'record-match-decision' && field.key === 'decisionCode') {
+                        const reference = value === 'use_existing'
+                          ? matchOptions[1]?.value ?? ''
+                          : matchOptions[0]?.value ?? '';
+                        return { ...current, [field.key]: value, candidateReference: reference };
+                      }
+                      return { ...current, [field.key]: value };
+                    });
+                    setImpactPreview(null);
+                  }}
+                />
+              );
+            })}
           </div>
+
+          {action.key === 'decide-credential' && (
+            <fieldset className="full-width workforce-evidence-selection">
+              <legend>Clean evidence used for this decision</legend>
+              {evidenceOptions.length === 0 ? (
+                <p className="help">No clean promoted evidence is available.</p>
+              ) : (
+                evidenceOptions.map((option) => (
+                  <label className="check-row" key={option.value}>
+                    <input
+                      checked={selectedEvidenceIds.includes(option.value)}
+                      type="checkbox"
+                      onChange={(event) => {
+                        setSelectedEvidenceIds((current) =>
+                          event.target.checked
+                            ? [...current, option.value]
+                            : current.filter((value) => value !== option.value),
+                        );
+                      }}
+                    />
+                    <span><strong>Clean promoted evidence</strong><small>{option.label}</small></span>
+                  </label>
+                ))
+              )}
+            </fieldset>
+          )}
 
           {action.key === 'upload-document' && (
             <label className="full-width workforce-file-field">
@@ -268,7 +404,10 @@ function ActionDialog({
                 accept="application/pdf,image/jpeg,image/png"
                 required
                 type="file"
-                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                onChange={(event) => {
+                  setFile(event.target.files?.[0] ?? null);
+                  setImpactPreview(null);
+                }}
               />
               <small>PDF, JPEG or PNG; maximum 25 MiB. The file enters private quarantine.</small>
             </label>
@@ -281,10 +420,40 @@ function ActionDialog({
               minLength={10}
               required={action.reasonRequired}
               value={reason}
-              onChange={(event) => setReason(event.target.value)}
+              onChange={(event) => {
+                setReason(event.target.value);
+                setImpactPreview(null);
+              }}
             />
             <small>Use 10–500 characters. Reasons become governed evidence.</small>
           </label>
+
+          {impactPreview && (
+            <section aria-labelledby="workforce-impact-title" className="workforce-impact-preview">
+              <header>
+                <div>
+                  <span className="eyebrow">Fresh server impact</span>
+                  <h3 id="workforce-impact-title">Review before confirmation</h3>
+                </div>
+                <span className={`badge ${impactPreview.blocked ? 'danger' : 'warning'}`}>
+                  {impactPreview.blocked ? 'Blocked' : 'Expires soon'}
+                </span>
+              </header>
+              <ul>
+                {impactPreview.items.map((item) => (
+                  <li className={item.tone} key={item.code}>
+                    <strong>{humanize(item.code)}</strong>
+                    <span>{item.detail}</span>
+                    <small>{item.affectedCount} affected</small>
+                  </li>
+                ))}
+              </ul>
+              <p>
+                Digest <code>{impactPreview.digest.slice(0, 12)}…</code> · expires{' '}
+                {new Date(impactPreview.expiresAt).toLocaleTimeString()}
+              </p>
+            </section>
+          )}
 
           {issue && (
             <div className="workforce-inline-issue" role="alert">
@@ -304,11 +473,22 @@ function ActionDialog({
             <button
               aria-busy={busy}
               className="primary-button"
-              disabled={busy || needsSelectedRevision}
+              disabled={
+                busy ||
+                needsSelectedRevision ||
+                Boolean(impactPreview?.blocked) ||
+                (action.key === 'decide-credential' && selectedEvidenceIds.length === 0)
+              }
               type="submit"
             >
               {busy && <LoaderCircle className="spin" aria-hidden="true" size={17} />}
-              {busy ? 'Submitting…' : action.label}
+              {busy
+                ? impactActions.has(action.key) && impactPreview === null
+                  ? 'Reviewing impact…'
+                  : 'Submitting…'
+                : impactActions.has(action.key) && impactPreview === null
+                  ? 'Review impact'
+                  : action.label}
             </button>
           </footer>
         </form>
@@ -326,6 +506,10 @@ function ActionField({
   onChange(value: string): void;
   value: string;
 }) {
+  if (field.inputType === 'hidden') {
+    return <input name={field.key} type="hidden" value={value} readOnly />;
+  }
+
   if (field.inputType === 'select') {
     return (
       <label>
@@ -378,17 +562,24 @@ export function WorkforceScreenPage({
   const [mutationIssue, setMutationIssue] = useState<UiIssue | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [exportAccess, setExportAccess] = useState<WorkforceExportAccessResponse | null>(null);
+  const [evidenceAccess, setEvidenceAccess] = useState<WorkforceEvidenceAccessResponse | null>(null);
+  const [credentialDocumentAccess, setCredentialDocumentAccess] =
+    useState<WorkforceCredentialDocumentAccessResponse | null>(null);
   const [activeAction, setActiveAction] = useState<WorkforceAction | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [queryDraft, setQueryDraft] = useState('');
   const [statusDraft, setStatusDraft] = useState('');
-  const [filters, setFilters] = useState<ScreenFilters>({ limit: 50 });
+  const [filters, setFilters] = useState<ScreenFilters>({ limit: 25 });
+  const [cursorStack, setCursorStack] = useState<string[]>([]);
   const [refresh, setRefresh] = useState(0);
   const lastAttempt = useRef<{ fingerprint: string; key: string } | null>(null);
 
   useEffect(() => {
     setExportAccess(null);
+    setEvidenceAccess(null);
+    setCredentialDocumentAccess(null);
+    setCursorStack([]);
   }, [id, organizationId]);
 
   useEffect(() => {
@@ -406,7 +597,22 @@ export function WorkforceScreenPage({
   }, [exportAccess]);
 
   useEffect(() => {
+    if (!credentialDocumentAccess) return;
+    const remaining = Date.parse(credentialDocumentAccess.expiresAt) - Date.now();
+    if (remaining <= 0) {
+      setCredentialDocumentAccess(null);
+      return;
+    }
+    const timeout = window.setTimeout(
+      () => setCredentialDocumentAccess(null),
+      Math.min(remaining, 2_147_483_647),
+    );
+    return () => window.clearTimeout(timeout);
+  }, [credentialDocumentAccess]);
+
+  useEffect(() => {
     const controller = new AbortController();
+    const activeCursor = cursorStack.at(-1);
     setLoading(true);
     setLoadIssue(null);
     setSuccess(null);
@@ -414,12 +620,22 @@ export function WorkforceScreenPage({
       .getWorkforceScreen(
         organizationId,
         id,
-        { limit: filters.limit, q: filters.q, status: filters.status },
+        {
+          limit: filters.limit,
+          q: filters.q,
+          status: filters.status,
+          ...(activeCursor ? { cursor: activeCursor } : {}),
+        },
         { signal: controller.signal },
       )
       .then((result) => {
         if (controller.signal.aborted) return;
         if (!result.ok) {
+          if (activeCursor && (result.status === 400 || result.status === 409)) {
+            setCursorStack([]);
+            setSuccess('The result set changed, the page cursor expired, or its filters no longer matched. Pagination restarted.');
+            return;
+          }
           setLoadIssue(issueFromFailure(result));
           setProjection(null);
           return;
@@ -433,12 +649,68 @@ export function WorkforceScreenPage({
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [client, filters, id, organizationId, refresh]);
+  }, [client, cursorStack, filters, id, organizationId, refresh]);
 
   const selected = projection?.rows.find((row) => row.id === selectedId);
+  const availableActions = projection?.actions.filter(
+    (action) =>
+      !selected ||
+      !action.targetRequired ||
+      selected.allowedActionKeys.includes(action.key),
+  ) ?? [];
   const moduleNumber = Number(id.slice(3));
   const previousId = moduleNumber > 1 ? `M2-${String(moduleNumber - 1).padStart(2, '0')}` : null;
   const nextId = moduleNumber < 29 ? `M2-${String(moduleNumber + 1).padStart(2, '0')}` : null;
+
+  async function requestImpactPreview(
+    submission: ActionSubmission,
+  ): Promise<WorkforceImpactPreviewResponse | null> {
+    if (!activeAction || !selected || !impactActions.has(activeAction.key)) return null;
+    setMutationIssue(null);
+    setSuccess(null);
+    try {
+      const fields = normalizedFields(activeAction, submission.fields);
+      const targetId = submission.targetId?.trim() || null;
+      if (!targetId || !uuidPattern.test(targetId) || targetId !== selected.id) {
+        throw new Error('Select the current server record before reviewing impact.');
+      }
+      const reason = submission.reason.trim().normalize('NFC');
+      const reasonLength = Array.from(reason).length;
+      if (activeAction.reasonRequired && (reasonLength < 10 || reasonLength > 500)) {
+        throw new Error('Reason must contain 10 to 500 characters.');
+      }
+      const memberId = selected.memberId ?? null;
+      setSubmitting(true);
+      const result = await client.previewWorkforceImpact(
+        organizationId,
+        id,
+        activeAction.key,
+        {
+          decision: fields.decisionCode ?? null,
+          evidenceIds: submission.evidenceIds,
+          fields,
+          memberId,
+          reason: reason || null,
+          targetId,
+        },
+        selected.etag,
+        selected.revision,
+      );
+      if (!result.ok) {
+        setMutationIssue(issueFromFailure(result));
+        return null;
+      }
+      return result.data;
+    } catch (error) {
+      setMutationIssue({
+        detail: error instanceof Error ? error.message : 'The impact could not be reviewed.',
+        title: 'Impact review unavailable',
+      });
+      return null;
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   async function submitAction(submission: ActionSubmission) {
     if (!activeAction) return;
@@ -479,6 +751,7 @@ export function WorkforceScreenPage({
       const fingerprint = JSON.stringify({
         action: activeAction.key,
         digest,
+        evidenceIds: submission.evidenceIds,
         fields,
         memberId,
         reason,
@@ -491,6 +764,61 @@ export function WorkforceScreenPage({
           : idempotencyKey(activeAction.key);
       lastAttempt.current = { fingerprint, key };
       setSubmitting(true);
+
+      if (activeAction.key === 'access-evidence') {
+        if (!selected) {
+          throw new Error('Select an evidence record before requesting restricted detail.');
+        }
+        const projection = fields.projection as WorkforceEvidenceAccessRequest['projection'];
+        const purposeCode = fields.purposeCode as WorkforceEvidenceAccessRequest['purposeCode'];
+        const accessResult = await client.accessWorkforceEvidence(
+          organizationId,
+          selected.id,
+          {
+            ...(selected.memberId ? { memberId: selected.memberId } : {}),
+            projection,
+            purposeCode,
+            reason,
+          },
+          key,
+        );
+        if (!accessResult.ok) {
+          setMutationIssue(issueFromFailure(accessResult));
+          return;
+        }
+        lastAttempt.current = null;
+        setEvidenceAccess(accessResult.data);
+        setActiveAction(null);
+        setSuccess('Restricted evidence opened and the access was audited.');
+        return;
+      }
+
+      if (activeAction.key === 'access-credential-document') {
+        if (!selected) {
+          throw new Error('Select a credential before requesting clean evidence access.');
+        }
+        const documentId = fields.documentId;
+        if (!documentId || !uuidPattern.test(documentId)) {
+          throw new Error('Select a clean promoted evidence document.');
+        }
+        const purposeCode = fields.purposeCode as
+          WorkforceCredentialDocumentAccessRequest['purposeCode'];
+        const accessResult = await client.accessWorkforceCredentialDocument(
+          organizationId,
+          selected.id,
+          documentId,
+          { purposeCode, reason },
+        );
+        if (!accessResult.ok) {
+          setMutationIssue(issueFromFailure(accessResult));
+          return;
+        }
+        lastAttempt.current = null;
+        setCredentialDocumentAccess(accessResult.data);
+        setActiveAction(null);
+        setSuccess('Short-lived clean evidence access was granted and audited.');
+        return;
+      }
 
       if (activeAction.key === 'access-export') {
         if (!selected || selected.status !== 'ready') {
@@ -535,8 +863,9 @@ export function WorkforceScreenPage({
           activeAction.key,
           {
             decision: fields.decisionCode ?? null,
-            evidenceIds: [],
+            evidenceIds: submission.evidenceIds,
             fields,
+            ...(submission.impactToken ? { impactToken: submission.impactToken } : {}),
             memberId,
             reason: reason || null,
             targetId,
@@ -608,6 +937,73 @@ export function WorkforceScreenPage({
         </div>
       )}
 
+      {credentialDocumentAccess && (
+        <div className="workforce-export-access" role="status">
+          <ShieldCheck aria-hidden="true" size={19} />
+          <div>
+            <strong>Clean evidence access ready</strong>
+            <p>
+              {credentialDocumentAccess.mediaType} · {credentialDocumentAccess.byteCount} bytes ·
+              expires {new Date(credentialDocumentAccess.expiresAt).toLocaleTimeString()}
+            </p>
+          </div>
+          <button
+            className="primary-button"
+            onClick={() => {
+              window.open(
+                credentialDocumentAccess.readUrl,
+                '_blank',
+                'noopener,noreferrer',
+              );
+            }}
+            type="button"
+          >
+            Open evidence
+          </button>
+          <button
+            aria-label="Close clean evidence access"
+            className="icon-button"
+            onClick={() => setCredentialDocumentAccess(null)}
+            type="button"
+          >
+            <X aria-hidden="true" size={18} />
+          </button>
+        </div>
+      )}
+
+      {evidenceAccess && (
+        <section aria-labelledby="workforce-evidence-title" className="panel workforce-evidence-detail">
+          <header>
+            <div>
+              <span className="eyebrow">Audited restricted detail</span>
+              <h2 id="workforce-evidence-title">{humanize(evidenceAccess.eventName)}</h2>
+              <p>
+                {new Date(evidenceAccess.occurredAt).toLocaleString()} · {evidenceAccess.operation}
+              </p>
+            </div>
+            <button
+              aria-label="Close restricted evidence detail"
+              className="icon-button"
+              onClick={() => setEvidenceAccess(null)}
+              type="button"
+            >
+              <X aria-hidden="true" size={18} />
+            </button>
+          </header>
+          <dl>
+            <div><dt>Evidence ID</dt><dd>{evidenceAccess.evidenceId}</dd></div>
+            <div><dt>Subject</dt><dd>{evidenceAccess.subjectType} · {evidenceAccess.subjectId}</dd></div>
+            <div><dt>Actor</dt><dd>{evidenceAccess.actorKind} · {evidenceAccess.actorId}</dd></div>
+            <div><dt>Correlation</dt><dd>{evidenceAccess.correlationId}</dd></div>
+            <div><dt>Purpose</dt><dd>{humanize(evidenceAccess.purposeCode)}</dd></div>
+            <div><dt>Redaction policy</dt><dd>{evidenceAccess.redactionPolicyVersion}</dd></div>
+            {Object.entries(evidenceAccess.payload).map(([key, value]) => (
+              <div key={key}><dt>{humanize(key)}</dt><dd>{evidenceValue(value)}</dd></div>
+            ))}
+          </dl>
+        </section>
+      )}
+
       {loading && (
         <section aria-live="polite" className="panel workforce-state">
           <LoaderCircle className="spin" aria-hidden="true" size={24} />
@@ -657,10 +1053,11 @@ export function WorkforceScreenPage({
               onSubmit={(event) => {
                 event.preventDefault();
                 setFilters({
-                  limit: 50,
+                  limit: 25,
                   ...(queryDraft.trim() ? { q: queryDraft.trim() } : {}),
                   ...(statusDraft.trim() ? { status: statusDraft.trim() } : {}),
                 });
+                setCursorStack([]);
               }}
             >
               <label>
@@ -668,7 +1065,8 @@ export function WorkforceScreenPage({
                 <span className="workforce-search-input">
                   <Search aria-hidden="true" size={17} />
                   <input
-                    maxLength={120}
+                    maxLength={100}
+                    minLength={2}
                     placeholder="Name, reference or record"
                     value={queryDraft}
                     onChange={(event) => setQueryDraft(event.target.value)}
@@ -692,7 +1090,8 @@ export function WorkforceScreenPage({
                   onClick={() => {
                     setQueryDraft('');
                     setStatusDraft('');
-                    setFilters({ limit: 50 });
+                    setFilters({ limit: 25 });
+                    setCursorStack([]);
                   }}
                   type="button"
                 >
@@ -761,18 +1160,41 @@ export function WorkforceScreenPage({
                 </table>
               </div>
             )}
+            <div aria-label="Workforce result pages" className="workforce-cursor-pager">
+              <button
+                className="secondary-button"
+                disabled={cursorStack.length === 0}
+                onClick={() => setCursorStack((current) => current.slice(0, -1))}
+                type="button"
+              >
+                <ArrowLeft aria-hidden="true" size={16} /> Previous
+              </button>
+              <span>Page {cursorStack.length + 1} · up to {projection.pageSize} records</span>
+              <button
+                className="secondary-button"
+                disabled={!projection.nextCursor}
+                onClick={() => {
+                  if (projection.nextCursor) {
+                    setCursorStack((current) => [...current, projection.nextCursor!]);
+                  }
+                }}
+                type="button"
+              >
+                Next <ArrowRight aria-hidden="true" size={16} />
+              </button>
+            </div>
           </section>
 
           <section aria-labelledby="workforce-actions-title" className="panel workforce-actions-panel">
             <div>
               <h2 id="workforce-actions-title">Available actions</h2>
-              <p>CareOS shows only actions authorized by the server for your current organization.</p>
+              <p>CareOS combines your live permission with the selected record’s server-projected state.</p>
             </div>
-            {projection.actions.length === 0 ? (
+            {availableActions.length === 0 ? (
               <p className="workforce-no-actions">No governed actions are available for this account.</p>
             ) : (
               <div className="workforce-actions">
-                {projection.actions.map((action) =>
+                {availableActions.map((action) =>
                   action.style === 'link' && action.href ? (
                     <a className="secondary-button" href={action.href} key={action.key}>
                       {action.label} <ArrowRight aria-hidden="true" size={16} />
@@ -820,6 +1242,10 @@ export function WorkforceScreenPage({
         <ActionDialog
           action={activeAction}
           busy={submitting}
+          defaultFieldValues={{
+            filterSearch: filters.q ?? '',
+            filterStatus: filters.status ?? '',
+          }}
           issue={mutationIssue}
           selected={selected}
           onClose={() => {
@@ -829,6 +1255,7 @@ export function WorkforceScreenPage({
             }
           }}
           onSubmit={submitAction}
+          onPreview={requestImpactPreview}
         />
       )}
     </Shell>

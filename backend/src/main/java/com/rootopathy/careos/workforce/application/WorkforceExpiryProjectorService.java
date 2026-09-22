@@ -1,8 +1,11 @@
 package com.rootopathy.careos.workforce.application;
 
+import com.rootopathy.careos.governance.application.ConsumerInboxOperations;
 import com.rootopathy.careos.governance.application.GovernanceEvidenceOperations;
 import com.rootopathy.careos.governance.domain.AuditRecord;
 import com.rootopathy.careos.governance.domain.GovernanceEvidence;
+import com.rootopathy.careos.governance.domain.InboundOutboxEvent;
+import com.rootopathy.careos.governance.domain.OutboxEnvelope;
 import com.rootopathy.careos.governance.domain.OutboxRecord;
 import com.rootopathy.careos.tenancy.application.ServiceIdentityAuthorizationOperations;
 import com.rootopathy.careos.tenancy.domain.OperationKey;
@@ -12,16 +15,27 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
 
 @Service
 public final class WorkforceExpiryProjectorService {
-    private static final String SERVICE_IDENTITY = "m2-expiry-scheduler-v1";
+    private static final String SCHEDULER_IDENTITY = "m2-expiry-scheduler-v1";
+    private static final String PROJECTOR_IDENTITY = "m2-expiry-projector-v1";
+    private static final String CONSUMER = "m2-expiry-projector-v1";
+    private static final Set<String> SOURCE_EVENTS = Set.of(
+            "credential.registration.verified",
+            "credential.registration.superseded",
+            "credential.registration.expired",
+            "credential.review.decided",
+            "credential.record.superseded",
+            "credential.record.expired");
     private final ServiceIdentityAuthorizationOperations authorization;
     private final WorkforceExpiryStore store;
     private final GovernanceEvidenceOperations evidence;
+    private final ConsumerInboxOperations inbox;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
@@ -29,11 +43,13 @@ public final class WorkforceExpiryProjectorService {
             ServiceIdentityAuthorizationOperations authorization,
             WorkforceExpiryStore store,
             GovernanceEvidenceOperations evidence,
+            ConsumerInboxOperations inbox,
             ObjectMapper objectMapper,
             Clock clock) {
         this.authorization = authorization;
         this.store = store;
         this.evidence = evidence;
+        this.inbox = inbox;
         this.objectMapper = objectMapper;
         this.clock = clock;
     }
@@ -46,7 +62,7 @@ public final class WorkforceExpiryProjectorService {
                 new ServiceIdentityAuthorizationRequest(
                         command.organizationId(),
                         command.presentedCredential(),
-                        SERVICE_IDENTITY,
+                        SCHEDULER_IDENTITY,
                         command.correlationId(),
                         new OperationKey("m2.expiry.process")),
                 context -> {
@@ -59,6 +75,35 @@ public final class WorkforceExpiryProjectorService {
                             .filter(milestone -> milestone.state().equals("planned"))
                             .count();
                     return new Result(evaluationDate,milestones.size(),planned,milestones.size()-planned);
+                });
+    }
+
+    public ConsumeResult consume(OutboxEnvelope envelope, String presentedCredential) {
+        if (envelope.schemaVersion()!=1 || !SOURCE_EVENTS.contains(envelope.eventName())
+                || !("professional_registration".equals(envelope.aggregateType())
+                     || "practitioner_credential".equals(envelope.aggregateType()))) {
+            throw new IllegalArgumentException("unsupported expiry-projector event");
+        }
+        return authorization.execute(
+                new ServiceIdentityAuthorizationRequest(
+                        envelope.organizationId(),presentedCredential,PROJECTOR_IDENTITY,
+                        envelope.correlationId(),new OperationKey("m2.expiry.process")),
+                context -> {
+                    var result = new ConsumeResult[1];
+                    inbox.execute(
+                            context,
+                            InboundOutboxEvent.from(CONSUMER,envelope),
+                            () -> {
+                                var now=clock.instant();
+                                var evaluationDate=LocalDate.ofInstant(now,ZoneOffset.UTC);
+                                var milestones=store.projectDue(context,evaluationDate,now,500);
+                                for (var milestone:milestones) record(context,milestone);
+                                result[0]=new ConsumeResult(
+                                        envelope.eventId(),"processed",milestones.size());
+                            });
+                    return result[0]==null
+                            ? new ConsumeResult(envelope.eventId(),"duplicate",0)
+                            : result[0];
                 });
     }
 
@@ -122,4 +167,6 @@ public final class WorkforceExpiryProjectorService {
             long projected,
             long planned,
             long suppressed) {}
+
+    public record ConsumeResult(UUID sourceEventId,String status,int projected) {}
 }

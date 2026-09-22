@@ -47,6 +47,7 @@ public class EvidenceExportStorageConfiguration {
       public boolean available() { return false; }
       public StoredArtifact store(com.rootopathy.careos.tenancy.domain.AuthorizedTenantContext c, java.util.UUID id, String type, String filename, byte[] content, String digest) { throw unavailable(); }
       public AccessGrant createReadGrant(com.rootopathy.careos.tenancy.domain.AuthorizedTenantContext c, java.util.UUID id, String reference, String digest, String filename, java.time.Duration ttl) { throw unavailable(); }
+      public ArtifactContent open(com.rootopathy.careos.tenancy.domain.AuthorizedTenantContext c, java.util.UUID id, String reference, String digest, long bytes) { throw unavailable(); }
       public void delete(com.rootopathy.careos.tenancy.domain.AuthorizedTenantContext c, java.util.UUID id, String reference, String digest) { throw unavailable(); }
     };
   }

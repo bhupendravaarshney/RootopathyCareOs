@@ -19,13 +19,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
-import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 @Service
@@ -83,20 +81,21 @@ public final class WorkforceExportAccessService {
                         clock.instant().plusSeconds(600)),
                 context -> {
                     var access = store.access(
-                            context,command.exportId(),revision,command.purposeKey());
+                            context,command.exportId(),revision,command.purposeKey(),
+                            maximumGrantExpiry(command));
                     var response = new LinkedHashMap<String,Object>();
                     response.put("exportId",access.exportId());
-                    response.put("artifactReference",access.artifactReference());
+                    response.put("downloadUrl",downloadUrl(command.organizationId(),access.exportId()));
+                    response.put("expiresAt",access.grantExpiresAt());
                     response.put("artifactDigest",access.artifactDigest());
                     response.put("contentType",access.contentType());
                     response.put("filename",access.filename());
-                    response.put("expiresAt",access.expiresAt());
                     var audit = new LinkedHashMap<String,Object>();
                     audit.put("exportId",access.exportId());
                     audit.put("state","accessed");
                     audit.put("artifactDigest",access.artifactDigest());
                     audit.put("rowCount",access.rowCount());
-                    audit.put("expiryTime",grantExpiry(access.expiresAt()));
+                    audit.put("expiryTime",access.grantExpiresAt());
                     audit.put("failureCode",null);
                     return new GovernedMutation(
                             new IdempotentResponse(200,"application/json",json(response)),
@@ -104,28 +103,28 @@ public final class WorkforceExportAccessService {
                                     "workforce.export.accessed",1,"workforce_export",
                                     access.exportId(),reason,json(audit))));
                 });
-        var material = material(persisted.response());
-        return authorization.execute(authorizationRequest, context -> {
-            var grant = artifacts.createReadGrant(
-                    context,
-                    material.exportId(),
-                    material.artifactReference(),
-                    material.artifactDigest(),
-                    material.filename(),
-                    grantTtl(material.expiresAt()));
-            var response = new LinkedHashMap<String,Object>();
-            response.put("exportId",material.exportId());
-            response.put("downloadUrl",grant.readUri().toString());
-            response.put("expiresAt",grant.expiresAt());
-            response.put("artifactDigest",material.artifactDigest());
-            response.put("contentType",material.contentType());
-            response.put("filename",material.filename());
-            return new IdempotencyOutcome(
-                    new IdempotentResponse(
-                            persisted.response().statusCode(),
-                            persisted.response().mediaType(),
-                            json(response)),
-                    persisted.replayed());
+        return persisted;
+    }
+
+    public Download download(DownloadCommand command) {
+        Objects.requireNonNull(command,"command");
+        var request = new TenantAuthorizationRequest(
+                command.organizationId(),
+                new AuthenticatedActorContext(
+                        command.actorId(),"workforce-export-download",command.correlationId()),
+                new OperationKey("workforce.export.access"),
+                null,
+                command.recentAuthenticationAt(),
+                command.mfaAuthenticatedAt(),
+                null);
+        return authorization.execute(request,context -> {
+            var access=store.download(context,command.exportId());
+            var content=artifacts.open(
+                    context,access.exportId(),access.artifactReference(),
+                    access.artifactDigest(),access.byteCount());
+            return new Download(
+                    access.exportId(),access.artifactDigest(),access.contentType(),
+                    access.filename(),access.byteCount(),access.grantExpiresAt(),content);
         });
     }
 
@@ -141,33 +140,28 @@ public final class WorkforceExportAccessService {
                 null);
     }
 
-    private Duration grantTtl(Instant artifactExpiry) {
-        var duration = Duration.between(clock.instant(),artifactExpiry);
-        if (duration.compareTo(Duration.ofMinutes(10))>0) duration=Duration.ofMinutes(10);
-        if (duration.compareTo(Duration.ofSeconds(1))<0) {
-            throw new IllegalArgumentException("ready workforce export is unavailable");
+    private Instant maximumGrantExpiry(Command command) {
+        var now=clock.instant();
+        var deadline=now.plus(Duration.ofMinutes(10));
+        if (command.recentAuthenticationAt()!=null) {
+            deadline=earlier(deadline,command.recentAuthenticationAt().plus(Duration.ofMinutes(5)));
         }
-        return duration;
+        if (command.mfaAuthenticatedAt()!=null) {
+            deadline=earlier(deadline,command.mfaAuthenticatedAt().plus(Duration.ofMinutes(5)));
+        }
+        if (!deadline.isAfter(now)) {
+            throw new IllegalArgumentException("recent authentication is required for export access");
+        }
+        return deadline;
     }
 
-    private Instant grantExpiry(Instant artifactExpiry) {
-        return clock.instant().plus(grantTtl(artifactExpiry));
+    private static Instant earlier(Instant left, Instant right) {
+        return left.isBefore(right)?left:right;
     }
 
-    private AccessMaterial material(IdempotentResponse response) {
-        try {
-            var values = objectMapper.readValue(
-                    response.bodyJson(),new TypeReference<Map<String,String>>() {});
-            return new AccessMaterial(
-                    UUID.fromString(values.get("exportId")),
-                    Objects.requireNonNull(values.get("artifactReference")),
-                    Objects.requireNonNull(values.get("artifactDigest")),
-                    Objects.requireNonNull(values.get("contentType")),
-                    Objects.requireNonNull(values.get("filename")),
-                    Instant.parse(values.get("expiresAt")));
-        } catch (RuntimeException exception) {
-            throw new IllegalStateException("Stored workforce export access result is invalid.",exception);
-        }
+    private static String downloadUrl(UUID organizationId, UUID exportId) {
+        return "/api/v1/organizations/"+organizationId
+                +"/workforce/exports/"+exportId+"/download";
     }
 
     private static long revision(String value, UUID exportId) {
@@ -217,11 +211,20 @@ public final class WorkforceExportAccessService {
             Instant recentAuthenticationAt,
             Instant mfaAuthenticatedAt) {}
 
-    private record AccessMaterial(
+    public record DownloadCommand(
+            UUID organizationId,
+            UUID actorId,
+            String correlationId,
             UUID exportId,
-            String artifactReference,
+            Instant recentAuthenticationAt,
+            Instant mfaAuthenticatedAt) {}
+
+    public record Download(
+            UUID exportId,
             String artifactDigest,
             String contentType,
             String filename,
-            Instant expiresAt) {}
+            long byteCount,
+            Instant expiresAt,
+            EvidenceExportArtifactStore.ArtifactContent content) {}
 }

@@ -1,8 +1,11 @@
 package com.rootopathy.careos.workforce.application;
 
 import com.rootopathy.careos.governance.application.GovernanceEvidenceOperations;
+import com.rootopathy.careos.governance.application.ConsumerInboxOperations;
 import com.rootopathy.careos.governance.domain.AuditRecord;
 import com.rootopathy.careos.governance.domain.GovernanceEvidence;
+import com.rootopathy.careos.governance.domain.InboundOutboxEvent;
+import com.rootopathy.careos.governance.domain.OutboxEnvelope;
 import com.rootopathy.careos.platform.application.DurableNotificationPort;
 import com.rootopathy.careos.platform.domain.DurableNotification;
 import com.rootopathy.careos.tenancy.application.ServiceIdentityAuthorizationOperations;
@@ -18,11 +21,13 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 public final class WorkforceNotificationWorkerService {
     private static final String SERVICE_IDENTITY = "m2-notification-worker-v1";
+    private static final String CONSUMER = "m2-notification-worker-v1";
     private static final Pattern SAFE_TOKEN = Pattern.compile("[A-Za-z0-9._:-]{1,160}");
     private final ServiceIdentityAuthorizationOperations authorization;
     private final WorkforceNotificationStore store;
     private final DurableNotificationPort notifications;
     private final GovernanceEvidenceOperations evidence;
+    private final ConsumerInboxOperations inbox;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
@@ -31,12 +36,14 @@ public final class WorkforceNotificationWorkerService {
             WorkforceNotificationStore store,
             DurableNotificationPort notifications,
             GovernanceEvidenceOperations evidence,
+            ConsumerInboxOperations inbox,
             ObjectMapper objectMapper,
             Clock clock) {
         this.authorization = authorization;
         this.store = store;
         this.notifications = notifications;
         this.evidence = evidence;
+        this.inbox = inbox;
         this.objectMapper = objectMapper;
         this.clock = clock;
     }
@@ -49,24 +56,48 @@ public final class WorkforceNotificationWorkerService {
                 command.organizationId(),command.presentedCredential(),command.correlationId()),
                 context -> {
                     var plans = store.lockPlanned(context,command.maximumItems());
-                    var now = clock.instant();
                     for (var plan : plans) {
-                        var message = ordered(
-                                "notificationId",plan.notificationId(),
-                                "memberReference",plan.memberId(),
-                                "milestone",plan.milestone(),
-                                "expiryDate",plan.expiryDate());
-                        notifications.enqueue(
-                                context,
-                                new DurableNotification(
-                                        plan.notificationId(),plan.recipientUserId(),plan.templateKey(),
-                                        plan.templateVersion(),json(message),
-                                        "m2-expiry:"+plan.notificationId(),now));
-                        var queued = store.queued(
-                                context,plan.notificationId(),plan.revision(),now);
-                        record(context,"workforce.notification.queued",queued);
+                        queue(context, plan);
                     }
                     return new QueueResult(plans.size());
+                });
+    }
+
+    public ConsumeResult consume(OutboxEnvelope envelope, String presentedCredential) {
+        if (!"credential.expiry.milestone_reached".equals(envelope.eventName())
+                || envelope.schemaVersion() != 1
+                || !"practitioner_credential".equals(envelope.aggregateType())) {
+            throw new IllegalArgumentException("unsupported notification-worker event");
+        }
+        var notificationId = notificationId(envelope.payloadJson());
+        return authorization.execute(
+                request(
+                        envelope.organizationId(),presentedCredential,envelope.correlationId()),
+                context -> {
+                    var result = new ConsumeResult[1];
+                    inbox.execute(
+                            context,
+                            InboundOutboxEvent.from(CONSUMER,envelope),
+                            () -> {
+                                var plan = store.lockPlanned(
+                                        context,notificationId,envelope.aggregateId());
+                                if (plan.isPresent()) {
+                                    queue(context,plan.orElseThrow());
+                                    result[0] = new ConsumeResult(
+                                            envelope.eventId(),notificationId,"processed",true);
+                                } else if (store.belongsToSource(
+                                        context,notificationId,envelope.aggregateId())) {
+                                    result[0] = new ConsumeResult(
+                                            envelope.eventId(),notificationId,"processed",false);
+                                } else {
+                                    throw new IllegalArgumentException(
+                                            "notification event does not match its expiry source");
+                                }
+                            });
+                    return result[0] == null
+                            ? new ConsumeResult(
+                                    envelope.eventId(),notificationId,"duplicate",false)
+                            : result[0];
                 });
     }
 
@@ -94,6 +125,27 @@ public final class WorkforceNotificationWorkerService {
                     record(context,"workforce.notification.failed",delivery);
                     return delivery;
                 });
+    }
+
+    private void queue(
+            com.rootopathy.careos.tenancy.domain.AuthorizedTenantContext context,
+            WorkforceNotificationStore.Plan plan) {
+        var now = clock.instant();
+        var message = ordered(
+                "notificationId",plan.notificationId(),
+                "memberReference",plan.memberId(),
+                "milestone",plan.milestone(),
+                "expiryDate",plan.expiryDate(),
+                "attempt",plan.attempt());
+        notifications.enqueue(
+                context,
+                new DurableNotification(
+                        plan.notificationId(),plan.recipientUserId(),plan.templateKey(),
+                        plan.templateVersion(),json(message),
+                        "m2-expiry:"+plan.notificationId(),now));
+        var queued = store.queued(
+                context,plan.notificationId(),plan.revision(),now);
+        record(context,"workforce.notification.queued",queued);
     }
 
     private static ServiceIdentityAuthorizationRequest request(
@@ -128,6 +180,23 @@ public final class WorkforceNotificationWorkerService {
         return value;
     }
 
+    private UUID notificationId(String payloadJson) {
+        try {
+            var payload = objectMapper.readTree(payloadJson);
+            var value = payload.get("notificationId");
+            if (value == null || !value.isString()) {
+                throw new IllegalArgumentException(
+                        "notification event omitted notificationId");
+            }
+            return UUID.fromString(value.stringValue());
+        } catch (IllegalArgumentException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new IllegalArgumentException(
+                    "notification event payload is invalid",exception);
+        }
+    }
+
     private static LinkedHashMap<String,Object> ordered(Object... values) {
         var result = new LinkedHashMap<String,Object>();
         for (var index=0;index<values.length;index+=2) {
@@ -160,9 +229,15 @@ public final class WorkforceNotificationWorkerService {
             String correlationId) {
         public OutcomeCommand {
             if (expectedRevision<0) throw new IllegalArgumentException("expectedRevision must be non-negative");
-            if (attempt<1 || attempt>20) throw new IllegalArgumentException("attempt must be between 1 and 20");
+            if (attempt<1 || attempt>5) throw new IllegalArgumentException("attempt must be between 1 and 5");
         }
     }
 
     public record QueueResult(int queued) {}
+
+    public record ConsumeResult(
+            UUID sourceEventId,
+            UUID notificationId,
+            String status,
+            boolean queued) {}
 }

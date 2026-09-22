@@ -35,8 +35,7 @@ WITH catalogues(registry_key,category,display_name) AS (
       ('workforce.supervision_mode','supervision_mode','Supervision mode'),
       ('workforce.offboarding_reason','offboarding_reason','Offboarding reason'),
       ('workforce.notification_milestone','notification_milestone','Notification milestone'),
-      ('workforce.notification_template','notification_template_metadata','Notification template metadata'),
-      ('workforce.export_legal_basis','export_legal_basis','Export legal basis')
+      ('workforce.notification_template','notification_template_metadata','Notification template metadata')
 )
 INSERT INTO workforce_registry_definitions
     (organization_id,registry_key,category,display_name,value_schema,review_cadence_days,

@@ -33,20 +33,67 @@ public final class JdbcWorkforceExportStore implements WorkforceExportStore {
     }
 
     @Override
+    public List<UUID> dueExportIds(
+            AuthorizedTenantContext context, Instant now, int maximumItems) {
+        if (maximumItems < 1 || maximumItems > 100) {
+            throw new IllegalArgumentException("maximumItems must be between 1 and 100");
+        }
+        return jdbc.queryForList(
+                """
+                SELECT id FROM workforce_export_jobs
+                WHERE organization_id=?
+                  AND ((status='authorized' AND attempt_count=0
+                        AND (next_attempt_at IS NULL OR next_attempt_at<=?))
+                    OR (status='running' AND lease_expires_at<=?))
+                ORDER BY COALESCE(next_attempt_at,lease_expires_at,created_at),id
+                LIMIT ?
+                """,
+                UUID.class,
+                context.organizationId(),
+                Timestamp.from(now),
+                Timestamp.from(now),
+                maximumItems);
+    }
+
+    @Override
     public Work claim(AuthorizedTenantContext context, UUID exportId, String workerId) {
         var result = jdbc.query(
                 """
                 UPDATE workforce_export_jobs
-                   SET status='running',attempt_count=attempt_count+1,worker_id=?,
-                       lease_expires_at=clock_timestamp()+interval '15 minutes',
-                       snapshot_at=transaction_timestamp(),
-                       next_attempt_at=NULL,failure_code=NULL,lock_version=lock_version+1,
+                   SET status=CASE
+                           WHEN status='running' AND lease_expires_at<=clock_timestamp() THEN 'failed'
+                           ELSE 'running' END,
+                       attempt_count=CASE
+                           WHEN status='running' AND lease_expires_at<=clock_timestamp() THEN attempt_count
+                           ELSE attempt_count+1 END,
+                       worker_id=CASE
+                           WHEN status='running' AND lease_expires_at<=clock_timestamp() THEN NULL
+                           ELSE ? END,
+                       snapshot_at=CASE
+                           WHEN status='authorized' THEN transaction_timestamp()
+                           ELSE snapshot_at END,
+                       lease_expires_at=CASE
+                           WHEN status='running' AND lease_expires_at<=clock_timestamp() THEN NULL
+                           ELSE clock_timestamp()+interval '15 minutes' END,
+                       next_attempt_at=NULL,lock_version=lock_version+1,
+                       dead_lettered_at=CASE
+                           WHEN status='running' AND lease_expires_at<=clock_timestamp()
+                                THEN clock_timestamp()
+                           ELSE NULL END,
+                       dead_letter_owner=CASE
+                           WHEN status='running' AND lease_expires_at<=clock_timestamp()
+                                THEN 'workforce_operations'
+                           ELSE NULL END,
+                       failure_code=CASE
+                           WHEN status='running' AND lease_expires_at<=clock_timestamp()
+                                THEN 'workforce.export.lease_expired'
+                           ELSE NULL END,
                        updated_at=clock_timestamp(),updated_by=?
                  WHERE organization_id=? AND id=?
-                   AND (status='authorized'
+                   AND ((status='authorized' AND attempt_count=0
+                         AND (next_attempt_at IS NULL
+                              OR next_attempt_at<=clock_timestamp()))
                      OR (status='running' AND lease_expires_at<=clock_timestamp()))
-                   AND attempt_count<5
-                   AND (next_attempt_at IS NULL OR next_attempt_at<=clock_timestamp())
                 """ + RETURNING,
                 row -> row.next() ? work(row) : null,
                 workerId,
@@ -65,6 +112,8 @@ public final class JdbcWorkforceExportStore implements WorkforceExportStore {
         requireRequesterSourcePermissions(context,work);
         var filters = filters(work.filtersJson());
         var memberId = optionalUuid(filters.get("memberId"));
+        var search = optionalText(filters.get("search"));
+        var status = optionalText(filters.get("status"));
         var limit = Math.min(work.rowLimit(), maximumRows) + 1;
         return switch (work.projection()) {
             case "workforce-directory-summary-v1" -> jdbc.query(
@@ -89,6 +138,12 @@ public final class JdbcWorkforceExportStore implements WorkforceExportStore {
                         ORDER BY candidate.effective_from DESC,candidate.id DESC LIMIT 1
                     ) assignment ON true
                     WHERE member.organization_id=? AND member.updated_at<=?
+                      AND (?::uuid IS NULL OR member.id=?::uuid)
+                      AND (?::text IS NULL OR lower(link.display_label||' '||member.member_number)
+                          LIKE '%'||lower(?::text)||'%')
+                      AND (?::text IS NULL OR member.lifecycle_state=?::text)
+                      AND careos_m2_user_can_access_member(
+                          ?,?,member.id,'workforce.directory.read')
                     ORDER BY member.member_number,member.id LIMIT ?
                     """,
                     (row, number) -> orderedRow(row,
@@ -98,6 +153,14 @@ public final class JdbcWorkforceExportStore implements WorkforceExportStore {
                     Timestamp.from(work.snapshotAt()),
                     context.organizationId(),
                     Timestamp.from(work.snapshotAt()),
+                    memberId,
+                    memberId,
+                    search,
+                    search,
+                    status,
+                    status,
+                    context.organizationId(),
+                    work.requesterId(),
                     limit);
             case "credential-expiry-summary-v1" -> jdbc.query(
                     """
@@ -116,6 +179,12 @@ public final class JdbcWorkforceExportStore implements WorkforceExportStore {
                       AND entry.id=credential.credential_type_entry_id
                     WHERE credential.organization_id=? AND credential.expires_on IS NOT NULL
                       AND credential.expires_on<=?::date+90 AND credential.updated_at<=?
+                      AND (?::uuid IS NULL OR credential.workforce_member_id=?::uuid)
+                      AND (?::text IS NULL OR lower(entry.display_label||' '||member.member_number)
+                          LIKE '%'||lower(?::text)||'%')
+                      AND (?::text IS NULL OR credential.status=?::text)
+                      AND careos_m2_user_can_access_member(
+                          ?,?,credential.workforce_member_id,'workforce.expiry.read')
                     ORDER BY credential.expires_on,credential.id LIMIT ?
                     """,
                     (row, number) -> orderedRow(row,
@@ -128,6 +197,14 @@ public final class JdbcWorkforceExportStore implements WorkforceExportStore {
                     context.organizationId(),
                     Timestamp.from(work.snapshotAt()),
                     Timestamp.from(work.snapshotAt()),
+                    memberId,
+                    memberId,
+                    search,
+                    search,
+                    status,
+                    status,
+                    context.organizationId(),
+                    work.requesterId(),
                     limit);
             case "workforce-configuration-summary-v1" -> jdbc.query(
                     """
@@ -139,18 +216,30 @@ public final class JdbcWorkforceExportStore implements WorkforceExportStore {
                            snapshot.activator_id AS "activatorId"
                     FROM workforce_configuration_snapshots snapshot
                     WHERE snapshot.organization_id=? AND snapshot.effective_at<=?
+                      AND (?::text IS NULL OR lower(snapshot.display_number)
+                          LIKE '%'||lower(?::text)||'%')
+                      AND (?::text IS NULL OR snapshot.status=?::text)
                     ORDER BY snapshot.effective_at DESC,snapshot.id DESC LIMIT ?
                     """,
                     (row, number) -> orderedRow(row,
                             "snapshotId","displayNumber","parentSnapshotId","snapshotDigest","status",
                             "effectiveAt","supersededAt","makerId","checkerId","activatorId"),
-                    context.organizationId(),Timestamp.from(work.snapshotAt()),limit);
-            case "workforce-audit-summary-v1" -> auditRows(context, work, false, memberId, limit);
-            case "workforce-audit-detail-v1" -> auditRows(context, work, true, memberId, limit);
-            case "member-timeline-summary-v1" -> memberTimelineRows(context, work, false, requiredMember(memberId), limit);
-            case "member-evidence-detail-v1" -> memberTimelineRows(context, work, true, requiredMember(memberId), limit);
-            case "credential-decision-detail-v1" -> credentialDecisionRows(context, work, requiredMember(memberId), limit);
-            case "scope-decision-detail-v1" -> scopeDecisionRows(context, work, requiredMember(memberId), limit);
+                    context.organizationId(),Timestamp.from(work.snapshotAt()),
+                    search,search,status,status,limit);
+            case "workforce-audit-summary-v1" ->
+                    auditRows(context, work, false, memberId, search, status, limit);
+            case "workforce-audit-detail-v1" ->
+                    auditRows(context, work, true, memberId, search, status, limit);
+            case "member-timeline-summary-v1" ->
+                    memberTimelineRows(
+                            context, work, false, requiredMember(memberId), search, status, limit);
+            case "member-evidence-detail-v1" ->
+                    memberTimelineRows(
+                            context, work, true, requiredMember(memberId), search, status, limit);
+            case "credential-decision-detail-v1" -> credentialDecisionRows(
+                    context, work, requiredMember(memberId), search, status, limit);
+            case "scope-decision-detail-v1" -> scopeDecisionRows(
+                    context, work, requiredMember(memberId), search, status, limit);
             default -> throw new IllegalArgumentException("unsupported workforce export projection");
         };
     }
@@ -160,6 +249,8 @@ public final class JdbcWorkforceExportStore implements WorkforceExportStore {
             Work work,
             boolean detail,
             UUID memberId,
+            String search,
+            String status,
             int limit) {
         var sql = new StringBuilder("""
                 SELECT event.id AS "eventId",event.occurred_at AS "occurredAt",
@@ -202,9 +293,25 @@ public final class JdbcWorkforceExportStore implements WorkforceExportStore {
         var parameters = new ArrayList<Object>();
         parameters.add(context.organizationId());
         parameters.add(Timestamp.from(work.snapshotAt()));
+        sql.append("""
+                 AND (?::text IS NULL OR lower(event.event_name) LIKE '%'||lower(?::text)||'%')
+                 AND (?::text IS NULL OR event.event_name=?::text)
+                """);
+        parameters.add(search);
+        parameters.add(search);
+        parameters.add(status);
+        parameters.add(status);
         if (memberId != null) {
-            sql.append(" AND event.payload->>'memberId'=?");
-            parameters.add(memberId.toString());
+            sql.append("""
+                     AND careos_m2_audit_event_member_id(
+                         event.organization_id,event.subject_type,event.subject_id,event.payload)=?
+                     AND careos_m2_user_can_access_member(?,?,?::uuid,?)
+                    """);
+            parameters.add(memberId);
+            parameters.add(context.organizationId());
+            parameters.add(work.requesterId());
+            parameters.add(memberId);
+            parameters.add(scopePermission(work.projection()));
         }
         sql.append(" ORDER BY event.occurred_at DESC,event.id DESC LIMIT ?");
         parameters.add(limit);
@@ -227,12 +334,19 @@ public final class JdbcWorkforceExportStore implements WorkforceExportStore {
             Work work,
             boolean detail,
             UUID memberId,
+            String search,
+            String status,
             int limit) {
-        return auditRows(context, work, detail, memberId, limit);
+        return auditRows(context, work, detail, memberId, search, status, limit);
     }
 
     private List<Map<String, Object>> credentialDecisionRows(
-            AuthorizedTenantContext context, Work work, UUID memberId, int limit) {
+            AuthorizedTenantContext context,
+            Work work,
+            UUID memberId,
+            String search,
+            String status,
+            int limit) {
         return jdbc.query(
                 """
                 SELECT verification.id AS "verificationId",credential.id AS "credentialId",
@@ -249,21 +363,32 @@ public final class JdbcWorkforceExportStore implements WorkforceExportStore {
                  AND credential.id=verification.practitioner_credential_id
                 WHERE verification.organization_id=? AND credential.workforce_member_id=?
                   AND verification.decided_at<=?
+                  AND (?::text IS NULL OR lower(credential.issuer) LIKE '%'||lower(?::text)||'%')
+                  AND (?::text IS NULL OR credential.status=?::text)
+                  AND careos_m2_user_can_access_member(
+                      ?,?,credential.workforce_member_id,'credential.record.read')
                 ORDER BY verification.decided_at DESC,verification.id DESC LIMIT ?
                 """,
                 (row, number) -> orderedRow(row,
                         "verificationId","credentialId","memberId","decision","decisionReasonCode",
                         "credentialDigest","evidenceDigest","policyVersion","registryVersion",
                         "decidedAt","reviewerId"),
-                context.organizationId(),memberId,Timestamp.from(work.snapshotAt()),limit);
+                context.organizationId(),memberId,Timestamp.from(work.snapshotAt()),
+                search,search,status,status,
+                context.organizationId(),work.requesterId(),limit);
     }
 
     private List<Map<String, Object>> scopeDecisionRows(
-            AuthorizedTenantContext context, Work work, UUID memberId, int limit) {
+            AuthorizedTenantContext context,
+            Work work,
+            UUID memberId,
+            String search,
+            String status,
+            int limit) {
         return jdbc.query(
                 """
                 SELECT scope.id AS "scopeId",practitioner.workforce_member_id AS "memberId",
-                       scope.scope_definition_id AS "definitionId",scope.lifecycle_state AS status,
+                       scope.scope_definition_id AS "definitionId",scope.status,
                        scope.result_digest AS "resultDigest",scope.submitted_by AS "submittedBy",
                        scope.submitted_at AS "submittedAt",scope.decided_by AS "decidedBy",
                        scope.decision_code AS "decisionCode",scope.decided_at AS "decidedAt",
@@ -272,15 +397,24 @@ public final class JdbcWorkforceExportStore implements WorkforceExportStore {
                 JOIN practitioner_profiles practitioner
                   ON practitioner.organization_id=scope.organization_id
                  AND practitioner.id=scope.practitioner_profile_id
+                JOIN scope_definitions definition
+                  ON definition.organization_id=scope.organization_id
+                 AND definition.id=scope.scope_definition_id
                 WHERE scope.organization_id=? AND practitioner.workforce_member_id=?
                   AND scope.created_at<=?
+                  AND (?::text IS NULL OR lower(definition.name) LIKE '%'||lower(?::text)||'%')
+                  AND (?::text IS NULL OR scope.status=?::text)
+                  AND careos_m2_user_can_access_member(
+                      ?,?,practitioner.workforce_member_id,'practitioner.scope.read')
                 ORDER BY coalesce(scope.decided_at,scope.submitted_at,scope.created_at) DESC,scope.id DESC
                 LIMIT ?
                 """,
                 (row, number) -> orderedRow(row,
                         "scopeId","memberId","definitionId","status","resultDigest","submittedBy",
                         "submittedAt","decidedBy","decisionCode","decidedAt","effectiveFrom","effectiveTo"),
-                context.organizationId(),memberId,Timestamp.from(work.snapshotAt()),limit);
+                context.organizationId(),memberId,Timestamp.from(work.snapshotAt()),
+                search,search,status,status,
+                context.organizationId(),work.requesterId(),limit);
     }
 
     @Override
@@ -312,21 +446,19 @@ public final class JdbcWorkforceExportStore implements WorkforceExportStore {
 
     @Override
     public Work failed(
-            AuthorizedTenantContext context, Work work, String failureCode, boolean retryable) {
-        var retry = retryable && work.attemptCount() < 5;
+            AuthorizedTenantContext context, Work work, String failureCode) {
         var result = jdbc.query(
                 """
                 UPDATE workforce_export_jobs
-                   SET status=?,failure_code=?,
-                       next_attempt_at=CASE WHEN ? THEN clock_timestamp()
-                           +(power(2,attempt_count)::text||' minutes')::interval ELSE NULL END,
-                       dead_lettered_at=CASE WHEN ? THEN NULL ELSE clock_timestamp() END,
+                   SET status='failed',failure_code=?,next_attempt_at=NULL,
+                       dead_lettered_at=clock_timestamp(),
+                       dead_letter_owner='workforce_operations',
                        worker_id=NULL,lease_expires_at=NULL,lock_version=lock_version+1,
                        updated_at=clock_timestamp(),updated_by=?
                  WHERE organization_id=? AND id=? AND status='running' AND lock_version=?
                 """ + RETURNING,
                 row -> row.next() ? work(row) : null,
-                retry ? "authorized" : "failed",failureCode,retry,retry,
+                failureCode,
                 context.actorId(),context.organizationId(),work.exportId(),work.revision());
         if (result == null) throw new IllegalArgumentException("workforce export generation lease was lost");
         return result;
@@ -334,26 +466,89 @@ public final class JdbcWorkforceExportStore implements WorkforceExportStore {
 
     @Override
     public Access access(
-            AuthorizedTenantContext context, UUID exportId, long revision, String purposeKey) {
+            AuthorizedTenantContext context,
+            UUID exportId,
+            long revision,
+            String purposeKey,
+            Instant maximumGrantExpiry) {
+        requireSourceAccess(context,exportId);
         var result = jdbc.query(
                 """
-                SELECT id,artifact_opaque_id,artifact_digest,artifact_content_type,
-                       artifact_filename,row_count,expires_at,lock_version
-                FROM workforce_export_jobs
-                WHERE organization_id=? AND id=? AND requester_id=? AND purpose_key=?
-                  AND status='ready' AND expires_at>clock_timestamp() AND lock_version=?
-                FOR UPDATE
+                UPDATE workforce_export_jobs
+                   SET access_granted_to=requester_id,
+                       access_grant_digest=artifact_digest,
+                       access_granted_at=clock_timestamp(),
+                       access_grant_expires_at=least(
+                           expires_at,clock_timestamp()+interval '10 minutes',?),
+                       lock_version=lock_version+1,
+                       updated_at=clock_timestamp(),updated_by=?
+                 WHERE organization_id=? AND id=? AND requester_id=? AND purpose_key=?
+                   AND status='ready' AND expires_at>clock_timestamp()
+                   AND artifact_opaque_id IS NOT NULL AND artifact_digest IS NOT NULL
+                   AND artifact_content_type IS NOT NULL AND artifact_filename IS NOT NULL
+                   AND ?>clock_timestamp() AND lock_version=?
+                RETURNING id,artifact_digest,artifact_content_type,artifact_filename,
+                          row_count,access_grant_expires_at,lock_version
                 """,
                 row -> row.next()
                         ? new Access(
                                 row.getObject(1,UUID.class),
-                                row.getObject(2,UUID.class).toString(),
-                                row.getString(3),row.getString(4),row.getString(5),
-                                (Integer) row.getObject(6),row.getTimestamp(7).toInstant(),row.getLong(8))
+                                row.getString(2),row.getString(3),row.getString(4),
+                                (Integer) row.getObject(5),row.getTimestamp(6).toInstant(),row.getLong(7))
                         : null,
-                context.organizationId(),exportId,context.actorId(),purposeKey,revision);
+                Timestamp.from(maximumGrantExpiry),context.actorId(),context.organizationId(),
+                exportId,context.actorId(),purposeKey,Timestamp.from(maximumGrantExpiry),revision);
         if (result == null) throw new IllegalArgumentException("ready workforce export is unavailable");
         return result;
+    }
+
+    @Override
+    public Download download(AuthorizedTenantContext context, UUID exportId) {
+        requireSourceAccess(context,exportId);
+        var result=jdbc.query(
+                """
+                SELECT id,artifact_opaque_id,artifact_digest,artifact_content_type,
+                       artifact_filename,artifact_byte_count,access_grant_expires_at
+                FROM workforce_export_jobs
+                WHERE organization_id=? AND id=? AND requester_id=?
+                  AND access_granted_to=? AND status='ready'
+                  AND expires_at>clock_timestamp()
+                  AND access_grant_expires_at>clock_timestamp()
+                  AND access_grant_digest=artifact_digest
+                  AND artifact_opaque_id IS NOT NULL AND artifact_digest IS NOT NULL
+                  AND artifact_content_type IS NOT NULL AND artifact_filename IS NOT NULL
+                  AND artifact_byte_count IS NOT NULL
+                """,
+                row -> row.next()
+                        ? new Download(
+                                row.getObject(1,UUID.class),row.getObject(2,UUID.class).toString(),
+                                row.getString(3),row.getString(4),row.getString(5),
+                                row.getLong(6),row.getTimestamp(7).toInstant())
+                        : null,
+                context.organizationId(),exportId,context.actorId(),context.actorId());
+        if (result==null) throw new SecurityException("workforce export download grant is unavailable");
+        return result;
+    }
+
+    @Override
+    public void requireSourceAccess(AuthorizedTenantContext context, UUID exportId) {
+        var source=jdbc.query(
+                """
+                SELECT requester_id,projection,filters_json::text FROM workforce_export_jobs
+                WHERE organization_id=? AND id=? AND requester_id=?
+                  AND status='ready' AND expires_at>clock_timestamp()
+                """,
+                row -> row.next()
+                        ? new SourceAuthorization(
+                                row.getObject("requester_id",UUID.class),
+                                row.getString("projection"),
+                                row.getString("filters_json"))
+                        : null,
+                context.organizationId(),exportId,context.actorId());
+        if (source==null) throw new SecurityException("ready workforce export is unavailable");
+        var memberId=optionalUuid(filters(source.filtersJson()).get("memberId"));
+        requireRequesterSourcePermissions(
+                context,source.requesterId(),source.projection(),memberId);
     }
 
     @Override
@@ -370,7 +565,17 @@ public final class JdbcWorkforceExportStore implements WorkforceExportStore {
     }
 
     @Override
+    public Work forDisposal(AuthorizedTenantContext context, UUID exportId) {
+        return forDisposal(context, exportId, null);
+    }
+
+    @Override
     public Work forDisposal(AuthorizedTenantContext context, UUID exportId, long revision) {
+        return forDisposal(context, exportId, Long.valueOf(revision));
+    }
+
+    private Work forDisposal(
+            AuthorizedTenantContext context, UUID exportId, Long expectedRevision) {
         var result = jdbc.query(
                 """
                 SELECT id,requester_id,projection,format,filters_json::text,filters_digest,
@@ -378,11 +583,12 @@ public final class JdbcWorkforceExportStore implements WorkforceExportStore {
                        lock_version,artifact_opaque_id,artifact_digest,artifact_content_type,
                        artifact_filename,row_count,artifact_byte_count,expires_at,legal_hold
                 FROM workforce_export_jobs
-                WHERE organization_id=? AND id=? AND status='expired' AND lock_version=?
+                WHERE organization_id=? AND id=? AND status='expired'
+                  AND (?::bigint IS NULL OR lock_version=?::bigint)
                 FOR UPDATE
                 """,
                 row -> row.next() ? work(row) : null,
-                context.organizationId(),exportId,revision);
+                context.organizationId(),exportId,expectedRevision,expectedRevision);
         if (result == null) throw new IllegalArgumentException("expired workforce export is unavailable");
         return result;
     }
@@ -432,7 +638,17 @@ public final class JdbcWorkforceExportStore implements WorkforceExportStore {
 
     private void requireRequesterSourcePermissions(
             AuthorizedTenantContext context, Work work) {
-        var required=switch (work.projection()) {
+        var memberId=optionalUuid(filters(work.filtersJson()).get("memberId"));
+        requireRequesterSourcePermissions(
+                context,work.requesterId(),work.projection(),memberId);
+    }
+
+    private void requireRequesterSourcePermissions(
+            AuthorizedTenantContext context,
+            UUID requesterId,
+            String projection,
+            UUID memberId) {
+        var required=switch (projection) {
             case "workforce-directory-summary-v1" -> List.of("workforce.directory.read");
             case "credential-expiry-summary-v1" -> List.of("workforce.expiry.read");
             case "workforce-configuration-summary-v1" -> List.of("workforce.history.read");
@@ -454,20 +670,50 @@ public final class JdbcWorkforceExportStore implements WorkforceExportStore {
                 """
                 SELECT count(DISTINCT grant_record.permission_key)
                 FROM organization_memberships membership
+                JOIN authorization_roles role ON role.role_key=membership.role_key
                 JOIN authorization_role_permissions grant_record
-                  ON grant_record.role_key=membership.role_key AND grant_record.status='active'
-                JOIN authorization_registry_releases release
-                  ON release.registry_version=grant_record.registry_version AND release.status='active'
+                  ON grant_record.role_key=membership.role_key
+                JOIN authorization_permissions permission
+                  ON permission.permission_key=grant_record.permission_key
                 WHERE membership.organization_id=? AND membership.user_id=?
                   AND membership.status='active' AND membership.effective_from<=clock_timestamp()
                   AND (membership.effective_to IS NULL OR membership.effective_to>clock_timestamp())
+                  AND role.status='active' AND role.interactive
+                  AND permission.status='active'
+                  AND EXISTS(SELECT 1 FROM authorization_registry_releases release
+                      WHERE release.registry_version=role.registry_version
+                        AND release.status='active')
+                  AND EXISTS(SELECT 1 FROM authorization_registry_releases release
+                      WHERE release.registry_version=permission.registry_version
+                        AND release.status='active')
                   AND grant_record.permission_key=ANY(?::varchar[])
                 """,
-                Integer.class,context.organizationId(),work.requesterId(),
+                Integer.class,context.organizationId(),requesterId,
                 required.toArray(String[]::new));
         if (count==null || count!=required.size()) {
             throw new SecurityException("export requester source authorization changed");
         }
+        if (memberId!=null && !Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT careos_m2_user_can_access_member(?,?,?,?)",
+                Boolean.class,
+                context.organizationId(),requesterId,memberId,scopePermission(projection)))) {
+            throw new SecurityException("export requester resource scope changed");
+        }
+    }
+
+    private static String scopePermission(String projection) {
+        return switch (projection) {
+            case "workforce-directory-summary-v1" -> "workforce.directory.read";
+            case "credential-expiry-summary-v1" -> "workforce.expiry.read";
+            case "workforce-configuration-summary-v1" -> "workforce.history.read";
+            case "workforce-audit-summary-v1","workforce-audit-detail-v1" ->
+                    "workforce.audit.read";
+            case "member-timeline-summary-v1","member-evidence-detail-v1" ->
+                    "workforce.timeline.read";
+            case "credential-decision-detail-v1" -> "credential.record.read";
+            case "scope-decision-detail-v1" -> "practitioner.scope.read";
+            default -> throw new SecurityException("unsupported export projection");
+        };
     }
 
     private static Map<String, Object> orderedRow(ResultSet row, String... keys)
@@ -481,6 +727,12 @@ public final class JdbcWorkforceExportStore implements WorkforceExportStore {
         return value == null ? null : UUID.fromString(value.toString());
     }
 
+    private static String optionalText(Object value) {
+        if (value == null) return null;
+        var text = value.toString().strip();
+        return text.isEmpty() ? null : text;
+    }
+
     private static UUID requiredMember(UUID value) {
         if (value == null) throw new IllegalArgumentException("member-bound export requires memberId");
         return value;
@@ -489,4 +741,7 @@ public final class JdbcWorkforceExportStore implements WorkforceExportStore {
     private static Instant instant(Timestamp value) {
         return value == null ? null : value.toInstant();
     }
+
+    private record SourceAuthorization(
+            UUID requesterId, String projection, String filtersJson) {}
 }

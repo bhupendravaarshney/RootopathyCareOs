@@ -20,7 +20,9 @@ public record WorkforceScreen(
         List<Column> columns,
         List<Row> rows,
         List<Action> actions,
-        List<Notice> notices) {
+        List<Notice> notices,
+        String nextCursor,
+        int pageSize) {
 
     public WorkforceScreen {
         Objects.requireNonNull(organizationId, "organizationId");
@@ -33,6 +35,12 @@ public record WorkforceScreen(
         rows = List.copyOf(rows == null ? List.of() : rows);
         actions = List.copyOf(actions == null ? List.of() : actions);
         notices = List.copyOf(notices == null ? List.of() : notices);
+        if (nextCursor != null && nextCursor.isBlank()) {
+            throw new IllegalArgumentException("nextCursor must be null or non-empty");
+        }
+        if (pageSize < 1 || pageSize > 100) {
+            throw new IllegalArgumentException("pageSize must be between 1 and 100");
+        }
     }
 
     public record Metric(String key, String label, long value, String tone) {
@@ -56,7 +64,18 @@ public record WorkforceScreen(
             String status,
             long revision,
             String etag,
-            Map<String, String> values) {
+            Map<String, String> values,
+            List<String> allowedActionKeys) {
+        public Row(
+                UUID id,
+                UUID memberId,
+                String status,
+                long revision,
+                String etag,
+                Map<String, String> values) {
+            this(id, memberId, status, revision, etag, values, List.of());
+        }
+
         public Row {
             Objects.requireNonNull(id, "row id");
             status = requireText(status, "row status");
@@ -65,6 +84,8 @@ public record WorkforceScreen(
             }
             etag = requireText(etag, "row etag");
             values = Map.copyOf(values == null ? Map.of() : values);
+            allowedActionKeys = List.copyOf(
+                    allowedActionKeys == null ? List.of() : allowedActionKeys);
         }
     }
 

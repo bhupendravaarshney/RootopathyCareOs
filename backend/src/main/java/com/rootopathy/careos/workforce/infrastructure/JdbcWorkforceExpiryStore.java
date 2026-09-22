@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -30,6 +31,58 @@ public final class JdbcWorkforceExpiryStore
             int maximumItems) {
         if (maximumItems < 1 || maximumItems > 500) {
             throw new IllegalArgumentException("maximumItems must be between 1 and 500");
+        }
+        var projected = new ArrayList<Milestone>(maximumItems);
+        projected.addAll(jdbc.query(
+                """
+                WITH stale AS (
+                    SELECT delivery.id,
+                           coalesce(delivery.practitioner_credential_id,
+                                    delivery.professional_registration_id) AS source_id,
+                           CASE WHEN delivery.practitioner_credential_id IS NOT NULL
+                                THEN 'credential' ELSE 'registration' END AS source_type,
+                           delivery.workforce_member_id,
+                           coalesce(credential.expires_on,registration.expires_on) AS expiry_date,
+                           delivery.milestone
+                    FROM workforce_notification_deliveries delivery
+                    LEFT JOIN practitioner_credentials credential
+                      ON credential.organization_id=delivery.organization_id
+                     AND credential.id=delivery.practitioner_credential_id
+                    LEFT JOIN professional_registrations registration
+                      ON registration.organization_id=delivery.organization_id
+                     AND registration.id=delivery.professional_registration_id
+                    WHERE delivery.organization_id=? AND delivery.status='planned'
+                      AND ((credential.id IS NOT NULL
+                            AND credential.status NOT IN ('verified','suspended','expired'))
+                        OR (registration.id IS NOT NULL
+                            AND registration.status NOT IN ('verified','suspended','expired')))
+                    ORDER BY delivery.created_at,delivery.id
+                    LIMIT ? FOR UPDATE OF delivery SKIP LOCKED
+                )
+                UPDATE workforce_notification_deliveries delivery
+                   SET status='cancelled',failure_code='source_no_longer_current',
+                       lock_version=delivery.lock_version+1,
+                       updated_at=clock_timestamp(),updated_by=?
+                  FROM stale
+                 WHERE delivery.organization_id=? AND delivery.id=stale.id
+                RETURNING delivery.id,stale.source_id,stale.source_type,
+                          stale.workforce_member_id,stale.expiry_date,stale.milestone
+                """,
+                (row, number) -> new Milestone(
+                        row.getObject("id",UUID.class),
+                        row.getObject("source_id",UUID.class),
+                        row.getString("source_type"),
+                        row.getObject("workforce_member_id",UUID.class),
+                        row.getObject("expiry_date",LocalDate.class),
+                        row.getString("milestone"),
+                        "suppressed",
+                        "source_no_longer_current"),
+                context.organizationId(),
+                maximumItems,
+                context.actorId(),
+                context.organizationId()));
+        if (projected.size() == maximumItems) {
+            return List.copyOf(projected);
         }
         var candidates = jdbc.query(
                 """
@@ -128,9 +181,8 @@ public final class JdbcWorkforceExpiryStore
                 context.organizationId(),
                 context.organizationId(),
                 context.organizationId(),
-                maximumItems);
+                maximumItems-projected.size());
 
-        var projected = new ArrayList<Milestone>(candidates.size());
         for (var candidate : candidates) {
             var notificationId = UuidV7Generator.randomUuid();
             var planned = candidate.recipientUserId() != null;
@@ -191,7 +243,7 @@ public final class JdbcWorkforceExpiryStore
                        entry.entry_key,version.version_number,delivery.template_version_id,
                        delivery.milestone,
                        coalesce(credential.expires_on,registration.expires_on) AS expiry_date,
-                       delivery.lock_version
+                       delivery.attempt_number,delivery.lock_version
                 FROM workforce_notification_deliveries delivery
                 JOIN workforce_registry_versions version
                   ON version.organization_id=delivery.organization_id
@@ -206,6 +258,12 @@ public final class JdbcWorkforceExpiryStore
                   ON registration.organization_id=delivery.organization_id
                  AND registration.id=delivery.professional_registration_id
                 WHERE delivery.organization_id=? AND delivery.status='planned'
+                  AND (delivery.next_attempt_at IS NULL
+                       OR delivery.next_attempt_at<=clock_timestamp())
+                  AND ((credential.id IS NOT NULL
+                        AND credential.status IN ('verified','suspended','expired'))
+                    OR (registration.id IS NOT NULL
+                        AND registration.status IN ('verified','suspended','expired')))
                 ORDER BY delivery.created_at,delivery.id
                 LIMIT ? FOR UPDATE OF delivery SKIP LOCKED
                 """,
@@ -218,9 +276,72 @@ public final class JdbcWorkforceExpiryStore
                         row.getObject("template_version_id", UUID.class),
                         row.getString("milestone"),
                         row.getObject("expiry_date", LocalDate.class),
+                        row.getInt("attempt_number"),
                         row.getLong("lock_version")),
                 context.organizationId(),
                 maximumItems);
+    }
+
+    @Override
+    public Optional<Plan> lockPlanned(
+            AuthorizedTenantContext context, UUID notificationId, UUID sourceId) {
+        return jdbc.query(
+                """
+                SELECT delivery.id,delivery.recipient_opaque_reference,delivery.workforce_member_id,
+                       entry.entry_key,version.version_number,delivery.template_version_id,
+                       delivery.milestone,
+                       coalesce(credential.expires_on,registration.expires_on) AS expiry_date,
+                       delivery.attempt_number,delivery.lock_version
+                FROM workforce_notification_deliveries delivery
+                JOIN workforce_registry_versions version
+                  ON version.organization_id=delivery.organization_id
+                 AND version.id=delivery.template_version_id
+                JOIN workforce_registry_entries entry
+                  ON entry.organization_id=version.organization_id
+                 AND entry.id=version.registry_entry_id
+                LEFT JOIN practitioner_credentials credential
+                  ON credential.organization_id=delivery.organization_id
+                 AND credential.id=delivery.practitioner_credential_id
+                LEFT JOIN professional_registrations registration
+                  ON registration.organization_id=delivery.organization_id
+                 AND registration.id=delivery.professional_registration_id
+                WHERE delivery.organization_id=? AND delivery.id=?
+                  AND (delivery.practitioner_credential_id=?
+                       OR delivery.professional_registration_id=?)
+                  AND delivery.status='planned'
+                  AND (delivery.next_attempt_at IS NULL
+                       OR delivery.next_attempt_at<=clock_timestamp())
+                  AND ((credential.id IS NOT NULL
+                        AND credential.status IN ('verified','suspended','expired'))
+                    OR (registration.id IS NOT NULL
+                        AND registration.status IN ('verified','suspended','expired')))
+                FOR UPDATE OF delivery
+                """,
+                resultSet -> resultSet.next()
+                        ? Optional.of(plan(resultSet))
+                        : Optional.empty(),
+                context.organizationId(),
+                notificationId,
+                sourceId,
+                sourceId);
+    }
+
+    @Override
+    public boolean belongsToSource(
+            AuthorizedTenantContext context, UUID notificationId, UUID sourceId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                """
+                SELECT EXISTS(
+                    SELECT 1 FROM workforce_notification_deliveries
+                    WHERE organization_id=? AND id=?
+                      AND (practitioner_credential_id=?
+                           OR professional_registration_id=?))
+                """,
+                Boolean.class,
+                context.organizationId(),
+                notificationId,
+                sourceId,
+                sourceId));
     }
 
     @Override
@@ -252,11 +373,14 @@ public final class JdbcWorkforceExpiryStore
                 notificationId,
                 revision,
                 """
+                WITH expected AS (SELECT ?::integer AS attempt)
                 UPDATE workforce_notification_deliveries
-                   SET status='delivered',attempt_number=?,provider_opaque_id=?,sent_at=?,delivered_at=?,
+                   SET status='delivered',provider_opaque_id=?,sent_at=?,delivered_at=?,
                        failure_code=NULL,lock_version=lock_version+1,
                        updated_at=clock_timestamp(),updated_by=?
-                 WHERE organization_id=? AND id=? AND status IN ('queued','sending') AND lock_version=?
+                  FROM expected
+                 WHERE organization_id=? AND id=? AND status IN ('queued','sending')
+                   AND attempt_number=expected.attempt AND lock_version=?
                 """,
                 attempt,
                 providerOpaqueId,
@@ -272,19 +396,64 @@ public final class JdbcWorkforceExpiryStore
             int attempt,
             String failureCode,
             Instant failedAt) {
-        return transition(
+        var failed = transition(
                 context,
                 notificationId,
                 revision,
                 """
+                WITH expected AS (SELECT ?::integer AS attempt)
                 UPDATE workforce_notification_deliveries
-                   SET status='failed',attempt_number=?,failure_code=?,sent_at=?,
+                   SET status='failed',failure_code=?,sent_at=?,
+                       dead_lettered_at=CASE WHEN expected.attempt=5 THEN ? ELSE NULL END,
+                       dead_letter_owner=CASE WHEN expected.attempt=5
+                           THEN 'workforce_operations' ELSE NULL END,
                        lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
-                 WHERE organization_id=? AND id=? AND status IN ('queued','sending') AND lock_version=?
+                  FROM expected
+                 WHERE organization_id=? AND id=? AND status IN ('queued','sending')
+                   AND attempt_number=expected.attempt AND lock_version=?
                 """,
                 attempt,
                 failureCode,
+                Timestamp.from(failedAt),
                 Timestamp.from(failedAt));
+        if (attempt < 5) {
+            var retryAt = failedAt.plusSeconds(60L << (attempt - 1));
+            var inserted = jdbc.update(
+                    """
+                    INSERT INTO workforce_notification_deliveries(
+                        id,organization_id,workforce_member_id,practitioner_credential_id,
+                        professional_registration_id,source_request_id,template_entry_id,
+                        template_version_id,milestone,channel,recipient_opaque_reference,
+                        purpose_key,attempt_number,retry_of_notification_id,next_attempt_at,
+                        status,created_by,updated_by)
+                    SELECT ?,source.organization_id,source.workforce_member_id,
+                           source.practitioner_credential_id,source.professional_registration_id,
+                           source.source_request_id,source.template_entry_id,
+                           source.template_version_id,source.milestone,source.channel,
+                           source.recipient_opaque_reference,source.purpose_key,
+                           source.attempt_number+1,source.id,?,'planned',?,?
+                    FROM workforce_notification_deliveries source
+                    WHERE source.organization_id=? AND source.id=?
+                      AND source.status='failed' AND source.attempt_number=?
+                      AND source.dead_lettered_at IS NULL
+                      AND NOT EXISTS (
+                          SELECT 1 FROM workforce_notification_deliveries retry
+                          WHERE retry.organization_id=source.organization_id
+                            AND retry.retry_of_notification_id=source.id)
+                    """,
+                    UuidV7Generator.randomUuid(),
+                    Timestamp.from(retryAt),
+                    context.actorId(),
+                    context.actorId(),
+                    context.organizationId(),
+                    notificationId,
+                    attempt);
+            if (inserted != 1) {
+                throw new IllegalArgumentException(
+                        "workforce notification retry evidence is stale");
+            }
+        }
+        return failed;
     }
 
     private Delivery transition(
@@ -342,6 +511,20 @@ public final class JdbcWorkforceExpiryStore
                     """,
                     context.actorId(),context.organizationId(),candidate.sourceId());
         }
+    }
+
+    private static Plan plan(java.sql.ResultSet row) throws java.sql.SQLException {
+        return new Plan(
+                row.getObject("id", UUID.class),
+                row.getObject("recipient_opaque_reference", UUID.class),
+                row.getObject("workforce_member_id", UUID.class),
+                "workforce.expiry." + row.getString("entry_key"),
+                row.getInt("version_number"),
+                row.getObject("template_version_id", UUID.class),
+                row.getString("milestone"),
+                row.getObject("expiry_date", LocalDate.class),
+                row.getInt("attempt_number"),
+                row.getLong("lock_version"));
     }
 
     private record Candidate(

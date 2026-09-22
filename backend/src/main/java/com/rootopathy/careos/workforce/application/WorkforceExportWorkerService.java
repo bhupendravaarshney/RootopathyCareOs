@@ -85,21 +85,40 @@ public final class WorkforceExportWorkerService {
         return authorization.execute(request(command), context -> generate(context, command));
     }
 
+    public List<UUID> dueExports(SweepCommand command) {
+        if (command.maximumItems() < 1 || command.maximumItems() > 100) {
+            throw new IllegalArgumentException("maximumItems must be between 1 and 100");
+        }
+        return authorization.execute(
+                new ServiceIdentityAuthorizationRequest(
+                        command.organizationId(),
+                        command.presentedCredential(),
+                        SERVICE_IDENTITY,
+                        command.correlationId(),
+                        new OperationKey("m2.export.generate")),
+                context -> store.dueExportIds(
+                        context, clock.instant(), command.maximumItems()));
+    }
+
     private Result generate(AuthorizedTenantContext context, Command command) {
         var work = store.claim(context, command.exportId(), command.workerId());
+        if ("failed".equals(work.status())) {
+            return terminalFailure(
+                    context, work, "workforce.export.lease_expired");
+        }
         EvidenceExportArtifactStore.StoredArtifact stored = null;
         var readyPersisted = false;
         try {
             if (!artifacts.available()) {
-                return failed(context, work, "workforce.export.storage_unavailable", true);
+                return failed(context, work, "workforce.export.storage_unavailable");
             }
             var rows = store.rows(context, work, work.rowLimit());
             if (rows.size() > work.rowLimit()) {
-                return failed(context, work, "workforce.export.row_limit", false);
+                return failed(context, work, "workforce.export.row_limit");
             }
             var artifact = serialize(work, rows);
             if (artifact.bytes().length > work.sizeLimitBytes()) {
-                return failed(context, work, "workforce.export.byte_limit", false);
+                return failed(context, work, "workforce.export.byte_limit");
             }
             stored = artifacts.store(
                     context,
@@ -130,36 +149,39 @@ public final class WorkforceExportWorkerService {
             return new Result(
                     ready.exportId(), "ready", ready.rowCount(), ready.byteCount(), null);
         } catch (ExportLimitException exception) {
-            return failed(context, work, exception.code, false);
+            return failed(context, work, exception.code);
         } catch (SecurityException exception) {
-            return failed(context,work,"workforce.export.authorization_changed",false);
+            return failed(context,work,"workforce.export.authorization_changed");
         } catch (RuntimeException exception) {
             if (stored != null && !deleteAfterFailure(context, work, stored, exception)) {
                 throw exception;
             }
             if (readyPersisted) throw exception;
-            return failed(context, work, "workforce.export.generation_failed", true);
+            return failed(context, work, "workforce.export.generation_failed");
         }
     }
 
     private Result failed(
             AuthorizedTenantContext context,
             WorkforceExportStore.Work work,
-            String code,
-            boolean retryable) {
-        var failed = store.failed(context, work, code, retryable);
-        if ("failed".equals(failed.status())) {
-            evidence.record(
-                    context,
-                    GovernanceEvidence.auditOnly(new AuditRecord(
-                            "workforce.export.failed",
-                            1,
-                            "workforce_export",
-                            failed.exportId(),
-                            null,
-                            json(lifecyclePayload(failed, code)))));
-        }
-        return new Result(failed.exportId(), failed.status(), null, null, code);
+            String code) {
+        return terminalFailure(context, store.failed(context, work, code), code);
+    }
+
+    private Result terminalFailure(
+            AuthorizedTenantContext context,
+            WorkforceExportStore.Work failed,
+            String code) {
+        evidence.record(
+                context,
+                GovernanceEvidence.auditOnly(new AuditRecord(
+                        "workforce.export.failed",
+                        1,
+                        "workforce_export",
+                        failed.exportId(),
+                        null,
+                        json(lifecyclePayload(failed, code)))));
+        return new Result(failed.exportId(), "failed", null, null, code);
     }
 
     private boolean deleteAfterFailure(
@@ -377,6 +399,12 @@ public final class WorkforceExportWorkerService {
             UUID organizationId,
             UUID exportId,
             String workerId,
+            String presentedCredential,
+            String correlationId) {}
+
+    public record SweepCommand(
+            UUID organizationId,
+            int maximumItems,
             String presentedCredential,
             String correlationId) {}
 

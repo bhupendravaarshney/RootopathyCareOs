@@ -4,6 +4,9 @@ export type WorkforceClient = Pick<
   CareOsApiClient,
   | 'getWorkforceScreen'
   | 'performWorkforceAction'
+  | 'previewWorkforceImpact'
+  | 'accessWorkforceEvidence'
+  | 'accessWorkforceCredentialDocument'
   | 'accessWorkforceExport'
   | 'uploadWorkforceCredentialDocument'
 >;

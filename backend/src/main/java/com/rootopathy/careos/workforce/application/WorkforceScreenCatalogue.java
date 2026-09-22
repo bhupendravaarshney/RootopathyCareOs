@@ -25,6 +25,8 @@ final class WorkforceScreenCatalogue {
                 .filter(action -> action.key().equals(actionKey)
                         && action.href() == null
                         && !action.key().equals("upload-document")
+                        && !action.key().equals("access-credential-document")
+                        && !action.key().equals("access-evidence")
                         && !action.key().equals("access-export"))
                 .findFirst()
                 .orElseThrow(() -> new WorkforceException(
@@ -87,14 +89,22 @@ final class WorkforceScreenCatalogue {
                         text("legalFamilyName", "Legal family name", true),
                         text("displayName", "Display name", true),
                         date("birthDate", "Date of birth", false),
+                        text("workEmail", "Work email", false),
+                        text("workPhone", "Work phone", false),
                         date("proposedStartDate", "Proposed start date", false),
                         select("accountAccessIntent", "Account access intent", true,
                                 "deferred", "Decide later", "existing_user", "Existing user", "invitation", "Invitation", "none_required", "No account required")));
         add(screens, "M2-04", "Duplicate and person search", "Match an existing person before creating a record.", "workforce.person.match",
                 action("record-match-decision", "Record match decision", "workforce.person.match", true, true, true,
-                        select("decisionCode", "Decision", true, "different_person", "Create new person", "same_person", "Use existing person"),
-                        text("matchRunId", "Match run ID", true),
-                        text("candidateReference", "Candidate reference", true)));
+                        select("decisionCode", "Decision", true, "create_new", "Create new person", "use_existing", "Use existing person"),
+                        text("matchRunId", "Exact match-run digest", true),
+                        text("candidateReference", "Organization candidate", true)),
+                action("request-person-merge", "Request person-link merge", "workforce.person.merge.request", true, true, true,
+                        uuid("discardedMemberId", "Duplicate member to consolidate", true)),
+                action("approve-person-merge", "Approve person-link merge", "workforce.person.merge.approve", true, true, true),
+                action("reject-person-merge", "Reject person-link merge", "workforce.person.merge.approve", true, true, true),
+                action("cancel-person-merge", "Cancel person-link merge", "workforce.person.merge.request", true, true, true),
+                action("execute-person-merge", "Execute approved person-link merge", "workforce.person.merge.execute", true, true, true));
         add(screens, "M2-05", "Personal and contact information", "Capture governed identity and contact details.", "workforce.person.restricted_read",
                 action("save-identity", "Save identity proposal", "workforce.person.correct", true, true, true,
                         text("legalGivenName", "Legal given name", true),
@@ -168,6 +178,14 @@ final class WorkforceScreenCatalogue {
         add(screens, "M2-11", "Credential verification queue", "Prioritize submitted credentials by SLA and risk.", "credential.review.queue",
                 action("claim-review", "Claim next eligible review", "credential.review.claim", true, true, false));
         add(screens, "M2-12", "Credential review detail", "Review clean evidence and record an independent decision.", "credential.document.read",
+                action("access-credential-document", "Open clean evidence", "credential.document.read", true, false, true,
+                        uuid("documentId", "Clean evidence document", true),
+                        select("purposeCode", "Access purpose", true,
+                                "credentialing_review", "Credentialing review",
+                                "regulatory_evidence", "Regulatory evidence",
+                                "security_investigation", "Security investigation",
+                                "employment_record_request", "Employment record request",
+                                "data_correction", "Data correction")),
                 action("decide-credential", "Record decision", "credential.review.decide", true, true, true,
                         select("decisionCode", "Decision", true, "verified", "Verify", "rejected", "Reject", "more_information_required", "Request information", "returned_for_correction", "Return for correction"),
                         text("decisionReasonCode", "Reason code", true)),
@@ -273,7 +291,7 @@ final class WorkforceScreenCatalogue {
                         datetime("effectiveTo", "Effective to", false)),
                 link("manage-invitations", "Open governed invitations", "#/M1-02"));
         add(screens, "M2-20", "Review and activate", "Validate readiness and independently activate workforce.", "workforce.readiness.read",
-                action("run-readiness", "Run readiness", "workforce.validation.run", true, false, false),
+                action("run-readiness", "Run readiness", "workforce.validation.run", true, true, false),
                 action("submit-activation", "Submit for activation", "workforce.activation.submit", true, true, true,
                         text("submittedReasonCode", "Submission reason code", true),
                         text("warningAcknowledgements", "Warning gate keys (comma-separated)", false)),
@@ -304,7 +322,7 @@ final class WorkforceScreenCatalogue {
                         uuid("readinessRunId", "Fresh reactivation readiness run", true),
                         text("warningAcknowledgements", "Warning gate keys (comma-separated)", false)));
         add(screens, "M2-24", "Offboarding", "End access and assignments while preserving attribution.", "workforce.member.read",
-                action("request-offboarding", "Request offboarding", "workforce.offboarding.request", true, false, true,
+                action("request-offboarding", "Request offboarding", "workforce.offboarding.request", true, true, true,
                         datetime("engagementEndAt", "Final working time", true), datetime("effectiveAt", "Effective time", true),
                         uuid("reasonEntryId", "Offboarding reason entry", true), uuid("reasonVersionId", "Offboarding reason version", true),
                         select("accessAction", "Access timing", true, "revoke_at_effective", "Revoke at effective time", "revoke_immediately", "Revoke immediately", "none", "No access action")),
@@ -321,15 +339,21 @@ final class WorkforceScreenCatalogue {
                         select("projection", "Projection", true, "workforce-configuration-summary-v1", "Configuration summary"),
                         select("format", "Format", true, "csv", "CSV", "jsonl", "JSON Lines"),
                         exportPurpose(), text("legalBasisKey", "Legal-basis registry key", true)),
+                action("retry-export", "Retry failed export", "workforce.export.request", true, true, true),
                 action("access-export", "Access ready export", "workforce.export.access", true, true, true,
                         exportPurpose()));
         add(screens, "M2-27", "Workforce audit log", "Filter and export purpose-bound audit evidence.", "workforce.audit.read",
+                action("access-evidence", "Open restricted audit detail", "workforce.audit.read", true, false, true,
+                        select("projection", "Projection", true,
+                                "workforce-audit-detail-v1", "Restricted audit detail"),
+                        evidencePurpose()),
                 action("request-export", "Request audit export", "workforce.export.request", false, false, true,
                         select("projection", "Projection", true, "workforce-audit-summary-v1", "Audit summary", "workforce-audit-detail-v1", "Restricted audit detail"),
                         select("format", "Format", true, "csv", "CSV", "jsonl", "JSON Lines"),
                         exportPurpose(), text("legalBasisKey", "Legal-basis registry key", true)),
                 action("approve-export", "Authorize restricted export", "workforce.export.approve", true, true, true),
                 action("deny-export", "Deny restricted export", "workforce.export.approve", true, true, true),
+                action("retry-export", "Retry failed export", "workforce.export.request", true, true, true),
                 action("access-export", "Access ready export", "workforce.export.access", true, true, true,
                         exportPurpose()));
         add(screens, "M2-28", "Controlled registries", "Govern versioned workforce catalogues while reusing the RBAC source of truth.", "workforce.registry.read",
@@ -344,16 +368,24 @@ final class WorkforceScreenCatalogue {
                                 "employment_category", "Employment category", "assignment_type", "Assignment type",
                                 "position", "Position", "supervision_mode", "Supervision mode",
                                 "offboarding_reason", "Offboarding reason", "notification_milestone", "Notification milestone",
-                                "notification_template_metadata", "Notification template metadata",
-                                "export_legal_basis", "Export legal basis"),
+                                "notification_template_metadata", "Notification template metadata"),
                         text("entryKey", "Entry key", true), text("code", "Code", true), text("entryLabel", "Entry label", true)),
+                action("create-registry-version", "Create successor registry version", "workforce.registry.manage", true, true, true,
+                        bool("enabled", "Entry remains enabled", true)),
+                action("submit-registry-change", "Validate and submit registry change", "workforce.registry.manage", true, true, true),
                 action("approve-registry-change", "Approve registry change", "workforce.registry.approve", true, true, true),
+                action("reject-registry-change", "Reject registry change", "workforce.registry.approve", true, true, true),
                 action("activate-registry-change", "Activate registry change", "workforce.registry.activate", true, true, true));
         add(screens, "M2-29", "Lifecycle and evidence timeline", "Correlate lifecycle, decisions and evidence.", "workforce.timeline.read",
+                action("access-evidence", "Open restricted member evidence", "workforce.audit.read", true, false, true,
+                        select("projection", "Projection", true,
+                                "member-evidence-detail-v1", "Restricted member evidence"),
+                        evidencePurpose()),
                 action("request-export", "Request timeline export", "workforce.export.request", false, false, true,
                         select("projection", "Projection", true, "member-timeline-summary-v1", "Member timeline summary", "member-evidence-detail-v1", "Restricted member evidence detail"),
                         select("format", "Format", true, "csv", "CSV", "jsonl", "JSON Lines"),
                         exportPurpose(), text("legalBasisKey", "Legal-basis registry key", true)),
+                action("retry-export", "Retry failed export", "workforce.export.request", true, true, true),
                 action("access-export", "Access ready export", "workforce.export.access", true, true, true,
                         exportPurpose()));
         return Map.copyOf(screens);
@@ -377,6 +409,11 @@ final class WorkforceScreenCatalogue {
             boolean ifMatchRequired,
             boolean reasonRequired,
             WorkforceScreen.Field... fields) {
+        var projectedFields = new java.util.ArrayList<>(List.of(fields));
+        if (key.equals("request-export")) {
+            projectedFields.add(hidden("filterSearch", "Export search filter"));
+            projectedFields.add(hidden("filterStatus", "Export status filter"));
+        }
         return new ActionSpec(
                 key,
                 label,
@@ -387,7 +424,7 @@ final class WorkforceScreenCatalogue {
                 ifMatchRequired,
                 reasonRequired,
                 null,
-                List.of(fields));
+                List.copyOf(projectedFields));
     }
 
     private static ActionSpec link(String key, String label, String href) {
@@ -403,6 +440,10 @@ final class WorkforceScreenCatalogue {
 
     private static WorkforceScreen.Field text(String key, String label, boolean required) {
         return field(key, label, "text", required, List.of());
+    }
+
+    private static WorkforceScreen.Field hidden(String key, String label) {
+        return field(key, label, "hidden", false, List.of());
     }
 
     private static WorkforceScreen.Field date(String key, String label, boolean required) {
@@ -433,6 +474,19 @@ final class WorkforceScreenCatalogue {
     private static WorkforceScreen.Field exportPurpose() {
         return select(
                 "purposeKey",
+                "Purpose",
+                true,
+                "workforce_operations", "Workforce operations",
+                "credentialing_review", "Credentialing review",
+                "regulatory_evidence", "Regulatory evidence",
+                "security_investigation", "Security investigation",
+                "employment_record_request", "Employment record request",
+                "data_correction", "Data correction");
+    }
+
+    private static WorkforceScreen.Field evidencePurpose() {
+        return select(
+                "purposeCode",
                 "Purpose",
                 true,
                 "workforce_operations", "Workforce operations",

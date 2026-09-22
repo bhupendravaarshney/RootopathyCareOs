@@ -257,10 +257,18 @@ import {
   serviceCatalogueValidator,
 } from './live-administration-contracts';
 import {
+  workforceCredentialDocumentAccessValidator,
+  workforceEvidenceAccessValidator,
   workforceExportAccessValidator,
+  workforceImpactPreviewValidator,
   workforceScreenValidator,
+  type WorkforceCredentialDocumentAccessRequest,
+  type WorkforceCredentialDocumentAccessResponse,
+  type WorkforceEvidenceAccessRequest,
+  type WorkforceEvidenceAccessResponse,
   type WorkforceExportAccessRequest,
   type WorkforceExportAccessResponse,
+  type WorkforceImpactPreviewResponse,
 } from './workforce-contracts';
 
 const ACCEPTED_RESPONSE_TYPES = 'application/json, application/problem+json';
@@ -730,7 +738,7 @@ function workforceScreenQuery(query: WorkforceScreenQuery): string {
   }
   if (query.q !== undefined) {
     if (typeof query.q !== 'string' || Array.from(query.q).length > 120) {
-      throw new Error('Workforce search must contain at most 120 characters.');
+      throw new Error('Workforce search must contain at most 100 characters.');
     }
     const normalized = query.q.trim().normalize('NFC');
     if (normalized) parameters.set('q', normalized);
@@ -747,6 +755,12 @@ function workforceScreenQuery(query: WorkforceScreenQuery): string {
       throw new Error('Workforce page limit must be an integer from 1 to 100.');
     }
     parameters.set('limit', String(query.limit));
+  }
+  if (query.cursor !== undefined) {
+    if (!/^[A-Za-z0-9_-]{1,2048}$/.test(query.cursor)) {
+      throw new Error('Workforce page cursor has an invalid format.');
+    }
+    parameters.set('cursor', query.cursor);
   }
   const serialized = parameters.toString();
   return serialized ? `?${serialized}` : '';
@@ -3388,6 +3402,39 @@ export class CareOsApiClient {
     });
   }
 
+  previewWorkforceImpact(
+    organizationId: string,
+    screenId: string,
+    actionKey: string,
+    body: WorkforceActionRequest,
+    ifMatch: string,
+    expectedRevision: number,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requireWorkforceScreenId(screenId);
+    const action = requireWorkforceActionKey(actionKey);
+    const targetId = requireUuid(body.targetId ?? '', 'targetId');
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+      throw new Error('Workforce impact preview revision is invalid.');
+    }
+    return this.#mutation<WorkforceImpactPreviewResponse>({
+      body,
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/workforce/screens/${screen}/actions/${action}/impact-preview`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: workforceImpactPreviewValidator(
+        screen,
+        action,
+        targetId,
+        expectedRevision,
+      ),
+    });
+  }
+
   accessWorkforceExport(
     organizationId: string,
     exportId: string,
@@ -3416,7 +3463,96 @@ export class CareOsApiClient {
       responseBody: 'json',
       signal: options.signal,
       successStatuses: [200],
-      validateResponse: workforceExportAccessValidator(exportJob),
+      validateResponse: workforceExportAccessValidator(organization, exportJob),
+    });
+  }
+
+  accessWorkforceEvidence(
+    organizationId: string,
+    evidenceId: string,
+    body: WorkforceEvidenceAccessRequest,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const evidence = requireUuid(evidenceId, 'evidenceId');
+    const memberId = body.memberId == null ? null : requireUuid(body.memberId, 'memberId');
+    if (
+      body.projection !== 'workforce-audit-detail-v1' &&
+      body.projection !== 'member-evidence-detail-v1'
+    ) {
+      throw new Error('Workforce evidence projection is invalid.');
+    }
+    if (body.projection === 'member-evidence-detail-v1' && memberId === null) {
+      throw new Error('A workforce member is required for member evidence detail.');
+    }
+    const purposes = new Set([
+      'workforce_operations',
+      'credentialing_review',
+      'regulatory_evidence',
+      'security_investigation',
+      'employment_record_request',
+      'data_correction',
+    ]);
+    if (!purposes.has(body.purposeCode)) {
+      throw new Error('Workforce evidence purposeCode is invalid.');
+    }
+    const reason = body.reason.trim().normalize('NFC');
+    const reasonLength = Array.from(reason).length;
+    if (reasonLength < 10 || reasonLength > 500) {
+      throw new Error('Workforce evidence access reason must contain 10 to 500 characters.');
+    }
+    const request: WorkforceEvidenceAccessRequest = {
+      ...(memberId === null ? {} : { memberId }),
+      projection: body.projection,
+      purposeCode: body.purposeCode,
+      reason,
+    };
+    return this.#mutation<WorkforceEvidenceAccessResponse>({
+      body: request,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/workforce/evidence/${evidence}/accesses`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: workforceEvidenceAccessValidator(evidence, memberId),
+    });
+  }
+
+  accessWorkforceCredentialDocument(
+    organizationId: string,
+    credentialId: string,
+    documentId: string,
+    body: WorkforceCredentialDocumentAccessRequest,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const credential = requireUuid(credentialId, 'credentialId');
+    const document = requireUuid(documentId, 'documentId');
+    const purposes = new Set([
+      'credentialing_review',
+      'regulatory_evidence',
+      'security_investigation',
+      'employment_record_request',
+      'data_correction',
+    ]);
+    if (!purposes.has(body.purposeCode)) {
+      throw new Error('Credential-document purposeCode is invalid.');
+    }
+    const reason = body.reason.trim().normalize('NFC');
+    const reasonLength = Array.from(reason).length;
+    if (reasonLength < 10 || reasonLength > 500) {
+      throw new Error('Credential-document access reason must contain 10 to 500 characters.');
+    }
+    return this.#mutation<WorkforceCredentialDocumentAccessResponse>({
+      body: { purposeCode: body.purposeCode, reason },
+      method: 'POST',
+      path: `/v1/organizations/${organization}/workforce/credentials/${credential}/documents/${document}/accesses`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: workforceCredentialDocumentAccessValidator(credential, document),
     });
   }
 

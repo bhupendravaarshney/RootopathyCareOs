@@ -4,10 +4,17 @@ import com.rootopathy.careos.tenancy.domain.AuthorizedTenantContext;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface WorkforceNotificationStore {
     List<Plan> lockPlanned(AuthorizedTenantContext context, int maximumItems);
+
+    Optional<Plan> lockPlanned(
+            AuthorizedTenantContext context, UUID notificationId, UUID sourceId);
+
+    boolean belongsToSource(
+            AuthorizedTenantContext context, UUID notificationId, UUID sourceId);
 
     Delivery queued(AuthorizedTenantContext context, UUID notificationId, long revision, Instant queuedAt);
 
@@ -36,6 +43,7 @@ public interface WorkforceNotificationStore {
             UUID templateVersionId,
             String milestone,
             LocalDate expiryDate,
+            int attempt,
             long revision) {}
 
     record Delivery(

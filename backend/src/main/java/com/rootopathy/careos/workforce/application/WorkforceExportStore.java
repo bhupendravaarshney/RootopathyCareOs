@@ -7,6 +7,9 @@ import java.util.Map;
 import java.util.UUID;
 
 public interface WorkforceExportStore {
+    List<UUID> dueExportIds(
+            AuthorizedTenantContext context, Instant now, int maximumItems);
+
     Work claim(AuthorizedTenantContext context, UUID exportId, String workerId);
 
     List<Map<String, Object>> rows(
@@ -25,16 +28,22 @@ public interface WorkforceExportStore {
     Work failed(
             AuthorizedTenantContext context,
             Work work,
-            String failureCode,
-            boolean retryable);
+            String failureCode);
 
     Access access(
             AuthorizedTenantContext context,
             UUID exportId,
             long revision,
-            String purposeKey);
+            String purposeKey,
+            Instant maximumGrantExpiry);
+
+    Download download(AuthorizedTenantContext context, UUID exportId);
+
+    void requireSourceAccess(AuthorizedTenantContext context, UUID exportId);
 
     Work expire(AuthorizedTenantContext context, UUID exportId, long revision);
+
+    Work forDisposal(AuthorizedTenantContext context, UUID exportId);
 
     Work forDisposal(AuthorizedTenantContext context, UUID exportId, long revision);
 
@@ -65,11 +74,19 @@ public interface WorkforceExportStore {
 
     record Access(
             UUID exportId,
-            String artifactReference,
             String artifactDigest,
             String contentType,
             String filename,
             Integer rowCount,
-            Instant expiresAt,
+            Instant grantExpiresAt,
             long revision) {}
+
+    record Download(
+            UUID exportId,
+            String artifactReference,
+            String artifactDigest,
+            String contentType,
+            String filename,
+            long byteCount,
+            Instant grantExpiresAt) {}
 }

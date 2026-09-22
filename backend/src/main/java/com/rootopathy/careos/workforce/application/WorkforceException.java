@@ -18,6 +18,7 @@ public final class WorkforceException extends RuntimeException {
         CONFLICT,
         PRECONDITION_REQUIRED,
         STALE,
-        EVIDENCE_NOT_CLEAN
+        EVIDENCE_NOT_CLEAN,
+        DEPENDENCY_UNAVAILABLE
     }
 }

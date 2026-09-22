@@ -25,12 +25,84 @@ export type WorkforceExportAccessResponse = {
   filename: string;
 };
 
+export type WorkforceEvidenceAccessRequest = {
+  memberId?: string | null;
+  projection: 'workforce-audit-detail-v1' | 'member-evidence-detail-v1';
+  purposeCode:
+    | 'workforce_operations'
+    | 'credentialing_review'
+    | 'regulatory_evidence'
+    | 'security_investigation'
+    | 'employment_record_request'
+    | 'data_correction';
+  reason: string;
+};
+
+export type WorkforceEvidenceAccessResponse = {
+  evidenceId: string;
+  memberId?: string | null;
+  occurredAt: string;
+  actorId: string;
+  actorKind: 'user' | 'service';
+  operation: string;
+  eventName: string;
+  schemaVersion: number;
+  subjectType: string;
+  subjectId: string;
+  correlationId: string;
+  projection: WorkforceEvidenceAccessRequest['projection'];
+  purposeCode: WorkforceEvidenceAccessRequest['purposeCode'];
+  redactionPolicyVersion: string;
+  payload: Record<string, unknown>;
+};
+
+export type WorkforceCredentialDocumentAccessRequest = {
+  purposeCode:
+    | 'credentialing_review'
+    | 'regulatory_evidence'
+    | 'security_investigation'
+    | 'employment_record_request'
+    | 'data_correction';
+  reason: string;
+};
+
+export type WorkforceCredentialDocumentAccessResponse = {
+  credentialId: string;
+  documentId: string;
+  accessIntentId: string;
+  readUrl: string;
+  expiresAt: string;
+  mediaType: string;
+  byteCount: number;
+  evidenceDigest: string;
+  purposeCode: WorkforceCredentialDocumentAccessRequest['purposeCode'];
+};
+
+export type WorkforceImpactItem = {
+  code: string;
+  tone: 'impact' | 'warning' | 'blocker';
+  detail: string;
+  affectedCount: number;
+};
+
+export type WorkforceImpactPreviewResponse = {
+  screenId: string;
+  actionKey: string;
+  targetId: string;
+  revision: number;
+  digest: string;
+  token: string;
+  expiresAt: string;
+  blocked: boolean;
+  items: WorkforceImpactItem[];
+};
+
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const screenPattern = /^M2-(0[1-9]|1[0-9]|2[0-9])$/;
 const strongEtagPattern = /^"[A-Za-z0-9._:-]{1,128}"$/;
 const sha256Pattern = /^[0-9a-f]{64}$/;
 const safeExportFilenamePattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,126}[A-Za-z0-9]$/;
-const fieldTypes = new Set(['date', 'datetime-local', 'select', 'text', 'uuid']);
+const fieldTypes = new Set(['date', 'datetime-local', 'hidden', 'select', 'text', 'uuid']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -75,6 +147,59 @@ function isStringMap(value: unknown): value is Record<string, string> {
   return isRecord(value) && Object.values(value).every((entry) => typeof entry === 'string');
 }
 
+function isImpactItem(value: unknown): value is WorkforceImpactItem {
+  return (
+    hasExactKeys(value, ['code', 'tone', 'detail', 'affectedCount']) &&
+    isNonEmptyString(value.code) &&
+    (value.tone === 'impact' || value.tone === 'warning' || value.tone === 'blocker') &&
+    isNonEmptyString(value.detail) &&
+    Number.isSafeInteger(value.affectedCount) &&
+    Number(value.affectedCount) >= 0
+  );
+}
+
+export function workforceCredentialDocumentAccessValidator(
+  credentialId: string,
+  documentId: string,
+): WorkforceResponseValidator<WorkforceCredentialDocumentAccessResponse> {
+  return (value): value is WorkforceCredentialDocumentAccessResponse => {
+    if (
+      !hasExactKeys(value, [
+        'credentialId',
+        'documentId',
+        'accessIntentId',
+        'readUrl',
+        'expiresAt',
+        'mediaType',
+        'byteCount',
+        'evidenceDigest',
+        'purposeCode',
+      ]) ||
+      value.credentialId !== credentialId ||
+      value.documentId !== documentId ||
+      !isUuid(value.accessIntentId) ||
+      !isDateTime(value.expiresAt) ||
+      typeof value.readUrl !== 'string' ||
+      !/^https?:\/\//.test(value.readUrl) ||
+      typeof value.mediaType !== 'string' ||
+      !/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(value.mediaType) ||
+      !Number.isSafeInteger(value.byteCount) ||
+      Number(value.byteCount) < 1 ||
+      typeof value.evidenceDigest !== 'string' ||
+      !sha256Pattern.test(value.evidenceDigest)
+    ) {
+      return false;
+    }
+    return new Set([
+      'credentialing_review',
+      'regulatory_evidence',
+      'security_investigation',
+      'employment_record_request',
+      'data_correction',
+    ]).has(value.purposeCode as string);
+  };
+}
+
 function isMetric(value: unknown): value is WorkforceMetric {
   return (
     hasExactKeys(value, ['key', 'label', 'value', 'tone']) &&
@@ -100,7 +225,11 @@ function isColumn(value: unknown): value is WorkforceColumn {
 
 function isRow(value: unknown): value is WorkforceRow {
   return (
-    hasExactKeys(value, ['id', 'status', 'revision', 'etag', 'values'], ['memberId']) &&
+    hasExactKeys(
+      value,
+      ['id', 'status', 'revision', 'etag', 'values', 'allowedActionKeys'],
+      ['memberId'],
+    ) &&
     isUuid(value.id) &&
     isOptionalNullableUuid(value.memberId) &&
     isNonEmptyString(value.status) &&
@@ -109,7 +238,11 @@ function isRow(value: unknown): value is WorkforceRow {
     value.revision >= 0 &&
     typeof value.etag === 'string' &&
     strongEtagPattern.test(value.etag) &&
-    isStringMap(value.values)
+    isStringMap(value.values) &&
+    isArrayOf(
+      value.allowedActionKeys,
+      (key): key is string => typeof key === 'string' && /^[a-z][a-z0-9-]*$/.test(key),
+    )
   );
 }
 
@@ -174,18 +307,23 @@ export function workforceScreenValidator(
   screenId: string,
 ): WorkforceResponseValidator<WorkforceScreen> {
   return (value): value is WorkforceScreen =>
-    hasExactKeys(value, [
-      'organizationId',
-      'screenId',
-      'title',
-      'purpose',
-      'generatedAt',
-      'metrics',
-      'columns',
-      'rows',
-      'actions',
-      'notices',
-    ]) &&
+    hasExactKeys(
+      value,
+      [
+        'organizationId',
+        'screenId',
+        'title',
+        'purpose',
+        'generatedAt',
+        'metrics',
+        'columns',
+        'rows',
+        'actions',
+        'notices',
+        'pageSize',
+      ],
+      ['nextCursor'],
+    ) &&
     value.organizationId === organizationId &&
     value.screenId === screenId &&
     screenPattern.test(screenId) &&
@@ -196,10 +334,18 @@ export function workforceScreenValidator(
     isArrayOf(value.columns, isColumn) &&
     isArrayOf(value.rows, isRow) &&
     isArrayOf(value.actions, isAction) &&
-    isArrayOf(value.notices, isNotice);
+    isArrayOf(value.notices, isNotice) &&
+    Number.isSafeInteger(value.pageSize) &&
+    Number(value.pageSize) >= 1 &&
+    Number(value.pageSize) <= 100 &&
+    (value.nextCursor === undefined ||
+      value.nextCursor === null ||
+      (typeof value.nextCursor === 'string' &&
+        /^[A-Za-z0-9_-]{1,2048}$/.test(value.nextCursor)));
 }
 
 export function workforceExportAccessValidator(
+  organizationId: string,
   exportId: string,
 ): WorkforceResponseValidator<WorkforceExportAccessResponse> {
   return (value): value is WorkforceExportAccessResponse => {
@@ -224,11 +370,87 @@ export function workforceExportAccessValidator(
       return false;
     }
 
-    try {
-      const url = new URL(value.downloadUrl);
-      return (url.protocol === 'https:' || url.protocol === 'http:') && Date.parse(value.expiresAt) > Date.now();
-    } catch {
-      return false;
-    }
+    const expectedPath =
+      `/api/v1/organizations/${organizationId}/workforce/exports/${exportId}/download`;
+    return value.downloadUrl === expectedPath && Date.parse(value.expiresAt) > Date.now();
   };
+}
+
+export function workforceEvidenceAccessValidator(
+  evidenceId: string,
+  memberId?: string | null,
+): WorkforceResponseValidator<WorkforceEvidenceAccessResponse> {
+  return (value): value is WorkforceEvidenceAccessResponse =>
+    hasExactKeys(value, [
+      'evidenceId',
+      'occurredAt',
+      'actorId',
+      'actorKind',
+      'operation',
+      'eventName',
+      'schemaVersion',
+      'subjectType',
+      'subjectId',
+      'correlationId',
+      'projection',
+      'purposeCode',
+      'redactionPolicyVersion',
+      'payload',
+    ], ['memberId']) &&
+    value.evidenceId === evidenceId &&
+    (memberId == null || value.memberId === memberId) &&
+    isOptionalNullableUuid(value.memberId) &&
+    isDateTime(value.occurredAt) &&
+    isUuid(value.actorId) &&
+    (value.actorKind === 'user' || value.actorKind === 'service') &&
+    isNonEmptyString(value.operation) &&
+    isNonEmptyString(value.eventName) &&
+    Number.isInteger(value.schemaVersion) &&
+    value.schemaVersion >= 1 &&
+    isNonEmptyString(value.subjectType) &&
+    isUuid(value.subjectId) &&
+    isNonEmptyString(value.correlationId) &&
+    (value.projection === 'workforce-audit-detail-v1' ||
+      value.projection === 'member-evidence-detail-v1') &&
+    (value.purposeCode === 'workforce_operations' ||
+      value.purposeCode === 'credentialing_review' ||
+      value.purposeCode === 'regulatory_evidence' ||
+      value.purposeCode === 'security_investigation' ||
+      value.purposeCode === 'employment_record_request' ||
+      value.purposeCode === 'data_correction') &&
+    isNonEmptyString(value.redactionPolicyVersion) &&
+    isRecord(value.payload);
+}
+
+export function workforceImpactPreviewValidator(
+  screenId: string,
+  actionKey: string,
+  targetId: string,
+  revision: number,
+): WorkforceResponseValidator<WorkforceImpactPreviewResponse> {
+  return (value): value is WorkforceImpactPreviewResponse =>
+    hasExactKeys(value, [
+      'screenId',
+      'actionKey',
+      'targetId',
+      'revision',
+      'digest',
+      'token',
+      'expiresAt',
+      'blocked',
+      'items',
+    ]) &&
+    value.screenId === screenId &&
+    value.actionKey === actionKey &&
+    value.targetId === targetId &&
+    value.revision === revision &&
+    typeof value.digest === 'string' &&
+    sha256Pattern.test(value.digest) &&
+    typeof value.token === 'string' &&
+    /^[A-Za-z0-9_-]{32,4096}$/.test(value.token) &&
+    isDateTime(value.expiresAt) &&
+    Date.parse(value.expiresAt) > Date.now() &&
+    typeof value.blocked === 'boolean' &&
+    isArrayOf(value.items, isImpactItem) &&
+    value.blocked === value.items.some((item) => item.tone === 'blocker');
 }

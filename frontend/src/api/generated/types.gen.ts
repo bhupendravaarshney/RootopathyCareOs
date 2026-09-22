@@ -15,6 +15,8 @@ export type WorkforceScreen = {
   rows: Array<WorkforceRow>;
   actions: Array<WorkforceAction>;
   notices: Array<WorkforceNotice>;
+  nextCursor?: string | null;
+  pageSize: number;
 };
 
 export type WorkforceMetric = {
@@ -38,6 +40,7 @@ export type WorkforceRow = {
   values: {
     [key: string]: string;
   };
+  allowedActionKeys: Array<string>;
 };
 
 export type WorkforceAction = {
@@ -7872,6 +7875,7 @@ export type GetWorkforceScreenData = {
     q?: string;
     status?: string;
     limit?: number;
+    cursor?: string;
   };
   url: '/api/v1/organizations/{organizationId}/workforce/screens/{screenId}';
 };

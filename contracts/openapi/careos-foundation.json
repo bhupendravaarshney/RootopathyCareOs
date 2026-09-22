@@ -6870,8 +6870,7 @@
         "parameters": [
           { "$ref": "#/components/parameters/OrganizationId" },
           { "name": "eventId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
-          { "$ref": "#/components/parameters/BrowserOrigin" },
-          { "$ref": "#/components/parameters/IdempotencyKey" }
+          { "$ref": "#/components/parameters/BrowserOrigin" }
         ],
         "security": [{ "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "additionalProperties": false, "required": ["purposeCode"], "properties": { "purposeCode": { "type": "string", "enum": ["configuration_review", "regulatory_evidence", "security_investigation", "data_correction"] } } } } } },
@@ -7491,7 +7490,8 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "maxLength": 120
+              "minLength": 2,
+              "maxLength": 100
             }
           },
           {
@@ -7499,7 +7499,8 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "maxLength": 40
+              "maxLength": 120,
+              "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$"
             }
           },
           {
@@ -7509,7 +7510,17 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 100,
-              "default": 50
+              "default": 25
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048,
+              "pattern": "^[A-Za-z0-9_-]+$"
             }
           }
         ],
@@ -7663,6 +7674,114 @@
         }
       }
     },
+    "/api/v1/organizations/{organizationId}/workforce/screens/{screenId}/actions/{actionKey}/impact-preview": {
+      "post": {
+        "operationId": "previewWorkforceImpact",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          {
+            "name": "screenId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^M2-(0[1-9]|1[0-9]|2[0-9])$"
+            }
+          },
+          {
+            "name": "actionKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+            }
+          },
+          { "$ref": "#/components/parameters/BrowserOrigin" },
+          { "$ref": "#/components/parameters/IfMatch" }
+        ],
+        "security": [
+          { "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/WorkforceActionRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Fresh server-derived impact bound to actor, action, fields and revision",
+            "headers": {
+              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
+              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/WorkforceImpactPreviewResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "412": { "$ref": "#/components/responses/PreconditionFailed" },
+          "428": { "$ref": "#/components/responses/PreconditionRequired" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/workforce/evidence/{evidenceId}/accesses": {
+      "post": {
+        "operationId": "accessWorkforceEvidence",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          {
+            "name": "evidenceId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          { "$ref": "#/components/parameters/BrowserOrigin" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "security": [
+          { "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/WorkforceEvidenceAccessRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Purpose-bound restricted workforce evidence detail; the access is audited atomically",
+            "headers": {
+              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
+              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/WorkforceEvidenceAccessResponse" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
     "/api/v1/organizations/{organizationId}/workforce/exports/{exportId}/accesses": {
       "post": {
         "operationId": "accessWorkforceExport",
@@ -7709,6 +7828,106 @@
           "409": { "$ref": "#/components/responses/Conflict" },
           "412": { "$ref": "#/components/responses/PreconditionFailed" },
           "428": { "$ref": "#/components/responses/PreconditionRequired" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/workforce/exports/{exportId}/download": {
+      "get": {
+        "operationId": "downloadWorkforceExport",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          {
+            "name": "exportId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "security": [
+          { "sessionCookie": [] }
+        ],
+        "responses": {
+          "200": {
+            "description": "The authenticated, requester-bound workforce export artifact",
+            "headers": {
+              "Content-Disposition": {
+                "description": "Safe server-owned attachment filename",
+                "schema": { "type": "string" }
+              },
+              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
+              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+            },
+            "content": {
+              "text/csv": {
+                "schema": { "type": "string", "format": "binary" }
+              },
+              "application/x-ndjson": {
+                "schema": { "type": "string", "format": "binary" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/workforce/credentials/{credentialId}/documents/{documentId}/accesses": {
+      "post": {
+        "operationId": "accessWorkforceCredentialDocument",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          {
+            "name": "credentialId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          { "$ref": "#/components/parameters/BrowserOrigin" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "security": [
+          { "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkforceCredentialDocumentAccessRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A one-minute purpose-bound clean credential-document grant with URL-free audit evidence",
+            "headers": {
+              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
+              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkforceCredentialDocumentAccessResponse"
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
           "500": { "$ref": "#/components/responses/InternalError" }
         }
       }
@@ -8283,7 +8502,9 @@
           "columns",
           "rows",
           "actions",
-          "notices"
+          "notices",
+          "nextCursor",
+          "pageSize"
         ],
         "properties": {
           "organizationId": {
@@ -8333,6 +8554,16 @@
             "items": {
               "$ref": "#/components/schemas/WorkforceNotice"
             }
+          },
+          "nextCursor": {
+            "type": ["string", "null"],
+            "maxLength": 2048,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
           }
         }
       },
@@ -8391,7 +8622,8 @@
           "status",
           "revision",
           "etag",
-          "values"
+          "values",
+          "allowedActionKeys"
         ],
         "properties": {
           "id": {
@@ -8421,6 +8653,14 @@
             "type": "object",
             "additionalProperties": {
               "type": "string"
+            }
+          },
+          "allowedActionKeys": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
             }
           }
         }
@@ -8598,6 +8838,212 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          "impactToken": {
+            "type": ["string", "null"],
+            "minLength": 32,
+            "maxLength": 4096,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          }
+        }
+      },
+      "WorkforceImpactPreviewResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "screenId",
+          "actionKey",
+          "targetId",
+          "revision",
+          "digest",
+          "token",
+          "expiresAt",
+          "blocked",
+          "items"
+        ],
+        "properties": {
+          "screenId": {
+            "type": "string",
+            "pattern": "^M2-(0[1-9]|1[0-9]|2[0-9])$"
+          },
+          "actionKey": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+          },
+          "targetId": { "type": "string", "format": "uuid" },
+          "revision": { "type": "integer", "format": "int64", "minimum": 0 },
+          "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "token": {
+            "type": "string",
+            "minLength": 32,
+            "maxLength": 4096,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "expiresAt": { "type": "string", "format": "date-time" },
+          "blocked": { "type": "boolean" },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": { "$ref": "#/components/schemas/WorkforceImpactItem" }
+          }
+        }
+      },
+      "WorkforceImpactItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "tone", "detail", "affectedCount"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,79}$"
+          },
+          "tone": {
+            "type": "string",
+            "enum": ["impact", "warning", "blocker"]
+          },
+          "detail": { "type": "string", "minLength": 1, "maxLength": 240 },
+          "affectedCount": { "type": "integer", "minimum": 0 }
+        }
+      },
+      "WorkforceEvidenceAccessRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["projection", "purposeCode", "reason"],
+        "properties": {
+          "memberId": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "projection": {
+            "type": "string",
+            "enum": ["workforce-audit-detail-v1", "member-evidence-detail-v1"]
+          },
+          "purposeCode": {
+            "type": "string",
+            "enum": [
+              "workforce_operations",
+              "credentialing_review",
+              "regulatory_evidence",
+              "security_investigation",
+              "employment_record_request",
+              "data_correction"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 500
+          }
+        }
+      },
+      "WorkforceEvidenceAccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "evidenceId",
+          "occurredAt",
+          "actorId",
+          "actorKind",
+          "operation",
+          "eventName",
+          "schemaVersion",
+          "subjectType",
+          "subjectId",
+          "correlationId",
+          "projection",
+          "purposeCode",
+          "redactionPolicyVersion",
+          "payload"
+        ],
+        "properties": {
+          "evidenceId": { "type": "string", "format": "uuid" },
+          "memberId": { "type": ["string", "null"], "format": "uuid" },
+          "occurredAt": { "type": "string", "format": "date-time" },
+          "actorId": { "type": "string", "format": "uuid" },
+          "actorKind": { "type": "string", "enum": ["user", "service"] },
+          "operation": { "type": "string", "minLength": 1 },
+          "eventName": { "type": "string", "minLength": 1 },
+          "schemaVersion": { "type": "integer", "minimum": 1 },
+          "subjectType": { "type": "string", "minLength": 1 },
+          "subjectId": { "type": "string", "format": "uuid" },
+          "correlationId": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "projection": {
+            "type": "string",
+            "enum": ["workforce-audit-detail-v1", "member-evidence-detail-v1"]
+          },
+          "purposeCode": {
+            "type": "string",
+            "enum": [
+              "workforce_operations",
+              "credentialing_review",
+              "regulatory_evidence",
+              "security_investigation",
+              "employment_record_request",
+              "data_correction"
+            ]
+          },
+          "redactionPolicyVersion": { "type": "string", "minLength": 1 },
+          "payload": { "type": "object", "additionalProperties": true }
+        }
+      },
+      "WorkforceCredentialDocumentAccessRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["purposeCode", "reason"],
+        "properties": {
+          "purposeCode": {
+            "type": "string",
+            "enum": [
+              "credentialing_review",
+              "regulatory_evidence",
+              "security_investigation",
+              "employment_record_request",
+              "data_correction"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 500
+          }
+        }
+      },
+      "WorkforceCredentialDocumentAccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "credentialId",
+          "documentId",
+          "accessIntentId",
+          "readUrl",
+          "expiresAt",
+          "mediaType",
+          "byteCount",
+          "evidenceDigest",
+          "purposeCode"
+        ],
+        "properties": {
+          "credentialId": { "type": "string", "format": "uuid" },
+          "documentId": { "type": "string", "format": "uuid" },
+          "accessIntentId": { "type": "string", "format": "uuid" },
+          "readUrl": { "type": "string", "format": "uri" },
+          "expiresAt": { "type": "string", "format": "date-time" },
+          "mediaType": {
+            "type": "string",
+            "pattern": "^[a-z0-9.+-]+/[a-z0-9.+-]+$"
+          },
+          "byteCount": { "type": "integer", "format": "int64", "minimum": 1 },
+          "evidenceDigest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "purposeCode": {
+            "type": "string",
+            "enum": [
+              "credentialing_review",
+              "regulatory_evidence",
+              "security_investigation",
+              "employment_record_request",
+              "data_correction"
+            ]
           }
         }
       },
@@ -8637,7 +9083,11 @@
         ],
         "properties": {
           "exportId": { "type": "string", "format": "uuid" },
-          "downloadUrl": { "type": "string", "format": "uri" },
+          "downloadUrl": {
+            "type": "string",
+            "format": "uri-reference",
+            "pattern": "^/api/v1/organizations/[0-9a-f-]{36}/workforce/exports/[0-9a-f-]{36}/download$"
+          },
           "expiresAt": { "type": "string", "format": "date-time" },
           "artifactDigest": {
             "type": "string",

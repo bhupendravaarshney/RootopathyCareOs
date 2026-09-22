@@ -9,22 +9,27 @@ import com.rootopathy.careos.platform.domain.PlatformCapability;
 import com.rootopathy.careos.tenancy.domain.AuthorizedTenantContext;
 import com.rootopathy.careos.workforce.application.WorkforceException;
 import com.rootopathy.careos.workforce.application.WorkforceEligibilityStore;
+import com.rootopathy.careos.workforce.application.WorkforceMatchKeyCodec;
 import com.rootopathy.careos.workforce.application.WorkforceOffboardingStore;
+import com.rootopathy.careos.workforce.application.WorkforceSensitiveValueCodec;
 import com.rootopathy.careos.workforce.application.WorkforceStore;
 import com.rootopathy.careos.workforce.application.WorkforceWorkerStore;
 import com.rootopathy.careos.workforce.domain.WorkforceScreen;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.sql.Timestamp;
+import java.text.Normalizer;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -40,14 +45,23 @@ public final class JdbcWorkforceStore
             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
     private final JdbcTemplate jdbc;
     private final PlatformCapabilityRegistry capabilities;
+    private final WorkforceMatchKeyCodec matchKeys;
+    private final WorkforceSensitiveValueCodec sensitiveValues;
 
-    public JdbcWorkforceStore(JdbcTemplate jdbc, PlatformCapabilityRegistry capabilities) {
+    public JdbcWorkforceStore(
+            JdbcTemplate jdbc,
+            PlatformCapabilityRegistry capabilities,
+            WorkforceMatchKeyCodec matchKeys,
+            WorkforceSensitiveValueCodec sensitiveValues) {
         this.jdbc = jdbc;
         this.capabilities = capabilities;
+        this.matchKeys = matchKeys;
+        this.sensitiveValues = sensitiveValues;
     }
 
     @Override
     public Projection projection(AuthorizedTenantContext context, ScreenQuery query) {
+        requireOperationScope();
         List<WorkforceScreen.Row> rows = switch (query.screenId()) {
             case "M2-01", "M2-02", "M2-03", "M2-21", "M2-23" ->
                 memberRows(context, query);
@@ -77,6 +91,15 @@ public final class JdbcWorkforceStore
             combined.addAll(rows);
             rows = List.copyOf(combined.subList(0, Math.min(combined.size(), query.limit())));
         }
+        rows = rows.stream()
+                .filter(row -> row.memberId() == null || canAccessMember(context, row.memberId()))
+                .toList();
+        if (query.screenId().equals("M2-12")) {
+            rows = rows.stream().map(row -> credentialEvidenceRow(context, row)).toList();
+        }
+        rows = rows.stream()
+                .map(row -> withAllowedActions(query.screenId(), row))
+                .toList();
         var columns = columns(query.screenId());
         var metrics = metrics(context, query.screenId(), rows);
         var notices = notices(query.screenId());
@@ -86,23 +109,288 @@ public final class JdbcWorkforceStore
         return new Projection(metrics, columns, rows, notices, generatedAt);
     }
 
+    private WorkforceScreen.Row withAllowedActions(
+            String screenId, WorkforceScreen.Row row) {
+        var status = row.status();
+        var actionContext = row.values().getOrDefault("$actionContext", "");
+        var actions = new ArrayList<String>();
+        switch (screenId) {
+            case "M2-04" -> {
+                if (Set.of("clear", "possible_match").contains(status)) {
+                    actions.add("record-match-decision");
+                } else if (status.equals("active")) {
+                    actions.add("request-person-merge");
+                } else if (status.equals("submitted")) {
+                    if (actionContext.equals("maker")) {
+                        actions.add("cancel-person-merge");
+                    } else if (actionContext.equals("independent")) {
+                        actions.addAll(List.of("approve-person-merge", "reject-person-merge"));
+                    }
+                } else if (status.equals("approved")) {
+                    if (actionContext.equals("independent")) {
+                        actions.add("execute-person-merge");
+                    }
+                }
+            }
+            case "M2-05" -> actions.add("save-identity");
+            case "M2-06" -> {
+                actions.add("save-engagement");
+                if (Set.of("draft", "scheduled").contains(status)) {
+                    actions.add("activate-engagement");
+                }
+            }
+            case "M2-07" -> {
+                actions.add("save-practitioner");
+                if (status.equals("draft")) actions.add("activate-practitioner");
+            }
+            case "M2-08" -> {
+                actions.add("add-qualification");
+                if (status.equals("draft")) actions.add("submit-qualification");
+                if (status.equals("submitted") && actionContext.equals("independent")) {
+                    actions.add("decide-qualification");
+                }
+            }
+            case "M2-09" -> {
+                actions.add("add-registration");
+                if (status.equals("draft")) actions.add("submit-registration");
+                if (status.equals("submitted") && actionContext.equals("independent")) {
+                    actions.add("verify-registration");
+                }
+                if (status.equals("verified")) actions.add("suspend-registration");
+                if (Set.of("verified", "suspended").contains(status)) {
+                    actions.add("revoke-registration");
+                }
+            }
+            case "M2-10" -> {
+                actions.add("create-credential");
+                if (Set.of("draft", "evidence_pending").contains(status)) {
+                    actions.addAll(List.of("upload-document", "submit-credential"));
+                }
+            }
+            case "M2-11" -> {
+                if (Set.of("submitted", "in_review").contains(status)
+                        && actionContext.equals("claimable")) {
+                    actions.add("claim-review");
+                }
+            }
+            case "M2-12" -> {
+                if (!"0".equals(row.values().getOrDefault("evidenceCount", "0"))) {
+                    actions.add("access-credential-document");
+                }
+                if (status.equals("in_review") && actionContext.equals("reviewer")) {
+                    actions.add("decide-credential");
+                }
+                if (status.equals("verified")) actions.add("suspend-credential");
+                if (Set.of("verified", "suspended").contains(status)) {
+                    actions.add("revoke-credential");
+                }
+            }
+            case "M2-13" -> {
+                actions.add("add-specialty");
+                if (Set.of("draft", "scheduled").contains(status)) {
+                    actions.add("activate-specialty");
+                }
+                if (Set.of("scheduled", "active").contains(status)) {
+                    actions.add("end-specialty");
+                }
+            }
+            case "M2-14" -> {
+                actions.add("save-scope");
+                if (status.equals("draft")) actions.add("submit-scope");
+                if (status.equals("submitted") && actionContext.equals("independent")) {
+                    actions.add("decide-scope");
+                }
+                if (Set.of("approved", "active").contains(status)) actions.add("suspend-scope");
+                if (Set.of("approved", "active", "suspended").contains(status)) {
+                    actions.add("end-scope");
+                }
+            }
+            case "M2-15" -> {
+                actions.add("save-assignment");
+                if (Set.of("draft", "scheduled").contains(status)) {
+                    actions.add("activate-assignment");
+                }
+            }
+            case "M2-16" -> {
+                actions.add("create-service-assignment");
+                if (status.equals("scheduled")) {
+                    actions.addAll(List.of("activate-service-assignment", "cancel-service-assignment"));
+                }
+                if (status.equals("active")) actions.add("suspend-service-assignment");
+                if (status.equals("suspended")) actions.add("reactivate-service-assignment");
+                if (Set.of("scheduled", "active", "suspended").contains(status)) {
+                    actions.add("end-service-assignment");
+                }
+            }
+            case "M2-18" -> {
+                actions.add("save-availability");
+                if (Set.of("draft", "scheduled").contains(status)) {
+                    actions.add("activate-availability");
+                }
+            }
+            case "M2-19" -> {
+                if (!status.equals("offboarded")) actions.add("link-existing-account");
+            }
+            case "M2-20" -> {
+                var context = row.values().getOrDefault("context", "");
+                var primary = row.values().getOrDefault("primary", "");
+                if (context.equals("Workforce member")) {
+                    if (Set.of("draft", "submitted", "suspended").contains(status)) {
+                        actions.add("run-readiness");
+                    }
+                } else if (primary.startsWith("Readiness ") && status.equals("complete")) {
+                    actions.add("submit-activation");
+                } else if (primary.startsWith("Activation ")) {
+                    if (status.equals("submitted") && actionContext.equals("independent")) {
+                        actions.add("approve-activation");
+                    }
+                    if (status.equals("approved") && actionContext.equals("independent")) {
+                        actions.add("execute-activation");
+                    }
+                }
+            }
+            case "M2-22" -> {
+                if (Set.of("scheduled", "active").contains(status)) {
+                    actions.addAll(List.of("transfer-assignment", "end-assignment"));
+                }
+                if (status.equals("active")) actions.add("suspend-assignment");
+                if (status.equals("suspended")) {
+                    actions.addAll(List.of("reactivate-assignment", "end-assignment"));
+                }
+                if (status.equals("scheduled")) actions.add("cancel-assignment");
+            }
+            case "M2-23" -> {
+                if (status.equals("active")) actions.add("suspend-member");
+                if (status.equals("suspended")) actions.add("reactivate-member");
+            }
+            case "M2-24" -> {
+                var primary = row.values().getOrDefault("primary", "");
+                if (!primary.endsWith(" · offboarding")
+                        && Set.of("active", "suspended").contains(status)) {
+                    actions.add("request-offboarding");
+                } else if (status.equals("submitted") && actionContext.equals("independent")) {
+                    actions.add("approve-offboarding");
+                }
+            }
+            case "M2-25" -> actions.add("escalate-expiry");
+            case "M2-26" -> exportActions(status, actionContext, actions, false);
+            case "M2-27" -> {
+                if (status.equals("recorded")) actions.add("access-evidence");
+                exportActions(status, actionContext, actions, true);
+            }
+            case "M2-28" -> {
+                actions.add("create-registry-version");
+                if (Set.of("draft", "validating", "ready").contains(status)
+                        && actionContext.equals("maker")) {
+                    actions.add("submit-registry-change");
+                }
+                if (status.equals("submitted") && actionContext.equals("independent")) {
+                    actions.addAll(List.of("approve-registry-change", "reject-registry-change"));
+                }
+                if (status.equals("approved") && actionContext.equals("independent")) {
+                    actions.add("activate-registry-change");
+                }
+            }
+            case "M2-29" -> {
+                if (status.equals("recorded")) actions.add("access-evidence");
+                exportActions(status, actionContext, actions, false);
+            }
+            default -> {
+                // Screens with link-only or non-target actions need no row action projection.
+            }
+        }
+        var publicValues = new LinkedHashMap<>(row.values());
+        publicValues.remove("$actionContext");
+        return new WorkforceScreen.Row(
+                row.id(),
+                row.memberId(),
+                row.status(),
+                row.revision(),
+                row.etag(),
+                publicValues,
+                actions);
+    }
+
+    private static void exportActions(
+            String status, String actionContext, List<String> actions, boolean approvalSupported) {
+        if (status.equals("failed") && actionContext.equals("owner_retryable")) {
+            actions.add("retry-export");
+        }
+        if (status.equals("ready") && actionContext.equals("owner")) {
+            actions.add("access-export");
+        }
+        if (approvalSupported && status.equals("requested")
+                && actionContext.equals("independent")) {
+            actions.addAll(List.of("approve-export", "deny-export"));
+        }
+    }
+
+    private WorkforceScreen.Row credentialEvidenceRow(
+            AuthorizedTenantContext context, WorkforceScreen.Row row) {
+        var evidence = jdbc.query(
+                """
+                SELECT document.id,document.declared_media_type,document.declared_size,
+                       document.declared_sha256,document.promoted_evidence_digest
+                FROM credential_documents document
+                JOIN document_promotion_evidence promotion
+                  ON promotion.organization_id=document.organization_id
+                 AND promotion.document_id=document.platform_document_id
+                 AND promotion.object_version_id=document.platform_object_version_id
+                WHERE document.organization_id=? AND document.practitioner_credential_id=?
+                  AND document.status='clean' AND document.promoted_evidence_digest IS NOT NULL
+                ORDER BY document.uploaded_at,document.id
+                LIMIT 32
+                """,
+                (resultSet, rowNumber) -> new CredentialEvidenceSummary(
+                        resultSet.getObject("id", UUID.class),
+                        resultSet.getString("declared_media_type"),
+                        resultSet.getLong("declared_size"),
+                        resultSet.getString("declared_sha256"),
+                        resultSet.getString("promoted_evidence_digest")),
+                context.organizationId(),
+                row.id());
+        var values = new LinkedHashMap<>(row.values());
+        values.put("evidenceCount", Integer.toString(evidence.size()));
+        for (var index = 0; index < evidence.size(); index++) {
+            var item = evidence.get(index);
+            values.put("evidence." + index + ".id", item.documentId().toString());
+            values.put(
+                    "evidence." + index + ".label",
+                    item.mediaType() + " · " + item.byteCount() + " bytes · sha256 "
+                            + item.declaredDigest().substring(0, 12) + "…");
+            values.put("evidence." + index + ".digest", item.promotionDigest());
+        }
+        return new WorkforceScreen.Row(
+                row.id(), row.memberId(), row.status(), row.revision(), row.etag(), values);
+    }
+
     @Override
     public Set<String> permissions(AuthorizedTenantContext context) {
         return Set.copyOf(jdbc.queryForList(
                 """
                 SELECT DISTINCT grants.permission_key
                 FROM organization_memberships memberships
+                JOIN authorization_roles roles
+                  ON roles.role_key=memberships.role_key
                 JOIN authorization_role_permissions grants
-                  ON grants.role_key = memberships.role_key
-                 AND grants.status = 'active'
-                JOIN authorization_registry_releases release
-                  ON release.registry_version = grants.registry_version
-                 AND release.status = 'active'
+                  ON grants.role_key=roles.role_key
+                JOIN authorization_permissions permissions
+                  ON permissions.permission_key=grants.permission_key
                 WHERE memberships.organization_id = ?
                   AND memberships.user_id = ?
                   AND memberships.status = 'active'
                   AND memberships.effective_from <= clock_timestamp()
                   AND (memberships.effective_to IS NULL OR memberships.effective_to > clock_timestamp())
+                  AND roles.status='active' AND roles.interactive
+                  AND permissions.status='active'
+                  AND EXISTS(SELECT 1 FROM authorization_registry_releases release
+                      WHERE release.registry_version=roles.registry_version
+                        AND release.status='active')
+                  AND EXISTS(SELECT 1 FROM authorization_registry_releases release
+                      WHERE release.registry_version=permissions.registry_version
+                        AND release.status='active')
+                  AND careos_m2_user_has_resource_scope(
+                      memberships.organization_id,memberships.user_id,grants.permission_key)
                 """,
                 String.class,
                 context.organizationId(),
@@ -110,10 +398,222 @@ public final class JdbcWorkforceStore
     }
 
     @Override
+    public EvidenceDetail accessEvidence(
+            AuthorizedTenantContext context, EvidenceAccessCommand command) {
+        requireOperationScope();
+        var memberProjection = command.projection().equals("member-evidence-detail-v1");
+        if (!memberProjection && !command.projection().equals("workforce-audit-detail-v1")) {
+            throw invalid("The restricted evidence projection is not supported.");
+        }
+        if (memberProjection) {
+            if (command.memberId() == null) {
+                throw invalid("memberId is required for member evidence detail.");
+            }
+            requireMember(context, command.memberId());
+        }
+        var detail = jdbc.query(
+                """
+                SELECT event.id,correlation.member_id,event.occurred_at,event.actor_user_id,
+                       event.actor_kind,event.operation_key,event.event_name,event.schema_version,
+                       event.subject_type,event.subject_id,event.correlation_id,event.payload::text
+                FROM audit_events event
+                JOIN audit_event_definitions definition
+                  ON definition.event_name=event.event_name
+                 AND definition.schema_version=event.schema_version
+                 AND definition.status='active'
+                 AND definition.registry_version='m2-candidate-1'
+                CROSS JOIN LATERAL (
+                    SELECT careos_m2_audit_event_member_id(
+                        event.organization_id,event.subject_type,event.subject_id,event.payload)
+                        AS member_id
+                ) correlation
+                WHERE event.organization_id=? AND event.id=?
+                  AND (NOT ?::boolean OR correlation.member_id=?::uuid)
+                """,
+                resultSet -> resultSet.next()
+                        ? new EvidenceDetail(
+                                resultSet.getObject("id", UUID.class),
+                                resultSet.getObject("member_id", UUID.class),
+                                resultSet.getTimestamp("occurred_at").toInstant(),
+                                resultSet.getObject("actor_user_id", UUID.class),
+                                resultSet.getString("actor_kind"),
+                                resultSet.getString("operation_key"),
+                                resultSet.getString("event_name"),
+                                resultSet.getInt("schema_version"),
+                                resultSet.getString("subject_type"),
+                                resultSet.getObject("subject_id", UUID.class),
+                                resultSet.getString("correlation_id"),
+                                resultSet.getString("payload"),
+                                "m2-minimum-necessary-v1")
+                        : null,
+                context.organizationId(),
+                command.evidenceId(),
+                memberProjection,
+                command.memberId());
+        if (detail == null
+                || (detail.memberId() != null && !canAccessMember(context, detail.memberId()))) {
+            throw notFound("The workforce evidence record was not found.");
+        }
+        var sourcePermission = evidenceSourcePermission(detail.eventName());
+        if (sourcePermission == null || !permissions(context).contains(sourcePermission)) {
+            throw notFound("The workforce evidence record was not found.");
+        }
+        return detail;
+    }
+
+    private static String evidenceSourcePermission(String eventName) {
+        if (eventName.startsWith("workforce.person_merge.")
+                || eventName.startsWith("workforce.person.")) {
+            return "workforce.person.restricted_read";
+        }
+        if (eventName.startsWith("workforce.member.")
+                || eventName.startsWith("workforce.identifier.")) {
+            return "workforce.member.read";
+        }
+        if (eventName.startsWith("workforce.engagement.")) {
+            return "workforce.engagement.read";
+        }
+        if (eventName.startsWith("practitioner.profile.")) {
+            return "workforce.practitioner.read";
+        }
+        if (eventName.startsWith("credential.qualification.")) {
+            return "credential.qualification.read";
+        }
+        if (eventName.startsWith("credential.registration.")) {
+            return "credential.registration.read";
+        }
+        if (eventName.startsWith("credential.document.")) {
+            return "credential.document.read";
+        }
+        if (eventName.startsWith("credential.review.")
+                || eventName.startsWith("credential.record.")
+                || eventName.startsWith("credential.legal_hold.")) {
+            return "credential.record.read";
+        }
+        if (eventName.startsWith("credential.expiry.")
+                || eventName.startsWith("workforce.notification.")) {
+            return "workforce.expiry.read";
+        }
+        if (eventName.startsWith("practitioner.specialty.")) {
+            return "practitioner.specialty.read";
+        }
+        if (eventName.startsWith("practitioner.scope.")) {
+            return "practitioner.scope.read";
+        }
+        if (eventName.startsWith("workforce.assignment.")) {
+            return "workforce.assignment.read";
+        }
+        if (eventName.startsWith("practitioner.service_assignment.")) {
+            return "practitioner.service_assignment.read";
+        }
+        if (eventName.startsWith("practitioner.eligibility.")) {
+            return "practitioner.eligibility.read";
+        }
+        if (eventName.startsWith("workforce.availability.")) {
+            return "workforce.availability.read";
+        }
+        if (eventName.startsWith("workforce.account_link.")) {
+            return "workforce.account_link.read";
+        }
+        if (eventName.startsWith("workforce.readiness.")
+                || eventName.startsWith("workforce.activation.")) {
+            return "workforce.readiness.read";
+        }
+        if (eventName.startsWith("workforce.offboarding.")) {
+            return "workforce.member.read";
+        }
+        if (eventName.startsWith("workforce.registry.")) {
+            return "workforce.registry.read";
+        }
+        if (eventName.startsWith("workforce.configuration.")) {
+            return "workforce.history.read";
+        }
+        if (eventName.startsWith("workforce.export.")
+                || eventName.startsWith("workforce.evidence.")) {
+            return "workforce.audit.read";
+        }
+        return null;
+    }
+
+    @Override
+    public CredentialDocument credentialDocument(
+            AuthorizedTenantContext context, UUID credentialId, UUID documentId) {
+        requireOperationScope();
+        var document = jdbc.query(
+                """
+                SELECT document.id,document.practitioner_credential_id,
+                       credential.workforce_member_id,document.platform_document_id,
+                       document.platform_object_version_id,document.declared_media_type,
+                       document.declared_size,document.promoted_evidence_digest
+                FROM credential_documents document
+                JOIN practitioner_credentials credential
+                  ON credential.organization_id=document.organization_id
+                 AND credential.id=document.practitioner_credential_id
+                JOIN document_promotion_evidence promotion
+                  ON promotion.organization_id=document.organization_id
+                 AND promotion.document_id=document.platform_document_id
+                 AND promotion.object_version_id=document.platform_object_version_id
+                WHERE document.organization_id=?
+                  AND document.practitioner_credential_id=? AND document.id=?
+                  AND document.status='clean'
+                  AND document.promoted_evidence_digest IS NOT NULL
+                """,
+                resultSet -> resultSet.next()
+                        ? new CredentialDocument(
+                                resultSet.getObject("practitioner_credential_id", UUID.class),
+                                resultSet.getObject("id", UUID.class),
+                                resultSet.getObject("workforce_member_id", UUID.class),
+                                new com.rootopathy.careos.platform.domain.DocumentObjectReference(
+                                        context.organizationId(),
+                                        resultSet.getObject("platform_document_id", UUID.class),
+                                        resultSet.getObject("platform_object_version_id", UUID.class)),
+                                resultSet.getString("declared_media_type"),
+                                resultSet.getLong("declared_size"),
+                                resultSet.getString("promoted_evidence_digest"))
+                        : null,
+                context.organizationId(),
+                credentialId,
+                documentId);
+        if (document == null || !canAccessMember(context, document.memberId())) {
+            throw notFound("The clean credential document was not found.");
+        }
+        return document;
+    }
+
+    @Override
+    public ImpactAnalysis previewImpact(
+            AuthorizedTenantContext context, MutationCommand command) {
+        requireOperationScope();
+        return switch (command.actionKey()) {
+            case "request-person-merge" -> personMergeRequestImpact(context,command);
+            case "suspend-registration" -> registrationLifecycleImpact(context,command,"suspended");
+            case "revoke-registration" -> registrationLifecycleImpact(context,command,"revoked");
+            case "suspend-credential" -> credentialLifecycleImpact(context,command,"suspended");
+            case "revoke-credential" -> credentialLifecycleImpact(context,command,"revoked");
+            case "suspend-scope" -> scopeLifecycleImpact(context,command,"suspended");
+            case "end-scope" -> scopeLifecycleImpact(context,command,"ended");
+            case "transfer-assignment" -> assignmentTransferImpact(context,command);
+            case "suspend-assignment" -> assignmentLifecycleImpact(context,command,"suspended");
+            case "reactivate-assignment" -> assignmentLifecycleImpact(context,command,"active");
+            case "end-assignment" -> assignmentLifecycleImpact(context,command,"ended");
+            case "suspend-member" -> memberLifecycleImpact(context,command,"active","suspended");
+            case "reactivate-member" -> memberLifecycleImpact(context,command,"suspended","active");
+            case "request-offboarding" -> offboardingRequestImpact(context,command);
+            default -> throw invalid("The requested action does not define an impact preview.");
+        };
+    }
+
+    @Override
     public MutationResult mutate(AuthorizedTenantContext context, MutationCommand command) {
+        requireOperationScope();
         return switch (command.actionKey()) {
             case "start-onboarding" -> startOnboarding(context, command);
             case "record-match-decision" -> recordMatchDecision(context, command);
+            case "request-person-merge" -> requestPersonMerge(context, command);
+            case "approve-person-merge" -> decidePersonMerge(context, command, true);
+            case "reject-person-merge" -> decidePersonMerge(context, command, false);
+            case "cancel-person-merge" -> cancelPersonMerge(context, command);
+            case "execute-person-merge" -> executePersonMerge(context, command);
             case "save-identity" -> saveIdentity(context, command);
             case "save-engagement" -> saveEngagement(context, command);
             case "activate-engagement" -> activateEngagement(context, command);
@@ -168,10 +668,14 @@ public final class JdbcWorkforceStore
             case "execute-offboarding" -> executeOffboarding(context, command);
             case "escalate-expiry" -> escalateExpiry(context, command);
             case "request-export" -> requestExport(context, command);
+            case "retry-export" -> retryExport(context, command);
             case "approve-export" -> decideExport(context, command, true);
             case "deny-export" -> decideExport(context, command, false);
             case "create-registry-change" -> createRegistryChange(context, command);
-            case "approve-registry-change" -> approveRegistryChange(context, command);
+            case "create-registry-version" -> createRegistryVersionChange(context, command);
+            case "submit-registry-change" -> submitRegistryChange(context, command);
+            case "approve-registry-change" -> decideRegistryChange(context, command, true);
+            case "reject-registry-change" -> decideRegistryChange(context, command, false);
             case "activate-registry-change" -> activateRegistryChange(context, command);
             default -> throw notFound("The requested workforce action does not exist.");
         };
@@ -243,6 +747,8 @@ public final class JdbcWorkforceStore
                        next_attempt_at=CASE WHEN attempt_count+1<5
                            THEN ?+(power(2,attempt_count)::text||' minutes')::interval ELSE NULL END,
                        dead_lettered_at=CASE WHEN attempt_count+1>=5 THEN ? ELSE NULL END,
+                       dead_letter_owner=CASE WHEN attempt_count+1>=5
+                           THEN 'workforce_operations' ELSE NULL END,
                        lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
                  WHERE organization_id=? AND id=? AND status IN ('approved','scheduled','failed')
                  RETURNING lock_version
@@ -283,7 +789,10 @@ public final class JdbcWorkforceStore
             UUID platformDocumentId,
             UUID platformObjectVersionId,
             Instant quarantinedAt) {
-        requireCredential(context, command.credentialId());
+        var credential=requireCredential(context,command.credentialId());
+        if (!Set.of("draft","evidence_pending").contains(credential.status())) {
+            throw conflict("Evidence must be uploaded to a new draft credential revision.");
+        }
         var documentId = UuidV7Generator.randomUuid();
         var updated = jdbc.update(
                 """
@@ -465,17 +974,7 @@ public final class JdbcWorkforceStore
     public WorkforceEligibilityStore.Evaluation evaluate(
             AuthorizedTenantContext context, WorkforceEligibilityStore.Command command) {
         var contextId = command.locationId() == null ? command.facilityId() : command.locationId();
-        var memberId = jdbc.query(
-                """
-                SELECT workforce_member_id FROM practitioner_profiles
-                WHERE organization_id=? AND id=?
-                """,
-                resultSet -> resultSet.next() ? resultSet.getObject(1, UUID.class) : null,
-                context.organizationId(),
-                command.practitionerId());
-        if (memberId == null) {
-            throw notFound("The practitioner was not found for eligibility evaluation.");
-        }
+        var memberId=lockPractitionerForEligibility(context,command.practitionerId());
         Objects.requireNonNull(command.activityEntryId(),"activityEntryId");
         if (command.evaluatedTo()!=null && !command.evaluatedTo().isAfter(command.evaluatedFrom())) {
             throw invalid("The eligibility evaluation end must follow its start.");
@@ -867,6 +1366,181 @@ public final class JdbcWorkforceStore
                 expiresAt);
     }
 
+    @Override
+    public WorkforceEligibilityStore.Reconciliation reconcile(
+            AuthorizedTenantContext context, UUID serviceAssignmentId, Instant now) {
+        var practitionerId=jdbc.query(
+                """
+                SELECT practitioner_profile_id FROM practitioner_service_assignments
+                WHERE organization_id=? AND id=?
+                """,
+                resultSet -> resultSet.next()
+                        ? resultSet.getObject("practitioner_profile_id",UUID.class)
+                        : null,
+                context.organizationId(),serviceAssignmentId);
+        if (practitionerId==null) {
+            throw notFound("The service assignment was not found for eligibility reconciliation.");
+        }
+        lockPractitionerForEligibility(context,practitionerId);
+        var assignment = jdbc.query(
+                """
+                SELECT assignment.practitioner_profile_id,assignment.service_id,
+                       assignment.facility_id,assignment.location_id,
+                       assignment.supervisor_practitioner_id,assignment.effective_from,
+                       assignment.effective_to,assignment.lifecycle_state,assignment.lock_version,
+                       evidence.activity_entry_id
+                FROM practitioner_service_assignments assignment
+                LEFT JOIN practitioner_eligibility_evidence evidence
+                  ON evidence.organization_id=assignment.organization_id
+                 AND evidence.id=assignment.eligibility_evidence_id
+                WHERE assignment.organization_id=? AND assignment.id=?
+                FOR UPDATE OF assignment
+                """,
+                resultSet -> resultSet.next()
+                        ? new ServiceAssignmentReconciliationSource(
+                                resultSet.getObject("practitioner_profile_id",UUID.class),
+                                resultSet.getObject("service_id",UUID.class),
+                                resultSet.getObject("facility_id",UUID.class),
+                                resultSet.getObject("location_id",UUID.class),
+                                resultSet.getObject("supervisor_practitioner_id",UUID.class),
+                                resultSet.getTimestamp("effective_from").toInstant(),
+                                instantValue(resultSet.getObject("effective_to")),
+                                resultSet.getString("lifecycle_state"),
+                                resultSet.getLong("lock_version"),
+                                resultSet.getObject("activity_entry_id",UUID.class))
+                        : null,
+                context.organizationId(),serviceAssignmentId);
+        if (assignment==null) {
+            throw stale("The service assignment changed before eligibility reconciliation.");
+        }
+        if (!Set.of("scheduled","active","suspended").contains(assignment.state())) {
+            throw conflict("Only a prospective service assignment can be reconciled.");
+        }
+        if (assignment.activityEntryId()==null) {
+            throw conflict("The service assignment has no bound activity evidence to re-evaluate.");
+        }
+        var evaluatedFrom=now.isAfter(assignment.effectiveFrom())?now:assignment.effectiveFrom();
+        if (assignment.effectiveTo()!=null && !assignment.effectiveTo().isAfter(evaluatedFrom)) {
+            throw conflict("The service assignment has no remaining prospective range.");
+        }
+        var evaluated=evaluate(
+                context,
+                new WorkforceEligibilityStore.Command(
+                        assignment.practitionerId(),assignment.serviceId(),assignment.facilityId(),
+                        assignment.locationId(),assignment.activityEntryId(),assignment.supervisorId(),
+                        evaluatedFrom,assignment.effectiveTo(),now));
+        var nextState=evaluated.outcome().equals("eligible")
+                ? assignment.state()
+                : Set.of("scheduled","active").contains(assignment.state())
+                        ? "suspended" : assignment.state();
+        var changed=jdbc.update(
+                """
+                UPDATE practitioner_service_assignments
+                SET eligibility_evidence_id=?,eligibility_digest=?,lifecycle_state=?,status=?,
+                    lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
+                WHERE organization_id=? AND id=? AND lifecycle_state=? AND lock_version=?
+                """,
+                evaluated.resultId(),evaluated.resultDigest(),nextState,nextState,context.actorId(),
+                context.organizationId(),serviceAssignmentId,assignment.state(),assignment.revision());
+        requireChanged(changed,"The service assignment changed during eligibility reconciliation.");
+        return new WorkforceEligibilityStore.Reconciliation(
+                serviceAssignmentId,assignment.state(),nextState,assignment.revision()+1,evaluated);
+    }
+
+    @Override
+    public List<UUID> affectedServiceAssignmentIds(
+            AuthorizedTenantContext context, String eventName, UUID aggregateId) {
+        Objects.requireNonNull(eventName, "eventName");
+        Objects.requireNonNull(aggregateId, "aggregateId");
+        return jdbc.query(
+                """
+                WITH parameters AS (
+                    SELECT ?::uuid AS organization_id,?::uuid AS aggregate_id,?::text AS event_name
+                ), affected_practitioners AS (
+                    SELECT registration.practitioner_profile_id AS id
+                    FROM professional_registrations registration,parameters
+                    WHERE registration.organization_id=parameters.organization_id
+                      AND registration.id=parameters.aggregate_id
+                    UNION
+                    SELECT credential.practitioner_profile_id
+                    FROM practitioner_credentials credential,parameters
+                    WHERE credential.organization_id=parameters.organization_id
+                      AND credential.id=parameters.aggregate_id
+                      AND credential.practitioner_profile_id IS NOT NULL
+                    UNION
+                    SELECT scope.practitioner_profile_id
+                    FROM scopes_of_practice scope,parameters
+                    WHERE scope.organization_id=parameters.organization_id
+                      AND scope.id=parameters.aggregate_id
+                    UNION
+                    SELECT source_assignment.practitioner_profile_id
+                    FROM practitioner_service_assignments source_assignment,parameters
+                    WHERE source_assignment.organization_id=parameters.organization_id
+                      AND source_assignment.id=parameters.aggregate_id
+                    UNION
+                    SELECT practitioner.id
+                    FROM practitioner_profiles practitioner,parameters
+                    WHERE practitioner.organization_id=parameters.organization_id
+                      AND practitioner.id=parameters.aggregate_id
+                    UNION
+                    SELECT practitioner.id
+                    FROM qualifications qualification
+                    JOIN practitioner_profiles practitioner
+                      ON practitioner.organization_id=qualification.organization_id
+                     AND practitioner.workforce_member_id=qualification.workforce_member_id
+                    CROSS JOIN parameters
+                    WHERE qualification.organization_id=parameters.organization_id
+                      AND qualification.id=parameters.aggregate_id
+                    UNION
+                    SELECT practitioner.id
+                    FROM workforce_assignments source_assignment
+                    JOIN practitioner_profiles practitioner
+                      ON practitioner.organization_id=source_assignment.organization_id
+                     AND practitioner.workforce_member_id=source_assignment.workforce_member_id
+                    CROSS JOIN parameters
+                    WHERE source_assignment.organization_id=parameters.organization_id
+                      AND source_assignment.id=parameters.aggregate_id
+                    UNION
+                    SELECT practitioner.id
+                    FROM workforce_members member
+                    JOIN practitioner_profiles practitioner
+                      ON practitioner.organization_id=member.organization_id
+                     AND practitioner.workforce_member_id=member.id
+                    CROSS JOIN parameters
+                    WHERE member.organization_id=parameters.organization_id
+                      AND member.id=parameters.aggregate_id
+                    UNION
+                    SELECT practitioner.id
+                    FROM workforce_offboarding_requests request
+                    JOIN practitioner_profiles practitioner
+                      ON practitioner.organization_id=request.organization_id
+                     AND practitioner.workforce_member_id=request.workforce_member_id
+                    CROSS JOIN parameters
+                    WHERE request.organization_id=parameters.organization_id
+                      AND request.id=parameters.aggregate_id
+                )
+                SELECT DISTINCT assignment.id
+                FROM practitioner_service_assignments assignment
+                CROSS JOIN parameters
+                WHERE assignment.organization_id=parameters.organization_id
+                  AND assignment.lifecycle_state IN ('scheduled','active','suspended')
+                  AND assignment.eligibility_evidence_id IS NOT NULL
+                  AND (assignment.effective_to IS NULL
+                    OR assignment.effective_to>clock_timestamp())
+                  AND (
+                    parameters.event_name IN (
+                        'workforce.registry.activated','workforce.configuration.activated',
+                        'workforce.configuration.superseded')
+                    OR assignment.practitioner_profile_id IN (
+                        SELECT id FROM affected_practitioners WHERE id IS NOT NULL)
+                    OR assignment.supervisor_practitioner_id IN (
+                        SELECT id FROM affected_practitioners WHERE id IS NOT NULL))
+                ORDER BY assignment.id
+                """,
+                (resultSet,rowNumber) -> resultSet.getObject(1,UUID.class),
+                context.organizationId(),aggregateId,eventName);
+    }
+
     private List<WorkforceScreen.Row> memberRows(
             AuthorizedTenantContext context, ScreenQuery query) {
         return rows(
@@ -882,6 +1556,7 @@ public final class JdbcWorkforceStore
                  AND link.id=member.organization_person_link_id
                 JOIN person_profiles person ON person.id=link.person_id
                 WHERE member.organization_id=?
+                  AND link.relationship_status='active'
                   AND (?::uuid IS NULL OR member.id=?::uuid)
                   AND (?::text IS NULL OR lower(person.display_name) LIKE '%'||lower(?::text)||'%'
                        OR lower(member.member_number) LIKE '%'||lower(?::text)||'%')
@@ -902,24 +1577,41 @@ public final class JdbcWorkforceStore
 
     private List<WorkforceScreen.Row> offboardingRows(
             AuthorizedTenantContext context, ScreenQuery query) {
-        return rows(
+        return rowsWithActionContext(
                 query,
                 """
                 WITH records AS (
                     SELECT member.id,member.id AS member_id,member.lifecycle_state AS status,
                            member.lock_version,person.display_name AS primary_value,
                            member.member_number AS secondary_value,'Workforce member' AS context_value,
-                           COALESCE(member.proposed_start_date::text,member.updated_at::date::text) AS effective_value
+                           COALESCE(member.proposed_start_date::text,member.updated_at::date::text) AS effective_value,
+                           'member'::text AS action_context
                     FROM workforce_members member
                     JOIN organization_person_links link ON link.organization_id=member.organization_id
                       AND link.id=member.organization_person_link_id
                     JOIN person_profiles person ON person.id=link.person_id
                     WHERE member.organization_id=?
+                      AND link.relationship_status<>'candidate'
                     UNION ALL
                     SELECT request.id,request.workforce_member_id AS member_id,request.status,
                            request.lock_version,person.display_name||' · offboarding' AS primary_value,
                            left(request.impact_digest,12)||'…' AS secondary_value,
-                           request.access_action AS context_value,request.effective_at::text AS effective_value
+                           request.access_action AS context_value,request.effective_at::text AS effective_value,
+                           CASE WHEN request.maker_id=? THEN 'maker'
+                                WHEN EXISTS (
+                                    SELECT 1 FROM access_assignment_scopes actor_scope
+                                    JOIN organization_memberships actor_membership
+                                      ON actor_membership.organization_id=actor_scope.organization_id
+                                     AND actor_membership.id=actor_scope.access_assignment_id
+                                    WHERE actor_scope.organization_id=request.organization_id
+                                      AND actor_scope.workforce_member_id=request.workforce_member_id
+                                      AND actor_scope.status IN ('approved','active')
+                                      AND actor_scope.effective_from<=clock_timestamp()
+                                      AND (actor_scope.effective_to IS NULL
+                                        OR actor_scope.effective_to>clock_timestamp())
+                                      AND actor_membership.user_id=?
+                                      AND actor_membership.status='active') THEN 'subject'
+                                ELSE 'independent' END AS action_context
                     FROM workforce_offboarding_requests request
                     JOIN workforce_members member ON member.organization_id=request.organization_id
                       AND member.id=request.workforce_member_id
@@ -927,8 +1619,10 @@ public final class JdbcWorkforceStore
                       AND link.id=member.organization_person_link_id
                     JOIN person_profiles person ON person.id=link.person_id
                     WHERE request.organization_id=?
+                      AND link.relationship_status<>'candidate'
                 )
-                SELECT id,member_id,status,lock_version,primary_value,secondary_value,context_value,effective_value
+                SELECT id,member_id,status,lock_version,primary_value,secondary_value,context_value,
+                       effective_value,action_context
                 FROM records
                 WHERE (?::uuid IS NULL OR member_id=?::uuid)
                   AND (?::text IS NULL OR lower(primary_value||' '||secondary_value) LIKE '%'||lower(?::text)||'%')
@@ -936,6 +1630,8 @@ public final class JdbcWorkforceStore
                 ORDER BY effective_value DESC,id LIMIT ?
                 """,
                 context.organizationId(),
+                context.actorId(),
+                context.actorId(),
                 context.organizationId(),
                 query.memberId(),
                 query.memberId(),
@@ -948,15 +1644,21 @@ public final class JdbcWorkforceStore
 
     private List<WorkforceScreen.Row> personRows(
             AuthorizedTenantContext context, ScreenQuery query) {
+        if (query.screenId().equals("M2-04")) {
+            var result = new ArrayList<WorkforceScreen.Row>();
+            result.addAll(personMatchRows(context, query));
+            result.addAll(activePersonLinkRows(context, query));
+            result.addAll(personMergeRows(context, query));
+            return List.copyOf(result.subList(0, Math.min(result.size(), query.limit())));
+        }
         return rows(
                 query,
                 """
                 SELECT member.id,member.id AS member_id,person.status,
-                       CASE WHEN ?='M2-04' THEN member.lock_version ELSE person.lock_version END AS lock_version,
+                       person.lock_version,
                        person.display_name AS primary_value,
                        member.member_number AS secondary_value,
-                       CASE WHEN ?='M2-04' THEN link.id::text
-                            WHEN person.birth_date IS NULL THEN 'Birth date not recorded'
+                       CASE WHEN person.birth_date IS NULL THEN 'Birth date not recorded'
                             ELSE 'Birth year '||extract(year from person.birth_date)::integer END AS context_value,
                        link.relationship_status AS effective_value
                 FROM workforce_members member
@@ -964,13 +1666,12 @@ public final class JdbcWorkforceStore
                   AND link.id=member.organization_person_link_id
                 JOIN person_profiles person ON person.id=link.person_id
                 WHERE member.organization_id=?
+                  AND link.relationship_status='active'
                   AND (?::uuid IS NULL OR member.id=?::uuid)
                   AND (?::text IS NULL OR lower(person.display_name) LIKE '%'||lower(?::text)||'%')
                   AND (?::text IS NULL OR person.status=?::text)
                 ORDER BY person.display_name,member.id LIMIT ?
                 """,
-                query.screenId(),
-                query.screenId(),
                 context.organizationId(),
                 query.memberId(),
                 query.memberId(),
@@ -979,6 +1680,271 @@ public final class JdbcWorkforceStore
                 query.status(),
                 query.status(),
                 query.limit());
+    }
+
+    private List<WorkforceScreen.Row> personMatchRows(
+            AuthorizedTenantContext context, ScreenQuery query) {
+        var onboardingCases = jdbc.query(
+                """
+                SELECT member.id,member.lock_version,member.member_number,member.updated_at,
+                       link.id AS link_id,link.person_id,person.display_name
+                FROM workforce_members member
+                JOIN organization_person_links link
+                  ON link.organization_id=member.organization_id
+                 AND link.id=member.organization_person_link_id
+                JOIN person_profiles person ON person.id=link.person_id
+                WHERE member.organization_id=? AND member.lifecycle_state='draft'
+                  AND link.relationship_status='candidate' AND link.effective_to IS NULL
+                  AND (?::uuid IS NULL OR member.id=?::uuid)
+                  AND (?::text IS NULL OR lower(person.display_name||' '||member.member_number)
+                      LIKE '%'||lower(?::text)||'%')
+                ORDER BY member.updated_at DESC,member.id
+                LIMIT ?
+                """,
+                (resultSet, rowNumber) -> new PersonMatchCase(
+                        resultSet.getObject("id", UUID.class),
+                        resultSet.getObject("link_id", UUID.class),
+                        resultSet.getObject("person_id", UUID.class),
+                        resultSet.getString("display_name"),
+                        resultSet.getString("member_number"),
+                        resultSet.getLong("lock_version"),
+                        resultSet.getTimestamp("updated_at").toInstant()),
+                context.organizationId(),
+                query.memberId(),
+                query.memberId(),
+                query.search(),
+                query.search(),
+                query.limit());
+        var matchAt = Objects.requireNonNull(
+                        jdbc.queryForObject("SELECT clock_timestamp()", Timestamp.class))
+                .toInstant();
+        var rows = new ArrayList<WorkforceScreen.Row>();
+        for (var onboardingCase : onboardingCases) {
+            var candidates = personMatchCandidates(
+                    context, onboardingCase.currentLinkId(), matchAt);
+            var status = candidates.isEmpty() ? "clear" : "possible_match";
+            if (query.status() != null && !query.status().equals(status)) {
+                continue;
+            }
+            var values = new LinkedHashMap<String, String>();
+            values.put("primary", onboardingCase.displayName());
+            values.put("secondary", onboardingCase.memberNumber());
+            values.put(
+                    "context",
+                    candidates.isEmpty()
+                            ? "No organization match found"
+                            : candidates.size() + (candidates.size() == 1
+                                    ? " possible organization match"
+                                    : " possible organization matches"));
+            values.put("effective", "Explicit decision required");
+            values.put("matchRunId", personMatchRunDigest(context, onboardingCase, candidates));
+            values.put("candidateReference", onboardingCase.currentLinkId().toString());
+            values.put("candidateCount", Integer.toString(candidates.size()));
+            values.put("candidate.0.value", onboardingCase.currentLinkId().toString());
+            values.put("candidate.0.label", "Create a new organization person");
+            for (var index = 0; index < candidates.size(); index++) {
+                var candidate = candidates.get(index);
+                values.put("candidate." + (index + 1) + ".value", candidate.linkId().toString());
+                values.put(
+                        "candidate." + (index + 1) + ".label",
+                        candidate.displayLabel() + " · " + matchReasonLabel(candidate.keyTypes()));
+            }
+            rows.add(new WorkforceScreen.Row(
+                    onboardingCase.memberId(),
+                    onboardingCase.memberId(),
+                    status,
+                    onboardingCase.revision(),
+                    "\"m2:M2-04:" + onboardingCase.memberId() + ":"
+                            + onboardingCase.revision() + "\"",
+                    values));
+        }
+        return rows;
+    }
+
+    private List<WorkforceScreen.Row> personMergeRows(
+            AuthorizedTenantContext context, ScreenQuery query) {
+        return rowsWithActionContext(
+                query,
+                """
+                SELECT request.id,retained_member.id AS member_id,request.decision_state AS status,
+                       request.lock_version,
+                       'Merge: '||retained_person.display_name AS primary_value,
+                       discarded_person.display_name AS secondary_value,
+                       request.retained_link_id::text||' ← '||request.discarded_link_id::text
+                            AS context_value,
+                       request.decision_state AS effective_value,
+                       CASE WHEN request.requested_by=? THEN 'maker'
+                            WHEN EXISTS (
+                                SELECT 1 FROM workforce_members affected_member
+                                JOIN access_assignment_scopes actor_scope
+                                  ON actor_scope.organization_id=affected_member.organization_id
+                                 AND actor_scope.workforce_member_id=affected_member.id
+                                JOIN organization_memberships actor_membership
+                                  ON actor_membership.organization_id=actor_scope.organization_id
+                                 AND actor_membership.id=actor_scope.access_assignment_id
+                                WHERE affected_member.organization_id=request.organization_id
+                                  AND affected_member.organization_person_link_id
+                                      IN (request.retained_link_id,request.discarded_link_id)
+                                  AND affected_member.lifecycle_state<>'offboarded'
+                                  AND actor_scope.status IN ('approved','active')
+                                  AND actor_scope.effective_from<=clock_timestamp()
+                                  AND (actor_scope.effective_to IS NULL
+                                    OR actor_scope.effective_to>clock_timestamp())
+                                  AND actor_membership.user_id=?
+                                  AND actor_membership.status='active') THEN 'subject'
+                            ELSE 'independent' END AS action_context
+                FROM person_merge_requests request
+                JOIN organization_person_links retained_link
+                  ON retained_link.organization_id=request.organization_id
+                 AND retained_link.id=request.retained_link_id
+                JOIN person_profiles retained_person ON retained_person.id=retained_link.person_id
+                JOIN organization_person_links discarded_link
+                  ON discarded_link.organization_id=request.organization_id
+                 AND discarded_link.id=request.discarded_link_id
+                JOIN person_profiles discarded_person ON discarded_person.id=discarded_link.person_id
+                JOIN LATERAL (
+                    SELECT member.id FROM workforce_members member
+                    WHERE member.organization_id=request.organization_id
+                      AND member.organization_person_link_id=request.retained_link_id
+                    ORDER BY (member.lifecycle_state<>'offboarded') DESC,
+                             member.updated_at DESC,member.id DESC LIMIT 1
+                ) retained_member ON true
+                WHERE request.organization_id=?
+                  AND (?::uuid IS NULL OR retained_member.id=?::uuid)
+                  AND (?::text IS NULL OR lower(retained_person.display_name||' '
+                      ||discarded_person.display_name) LIKE '%'||lower(?::text)||'%')
+                  AND (?::text IS NULL OR request.decision_state=?::text)
+                ORDER BY request.created_at DESC,request.id LIMIT ?
+                """,
+                context.actorId(),
+                context.actorId(),
+                context.organizationId(),
+                query.memberId(),
+                query.memberId(),
+                query.search(),
+                query.search(),
+                query.status(),
+                query.status(),
+                query.limit());
+    }
+
+    private List<WorkforceScreen.Row> activePersonLinkRows(
+            AuthorizedTenantContext context, ScreenQuery query) {
+        return rows(
+                query,
+                """
+                SELECT member.id,member.id AS member_id,link.relationship_status AS status,
+                       member.lock_version,person.display_name AS primary_value,
+                       member.member_number AS secondary_value,
+                       'Organization person link '||link.id::text AS context_value,
+                       member.lifecycle_state AS effective_value
+                FROM workforce_members member
+                JOIN organization_person_links link
+                  ON link.organization_id=member.organization_id
+                 AND link.id=member.organization_person_link_id
+                JOIN person_profiles person ON person.id=link.person_id
+                WHERE member.organization_id=? AND link.relationship_status='active'
+                  AND (?::uuid IS NULL OR member.id=?::uuid)
+                  AND (?::text IS NULL OR lower(person.display_name||' '||member.member_number)
+                      LIKE '%'||lower(?::text)||'%')
+                  AND (?::text IS NULL OR link.relationship_status=?::text)
+                ORDER BY member.updated_at DESC,member.id LIMIT ?
+                """,
+                context.organizationId(),
+                query.memberId(),
+                query.memberId(),
+                query.search(),
+                query.search(),
+                query.status(),
+                query.status(),
+                query.limit());
+    }
+
+    private List<PersonMatchCandidate> personMatchCandidates(
+            AuthorizedTenantContext context, UUID sourceLinkId, Instant effectiveAt) {
+        return jdbc.query(
+                """
+                SELECT candidate.id,candidate.display_label,live_member.id AS live_member_id,
+                       array_agg(DISTINCT source_key.key_type ORDER BY source_key.key_type)
+                           AS key_types
+                FROM person_match_keys source_key
+                JOIN person_match_keys matched_key
+                  ON matched_key.organization_id=source_key.organization_id
+                 AND matched_key.key_type=source_key.key_type
+                 AND matched_key.hmac_key_version=source_key.hmac_key_version
+                 AND matched_key.keyed_digest=source_key.keyed_digest
+                 AND matched_key.organization_person_link_id<>source_key.organization_person_link_id
+                 AND matched_key.status='active'
+                 AND matched_key.effective_from<=?
+                 AND (matched_key.effective_to IS NULL OR matched_key.effective_to>?)
+                JOIN organization_person_links candidate
+                  ON candidate.organization_id=matched_key.organization_id
+                 AND candidate.id=matched_key.organization_person_link_id
+                LEFT JOIN LATERAL (
+                    SELECT existing.id
+                    FROM workforce_members existing
+                    WHERE existing.organization_id=candidate.organization_id
+                      AND existing.organization_person_link_id=candidate.id
+                      AND existing.lifecycle_state<>'offboarded'
+                    ORDER BY existing.created_at DESC,existing.id DESC
+                    LIMIT 1
+                ) live_member ON true
+                WHERE source_key.organization_id=?
+                  AND source_key.organization_person_link_id=?
+                  AND source_key.status='active'
+                  AND source_key.effective_from<=?
+                  AND (source_key.effective_to IS NULL OR source_key.effective_to>?)
+                  AND candidate.relationship_status='active'
+                  AND candidate.effective_from<=?
+                  AND (candidate.effective_to IS NULL OR candidate.effective_to>?)
+                GROUP BY candidate.id,candidate.display_label,live_member.id
+                ORDER BY candidate.id
+                """,
+                (resultSet, rowNumber) -> new PersonMatchCandidate(
+                        resultSet.getObject("id", UUID.class),
+                        resultSet.getString("display_label"),
+                        resultSet.getObject("live_member_id", UUID.class),
+                        Arrays.asList((String[]) resultSet.getArray("key_types").getArray())),
+                Timestamp.from(effectiveAt),
+                Timestamp.from(effectiveAt),
+                context.organizationId(),
+                sourceLinkId,
+                Timestamp.from(effectiveAt),
+                Timestamp.from(effectiveAt),
+                Timestamp.from(effectiveAt),
+                Timestamp.from(effectiveAt));
+    }
+
+    private String personMatchRunDigest(
+            AuthorizedTenantContext context,
+            PersonMatchCase onboardingCase,
+            List<PersonMatchCandidate> candidates) {
+        var canonical = new StringBuilder("m2-person-match-run-v1|")
+                .append(context.organizationId()).append('|')
+                .append(context.actorId()).append('|')
+                .append(onboardingCase.memberId()).append('|')
+                .append(onboardingCase.currentLinkId()).append('|')
+                .append(onboardingCase.revision()).append('|')
+                .append(matchKeys.keyVersion());
+        for (var candidate : candidates) {
+            canonical.append('|').append(candidate.linkId()).append(':')
+                    .append(Objects.toString(candidate.liveMemberId(), "-")).append(':')
+                    .append(String.join(",", candidate.keyTypes()));
+        }
+        return digest(canonical.toString());
+    }
+
+    private static String matchReasonLabel(List<String> keyTypes) {
+        return keyTypes.stream()
+                .map(keyType -> switch (keyType) {
+                    case "legal_name_birth_date" -> "same legal name and birth date";
+                    case "email" -> "same work email";
+                    case "phone" -> "same work phone";
+                    case "regulated_identifier" -> "same regulated identifier";
+                    default -> "matching organization identity evidence";
+                })
+                .reduce((left, right) -> left + "; " + right)
+                .orElse("matching organization identity evidence");
     }
 
     private List<WorkforceScreen.Row> engagementRows(
@@ -1032,14 +1998,27 @@ public final class JdbcWorkforceStore
 
     private List<WorkforceScreen.Row> qualificationRows(
             AuthorizedTenantContext context, ScreenQuery query) {
-        return rows(
+        return rowsWithActionContext(
                 query,
                 """
                 SELECT qualification.id,qualification.workforce_member_id AS member_id,qualification.status,
                        qualification.lock_version,entry.display_label AS primary_value,
                        qualification.awarding_body AS secondary_value,
                        qualification.country_code AS context_value,
-                       qualification.awarded_on::text AS effective_value
+                       qualification.awarded_on::text AS effective_value,
+                       CASE WHEN qualification.updated_by=? OR EXISTS (
+                           SELECT 1 FROM access_assignment_scopes actor_scope
+                           JOIN organization_memberships actor_membership
+                             ON actor_membership.organization_id=actor_scope.organization_id
+                            AND actor_membership.id=actor_scope.access_assignment_id
+                           WHERE actor_scope.organization_id=qualification.organization_id
+                             AND actor_scope.workforce_member_id=qualification.workforce_member_id
+                             AND actor_scope.status IN ('approved','active')
+                             AND actor_scope.effective_from<=clock_timestamp()
+                             AND (actor_scope.effective_to IS NULL
+                               OR actor_scope.effective_to>clock_timestamp())
+                             AND actor_membership.user_id=? AND actor_membership.status='active')
+                            THEN 'blocked' ELSE 'independent' END AS action_context
                 FROM qualifications qualification
                 JOIN workforce_registry_entries entry ON entry.organization_id=qualification.organization_id
                   AND entry.id=qualification.qualification_entry_id
@@ -1049,20 +2028,34 @@ public final class JdbcWorkforceStore
                   AND (?::text IS NULL OR qualification.status=?::text)
                 ORDER BY qualification.awarded_on DESC,qualification.id LIMIT ?
                 """,
-                context.organizationId(), query.memberId(), query.memberId(), query.search(),
+                context.actorId(), context.actorId(), context.organizationId(),
+                query.memberId(), query.memberId(), query.search(),
                 query.search(), query.status(), query.status(), query.limit());
     }
 
     private List<WorkforceScreen.Row> registrationRows(
             AuthorizedTenantContext context, ScreenQuery query) {
-        return rows(
+        return rowsWithActionContext(
                 query,
                 """
                 SELECT registration.id,practitioner.workforce_member_id AS member_id,registration.status,
                        registration.lock_version,registration.masked_display AS primary_value,
                        regulator.display_label AS secondary_value,
                        registration.jurisdiction_country AS context_value,
-                       COALESCE(registration.expires_on::text,'No expiry') AS effective_value
+                       COALESCE(registration.expires_on::text,'No expiry') AS effective_value,
+                       CASE WHEN registration.updated_by=? OR EXISTS (
+                           SELECT 1 FROM access_assignment_scopes actor_scope
+                           JOIN organization_memberships actor_membership
+                             ON actor_membership.organization_id=actor_scope.organization_id
+                            AND actor_membership.id=actor_scope.access_assignment_id
+                           WHERE actor_scope.organization_id=registration.organization_id
+                             AND actor_scope.workforce_member_id=practitioner.workforce_member_id
+                             AND actor_scope.status IN ('approved','active')
+                             AND actor_scope.effective_from<=clock_timestamp()
+                             AND (actor_scope.effective_to IS NULL
+                               OR actor_scope.effective_to>clock_timestamp())
+                             AND actor_membership.user_id=? AND actor_membership.status='active')
+                            THEN 'blocked' ELSE 'independent' END AS action_context
                 FROM professional_registrations registration
                 JOIN practitioner_profiles practitioner ON practitioner.organization_id=registration.organization_id
                   AND practitioner.id=registration.practitioner_profile_id
@@ -1074,23 +2067,58 @@ public final class JdbcWorkforceStore
                   AND (?::text IS NULL OR registration.status=?::text)
                 ORDER BY registration.expires_on NULLS LAST,registration.id LIMIT ?
                 """,
-                context.organizationId(), query.memberId(), query.memberId(), query.search(),
+                context.actorId(), context.actorId(), context.organizationId(),
+                query.memberId(), query.memberId(), query.search(),
                 query.search(), query.status(), query.status(), query.limit());
     }
 
     private List<WorkforceScreen.Row> credentialRows(
             AuthorizedTenantContext context, ScreenQuery query) {
-        return rows(
+        var verifiedSummaryOnly = hasActiveRole(context, "clinical_governance_approver")
+                && !hasAnyActiveRole(
+                        context,
+                        Set.of(
+                                "organization_owner",
+                                "local_bootstrap",
+                                "credentialing_officer",
+                                "practitioner"));
+        return rowsWithActionContext(
                 query,
                 """
                 SELECT credential.id,credential.workforce_member_id AS member_id,credential.status,
                        credential.lock_version,entry.display_label AS primary_value,
                        credential.issuer AS secondary_value,credential.risk_tier AS context_value,
-                       COALESCE(credential.expires_on::text,'No expiry') AS effective_value
+                       COALESCE(credential.expires_on::text,'No expiry') AS effective_value,
+                       CASE
+                         WHEN EXISTS (
+                           SELECT 1 FROM access_assignment_scopes actor_scope
+                           JOIN organization_memberships actor_membership
+                             ON actor_membership.organization_id=actor_scope.organization_id
+                            AND actor_membership.id=actor_scope.access_assignment_id
+                           WHERE actor_scope.organization_id=credential.organization_id
+                             AND actor_scope.workforce_member_id=credential.workforce_member_id
+                             AND actor_scope.status IN ('approved','active')
+                             AND actor_scope.effective_from<=clock_timestamp()
+                             AND (actor_scope.effective_to IS NULL
+                               OR actor_scope.effective_to>clock_timestamp())
+                             AND actor_membership.user_id=?
+                             AND actor_membership.status='active') THEN 'blocked'
+                         WHEN credential.status='in_review' AND credential.reviewer_id=?
+                           AND credential.review_lease_expires_at>clock_timestamp() THEN 'reviewer'
+                         WHEN credential.status IN ('submitted','in_review')
+                           AND (credential.status='submitted'
+                             OR credential.review_lease_expires_at<=clock_timestamp())
+                           AND credential.submitted_by<>?
+                           AND NOT EXISTS (SELECT 1 FROM credential_documents actor_document
+                               WHERE actor_document.organization_id=credential.organization_id
+                                 AND actor_document.practitioner_credential_id=credential.id
+                                 AND actor_document.created_by=?) THEN 'claimable'
+                         ELSE 'blocked' END AS action_context
                 FROM practitioner_credentials credential
                 JOIN workforce_registry_entries entry ON entry.organization_id=credential.organization_id
                   AND entry.id=credential.credential_type_entry_id
                 WHERE credential.organization_id=?
+                  AND (NOT ?::boolean OR credential.status='verified')
                   AND (?::uuid IS NULL OR credential.workforce_member_id=?::uuid)
                   AND (?::text IS NULL OR lower(credential.issuer) LIKE '%'||lower(?::text)||'%')
                   AND (?::text IS NULL OR credential.status=?::text)
@@ -1098,7 +2126,9 @@ public final class JdbcWorkforceStore
                          WHEN 'moderate' THEN 3 ELSE 4 END,
                          credential.submitted_at NULLS LAST,credential.id LIMIT ?
                 """,
-                context.organizationId(), query.memberId(), query.memberId(), query.search(),
+                context.actorId(), context.actorId(), context.actorId(), context.actorId(),
+                context.organizationId(), verifiedSummaryOnly,
+                query.memberId(), query.memberId(), query.search(),
                 query.search(), query.status(), query.status(), query.limit());
     }
 
@@ -1128,14 +2158,27 @@ public final class JdbcWorkforceStore
 
     private List<WorkforceScreen.Row> scopeRows(
             AuthorizedTenantContext context, ScreenQuery query) {
-        return rows(
+        return rowsWithActionContext(
                 query,
                 """
                 SELECT scope.id,practitioner.workforce_member_id AS member_id,scope.status,
                        scope.lock_version,definition.name AS primary_value,
                        definition.definition_code AS secondary_value,
                        COALESCE(scope.decision_code,'Awaiting decision') AS context_value,
-                       scope.effective_from::date::text AS effective_value
+                       scope.effective_from::date::text AS effective_value,
+                       CASE WHEN scope.submitted_by=? OR EXISTS (
+                           SELECT 1 FROM access_assignment_scopes actor_scope
+                           JOIN organization_memberships actor_membership
+                             ON actor_membership.organization_id=actor_scope.organization_id
+                            AND actor_membership.id=actor_scope.access_assignment_id
+                           WHERE actor_scope.organization_id=scope.organization_id
+                             AND actor_scope.workforce_member_id=practitioner.workforce_member_id
+                             AND actor_scope.status IN ('approved','active')
+                             AND actor_scope.effective_from<=clock_timestamp()
+                             AND (actor_scope.effective_to IS NULL
+                               OR actor_scope.effective_to>clock_timestamp())
+                             AND actor_membership.user_id=? AND actor_membership.status='active')
+                            THEN 'blocked' ELSE 'independent' END AS action_context
                 FROM scopes_of_practice scope
                 JOIN practitioner_profiles practitioner ON practitioner.organization_id=scope.organization_id
                   AND practitioner.id=scope.practitioner_profile_id
@@ -1147,7 +2190,8 @@ public final class JdbcWorkforceStore
                   AND (?::text IS NULL OR scope.status=?::text)
                 ORDER BY scope.effective_from DESC,scope.id LIMIT ?
                 """,
-                context.organizationId(), query.memberId(), query.memberId(), query.search(),
+                context.actorId(), context.actorId(), context.organizationId(),
+                query.memberId(), query.memberId(), query.search(),
                 query.search(), query.status(), query.status(), query.limit());
     }
 
@@ -1270,14 +2314,15 @@ public final class JdbcWorkforceStore
 
     private List<WorkforceScreen.Row> readinessRows(
             AuthorizedTenantContext context, ScreenQuery query) {
-        return rows(
+        return rowsWithActionContext(
                 query,
                 """
                 WITH records AS (
                     SELECT member.id,member.id AS member_id,member.lifecycle_state AS status,
                            member.lock_version,person.display_name AS primary_value,
                            member.pathway AS secondary_value,'Workforce member' AS context_value,
-                           member.updated_at::text AS effective_value,member.updated_at AS sort_at
+                           member.updated_at::text AS effective_value,member.updated_at AS sort_at,
+                           'member'::text AS action_context
                     FROM workforce_members member
                     JOIN organization_person_links link ON link.organization_id=member.organization_id
                       AND link.id=member.organization_person_link_id
@@ -1289,17 +2334,33 @@ public final class JdbcWorkforceStore
                            run.pathway AS secondary_value,
                            COALESCE(run.blocker_count,0)||' blockers · '||COALESCE(run.warning_count,0)||' warnings' AS context_value,
                            COALESCE(run.expires_at::text,'Not complete') AS effective_value,
-                           run.requested_at AS sort_at
+                           run.requested_at AS sort_at,'run'::text AS action_context
                     FROM workforce_readiness_runs run WHERE run.organization_id=?
                     UNION ALL
                     SELECT request.id,request.workforce_member_id AS member_id,request.status,request.lock_version,
                            'Activation '||left(request.result_digest,12) AS primary_value,
                            'Independent approval' AS secondary_value,
                            COALESCE(request.decision_code,'Awaiting decision') AS context_value,
-                           request.expires_at::text AS effective_value,request.requested_at AS sort_at
+                           request.expires_at::text AS effective_value,request.requested_at AS sort_at,
+                           CASE WHEN request.maker_id=? THEN 'maker'
+                                WHEN EXISTS (
+                                    SELECT 1 FROM access_assignment_scopes actor_scope
+                                    JOIN organization_memberships actor_membership
+                                      ON actor_membership.organization_id=actor_scope.organization_id
+                                     AND actor_membership.id=actor_scope.access_assignment_id
+                                    WHERE actor_scope.organization_id=request.organization_id
+                                      AND actor_scope.workforce_member_id=request.workforce_member_id
+                                      AND actor_scope.status IN ('approved','active')
+                                      AND actor_scope.effective_from<=clock_timestamp()
+                                      AND (actor_scope.effective_to IS NULL
+                                        OR actor_scope.effective_to>clock_timestamp())
+                                      AND actor_membership.user_id=?
+                                      AND actor_membership.status='active') THEN 'subject'
+                                ELSE 'independent' END AS action_context
                     FROM workforce_activation_requests request WHERE request.organization_id=?
                 )
-                SELECT id,member_id,status,lock_version,primary_value,secondary_value,context_value,effective_value
+                SELECT id,member_id,status,lock_version,primary_value,secondary_value,context_value,
+                       effective_value,action_context
                 FROM records
                 WHERE (?::uuid IS NULL OR member_id=?::uuid)
                   AND (?::text IS NULL OR id::text LIKE '%'||?::text||'%'
@@ -1307,7 +2368,8 @@ public final class JdbcWorkforceStore
                   AND (?::text IS NULL OR status=?::text)
                 ORDER BY sort_at DESC,id LIMIT ?
                 """,
-                context.organizationId(), context.organizationId(), context.organizationId(),
+                context.organizationId(), context.organizationId(), context.actorId(),
+                context.actorId(), context.organizationId(),
                 query.memberId(), query.memberId(), query.search(), query.search(), query.search(),
                 query.status(), query.status(), query.limit());
     }
@@ -1387,16 +2449,21 @@ public final class JdbcWorkforceStore
             AuthorizedTenantContext context, ScreenQuery query, boolean memberOnly) {
         var sql = memberOnly
                 ? """
-                  SELECT event.id,(event.payload->>'memberId')::uuid AS member_id,'recorded' AS status,
+                  SELECT event.id,correlation.member_id,'recorded' AS status,
                          0::bigint AS lock_version,event.event_name AS primary_value,
                          event.subject_type AS secondary_value,event.correlation_id AS context_value,
                          event.occurred_at::text AS effective_value
                   FROM audit_events event
                   JOIN audit_event_definitions definition ON definition.event_name=event.event_name
                     AND definition.schema_version=event.schema_version
+                  CROSS JOIN LATERAL (
+                      SELECT careos_m2_audit_event_member_id(
+                          event.organization_id,event.subject_type,event.subject_id,event.payload)
+                          AS member_id
+                  ) correlation
                   WHERE event.organization_id=? AND definition.registry_version='m2-candidate-1'
-                    AND event.payload ? 'memberId'
-                    AND (?::uuid IS NULL OR event.payload->>'memberId'=?::text)
+                    AND correlation.member_id IS NOT NULL
+                    AND (?::uuid IS NULL OR correlation.member_id=?::uuid)
                     AND (?::text IS NULL OR lower(event.event_name) LIKE '%'||lower(?::text)||'%')
                     AND (?::text IS NULL OR event.event_name=?::text)
                   ORDER BY event.occurred_at DESC,event.id LIMIT ?
@@ -1423,13 +2490,15 @@ public final class JdbcWorkforceStore
 
     private List<WorkforceScreen.Row> registryRows(
             AuthorizedTenantContext context, ScreenQuery query) {
-        return rows(
+        return rowsWithActionContext(
                 query,
                 """
                 SELECT version.id,NULL::uuid AS member_id,version.status,version.lock_version,
                        definition.display_name AS primary_value,entry.display_label AS secondary_value,
                        'Version '||version.version_number AS context_value,
-                       version.effective_from::text AS effective_value
+                       version.effective_from::text AS effective_value,
+                       CASE WHEN version.maker_id=? THEN 'maker'
+                            ELSE 'independent' END AS action_context
                 FROM workforce_registry_versions version
                 JOIN workforce_registry_entries entry ON entry.organization_id=version.organization_id
                   AND entry.id=version.registry_entry_id
@@ -1441,7 +2510,8 @@ public final class JdbcWorkforceStore
                   AND (?::text IS NULL OR version.status=?::text)
                 ORDER BY definition.display_name,entry.display_label,version.version_number DESC LIMIT ?
                 """,
-                context.organizationId(), query.memberId(), query.memberId(), query.search(),
+                context.actorId(), context.organizationId(),
+                query.memberId(), query.memberId(), query.search(),
                 query.search(), query.status(), query.status(), query.limit());
     }
 
@@ -1466,18 +2536,42 @@ public final class JdbcWorkforceStore
         var canApprove = permissions(context).contains("workforce.export.approve");
         var placeholders = String.join(",", java.util.Collections.nCopies(projections.size(), "?"));
         var sql = """
-                SELECT id,status,lock_version,projection AS primary_value,
-                       upper(format)||' · '||purpose_key AS secondary_value,
-                       CASE WHEN status='ready' THEN 'Available until '||expires_at::text
-                            WHEN failure_code IS NOT NULL THEN failure_code
-                            ELSE 'Snapshot '||snapshot_at::text END AS context_value,
-                       created_at::text AS effective_value
-                FROM workforce_export_jobs
-                WHERE organization_id=? AND projection IN (%s)
-                  AND (requester_id=? OR ?)
-                  AND (?::text IS NULL OR lower(projection) LIKE '%%'||lower(?::text)||'%%')
-                  AND (?::text IS NULL OR status=?::text)
-                ORDER BY created_at DESC,id DESC LIMIT ?
+                SELECT export_job.id,export_job.status,export_job.lock_version,
+                       export_job.requester_id,export_job.projection AS primary_value,
+                       upper(export_job.format)||' · '||export_job.purpose_key AS secondary_value,
+                       CASE WHEN export_job.status='ready'
+                                 THEN 'Available until '||export_job.expires_at::text
+                            WHEN export_job.failure_code IS NOT NULL
+                                 THEN export_job.failure_code
+                            ELSE 'Snapshot '||export_job.snapshot_at::text END AS context_value,
+                       export_job.created_at::text AS effective_value,
+                       export_job.failure_code<>'authorization_denied'
+                         AND retry.id IS NULL
+                         AND COALESCE(lineage.depth,0)<5 AS retryable
+                FROM workforce_export_jobs export_job
+                LEFT JOIN workforce_export_jobs retry
+                  ON retry.organization_id=export_job.organization_id
+                 AND retry.retry_of_export_id=export_job.id
+                LEFT JOIN LATERAL (
+                    WITH RECURSIVE ancestors AS (
+                        SELECT source.id,source.retry_of_export_id,1 AS depth
+                        FROM workforce_export_jobs source
+                        WHERE source.organization_id=export_job.organization_id
+                          AND source.id=export_job.id
+                        UNION ALL
+                        SELECT parent.id,parent.retry_of_export_id,ancestors.depth+1
+                        FROM workforce_export_jobs parent
+                        JOIN ancestors ON parent.id=ancestors.retry_of_export_id
+                        WHERE parent.organization_id=export_job.organization_id
+                          AND ancestors.depth<6
+                    )
+                    SELECT max(depth) AS depth FROM ancestors
+                ) lineage ON true
+                WHERE export_job.organization_id=? AND export_job.projection IN (%s)
+                  AND (export_job.requester_id=? OR ?)
+                  AND (?::text IS NULL OR lower(export_job.projection) LIKE '%%'||lower(?::text)||'%%')
+                  AND (?::text IS NULL OR export_job.status=?::text)
+                ORDER BY export_job.created_at DESC,export_job.id DESC LIMIT ?
                 """.formatted(placeholders);
         var parameters = new ArrayList<Object>();
         parameters.add(context.organizationId());
@@ -1499,6 +2593,12 @@ public final class JdbcWorkforceStore
                     values.put("secondary", safe(resultSet.getString("secondary_value")));
                     values.put("context", safe(resultSet.getString("context_value")));
                     values.put("effective", safe(resultSet.getString("effective_value")));
+                    values.put(
+                            "$actionContext",
+                            context.actorId().equals(resultSet.getObject("requester_id", UUID.class))
+                                    ? (resultSet.getBoolean("retryable")
+                                            ? "owner_retryable" : "owner")
+                                    : "independent");
                     return new WorkforceScreen.Row(
                             id,
                             null,
@@ -1511,6 +2611,16 @@ public final class JdbcWorkforceStore
     }
 
     private List<WorkforceScreen.Row> rows(ScreenQuery query, String sql, Object... arguments) {
+        return rows(query, false, sql, arguments);
+    }
+
+    private List<WorkforceScreen.Row> rowsWithActionContext(
+            ScreenQuery query, String sql, Object... arguments) {
+        return rows(query, true, sql, arguments);
+    }
+
+    private List<WorkforceScreen.Row> rows(
+            ScreenQuery query, boolean includeActionContext, String sql, Object... arguments) {
         return jdbc.query(sql, (resultSet, rowNumber) -> {
             var id = resultSet.getObject("id", UUID.class);
             var memberId = resultSet.getObject("member_id", UUID.class);
@@ -1521,6 +2631,9 @@ public final class JdbcWorkforceStore
             values.put("secondary", safe(resultSet.getString("secondary_value")));
             values.put("context", safe(resultSet.getString("context_value")));
             values.put("effective", safe(resultSet.getString("effective_value")));
+            if (includeActionContext) {
+                values.put("$actionContext", safe(resultSet.getString("action_context")));
+            }
             return new WorkforceScreen.Row(
                     id,
                     memberId,
@@ -1570,7 +2683,9 @@ public final class JdbcWorkforceStore
                            count(*) FILTER (WHERE lifecycle_state='active') AS active,
                            count(*) FILTER (WHERE lifecycle_state='draft') AS onboarding,
                            count(*) FILTER (WHERE lifecycle_state IN ('suspended','offboarding')) AS attention
-                    FROM workforce_members WHERE organization_id=?
+                    FROM workforce_members
+                    WHERE organization_id=?
+                      AND careos_m2_actor_can_access_member(organization_id,id)
                     """,
                     context.organizationId());
             return List.of(
@@ -1716,6 +2831,12 @@ public final class JdbcWorkforceStore
                 context.actorId(),
                 context.organizationId(),
                 linkId);
+        replaceLegalNameBirthDateMatchKey(
+                context, linkId, given, family, birthDate, command.now());
+        saveWorkContact(
+                context, linkId, personId, "email", optional(command, "workEmail"), command.now());
+        saveWorkContact(
+                context, linkId, personId, "phone", optional(command, "workPhone"), command.now());
         var audit = ordered(
                 "memberId", memberId,
                 "organizationPersonLinkId", linkId,
@@ -1739,14 +2860,18 @@ public final class JdbcWorkforceStore
 
     private MutationResult recordMatchDecision(
             AuthorizedTenantContext context, MutationCommand command) {
-        var memberId = requireTarget(command);
+        var memberId = member(command);
+        if (command.targetId() == null || !command.targetId().equals(memberId)) {
+            throw conflict("The selected match case is not bound to this workforce member.");
+        }
         var revision = requireRevision(command);
-        var matchRunId = uuid(command, "matchRunId");
-        if (!matchRunId.equals(memberId)) {
-            throw conflict("The person-match run is not bound to the selected onboarding case.");
+        requireMember(context, memberId);
+        var suppliedMatchRunId = required(command, "matchRunId");
+        if (!suppliedMatchRunId.matches("[0-9a-f]{64}")) {
+            throw invalid("matchRunId must be the exact lowercase match-run digest.");
         }
         var decision = required(command, "decisionCode");
-        if (!Set.of("same_person", "different_person").contains(decision)) {
+        if (!Set.of("use_existing", "create_new").contains(decision)) {
             throw invalid("The person-match decision is not supported.");
         }
         UUID candidateReference;
@@ -1755,20 +2880,47 @@ public final class JdbcWorkforceStore
         } catch (IllegalArgumentException exception) {
             throw invalid("candidateReference must be an authorized opaque UUID.");
         }
-        var currentLinkId = jdbc.query(
+        var onboardingCase = jdbc.query(
                 """
-                SELECT organization_person_link_id FROM workforce_members
-                WHERE organization_id=? AND id=? AND lifecycle_state='draft' AND lock_version=?
+                SELECT member.id,member.organization_person_link_id AS link_id,link.person_id,
+                       member.member_number,member.lock_version,member.updated_at,
+                       person.display_name
+                FROM workforce_members member
+                JOIN organization_person_links link
+                  ON link.organization_id=member.organization_id
+                 AND link.id=member.organization_person_link_id
+                JOIN person_profiles person ON person.id=link.person_id
+                WHERE member.organization_id=? AND member.id=?
+                  AND member.lifecycle_state='draft' AND member.lock_version=?
+                  AND link.relationship_status='candidate' AND link.effective_to IS NULL
                 FOR UPDATE
                 """,
-                resultSet -> resultSet.next() ? resultSet.getObject(1, UUID.class) : null,
+                resultSet -> resultSet.next()
+                        ? new PersonMatchCase(
+                                resultSet.getObject("id", UUID.class),
+                                resultSet.getObject("link_id", UUID.class),
+                                resultSet.getObject("person_id", UUID.class),
+                                resultSet.getString("display_name"),
+                                resultSet.getString("member_number"),
+                                resultSet.getLong("lock_version"),
+                                resultSet.getTimestamp("updated_at").toInstant())
+                        : null,
                 context.organizationId(), memberId, revision);
-        if (currentLinkId == null) {
+        if (onboardingCase == null) {
             throw stale("The onboarding match decision is stale or unavailable.");
         }
-        if (decision.equals("different_person")) {
-            if (!candidateReference.equals(currentLinkId)) {
-                throw conflict("The create-new decision is not bound to the current candidate link.");
+        var candidates = personMatchCandidates(
+                context, onboardingCase.currentLinkId(), command.now());
+        var currentMatchRunId = personMatchRunDigest(context, onboardingCase, candidates);
+        if (!MessageDigest.isEqual(
+                suppliedMatchRunId.getBytes(StandardCharsets.UTF_8),
+                currentMatchRunId.getBytes(StandardCharsets.UTF_8))) {
+            throw conflict("The organization person-match result changed; review a fresh match run.");
+        }
+        PersonMatchCandidate selectedCandidate = null;
+        if (decision.equals("create_new")) {
+            if (!candidateReference.equals(onboardingCase.currentLinkId())) {
+                throw conflict("The create-new decision is not bound to the provisional person link.");
             }
             var activated = jdbc.update(
                     """
@@ -1777,58 +2929,221 @@ public final class JdbcWorkforceStore
                         lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
                     WHERE organization_id=? AND id=? AND relationship_status='candidate'
                     """,
-                    context.actorId(), context.organizationId(), currentLinkId);
+                    context.actorId(), context.organizationId(), onboardingCase.currentLinkId());
             requireChanged(activated, "The candidate person link changed before the decision committed.");
         } else {
-            var candidateAvailable = exists(
-                    """
-                    SELECT EXISTS(SELECT 1 FROM organization_person_links link
-                    WHERE link.organization_id=? AND link.id=? AND link.relationship_status='active'
-                      AND link.effective_from<=? AND (link.effective_to IS NULL OR link.effective_to>?)
-                      AND NOT EXISTS(SELECT 1 FROM workforce_members existing
-                          WHERE existing.organization_id=link.organization_id
-                            AND existing.organization_person_link_id=link.id
-                            AND existing.lifecycle_state<>'offboarded'))
-                    """,
-                    context.organizationId(), candidateReference, Timestamp.from(command.now()),
-                    Timestamp.from(command.now()));
-            if (!candidateAvailable || candidateReference.equals(currentLinkId)) {
-                throw conflict("The selected existing person link is no longer eligible.");
+            selectedCandidate = candidates.stream()
+                    .filter(candidate -> candidate.linkId().equals(candidateReference))
+                    .findFirst()
+                    .orElseThrow(() -> conflict(
+                            "The selected existing person is not in this fresh organization match run."));
+        }
+        UUID resultMemberId = memberId;
+        long resultRevision = revision + 1;
+        if (selectedCandidate != null && selectedCandidate.liveMemberId() != null) {
+            var existing = requireMember(context, selectedCandidate.liveMemberId());
+            discardProvisionalOnboardingCase(context, onboardingCase);
+            resultMemberId = existing.id();
+            resultRevision = existing.revision();
+        } else {
+            if (selectedCandidate != null) {
+                var ended = jdbc.update(
+                        """
+                        UPDATE organization_person_links
+                        SET relationship_status='ended',status='ended',
+                            effective_to=GREATEST(?::timestamptz,effective_from+interval '1 microsecond'),
+                            lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
+                        WHERE organization_id=? AND id=? AND relationship_status='candidate'
+                        """,
+                        Timestamp.from(command.now()), context.actorId(), context.organizationId(),
+                        onboardingCase.currentLinkId());
+                requireChanged(ended, "The provisional person link changed before the decision committed.");
+                jdbc.update(
+                        """
+                        UPDATE person_match_keys
+                        SET effective_to=GREATEST(?::timestamptz,effective_from+interval '1 microsecond'),
+                            status='revoked',lock_version=lock_version+1,
+                            updated_at=clock_timestamp(),updated_by=?
+                        WHERE organization_id=? AND organization_person_link_id=?
+                          AND status='active' AND effective_to IS NULL
+                        """,
+                        Timestamp.from(command.now()), context.actorId(), context.organizationId(),
+                        onboardingCase.currentLinkId());
             }
-            var ended = jdbc.update(
+            var changed = jdbc.update(
+                    """
+                    UPDATE workforce_members
+                    SET organization_person_link_id=?,lock_version=lock_version+1,
+                        updated_at=clock_timestamp(),updated_by=?
+                    WHERE organization_id=? AND id=? AND lock_version=? AND lifecycle_state='draft'
+                    """,
+                    selectedCandidate == null
+                            ? onboardingCase.currentLinkId()
+                            : candidateReference,
+                    context.actorId(),
+                    context.organizationId(),
+                    memberId,
+                    revision);
+            requireChanged(changed, "The onboarding match decision is stale or unavailable.");
+        }
+        if (selectedCandidate != null && selectedCandidate.liveMemberId() == null) {
+            jdbc.update(
                     """
                     UPDATE organization_person_links
-                    SET relationship_status='ended',status='ended',
-                        effective_to=GREATEST(?::timestamptz,effective_from+interval '1 microsecond'),
+                    SET source_workforce_member_id=COALESCE(source_workforce_member_id,?),
                         lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
-                    WHERE organization_id=? AND id=? AND relationship_status='candidate'
+                    WHERE organization_id=? AND id=? AND relationship_status='active'
                     """,
-                    Timestamp.from(command.now()), context.actorId(), context.organizationId(), currentLinkId);
-            requireChanged(ended, "The provisional person link changed before the decision committed.");
+                    memberId, context.actorId(), context.organizationId(), candidateReference);
         }
-        var changed = jdbc.update(
-                """
-                UPDATE workforce_members
-                SET organization_person_link_id=?,lock_version=lock_version+1,
-                    updated_at=clock_timestamp(),updated_by=?
-                WHERE organization_id=? AND id=? AND lock_version=? AND lifecycle_state='draft'
-                """,
-                decision.equals("same_person") ? candidateReference : currentLinkId,
-                context.actorId(),
-                context.organizationId(),
-                memberId,
-                revision);
-        requireChanged(changed, "The onboarding match decision is stale or unavailable.");
         var payload = ordered(
                 "onboardingId", memberId,
-                "matchRunId", matchRunId,
+                "matchRunId", suppliedMatchRunId,
                 "decisionCode", decision,
                 "candidateReference", candidateReference,
                 "lockVersion", revision + 1);
         return result(
-                memberId,
+                resultMemberId,
                 "workforce_member",
                 "workforce.person.match_decided",
+                null,
+                null,
+                payload,
+                Map.of(),
+                200,
+                resultRevision);
+    }
+
+    private void discardProvisionalOnboardingCase(
+            AuthorizedTenantContext context, PersonMatchCase onboardingCase) {
+        var discarded = jdbc.queryForObject(
+                "SELECT careos_discard_provisional_onboarding_case(?,?,?,?,?)",
+                Boolean.class,
+                context.organizationId(),
+                onboardingCase.memberId(),
+                onboardingCase.currentLinkId(),
+                onboardingCase.personId(),
+                onboardingCase.revision());
+        if (!Boolean.TRUE.equals(discarded)) {
+            throw conflict("The provisional onboarding case changed before it could be resolved.");
+        }
+    }
+
+    private MutationResult requestPersonMerge(
+            AuthorizedTenantContext context, MutationCommand command) {
+        var retained = requirePersonMergeMember(context, requireTarget(command));
+        var revision = requireRevision(command);
+        if (retained.memberRevision() != revision) {
+            throw stale("The retained member changed before the merge request was prepared.");
+        }
+        var discarded = requirePersonMergeMember(context, uuid(command, "discardedMemberId"));
+        if (retained.memberId().equals(discarded.memberId())
+                || retained.linkId().equals(discarded.linkId())) {
+            throw invalid("The retained and discarded person links must be different.");
+        }
+        if (!retained.linkStatus().equals("active") || !discarded.linkStatus().equals("active")) {
+            throw conflict("Only active organization person links may be consolidated.");
+        }
+        lockPersonMergeLinks(context, retained.linkId(), discarded.linkId());
+        if (exists(
+                """
+                SELECT EXISTS(SELECT 1 FROM person_merge_requests request
+                WHERE request.organization_id=?
+                  AND request.decision_state IN ('draft','submitted','approved')
+                  AND (request.retained_link_id IN (?,?)
+                    OR request.discarded_link_id IN (?,?)))
+                """,
+                context.organizationId(), retained.linkId(), discarded.linkId(),
+                retained.linkId(), discarded.linkId())) {
+            throw conflict("One of the person links already has an open merge request.");
+        }
+        var reviewedImpact = personMergeRequestImpact(context, command);
+        requireCurrentImpact(command, reviewedImpact);
+        var requestId = UuidV7Generator.randomUuid();
+        var candidateDigest = personMergeCandidateDigest(context, retained.linkId(), discarded.linkId());
+        var impactDigest = reviewedImpact.digest();
+        jdbc.update(
+                """
+                INSERT INTO person_merge_requests(
+                    id,organization_id,retained_link_id,discarded_link_id,requested_by,
+                    candidate_evidence_digest,impact_digest,decision_state,reason_code,
+                    submitted_at,status,created_by,updated_by)
+                VALUES (?,?,?,?,?,?,?,'submitted','duplicate_organization_link',?,'submitted',?,?)
+                """,
+                requestId,
+                context.organizationId(),
+                retained.linkId(),
+                discarded.linkId(),
+                context.actorId(),
+                candidateDigest,
+                impactDigest,
+                Timestamp.from(command.now()),
+                context.actorId(),
+                context.actorId());
+        var payload = ordered(
+                "mergeRequestId", requestId,
+                "retainedLinkId", retained.linkId(),
+                "discardedLinkId", discarded.linkId(),
+                "impactDigest", impactDigest,
+                "state", "submitted");
+        return result(
+                requestId,
+                "person_merge_request",
+                "workforce.person_merge.requested",
+                null,
+                null,
+                payload,
+                Map.of(),
+                201,
+                0);
+    }
+
+    private MutationResult decidePersonMerge(
+            AuthorizedTenantContext context, MutationCommand command, boolean approved) {
+        var requestId = requireTarget(command);
+        var revision = requireRevision(command);
+        var request = requirePersonMergeRequest(context, requestId);
+        if (!request.state().equals("submitted") || request.revision() != revision) {
+            throw stale("The person-link merge request is no longer awaiting a decision.");
+        }
+        if (request.requestedBy().equals(context.actorId())
+                || isSubjectActor(context, request.retainedMemberId())
+                || isSubjectActor(context, request.discardedMemberId())) {
+            throw conflict("The requester or an affected account cannot decide this merge request.");
+        }
+        lockPersonMergeLinks(context, request.retainedLinkId(), request.discardedLinkId());
+        if (approved) {
+            requireCurrentPersonMergeImpact(context, request);
+        }
+        var state = approved ? "approved" : "rejected";
+        var changed = jdbc.update(
+                """
+                UPDATE person_merge_requests
+                SET decision_state=?,status=?,decision_by=?,decided_at=?,
+                    lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
+                WHERE organization_id=? AND id=? AND decision_state='submitted'
+                  AND lock_version=? AND requested_by<>?
+                """,
+                state,
+                state,
+                context.actorId(),
+                Timestamp.from(command.now()),
+                context.actorId(),
+                context.organizationId(),
+                requestId,
+                revision,
+                context.actorId());
+        requireChanged(changed, "The person-link merge request changed before the decision committed.");
+        var payload = ordered(
+                "mergeRequestId", requestId,
+                "retainedLinkId", request.retainedLinkId(),
+                "discardedLinkId", request.discardedLinkId(),
+                "impactDigest", request.impactDigest(),
+                "state", state);
+        return result(
+                requestId,
+                "person_merge_request",
+                "workforce.person_merge." + state,
                 null,
                 null,
                 payload,
@@ -1837,24 +3152,211 @@ public final class JdbcWorkforceStore
                 revision + 1);
     }
 
+    private MutationResult cancelPersonMerge(
+            AuthorizedTenantContext context, MutationCommand command) {
+        var requestId = requireTarget(command);
+        var revision = requireRevision(command);
+        var request = requirePersonMergeRequest(context, requestId);
+        if (!request.state().equals("submitted")
+                || request.revision() != revision
+                || !request.requestedBy().equals(context.actorId())) {
+            throw conflict("Only the requester may cancel a submitted person-link merge.");
+        }
+        var changed = jdbc.update(
+                """
+                UPDATE person_merge_requests
+                SET decision_state='cancelled',status='cancelled',
+                    lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
+                WHERE organization_id=? AND id=? AND decision_state='submitted'
+                  AND lock_version=? AND requested_by=?
+                """,
+                context.actorId(), context.organizationId(), requestId, revision, context.actorId());
+        requireChanged(changed, "The person-link merge request changed before cancellation.");
+        var payload = ordered(
+                "mergeRequestId", requestId,
+                "retainedLinkId", request.retainedLinkId(),
+                "discardedLinkId", request.discardedLinkId(),
+                "impactDigest", request.impactDigest(),
+                "state", "cancelled");
+        return result(
+                requestId,
+                "person_merge_request",
+                "workforce.person_merge.cancelled",
+                null,
+                null,
+                payload,
+                Map.of(),
+                200,
+                revision + 1);
+    }
+
+    private MutationResult executePersonMerge(
+            AuthorizedTenantContext context, MutationCommand command) {
+        var requestId = requireTarget(command);
+        var revision = requireRevision(command);
+        var request = requirePersonMergeRequest(context, requestId);
+        if (!request.state().equals("approved") || request.revision() != revision) {
+            throw stale("The person-link merge request is not approved at this revision.");
+        }
+        if (request.requestedBy().equals(context.actorId())
+                || isSubjectActor(context, request.retainedMemberId())
+                || isSubjectActor(context, request.discardedMemberId())) {
+            throw conflict("The requester or an affected account cannot execute this merge request.");
+        }
+        lockPersonMergeLinks(context, request.retainedLinkId(), request.discardedLinkId());
+        requireCurrentPersonMergeImpact(context, request);
+        var retainedLiveMember = currentMemberForLink(context, request.retainedLinkId());
+        var discardedLiveMember = currentMemberForLink(context, request.discardedLinkId());
+        if (retainedLiveMember != null && discardedLiveMember != null
+                && !retainedLiveMember.equals(discardedLiveMember)) {
+            throw conflict(
+                    "Both person links still own live workforce records. Complete governed duplicate-record offboarding before consolidation.");
+        }
+        var affectedReferences = 0;
+        UUID retainedMemberId = retainedLiveMember;
+        if (retainedLiveMember == null && discardedLiveMember != null) {
+            var moved = jdbc.update(
+                    """
+                    UPDATE workforce_members
+                    SET organization_person_link_id=?,lock_version=lock_version+1,
+                        updated_at=clock_timestamp(),updated_by=?
+                    WHERE organization_id=? AND id=? AND organization_person_link_id=?
+                      AND lifecycle_state<>'offboarded'
+                    """,
+                    request.retainedLinkId(),
+                    context.actorId(),
+                    context.organizationId(),
+                    discardedLiveMember,
+                    request.discardedLinkId());
+            requireChanged(moved, "The live workforce reference changed before consolidation.");
+            retainedMemberId = discardedLiveMember;
+            affectedReferences += moved;
+        }
+        if (retainedMemberId == null) {
+            retainedMemberId = request.retainedMemberId();
+        }
+        var revokedKeys = jdbc.update(
+                """
+                UPDATE person_match_keys discarded
+                SET status='revoked',
+                    effective_to=GREATEST(?::timestamptz,discarded.effective_from+interval '1 microsecond'),
+                    lock_version=discarded.lock_version+1,
+                    updated_at=clock_timestamp(),updated_by=?
+                WHERE discarded.organization_id=?
+                  AND discarded.organization_person_link_id=? AND discarded.status='active'
+                  AND EXISTS(SELECT 1 FROM person_match_keys retained
+                      WHERE retained.organization_id=discarded.organization_id
+                        AND retained.organization_person_link_id=? AND retained.status='active'
+                        AND retained.key_type=discarded.key_type
+                        AND retained.hmac_key_version=discarded.hmac_key_version
+                        AND retained.keyed_digest=discarded.keyed_digest)
+                """,
+                Timestamp.from(command.now()),
+                context.actorId(),
+                context.organizationId(),
+                request.discardedLinkId(),
+                request.retainedLinkId());
+        var movedKeys = jdbc.update(
+                """
+                UPDATE person_match_keys
+                SET organization_person_link_id=?,lock_version=lock_version+1,
+                    updated_at=clock_timestamp(),updated_by=?
+                WHERE organization_id=? AND organization_person_link_id=? AND status='active'
+                """,
+                request.retainedLinkId(),
+                context.actorId(),
+                context.organizationId(),
+                request.discardedLinkId());
+        affectedReferences += revokedKeys + movedKeys;
+        if (retainedMemberId != null) {
+            jdbc.update(
+                    """
+                    UPDATE organization_person_links
+                    SET source_workforce_member_id=COALESCE(source_workforce_member_id,?),
+                        lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
+                    WHERE organization_id=? AND id=? AND relationship_status='active'
+                    """,
+                    retainedMemberId,
+                    context.actorId(),
+                    context.organizationId(),
+                    request.retainedLinkId());
+        }
+        var merged = jdbc.update(
+                """
+                UPDATE organization_person_links
+                SET relationship_status='merged',status='merged',
+                    effective_to=GREATEST(?::timestamptz,effective_from+interval '1 microsecond'),
+                    lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
+                WHERE organization_id=? AND id=? AND relationship_status='active'
+                """,
+                Timestamp.from(command.now()),
+                context.actorId(),
+                context.organizationId(),
+                request.discardedLinkId());
+        requireChanged(merged, "The discarded person link changed before consolidation.");
+        affectedReferences += merged;
+        var executed = jdbc.update(
+                """
+                UPDATE person_merge_requests
+                SET decision_state='executed',status='executed',executed_at=?,
+                    lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
+                WHERE organization_id=? AND id=? AND decision_state='approved'
+                  AND lock_version=? AND requested_by<>?
+                """,
+                Timestamp.from(command.now()),
+                context.actorId(),
+                context.organizationId(),
+                requestId,
+                revision,
+                context.actorId());
+        requireChanged(executed, "The approved person-link merge changed before execution.");
+        var audit = ordered(
+                "mergeRequestId", requestId,
+                "retainedLinkId", request.retainedLinkId(),
+                "discardedLinkId", request.discardedLinkId(),
+                "impactDigest", request.impactDigest(),
+                "state", "executed");
+        var outbox = ordered(
+                "mergeRequestId", requestId,
+                "retainedMemberId", retainedMemberId,
+                "affectedReferenceCount", affectedReferences);
+        return result(
+                requestId,
+                "person_merge_request",
+                "workforce.person_merge.executed",
+                "workforce.person_merge.executed",
+                "person_merge_request",
+                audit,
+                outbox,
+                200,
+                revision + 1);
+    }
+
     private MutationResult saveIdentity(
             AuthorizedTenantContext context, MutationCommand command) {
         var memberId = requireTarget(command);
         var revision = requireRevision(command);
-        var personId = jdbc.query(
+        requireMember(context, memberId);
+        var identityLink = jdbc.query(
                 """
-                SELECT link.person_id FROM workforce_members member
+                SELECT link.id,link.person_id FROM workforce_members member
                 JOIN organization_person_links link ON link.organization_id=member.organization_id
                   AND link.id=member.organization_person_link_id
                 WHERE member.organization_id=? AND member.id=?
                 """,
-                resultSet -> resultSet.next() ? resultSet.getObject(1, UUID.class) : null,
+                resultSet -> resultSet.next()
+                        ? new PersonIdentityLink(
+                                resultSet.getObject("id", UUID.class),
+                                resultSet.getObject("person_id", UUID.class))
+                        : null,
                 context.organizationId(), memberId);
-        if (personId == null) {
+        if (identityLink == null) {
             throw notFound("The member identity link was not found.");
         }
         var birthDate = optionalDate(command, "birthDate");
         requireAdultBirthDate(birthDate, command.now());
+        var given = required(command, "legalGivenName");
+        var family = required(command, "legalFamilyName");
         var changed = jdbc.update(
                 """
                 UPDATE person_profiles person
@@ -1867,8 +3369,8 @@ public final class JdbcWorkforceStore
                 WHERE member.organization_id=? AND member.id=? AND person.id=link.person_id
                   AND person.lock_version=?
                 """,
-                required(command, "legalGivenName"),
-                required(command, "legalFamilyName"),
+                given,
+                family,
                 required(command, "displayName"),
                 birthDate,
                 optional(command, "preferredLocale"),
@@ -1877,14 +3379,28 @@ public final class JdbcWorkforceStore
                 memberId,
                 revision);
         requireChanged(changed, "The identity proposal is stale or unavailable.");
-        saveWorkContact(context, personId, "email", optional(command, "workEmail"), command.now());
-        saveWorkContact(context, personId, "phone", optional(command, "workPhone"), command.now());
+        replaceLegalNameBirthDateMatchKey(
+                context, identityLink.linkId(), given, family, birthDate, command.now());
+        saveWorkContact(
+                context,
+                identityLink.linkId(),
+                identityLink.personId(),
+                "email",
+                optional(command, "workEmail"),
+                command.now());
+        saveWorkContact(
+                context,
+                identityLink.linkId(),
+                identityLink.personId(),
+                "phone",
+                optional(command, "workPhone"),
+                command.now());
         if (!exists(
                 """
                 SELECT EXISTS(SELECT 1 FROM person_contacts
                 WHERE person_id=? AND contact_use='work' AND status='active')
                 """,
-                personId)) {
+                identityLink.personId())) {
             throw invalid("At least one work email or work phone is required.");
         }
         var changedFields = command.fields().keySet().stream().sorted().toList();
@@ -1911,6 +3427,7 @@ public final class JdbcWorkforceStore
 
     private void saveWorkContact(
             AuthorizedTenantContext context,
+            UUID organizationPersonLinkId,
             UUID personId,
             String channel,
             String value,
@@ -1918,9 +3435,10 @@ public final class JdbcWorkforceStore
         if (value == null) {
             return;
         }
+        var normalizedValue = Normalizer.normalize(value.strip(), Normalizer.Form.NFC);
         var normalized = channel.equals("email")
-                ? value.strip().toLowerCase()
-                : value.replaceAll("[^0-9+]", "");
+                ? normalizedValue.toLowerCase(Locale.ROOT)
+                : normalizedValue.replaceAll("[^0-9+]", "");
         if (channel.equals("email") && !normalized.matches("[^@\\s]+@[^@\\s]+\\.[^@\\s]+")) {
             throw invalid("workEmail has an invalid format.");
         }
@@ -1937,7 +3455,8 @@ public final class JdbcWorkforceStore
                   AND status='active' AND effective_to IS NULL
                 """,
                 Timestamp.from(now), context.actorId(), personId, channel);
-        var contactDigest = digest(normalized);
+        var contactDigest = sensitiveValues.digest(
+                context.organizationId(), "person_contact:" + channel, normalized);
         var masked = channel.equals("email") ? maskEmail(normalized) : maskPhone(normalized);
         jdbc.update(
                 """
@@ -1950,13 +3469,90 @@ public final class JdbcWorkforceStore
                 UuidV7Generator.randomUuid(),
                 personId,
                 channel,
-                HexFormat.of().parseHex(contactDigest),
+                sensitiveValues.encrypt(
+                        context.organizationId(), "person_contact:" + channel, normalized),
                 contactDigest,
                 masked,
                 channel.equals("email"),
                 Timestamp.from(now),
                 context.actorId(),
                 context.actorId());
+        replaceMatchKey(
+                context,
+                organizationPersonLinkId,
+                channel,
+                normalizeMatchValue(normalized),
+                now);
+    }
+
+    private void replaceLegalNameBirthDateMatchKey(
+            AuthorizedTenantContext context,
+            UUID organizationPersonLinkId,
+            String legalGivenName,
+            String legalFamilyName,
+            LocalDate birthDate,
+            Instant now) {
+        var normalized = birthDate == null
+                ? null
+                : normalizeMatchValue(legalGivenName) + "\u001f"
+                        + normalizeMatchValue(legalFamilyName) + "\u001f" + birthDate;
+        replaceMatchKey(
+                context,
+                organizationPersonLinkId,
+                "legal_name_birth_date",
+                normalized,
+                now);
+    }
+
+    private void replaceMatchKey(
+            AuthorizedTenantContext context,
+            UUID organizationPersonLinkId,
+            String keyType,
+            String normalizedValue,
+            Instant now) {
+        jdbc.update(
+                """
+                UPDATE person_match_keys
+                SET effective_to=GREATEST(?::timestamptz,effective_from+interval '1 microsecond'),
+                    status='rotated',lock_version=lock_version+1,
+                    updated_at=clock_timestamp(),updated_by=?
+                WHERE organization_id=? AND organization_person_link_id=? AND key_type=?
+                  AND status='active' AND effective_to IS NULL
+                """,
+                Timestamp.from(now),
+                context.actorId(),
+                context.organizationId(),
+                organizationPersonLinkId,
+                keyType);
+        if (normalizedValue == null || normalizedValue.isBlank()) {
+            return;
+        }
+        jdbc.update(
+                """
+                INSERT INTO person_match_keys(
+                    id,organization_id,organization_person_link_id,key_type,hmac_key_version,
+                    keyed_digest,effective_from,status,created_by,updated_by)
+                VALUES (?,?,?,?,?,?,?,'active',?,?)
+                """,
+                UuidV7Generator.randomUuid(),
+                context.organizationId(),
+                organizationPersonLinkId,
+                keyType,
+                matchKeys.keyVersion(),
+                matchKeys.digest(context.organizationId(), keyType, normalizedValue),
+                Timestamp.from(now),
+                context.actorId(),
+                context.actorId());
+    }
+
+    private static String normalizeMatchValue(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return Normalizer.normalize(value, Normalizer.Form.NFKC)
+                .strip()
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("\\s+", " ");
     }
 
     private MutationResult saveEngagement(
@@ -2145,7 +3741,8 @@ public final class JdbcWorkforceStore
         if (!number.matches("[A-Z0-9./-]{2,120}")) {
             throw invalid("registrationNumber contains unsupported characters.");
         }
-        var numberDigest = digest(number);
+        var numberDigest = sensitiveValues.digest(
+                context.organizationId(), "professional_registration_number", number);
         var masked = number.length() <= 4
                 ? "••••"
                 : "••••" + number.substring(number.length() - 4);
@@ -2211,7 +3808,8 @@ public final class JdbcWorkforceStore
                 regulatorVersionId,
                 registrationTypeEntryId,
                 registrationTypeVersionId,
-                HexFormat.of().parseHex(numberDigest),
+                sensitiveValues.encrypt(
+                        context.organizationId(), "professional_registration_number", number),
                 numberDigest,
                 masked,
                 required(command, "jurisdictionCountry").toUpperCase(),
@@ -2341,7 +3939,7 @@ public final class JdbcWorkforceStore
                 SET status='submitted',submitted_by=?,submitted_at=clock_timestamp(),
                     lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
                 WHERE organization_id=? AND id=? AND lock_version=?
-                  AND status IN ('draft','evidence_pending','returned_for_correction','more_information_required')
+                  AND status IN ('draft','evidence_pending')
                 """,
                 context.actorId(),
                 context.actorId(),
@@ -2392,6 +3990,11 @@ public final class JdbcWorkforceStore
                   AND (status='submitted'
                     OR (status='in_review' AND review_lease_expires_at<=clock_timestamp()))
                   AND submitted_by<>?
+                  AND NOT EXISTS (
+                      SELECT 1 FROM credential_documents document
+                      WHERE document.organization_id=practitioner_credentials.organization_id
+                        AND document.practitioner_credential_id=practitioner_credentials.id
+                        AND document.created_by=?)
                 """,
                 context.actorId(),
                 Timestamp.from(leaseExpiry),
@@ -2399,6 +4002,7 @@ public final class JdbcWorkforceStore
                 context.organizationId(),
                 credentialId,
                 revision,
+                context.actorId(),
                 context.actorId());
         requireChanged(changed, "The credential cannot be claimed or is already under review.");
         var payload = ordered(
@@ -2449,21 +4053,26 @@ public final class JdbcWorkforceStore
                 .contains(decision)) {
             throw invalid("The credential decision is not supported.");
         }
-        var evidenceIds = command.evidenceIds().isEmpty()
-                ? jdbc.queryForList(
-                        """
-                        SELECT id FROM credential_documents
-                        WHERE organization_id=? AND practitioner_credential_id=? AND status='clean'
-                        ORDER BY id
-                        """,
-                        UUID.class,
-                        context.organizationId(),
-                        credentialId)
-                : command.evidenceIds();
+        var evidenceIds = command.evidenceIds();
         if (evidenceIds.isEmpty()) {
             throw new WorkforceException(
                     WorkforceException.Reason.EVIDENCE_NOT_CLEAN,
-                    "A credential decision requires clean promoted evidence.");
+                    "Select at least one clean promoted document for this credential decision.");
+        }
+        if (Set.copyOf(evidenceIds).size() != evidenceIds.size()) {
+            throw invalid("Credential decision evidence IDs must be unique.");
+        }
+        if (exists(
+                """
+                SELECT EXISTS(SELECT 1 FROM credential_documents
+                WHERE organization_id=? AND practitioner_credential_id=?
+                  AND id=ANY(?::uuid[]) AND created_by=?)
+                """,
+                context.organizationId(),
+                credentialId,
+                evidenceIds.toArray(UUID[]::new),
+                context.actorId())) {
+            throw conflict("A credential evidence uploader cannot decide that evidence.");
         }
         var cleanCount = Objects.requireNonNull(jdbc.queryForObject(
                 """
@@ -2589,6 +4198,7 @@ public final class JdbcWorkforceStore
         requireRange(effectiveFrom, effectiveTo);
         requireRegistryCategory(
                 context, specialtyEntryId, specialtyVersionId, "specialty", effectiveFrom, effectiveTo);
+        var supersedesId = optionalUuid(command, "supersedesId");
         if (supersedesId!=null) {
             var predecessorChanged=jdbc.update(
                     """
@@ -2844,6 +4454,18 @@ public final class JdbcWorkforceStore
         var scopeId = requireTarget(command);
         var revision = requireRevision(command);
         var scope = requireScope(context, scopeId);
+        var memberId = requirePractitionerMember(context, scope.practitionerId());
+        if (isSubjectActor(context, memberId)) {
+            throw conflict("A workforce member cannot decide their own scope of practice.");
+        }
+        if (exists(
+                """
+                SELECT EXISTS(SELECT 1 FROM scopes_of_practice
+                WHERE organization_id=? AND id=? AND submitted_by=?)
+                """,
+                context.organizationId(), scopeId, context.actorId())) {
+            throw conflict("The scope submitter cannot record its approval decision.");
+        }
         var decision = required(command, "decisionCode");
         if (!Set.of("approved","rejected","changes_requested").contains(decision)) {
             throw invalid("The scope decision is not supported.");
@@ -3064,19 +4686,82 @@ public final class JdbcWorkforceStore
             throw conflict("The workforce member changed or cannot be linked to an account.");
         }
         var membershipId = uuid(command, "membershipId");
-        var membershipAvailable = Boolean.TRUE.equals(jdbc.queryForObject(
+        var accountEmail = jdbc.query(
+                """
+                SELECT account.email
+                FROM organization_memberships membership
+                JOIN users account ON account.id=membership.user_id
+                JOIN workforce_members member
+                      ON member.organization_id=membership.organization_id
+                     AND member.id=?
+                JOIN organization_person_links person_link
+                      ON person_link.organization_id=member.organization_id
+                     AND person_link.id=member.organization_person_link_id
+                     AND person_link.relationship_status='active'
+                     AND person_link.effective_from<=clock_timestamp()
+                     AND (person_link.effective_to IS NULL
+                          OR person_link.effective_to>clock_timestamp())
+                WHERE membership.organization_id=? AND membership.id=?
+                      AND membership.status='active' AND account.status='active'
+                      AND membership.effective_from<=clock_timestamp()
+                      AND (membership.effective_to IS NULL
+                           OR membership.effective_to>clock_timestamp())
+                      AND NOT EXISTS(
+                          SELECT 1 FROM access_assignment_scopes existing_scope
+                          WHERE existing_scope.organization_id=membership.organization_id
+                            AND existing_scope.access_assignment_id=membership.id
+                            AND existing_scope.workforce_member_id<>member.id
+                            AND existing_scope.status='active'
+                            AND existing_scope.effective_from<=clock_timestamp()
+                            AND (existing_scope.effective_to IS NULL
+                                 OR existing_scope.effective_to>clock_timestamp()))
+                      AND NOT EXISTS(
+                          SELECT 1
+                          FROM access_assignment_scopes existing_scope
+                          JOIN organization_memberships existing_membership
+                            ON existing_membership.organization_id=existing_scope.organization_id
+                           AND existing_membership.id=existing_scope.access_assignment_id
+                          WHERE existing_scope.organization_id=membership.organization_id
+                            AND existing_scope.workforce_member_id=member.id
+                            AND existing_membership.user_id<>membership.user_id
+                            AND existing_scope.status='active'
+                            AND existing_scope.effective_from<=clock_timestamp()
+                            AND (existing_scope.effective_to IS NULL
+                                 OR existing_scope.effective_to>clock_timestamp()))
+                """,
+                resultSet -> resultSet.next() ? resultSet.getString(1) : null,
+                memberId,
+                context.organizationId(),
+                membershipId);
+        var normalizedAccountEmail = accountEmail == null
+                ? null
+                : Normalizer.normalize(accountEmail.strip(), Normalizer.Form.NFC)
+                        .toLowerCase(Locale.ROOT);
+        var emailDigest = normalizedAccountEmail == null
+                ? null
+                : sensitiveValues.digest(
+                        context.organizationId(), "person_contact:email", normalizedAccountEmail);
+        var membershipMatches = emailDigest != null && exists(
                 """
                 SELECT EXISTS(
-                    SELECT 1 FROM organization_memberships
-                    WHERE organization_id=? AND id=? AND status='active'
-                      AND effective_from<=clock_timestamp()
-                      AND (effective_to IS NULL OR effective_to>clock_timestamp()))
+                    SELECT 1
+                    FROM workforce_members member
+                    JOIN organization_person_links person_link
+                      ON person_link.organization_id=member.organization_id
+                     AND person_link.id=member.organization_person_link_id
+                    JOIN person_contacts contact ON contact.person_id=person_link.person_id
+                    WHERE member.organization_id=? AND member.id=?
+                      AND contact.channel='email' AND contact.contact_use='work'
+                      AND contact.status='active'
+                      AND contact.effective_from<=clock_timestamp()
+                      AND (contact.effective_to IS NULL
+                           OR contact.effective_to>clock_timestamp())
+                      AND contact.normalized_digest=?)
                 """,
-                Boolean.class,
-                context.organizationId(),
-                membershipId));
-        if (!membershipAvailable) {
-            throw conflict("Only an active canonical organization membership may be linked.");
+                context.organizationId(), memberId, emailDigest);
+        if (!membershipMatches) {
+            throw conflict(
+                    "The active organization membership does not match the member's current work email or is already linked elsewhere.");
         }
         var effectiveFrom = instant(command, "effectiveFrom");
         var effectiveTo = optionalInstant(command, "effectiveTo");
@@ -3157,6 +4842,10 @@ public final class JdbcWorkforceStore
         }
         if (notRequired && (!intervals.isEmpty() || !exceptions.isEmpty())) {
             throw invalid("A not-required availability profile cannot contain intervals or exceptions.");
+        }
+        if (notRequired && !availabilityMayBeOmitted(context,memberId,effectiveFrom)) {
+            throw conflict(
+                    "Availability may be omitted only for an approved not-required employment category.");
         }
         jdbc.update(
                 """
@@ -3268,6 +4957,7 @@ public final class JdbcWorkforceStore
                 FROM employment_engagements WHERE organization_id=? AND id=?
                 """,
                 context.organizationId(), id);
+        requireMember(context, (UUID) row.get("workforce_member_id"));
         var from = (String) row.get("status");
         var effectiveFrom = instantValue(row.get("effective_from"));
         var effectiveTo = instantValue(row.get("effective_to"));
@@ -3326,6 +5016,7 @@ public final class JdbcWorkforceStore
                 WHERE practitioner.organization_id=? AND practitioner.id=?
                 """,
                 context.organizationId(), id);
+        requireMember(context, (UUID) row.get("workforce_member_id"));
         var from = (String) row.get("lifecycle_state");
         if (!"clinical".equals(row.get("pathway"))) {
             throw conflict("Only the clinical pathway can activate a practitioner profile.");
@@ -3365,6 +5056,7 @@ public final class JdbcWorkforceStore
         var row = jdbc.queryForMap(
                 "SELECT workforce_member_id,status FROM qualifications WHERE organization_id=? AND id=?",
                 context.organizationId(), id);
+        requireMember(context, (UUID) row.get("workforce_member_id"));
         var changed = jdbc.update(
                 """
                 UPDATE qualifications SET status=?,lock_version=lock_version+1,
@@ -3402,6 +5094,7 @@ public final class JdbcWorkforceStore
                 WHERE organization_id=? AND id=?
                 """,
                 context.organizationId(), id);
+        requireMember(context, (UUID) row.get("workforce_member_id"));
         if (isSubjectActor(context, (UUID) row.get("workforce_member_id"))) {
             throw conflict("A workforce member cannot decide their own qualification.");
         }
@@ -3463,6 +5156,7 @@ public final class JdbcWorkforceStore
                 WHERE registration.organization_id=? AND registration.id=?
                 """,
                 context.organizationId(), id);
+        requireMember(context, (UUID) row.get("workforce_member_id"));
         if (to.equals("verified")
                 && isSubjectActor(context, (UUID) row.get("workforce_member_id"))) {
             throw conflict("A workforce member cannot verify their own registration.");
@@ -3546,9 +5240,9 @@ public final class JdbcWorkforceStore
             AuthorizedTenantContext context, MutationCommand command, String to) {
         var id = requireTarget(command);
         var revision = requireRevision(command);
-        var effectiveTime = currentEffectiveTime(command);
-        var reasonCode = reasonCode(command);
-        var authorityEvidenceId = uuid(command, "authorityEvidenceId");
+        var effectiveTime=currentEffectiveTime(command);
+        reasonCode(command);
+        uuid(command, "authorityEvidenceId");
         var row = jdbc.queryForMap(
                 """
                 SELECT registration.practitioner_profile_id,registration.status,
@@ -3560,14 +5254,14 @@ public final class JdbcWorkforceStore
                 WHERE registration.organization_id=? AND registration.id=?
                 """,
                 context.organizationId(),id);
+        requireMember(context, (UUID) row.get("workforce_member_id"));
         var from = (String) row.get("status");
         var allowed = to.equals("suspended")
                 ? Set.of("verified") : Set.of("verified","suspended");
         if (!allowed.contains(from)) {
             throw conflict("The registration cannot enter " + to + " from its current state.");
         }
-        var impactDigest = domainImpactDigest(
-                context,"professional_registration",id,from,to,effectiveTime,revision);
+        requireCurrentImpact(command,registrationLifecycleImpact(context,command,to));
         var changed = jdbc.update(
                 """
                 UPDATE professional_registrations
@@ -3577,10 +5271,8 @@ public final class JdbcWorkforceStore
                 """,
                 to,context.actorId(),context.organizationId(),id,from,revision);
         requireChanged(changed,"The registration lifecycle transition is stale or invalid.");
-        recordDomainLifecycleEvidence(
-                context,"professional_registration",id,
-                (UUID) row.get("workforce_member_id"),from,to,effectiveTime,
-                reasonCode,authorityEvidenceId,impactDigest,revision+1);
+        reconcileProspectiveServiceAssignments(
+                context,(UUID) row.get("practitioner_profile_id"),null,effectiveTime);
         var payload = ordered(
                 "practitionerId",row.get("practitioner_profile_id"),
                 "registrationId",id,"fromState",from,"toState",to,
@@ -3595,16 +5287,15 @@ public final class JdbcWorkforceStore
         var id = requireTarget(command);
         var revision = requireRevision(command);
         var effectiveTime = currentEffectiveTime(command);
-        var reasonCode = reasonCode(command);
-        var authorityEvidenceId = uuid(command,"authorityEvidenceId");
+        reasonCode(command);
+        uuid(command, "authorityEvidenceId");
         var credential = requireCredential(context,id);
         var allowed = to.equals("suspended")
                 ? Set.of("verified") : Set.of("verified","suspended");
         if (credential.revision()!=revision || !allowed.contains(credential.status())) {
             throw stale("The credential lifecycle transition is stale or invalid.");
         }
-        var impactDigest = domainImpactDigest(
-                context,"practitioner_credential",id,credential.status(),to,effectiveTime,revision);
+        requireCurrentImpact(command,credentialLifecycleImpact(context,command,to));
         var changed=jdbc.update(
                 """
                 UPDATE practitioner_credentials
@@ -3614,10 +5305,8 @@ public final class JdbcWorkforceStore
                 """,
                 to,context.actorId(),context.organizationId(),id,credential.status(),revision);
         requireChanged(changed,"The credential lifecycle transition is stale or invalid.");
-        recordDomainLifecycleEvidence(
-                context,"practitioner_credential",id,credential.memberId(),
-                credential.status(),to,effectiveTime,reasonCode,authorityEvidenceId,
-                impactDigest,revision+1);
+        reconcileProspectiveServiceAssignments(
+                context,credential.practitionerId(),null,effectiveTime);
         var payload=ordered(
                 "practitionerId",credential.practitionerId(),"credentialId",id,
                 "fromState",credential.status(),"toState",to,
@@ -3644,6 +5333,7 @@ public final class JdbcWorkforceStore
                 WHERE specialty.organization_id=? AND specialty.id=?
                 """,
                 context.organizationId(), id);
+        requirePractitionerMember(context, (UUID) row.get("practitioner_profile_id"));
         requireRegistryCategory(
                 context, (UUID) row.get("specialty_entry_id"),
                 (UUID) row.get("specialty_version_id"), "specialty",
@@ -3696,6 +5386,7 @@ public final class JdbcWorkforceStore
                 FROM practitioner_specialties WHERE organization_id=? AND id=?
                 """,
                 context.organizationId(),id);
+        requirePractitionerMember(context, (UUID) row.get("practitioner_profile_id"));
         var effectiveFrom=instantValue(row.get("effective_from"));
         var effectiveTo=instantValue(row.get("effective_to"));
         if (!Set.of("scheduled","active").contains(row.get("status"))
@@ -3742,14 +5433,7 @@ public final class JdbcWorkforceStore
                 || (scope.effectiveTo()!=null && effectiveTime.isAfter(scope.effectiveTo()))) {
             throw invalid("The scope lifecycle effective time must fall inside its effective range.");
         }
-        var memberId=Objects.requireNonNull(jdbc.queryForObject(
-                """
-                SELECT workforce_member_id FROM practitioner_profiles
-                WHERE organization_id=? AND id=?
-                """,
-                UUID.class,context.organizationId(),scope.practitionerId()));
-        var impactDigest=domainImpactDigest(
-                context,"scope_of_practice",id,scope.status(),to,effectiveTime,revision);
+        requireCurrentImpact(command,scopeLifecycleImpact(context,command,to));
         var changed=jdbc.update(
                 """
                 UPDATE scopes_of_practice
@@ -3763,31 +5447,8 @@ public final class JdbcWorkforceStore
                 to,to,to,reasonCode,to,reasonCode,to,Timestamp.from(effectiveTime),
                 context.actorId(),context.organizationId(),id,scope.status(),revision);
         requireChanged(changed,"The scope lifecycle transition is stale or invalid.");
-        if (to.equals("suspended")) {
-            jdbc.update(
-                    """
-                    UPDATE practitioner_service_assignments
-                    SET lifecycle_state='suspended',status='suspended',lock_version=lock_version+1,
-                        updated_at=clock_timestamp(),updated_by=?
-                    WHERE organization_id=? AND scope_of_practice_id=? AND lifecycle_state='active'
-                    """,
-                    context.actorId(),context.organizationId(),id);
-        } else {
-            jdbc.update(
-                    """
-                    UPDATE practitioner_service_assignments
-                    SET lifecycle_state='ended',status='ended',
-                        effective_to=CASE WHEN effective_to IS NULL OR effective_to>? THEN ? ELSE effective_to END,
-                        lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
-                    WHERE organization_id=? AND scope_of_practice_id=?
-                      AND lifecycle_state IN ('active','suspended') AND effective_from<?
-                    """,
-                    Timestamp.from(effectiveTime),Timestamp.from(effectiveTime),context.actorId(),
-                    context.organizationId(),id,Timestamp.from(effectiveTime));
-        }
-        recordDomainLifecycleEvidence(
-                context,"scope_of_practice",id,memberId,scope.status(),to,effectiveTime,
-                reasonCode,null,impactDigest,revision+1);
+        reconcileProspectiveServiceAssignments(
+                context,scope.practitionerId(),id,effectiveTime);
         var payload=ordered(
                 "practitionerId",scope.practitionerId(),"scopeId",id,
                 "fromState",scope.status(),"toState",to,
@@ -3808,6 +5469,7 @@ public final class JdbcWorkforceStore
                 FROM workforce_assignments WHERE organization_id=? AND id=?
                 """,
                 context.organizationId(), id);
+        requireMember(context, (UUID) row.get("workforce_member_id"));
         var from = (String) row.get("lifecycle_state");
         var effectiveFrom = instantValue(row.get("effective_from"));
         var effectiveTo = instantValue(row.get("effective_to"));
@@ -3850,8 +5512,7 @@ public final class JdbcWorkforceStore
             AuthorizedTenantContext context, MutationCommand command) {
         var id = requireTarget(command);
         var revision = requireRevision(command);
-        var row = jdbc.queryForMap(
-                """
+        var sourceSql="""
                 SELECT practitioner_profile_id,service_id,facility_id,location_id,
                        COALESCE(location_id,facility_id) AS context_id,scope_of_practice_id,
                        supervisor_practitioner_id,effective_from,effective_to,
@@ -3859,22 +5520,20 @@ public final class JdbcWorkforceStore
                        (SELECT activity_entry_id FROM practitioner_eligibility_evidence evidence
                         WHERE evidence.organization_id=practitioner_service_assignments.organization_id
                           AND evidence.id=practitioner_service_assignments.eligibility_evidence_id)
-                           AS activity_entry_id
+                            AS activity_entry_id
                 FROM practitioner_service_assignments WHERE organization_id=? AND id=?
-                """,
-                context.organizationId(), id);
+                """;
+        var row=jdbc.queryForMap(sourceSql,context.organizationId(),id);
+        requirePractitionerMember(context, (UUID) row.get("practitioner_profile_id"));
+        lockPractitionerForEligibility(context,(UUID) row.get("practitioner_profile_id"));
+        row=jdbc.queryForMap(sourceSql,context.organizationId(),id);
         var from=(String) row.get("lifecycle_state");
         UUID eligibilityEvidenceId=(UUID) row.get("eligibility_evidence_id");
         String eligibilityDigest=(String) row.get("eligibility_digest");
         Instant reactivationTime=null;
-        String reactivationReason=null;
-        String impactDigest=null;
         if (from.equals("suspended")) {
             reactivationTime=currentEffectiveTime(command);
-            reactivationReason=reasonCode(command);
-            impactDigest=domainImpactDigest(
-                    context,"practitioner_service_assignment",id,from,"active",
-                    reactivationTime,revision);
+            reasonCode(command);
             var evaluatedFrom=reactivationTime.isAfter(instantValue(row.get("effective_from")))
                     ? reactivationTime : instantValue(row.get("effective_from"));
             if (row.get("activity_entry_id")==null
@@ -3908,8 +5567,8 @@ public final class JdbcWorkforceStore
                   AND (assignment.effective_to IS NULL OR assignment.effective_to>clock_timestamp())
                   AND EXISTS(SELECT 1 FROM practitioner_eligibility_evidence evidence
                       WHERE evidence.organization_id=assignment.organization_id
-                        AND evidence.id=assignment.eligibility_evidence_id
-                        AND evidence.result_digest=assignment.eligibility_digest
+                        AND evidence.id=?
+                        AND evidence.result_digest=?
                         AND evidence.practitioner_profile_id=assignment.practitioner_profile_id
                         AND evidence.service_id=assignment.service_id
                         AND evidence.facility_id=assignment.facility_id
@@ -3927,19 +5586,8 @@ public final class JdbcWorkforceStore
                         AND evidence.outcome='eligible' AND evidence.expires_at>clock_timestamp())
                 """,
                 eligibilityEvidenceId,eligibilityDigest,context.actorId(),
-                context.organizationId(), id, revision);
+                context.organizationId(),id,revision,eligibilityEvidenceId,eligibilityDigest);
         requireChanged(changed, "The service assignment or its eligibility evidence is stale.");
-        if (from.equals("suspended")) {
-            var memberId=Objects.requireNonNull(jdbc.queryForObject(
-                    """
-                    SELECT workforce_member_id FROM practitioner_profiles
-                    WHERE organization_id=? AND id=?
-                    """,
-                    UUID.class,context.organizationId(),row.get("practitioner_profile_id")));
-            recordDomainLifecycleEvidence(
-                    context,"practitioner_service_assignment",id,memberId,from,"active",
-                    reactivationTime,reactivationReason,null,impactDigest,revision+1);
-        }
         var payload = ordered(
                 "practitionerId", row.get("practitioner_profile_id"), "serviceAssignmentId", id,
                 "serviceId", row.get("service_id"), "contextId", row.get("context_id"),
@@ -3954,7 +5602,7 @@ public final class JdbcWorkforceStore
         var id=requireTarget(command);
         var revision=requireRevision(command);
         var effectiveTime=currentEffectiveTime(command);
-        var reasonCode=reasonCode(command);
+        reasonCode(command);
         var assignment=requireAssignment(context,id);
         if (assignment.revision()!=revision) {
             throw stale("The assignment lifecycle transition is stale.");
@@ -3989,8 +5637,9 @@ public final class JdbcWorkforceStore
                 throw conflict("An active engagement must cover the reactivated assignment range.");
             }
         }
-        var impactDigest=domainImpactDigest(
-                context,"workforce_assignment",id,assignment.status(),to,effectiveTime,revision);
+        if (!to.equals("cancelled")) {
+            requireCurrentImpact(command, assignmentLifecycleImpact(context, command, to));
+        }
         var changed=jdbc.update(
                 """
                 UPDATE workforce_assignments
@@ -4002,9 +5651,6 @@ public final class JdbcWorkforceStore
                 to,to,to,Timestamp.from(effectiveTime),context.actorId(),context.organizationId(),
                 id,assignment.status(),revision);
         requireChanged(changed,"The assignment lifecycle transition is stale or invalid.");
-        recordDomainLifecycleEvidence(
-                context,"workforce_assignment",id,assignment.memberId(),assignment.status(),to,
-                effectiveTime,reasonCode,null,impactDigest,revision+1);
         var contextType=assignment.locationId()!=null?"location"
                 :assignment.organizationUnitId()!=null?"organization_unit":"facility";
         var contextId=assignment.locationId()!=null?assignment.locationId()
@@ -4027,9 +5673,8 @@ public final class JdbcWorkforceStore
         var id=requireTarget(command);
         var revision=requireRevision(command);
         var effectiveTime=currentEffectiveTime(command);
-        var reasonCode=reasonCode(command);
-        var row=jdbc.queryForMap(
-                """
+        reasonCode(command);
+        var sourceSql="""
                 SELECT assignment.practitioner_profile_id,assignment.service_id,
                        assignment.facility_id,assignment.location_id,
                        coalesce(assignment.location_id,assignment.facility_id) AS context_id,
@@ -4041,8 +5686,11 @@ public final class JdbcWorkforceStore
                   ON practitioner.organization_id=assignment.organization_id
                  AND practitioner.id=assignment.practitioner_profile_id
                 WHERE assignment.organization_id=? AND assignment.id=?
-                """,
-                context.organizationId(),id);
+                """;
+        var row=jdbc.queryForMap(sourceSql,context.organizationId(),id);
+        requireMember(context, (UUID) row.get("workforce_member_id"));
+        lockPractitionerForEligibility(context,(UUID) row.get("practitioner_profile_id"));
+        row=jdbc.queryForMap(sourceSql,context.organizationId(),id);
         var from=(String) row.get("lifecycle_state");
         var allowed=switch (to) {
             case "suspended" -> Set.of("active");
@@ -4059,8 +5707,6 @@ public final class JdbcWorkforceStore
                 || (effectiveTo!=null && effectiveTime.isAfter(effectiveTo)))) {
             throw invalid("The service-assignment lifecycle time must fall inside its effective range.");
         }
-        var impactDigest=domainImpactDigest(
-                context,"practitioner_service_assignment",id,from,to,effectiveTime,revision);
         var changed=jdbc.update(
                 """
                 UPDATE practitioner_service_assignments
@@ -4072,10 +5718,6 @@ public final class JdbcWorkforceStore
                 to,to,to,Timestamp.from(effectiveTime),context.actorId(),context.organizationId(),
                 id,from,revision);
         requireChanged(changed,"The service-assignment lifecycle transition is stale or invalid.");
-        recordDomainLifecycleEvidence(
-                context,"practitioner_service_assignment",id,
-                (UUID) row.get("workforce_member_id"),from,to,effectiveTime,
-                reasonCode,null,impactDigest,revision+1);
         var payload=ordered(
                 "practitionerId",row.get("practitioner_profile_id"),
                 "serviceAssignmentId",id,"serviceId",row.get("service_id"),
@@ -4104,6 +5746,7 @@ public final class JdbcWorkforceStore
                 FROM availability_profiles profile WHERE organization_id=? AND id=?
                 """,
                 context.organizationId(), id);
+        requireMember(context, (UUID) row.get("workforce_member_id"));
         jdbc.update(
                 """
                 UPDATE availability_profiles current_profile
@@ -4143,7 +5786,11 @@ public final class JdbcWorkforceStore
     private MutationResult runReadiness(
             AuthorizedTenantContext context, MutationCommand command) {
         var memberId = member(command);
+        var revision = requireRevision(command);
         var member = requireMember(context, memberId);
+        if (member.revision() != revision) {
+            throw stale("The member changed before readiness evaluation began.");
+        }
         if (!Set.of("draft", "submitted", "suspended").contains(member.status())) {
             throw conflict("Readiness can only be run for onboarding or suspended workforce members.");
         }
@@ -4381,6 +6028,7 @@ public final class JdbcWorkforceStore
                         Timestamp.from(at), Timestamp.from(at),
                         Timestamp.from(at), Timestamp.from(at)),
                 "M2-15"));
+        var availabilityNotRequired=availabilityMayBeOmitted(context,member.id(),at);
         gates.add(gate(
                 "workforce.availability.valid",
                 exists(
@@ -4390,34 +6038,14 @@ public final class JdbcWorkforceStore
                           AND profile.lifecycle_state IN ('scheduled','active')
                           AND profile.effective_from<=?
                           AND (profile.effective_to IS NULL OR profile.effective_to>?)
-                          AND ((profile.not_required AND EXISTS(
-                              SELECT 1 FROM employment_engagements engagement
-                              JOIN workforce_registry_definitions definition
-                                ON definition.organization_id=engagement.organization_id
-                               AND definition.category='employment_category'
-                              JOIN workforce_registry_entries entry
-                                ON entry.organization_id=definition.organization_id
-                               AND entry.registry_definition_id=definition.id
-                               AND entry.entry_key=engagement.employment_category_key
-                              JOIN workforce_registry_versions version
-                                ON version.organization_id=entry.organization_id
-                               AND version.registry_entry_id=entry.id
-                              WHERE engagement.organization_id=profile.organization_id
-                                AND engagement.workforce_member_id=profile.workforce_member_id
-                                AND engagement.status IN ('scheduled','active')
-                                AND engagement.effective_from<=?
-                                AND (engagement.effective_to IS NULL OR engagement.effective_to>?)
-                                AND definition.status='active' AND entry.status='active'
-                                AND version.status='active' AND version.effective_from<=?
-                                AND (version.effective_to IS NULL OR version.effective_to>?)
-                                AND coalesce((version.version_fields->>'availabilityNotRequired')::boolean,false)))
+                          AND ((profile.not_required AND ?::boolean)
                             OR (NOT profile.not_required AND EXISTS(
                               SELECT 1 FROM availability_periods period
                               WHERE period.organization_id=profile.organization_id
                                 AND period.availability_profile_id=profile.id AND period.status='active'))))
                         """,
                         context.organizationId(), member.id(), Timestamp.from(at), Timestamp.from(at),
-                        Timestamp.from(at), Timestamp.from(at),Timestamp.from(at),Timestamp.from(at)),
+                        availabilityNotRequired),
                 "M2-18"));
         var accessLinked = exists(
                 """
@@ -4487,13 +6115,24 @@ public final class JdbcWorkforceStore
                         """
                         SELECT count(DISTINCT membership.user_id)>=2
                         FROM organization_memberships membership
+                        JOIN authorization_roles role
+                          ON role.role_key=membership.role_key
                         JOIN authorization_role_permissions role_permission
                           ON role_permission.role_key=membership.role_key
                          AND role_permission.permission_key='workforce.activation.approve'
-                         AND role_permission.status='active'
+                        JOIN authorization_permissions permission
+                          ON permission.permission_key=role_permission.permission_key
                         WHERE membership.organization_id=? AND membership.status='active'
                           AND membership.effective_from<=?
                           AND (membership.effective_to IS NULL OR membership.effective_to>?)
+                          AND role.status='active' AND role.interactive
+                          AND permission.status='active'
+                          AND EXISTS(SELECT 1 FROM authorization_registry_releases release
+                              WHERE release.registry_version=role.registry_version
+                                AND release.status='active')
+                          AND EXISTS(SELECT 1 FROM authorization_registry_releases release
+                              WHERE release.registry_version=permission.registry_version
+                                AND release.status='active')
                         """,
                         Boolean.class,context.organizationId(),Timestamp.from(at),Timestamp.from(at))),
                 "M2-20"));
@@ -4510,12 +6149,15 @@ public final class JdbcWorkforceStore
                              AND profession.registry_entry_id=practitioner.profession_entry_id
                              AND profession.id=practitioner.profession_version_id
                             WHERE practitioner.organization_id=? AND practitioner.workforce_member_id=?
-                              AND practitioner.status='active' AND profession.status='active'
+                              AND ((?::boolean AND practitioner.status IN ('active','suspended'))
+                                OR (NOT ?::boolean AND practitioner.status='active'))
+                              AND profession.status='active'
                               AND profession.superseded_at IS NULL
                               AND practitioner.effective_from<=?
                               AND (practitioner.effective_to IS NULL OR practitioner.effective_to>?))
                             """,
-                            context.organizationId(), member.id(),Timestamp.from(at),Timestamp.from(at)),
+                            context.organizationId(),member.id(),member.status().equals("suspended"),
+                            member.status().equals("suspended"),Timestamp.from(at),Timestamp.from(at)),
                     "M2-07"));
             gates.add(gate(
                     "practitioner.registration.current",
@@ -5101,19 +6743,9 @@ public final class JdbcWorkforceStore
                 context, predecessor.memberId(), effectiveTime, predecessor.effectiveTo())) {
             throw conflict("An engagement must cover the successor assignment range.");
         }
-        var impactDigest = digest(predecessorId
-                + "|"
-                + successorFacilityId
-                + "|"
-                + Objects.toString(successorUnitId, "")
-                + "|"
-                + Objects.toString(successorLocationId, "")
-                + "|"
-                + effectiveTime
-                + "|"
-                + Objects.toString(predecessor.effectiveTo(), "")
-                + "|"
-                + revision);
+        var impact=assignmentTransferImpact(context,command);
+        requireCurrentImpact(command,impact);
+        var impactDigest=impact.digest();
         var due = !effectiveTime.isAfter(command.now());
         var ended = jdbc.update(
                 """
@@ -5188,14 +6820,14 @@ public final class JdbcWorkforceStore
             String toState) {
         var memberId = requireTarget(command);
         var revision = requireRevision(command);
-        var effectiveTime = instant(command, "effectiveTime");
+        var effectiveTime = currentEffectiveTime(command);
         var categoryCode = required(command, "categoryCode");
+        if (!categoryCode.matches("[a-z][a-z0-9._:-]{1,79}")) {
+            throw invalid("categoryCode must be a stable lower-case machine key.");
+        }
         var member = requireMember(context, memberId);
         if (!member.status().equals(fromState) || member.revision() != revision) {
             throw stale("The member lifecycle transition is stale or invalid.");
-        }
-        if (effectiveTime.isAfter(command.now().plusSeconds(60))) {
-            throw invalid("Suspension and reactivation actions must use a current effective time.");
         }
         if (member.pathway().equals("clinical")
                 && !permissions(context).contains("practitioner.scope.lifecycle")) {
@@ -5224,8 +6856,10 @@ public final class JdbcWorkforceStore
             }
             requireWarningAcknowledgements(context, run.id(), command);
         }
+        var impact=memberLifecycleImpact(context,command,fromState,toState);
+        requireCurrentImpact(command,impact);
         var transitionId = UuidV7Generator.randomUuid();
-        var impactDigest = digest(memberId + "|" + fromState + "|" + toState + "|" + effectiveTime);
+        var impactDigest = impact.digest();
         var changed = jdbc.update(
                 """
                 UPDATE workforce_members
@@ -5253,6 +6887,7 @@ public final class JdbcWorkforceStore
                 transitionId,
                 revision + 1);
         if (toState.equals("suspended")) {
+            var practitionerId=findPractitionerId(context,memberId,false);
             jdbc.update(
                     """
                     UPDATE practitioner_profiles SET lifecycle_state='suspended',status='suspended',
@@ -5260,42 +6895,14 @@ public final class JdbcWorkforceStore
                     WHERE organization_id=? AND workforce_member_id=? AND lifecycle_state='active'
                     """,
                     context.actorId(), context.organizationId(), memberId);
-            jdbc.update(
-                    """
-                    UPDATE practitioner_service_assignments assignment
-                    SET lifecycle_state='suspended',status='suspended',lock_version=lock_version+1,
-                        updated_at=clock_timestamp(),updated_by=?
-                    FROM practitioner_profiles practitioner
-                    WHERE assignment.organization_id=?
-                      AND practitioner.organization_id=assignment.organization_id
-                      AND practitioner.id=assignment.practitioner_profile_id
-                      AND practitioner.workforce_member_id=?
-                      AND assignment.lifecycle_state='active'
-                    """,
-                    context.actorId(), context.organizationId(), memberId);
+            reconcileProspectiveServiceAssignments(
+                    context,practitionerId,null,effectiveTime);
         } else {
             jdbc.update(
                     """
                     UPDATE practitioner_profiles SET lifecycle_state='active',status='active',
                         lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
                     WHERE organization_id=? AND workforce_member_id=? AND lifecycle_state='suspended'
-                    """,
-                    context.actorId(), context.organizationId(), memberId);
-            jdbc.update(
-                    """
-                    UPDATE practitioner_service_assignments assignment
-                    SET lifecycle_state='active',status='active',lock_version=lock_version+1,
-                        updated_at=clock_timestamp(),updated_by=?
-                    FROM practitioner_profiles practitioner
-                    JOIN practitioner_eligibility_evidence eligibility
-                      ON eligibility.organization_id=practitioner.organization_id
-                    WHERE assignment.organization_id=?
-                      AND practitioner.organization_id=assignment.organization_id
-                      AND practitioner.id=assignment.practitioner_profile_id
-                      AND practitioner.workforce_member_id=?
-                      AND eligibility.id=assignment.eligibility_evidence_id
-                      AND eligibility.outcome='eligible' AND eligibility.expires_at>clock_timestamp()
-                      AND assignment.lifecycle_state='suspended'
                     """,
                     context.actorId(), context.organizationId(), memberId);
         }
@@ -5322,7 +6929,11 @@ public final class JdbcWorkforceStore
     private MutationResult requestOffboarding(
             AuthorizedTenantContext context, MutationCommand command) {
         var memberId = requireTarget(command);
+        var revision = requireRevision(command);
         var member = requireMember(context, memberId);
+        if (member.revision() != revision) {
+            throw stale("The member changed before the offboarding impact was calculated.");
+        }
         if (!Set.of("active", "suspended").contains(member.status())) {
             throw conflict("Only an active or suspended member may enter offboarding.");
         }
@@ -5341,8 +6952,9 @@ public final class JdbcWorkforceStore
         requireRegistryCategory(
                 context, reasonEntryId, reasonVersionId, "offboarding_reason",
                 command.now(), effectiveAt);
-        var impactDigest = offboardingImpactDigest(
-                context, memberId, engagementEndAt, effectiveAt, accessAction);
+        var impact=offboardingRequestImpact(context,command);
+        requireCurrentImpact(command,impact);
+        var impactDigest=impact.digest();
         jdbc.update(
                 """
                 INSERT INTO workforce_offboarding_requests(
@@ -5555,6 +7167,32 @@ public final class JdbcWorkforceStore
                 member.id());
         jdbc.update(
                 """
+                UPDATE practitioner_profiles
+                SET lifecycle_state='ended',status='ended',
+                    effective_to=LEAST(COALESCE(effective_to,?),?),
+                    lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
+                WHERE organization_id=? AND workforce_member_id=?
+                  AND lifecycle_state IN ('active','suspended')
+                  AND effective_from<?
+                """,
+                Timestamp.from(request.effectiveAt()), Timestamp.from(request.effectiveAt()),
+                context.actorId(), context.organizationId(), member.id(),
+                Timestamp.from(request.effectiveAt()));
+        jdbc.update(
+                """
+                UPDATE availability_profiles
+                SET lifecycle_state='cancelled',status='cancelled',
+                    effective_to=CASE WHEN effective_from<?
+                        THEN LEAST(COALESCE(effective_to,?),?) ELSE effective_to END,
+                    lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
+                WHERE organization_id=? AND workforce_member_id=?
+                  AND lifecycle_state IN ('draft','scheduled','active')
+                """,
+                Timestamp.from(request.effectiveAt()), Timestamp.from(request.effectiveAt()),
+                Timestamp.from(request.effectiveAt()), context.actorId(),
+                context.organizationId(), member.id());
+        jdbc.update(
+                """
                 UPDATE access_assignment_scopes
                 SET status=CASE WHEN effective_from>=? THEN 'cancelled' ELSE 'ended' END,
                     effective_to=CASE WHEN effective_from>=? THEN effective_to
@@ -5599,6 +7237,7 @@ public final class JdbcWorkforceStore
                 """
                 UPDATE workforce_offboarding_requests
                 SET status='completed',failure_code=NULL,next_attempt_at=NULL,dead_lettered_at=NULL,
+                    dead_letter_owner=NULL,
                     lock_version=lock_version+1,
                     updated_at=clock_timestamp(),updated_by=?
                 WHERE organization_id=? AND id=? AND status IN ('approved','scheduled','failed')
@@ -5641,6 +7280,17 @@ public final class JdbcWorkforceStore
         var milestone = required(command, "milestone");
         if (!Set.of("90", "60", "30", "7", "0", "expired").contains(milestone)) {
             throw invalid("The expiry milestone is not supported.");
+        }
+        var evaluationDate=LocalDate.ofInstant(command.now(),ZoneOffset.UTC);
+        var daysUntilExpiry=source.expiresOn().toEpochDay()-evaluationDate.toEpochDay();
+        var currentMilestone=daysUntilExpiry<0?"expired"
+                :daysUntilExpiry==90?"90"
+                :daysUntilExpiry==60?"60"
+                :daysUntilExpiry==30?"30"
+                :daysUntilExpiry==7?"7"
+                :daysUntilExpiry==0?"0":null;
+        if (!Objects.equals(milestone,currentMilestone)) {
+            throw conflict("The requested milestone does not match the source expiry date.");
         }
         var target = jdbc.query(
                 """
@@ -5690,20 +7340,32 @@ public final class JdbcWorkforceStore
         if (target == null) {
             throw conflict("An active expiry notification template is required.");
         }
+        jdbc.query(
+                "SELECT pg_advisory_xact_lock(hashtextextended(?::text,0))",
+                resultSet -> {
+                    resultSet.next();
+                    return Boolean.TRUE;
+                },
+                "workforce-expiry-notification:"+context.organizationId()+":"
+                        +source.sourceType()+":"+credentialId+":"+milestone+":"
+                        +target.templateVersionId());
         var notificationId = UuidV7Generator.randomUuid();
         var planned = target.recipientId() != null;
-        var attempt = Objects.requireNonNull(jdbc.queryForObject(
+        var existingAttempt = Boolean.TRUE.equals(jdbc.queryForObject(
                 """
-                SELECT coalesce(max(attempt_number),0)+1
-                FROM workforce_notification_deliveries
-                WHERE organization_id=?
-                  AND ((?='credential' AND practitioner_credential_id=?)
-                    OR (?='registration' AND professional_registration_id=?))
-                  AND milestone=? AND template_version_id=?
+                SELECT EXISTS(
+                    SELECT 1 FROM workforce_notification_deliveries
+                    WHERE organization_id=?
+                      AND ((?='credential' AND practitioner_credential_id=?)
+                        OR (?='registration' AND professional_registration_id=?))
+                      AND milestone=? AND template_version_id=?)
                 """,
-                Integer.class,
+                Boolean.class,
                 context.organizationId(),source.sourceType(),credentialId,
                 source.sourceType(),credentialId,milestone,target.templateVersionId()));
+        if (existingAttempt) {
+            throw conflict("This expiry milestone already has notification evidence.");
+        }
         jdbc.update(
                 """
                 INSERT INTO workforce_notification_deliveries(
@@ -5724,7 +7386,7 @@ public final class JdbcWorkforceStore
                 "email",
                 planned ? target.recipientId() : source.memberId(),
                 "credential_expiry_escalation",
-                attempt,
+                1,
                 planned ? null : "recipient_unavailable",
                 planned ? "planned" : "suppressed",
                 context.actorId(),
@@ -5805,25 +7467,6 @@ public final class JdbcWorkforceStore
             throw invalid("The export projection is not available from this source screen.");
         }
         requireExportSourcePermissions(context,projection);
-        if (!exists(
-                """
-                SELECT EXISTS(SELECT 1
-                FROM workforce_registry_definitions definition
-                JOIN workforce_registry_entries entry
-                  ON entry.organization_id=definition.organization_id
-                 AND entry.registry_definition_id=definition.id
-                JOIN workforce_registry_versions version
-                  ON version.organization_id=entry.organization_id
-                 AND version.registry_entry_id=entry.id
-                WHERE definition.organization_id=? AND definition.category='export_legal_basis'
-                  AND definition.status='active' AND entry.status='active'
-                  AND entry.entry_key=? AND version.status='active'
-                  AND version.effective_from<=? AND (version.effective_to IS NULL OR version.effective_to>?)
-                  AND coalesce((version.version_fields->>'enabled')::boolean,false))
-                """,
-                context.organizationId(),legalBasis,Timestamp.from(command.now()),Timestamp.from(command.now()))) {
-            throw invalid("legalBasisKey is not an active approved export legal basis.");
-        }
         if (Set.of(
                                 "member-timeline-summary-v1",
                                 "member-evidence-detail-v1",
@@ -5836,7 +7479,28 @@ public final class JdbcWorkforceStore
         if (command.memberId()!=null) {
             requireMember(context,command.memberId());
         }
-        var filterDigest = digest(command.screenId() + "|" + Objects.toString(command.memberId(), "all"));
+        var filterSearch = optional(command, "filterSearch");
+        if (filterSearch != null) {
+            filterSearch = Normalizer.normalize(filterSearch, Normalizer.Form.NFC).strip();
+            var length = filterSearch.codePointCount(0, filterSearch.length());
+            if (length < 2 || length > 100
+                    || filterSearch.codePoints().anyMatch(Character::isISOControl)) {
+                throw invalid("Export search filters must contain 2 to 100 safe characters.");
+            }
+        }
+        var filterStatus = optional(command, "filterStatus");
+        if (filterStatus != null
+                && (filterStatus.length() > 120
+                        || !filterStatus.matches(
+                                "[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*"))) {
+            throw invalid("Export status filters must be stable lower-case state or event keys.");
+        }
+        var filterDigest = digest(String.join(
+                "|",
+                command.screenId(),
+                Objects.toString(command.memberId(), "all"),
+                Objects.toString(filterSearch, ""),
+                Objects.toString(filterStatus, "")));
         var sortDigest = digest("effective_desc|stable_id");
         var rowLimit = restricted ? 25_000 : 100_000;
         var sizeLimit = restricted ? 104_857_600L : 262_144_000L;
@@ -5848,7 +7512,9 @@ public final class JdbcWorkforceStore
                     filters_digest,sort_digest,snapshot_at,format,row_limit,size_limit_bytes,
                     policy_version,status,filters_json,created_by,updated_by)
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?, 'm2-export-v1',?,
-                        jsonb_build_object('screenId',?::text,'memberId',?::text),?,?)
+                        jsonb_build_object(
+                            'screenId',?::text,'memberId',?::text,
+                            'search',?::text,'status',?::text),?,?)
                 """,
                 exportId,
                 context.organizationId(),
@@ -5865,6 +7531,8 @@ public final class JdbcWorkforceStore
                 initialStatus,
                 command.screenId(),
                 command.memberId() == null ? null : command.memberId().toString(),
+                filterSearch,
+                filterStatus,
                 context.actorId(),
                 context.actorId());
         var payload = ordered(
@@ -5888,6 +7556,165 @@ public final class JdbcWorkforceStore
                 restricted ? null : "workforce_export",
                 payload,
                 restricted ? Map.of() : worker,
+                201,
+                0);
+    }
+
+    private MutationResult retryExport(
+            AuthorizedTenantContext context, MutationCommand command) {
+        var failedExportId = requireTarget(command);
+        var revision = requireRevision(command);
+        var source = jdbc.query(
+                """
+                SELECT export_job.id,export_job.requester_id,export_job.purpose_key,
+                       export_job.legal_basis_key,export_job.projection,
+                       export_job.filters_digest,export_job.sort_digest,export_job.format,
+                       export_job.row_limit,export_job.size_limit_bytes,
+                       export_job.policy_version,export_job.filters_json::text,
+                       (export_job.filters_json->>'memberId')::uuid AS member_id,
+                       export_job.status,export_job.failure_code,
+                       export_job.lock_version,export_job.updated_at
+                FROM workforce_export_jobs export_job
+                WHERE export_job.organization_id=? AND export_job.id=?
+                FOR UPDATE
+                """,
+                resultSet -> resultSet.next()
+                        ? new ExportRetrySource(
+                                resultSet.getObject("id", UUID.class),
+                                resultSet.getObject("requester_id", UUID.class),
+                                resultSet.getString("purpose_key"),
+                                resultSet.getString("legal_basis_key"),
+                                resultSet.getString("projection"),
+                                resultSet.getString("filters_digest"),
+                                resultSet.getString("sort_digest"),
+                                resultSet.getString("format"),
+                                resultSet.getInt("row_limit"),
+                                resultSet.getLong("size_limit_bytes"),
+                                resultSet.getString("policy_version"),
+                                resultSet.getString("filters_json"),
+                                resultSet.getObject("member_id", UUID.class),
+                                resultSet.getString("status"),
+                                resultSet.getString("failure_code"),
+                                resultSet.getLong("lock_version"),
+                                resultSet.getTimestamp("updated_at").toInstant())
+                        : null,
+                context.organizationId(),
+                failedExportId);
+        if (source == null) {
+            throw notFound("The failed workforce export was not found.");
+        }
+        if (!source.status().equals("failed") || source.revision() != revision
+                || "authorization_denied".equals(source.failureCode())
+                || !source.requesterId().equals(context.actorId())) {
+            throw conflict("Only the requester may retry this terminal failed export revision.");
+        }
+        var visibleFromScreen = switch (command.screenId()) {
+            case "M2-26" -> source.projection().equals("workforce-configuration-summary-v1");
+            case "M2-27" -> true;
+            case "M2-29" -> Set.of(
+                            "member-timeline-summary-v1", "member-evidence-detail-v1")
+                    .contains(source.projection());
+            default -> false;
+        };
+        if (!visibleFromScreen) {
+            throw invalid("The failed export is not available from this recovery screen.");
+        }
+        requireExportSourcePermissions(context, source.projection());
+        if (source.memberId() != null) {
+            requireMember(context, source.memberId());
+        }
+        if (exists(
+                """
+                SELECT EXISTS(SELECT 1 FROM workforce_export_jobs retry
+                WHERE retry.organization_id=? AND retry.retry_of_export_id=?)
+                """,
+                context.organizationId(), failedExportId)) {
+            throw conflict("This failed export already has a linked retry job.");
+        }
+        var lineageDepth = jdbc.queryForObject(
+                """
+                WITH RECURSIVE lineage AS (
+                    SELECT id,retry_of_export_id,1 AS depth
+                    FROM workforce_export_jobs
+                    WHERE organization_id=? AND id=?
+                    UNION ALL
+                    SELECT parent.id,parent.retry_of_export_id,lineage.depth+1
+                    FROM workforce_export_jobs parent
+                    JOIN lineage ON parent.id=lineage.retry_of_export_id
+                    WHERE parent.organization_id=? AND lineage.depth<6
+                )
+                SELECT COALESCE(max(depth),0) FROM lineage
+                """,
+                Integer.class,
+                context.organizationId(), failedExportId, context.organizationId());
+        if (lineageDepth == null || lineageDepth < 1) {
+            throw conflict("The export retry lineage could not be verified.");
+        }
+        if (lineageDepth >= 5) {
+            throw conflict("This export retry lineage has reached its five-attempt limit.");
+        }
+        if (exists(
+                """
+                SELECT EXISTS(SELECT 1 FROM workforce_export_jobs active_job
+                WHERE active_job.organization_id=? AND active_job.requester_id=?
+                  AND active_job.projection=?
+                  AND active_job.status IN ('requested','authorized','running','ready'))
+                """,
+                context.organizationId(), context.actorId(), source.projection())) {
+            throw conflict("An active export already exists for this requester and projection.");
+        }
+        var exportId = UuidV7Generator.randomUuid();
+        var initialStatus = source.restricted() ? "requested" : "authorized";
+        var nextAttemptAt = source.failedAt().plusSeconds(60L << (lineageDepth - 1));
+        jdbc.update(
+                """
+                INSERT INTO workforce_export_jobs(
+                    id,organization_id,requester_id,purpose_key,legal_basis_key,projection,
+                    filters_digest,sort_digest,snapshot_at,format,row_limit,size_limit_bytes,
+                    policy_version,status,filters_json,retry_of_export_id,next_attempt_at,
+                    created_by,updated_by)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, ?,?::jsonb,?,?,?,?)
+                """,
+                exportId,
+                context.organizationId(),
+                context.actorId(),
+                source.purposeKey(),
+                source.legalBasisKey(),
+                source.projection(),
+                source.filterDigest(),
+                source.sortDigest(),
+                Timestamp.from(command.now()),
+                source.format(),
+                source.rowLimit(),
+                source.sizeLimitBytes(),
+                source.policyVersion(),
+                initialStatus,
+                source.filtersJson(),
+                failedExportId,
+                Timestamp.from(nextAttemptAt),
+                context.actorId(),
+                context.actorId());
+        var payload = ordered(
+                "exportId", exportId,
+                "projection", source.projection(),
+                "format", source.format(),
+                "filterDigest", source.filterDigest(),
+                "purposeCode", source.purposeKey(),
+                "approvalId", null);
+        var worker = ordered(
+                "exportId", exportId,
+                "projection", source.projection(),
+                "format", source.format(),
+                "filterDigest", source.filterDigest(),
+                "purposeCode", source.purposeKey());
+        return result(
+                exportId,
+                "workforce_export",
+                "workforce.export.requested",
+                source.restricted() ? null : "workforce.export.authorized",
+                source.restricted() ? null : "workforce_export",
+                payload,
+                source.restricted() ? Map.of() : worker,
                 201,
                 0);
     }
@@ -6070,7 +7897,7 @@ public final class JdbcWorkforceStore
                 INSERT INTO workforce_configuration_change_items(
                     id,organization_id,change_request_id,item_order,target_type,target_id,
                     new_revision,new_digest,change_type,changed_fields,created_by,updated_by)
-                VALUES (?,?,?,1,'registry_version',?,0,?,'added',?::varchar[],?,?)
+                VALUES (?,?,?,1,'registry_version',?,1,?,'added',?::varchar[],?,?)
                 """,
                 itemId,
                 context.organizationId(),
@@ -6100,48 +7927,299 @@ public final class JdbcWorkforceStore
                 0);
     }
 
-    private MutationResult approveRegistryChange(
+    private MutationResult createRegistryVersionChange(
             AuthorizedTenantContext context, MutationCommand command) {
-        var draftVersionId = requireTarget(command);
+        var predecessorId = requireTarget(command);
         var expectedRevision = requireRevision(command);
-        var version = requireRegistryVersion(context, draftVersionId);
-        if (version.revision() != expectedRevision
-                || !version.status().equals("draft")
-                || version.makerId().equals(context.actorId())) {
-            throw conflict("The registry draft cannot be approved by this actor.");
+        var predecessor = requireRegistryVersion(context, predecessorId);
+        if (predecessor.revision() != expectedRevision || !predecessor.status().equals("active")) {
+            throw stale("The selected active registry version changed.");
         }
-        var change = findRegistryChange(context, draftVersionId);
-        var approvedVersionId = UuidV7Generator.randomUuid();
-        var approvedNumber = version.versionNumber() + 1;
+        jdbc.query(
+                "SELECT pg_advisory_xact_lock(hashtextextended(?::text,0))",
+                resultSet -> {
+                    resultSet.next();
+                    return Boolean.TRUE;
+                },
+                "workforce-registry-entry:" + context.organizationId() + ":" + predecessor.entryId());
+        var entry = jdbc.query(
+                """
+                SELECT entry.display_label,entry.lifecycle_state,definition.display_name,
+                       definition.category,
+                       coalesce((version.version_fields->>'enabled')::boolean,false) AS enabled
+                FROM workforce_registry_versions version
+                JOIN workforce_registry_entries entry
+                  ON entry.organization_id=version.organization_id
+                 AND entry.id=version.registry_entry_id
+                JOIN workforce_registry_definitions definition
+                  ON definition.organization_id=entry.organization_id
+                 AND definition.id=entry.registry_definition_id
+                WHERE version.organization_id=? AND version.id=?
+                  AND version.status='active' AND version.superseded_at IS NULL
+                  AND entry.lifecycle_state IN ('active','retired')
+                  AND definition.lifecycle_state='active'
+                """,
+                resultSet -> resultSet.next()
+                        ? new RegistryEntryContext(
+                                resultSet.getString("display_label"),
+                                resultSet.getString("lifecycle_state"),
+                                resultSet.getString("display_name"),
+                                resultSet.getString("category"),
+                                resultSet.getBoolean("enabled"))
+                        : null,
+                context.organizationId(),
+                predecessorId);
+        if (entry == null) {
+            throw conflict("The selected version is not the current registry baseline.");
+        }
+        var enabled = bool(command, "enabled");
+        if (enabled == entry.enabled()) {
+            throw invalid("A successor registry version must change the enabled state.");
+        }
+        if (exists(
+                """
+                SELECT EXISTS(SELECT 1 FROM workforce_registry_versions version
+                WHERE version.organization_id=? AND version.registry_entry_id=?
+                  AND version.status IN ('draft','submitted','approved'))
+                """,
+                context.organizationId(), predecessor.entryId())) {
+            throw conflict("The registry entry already has an open successor version.");
+        }
+        var versionNumber = Objects.requireNonNull(jdbc.queryForObject(
+                """
+                SELECT coalesce(max(version_number),0)+1
+                FROM workforce_registry_versions
+                WHERE organization_id=? AND registry_entry_id=?
+                """,
+                Integer.class,
+                context.organizationId(),
+                predecessor.entryId()));
+        var versionId = UuidV7Generator.randomUuid();
+        var requestId = UuidV7Generator.randomUuid();
+        var itemId = UuidV7Generator.randomUuid();
+        var versionFields = enabled ? "{\"enabled\":true}" : "{\"enabled\":false}";
+        var versionDigest = digest(versionFields);
+        var parentSnapshot = jdbc.query(
+                """
+                SELECT id FROM workforce_configuration_snapshots
+                WHERE organization_id=? AND status='active' AND superseded_at IS NULL
+                ORDER BY effective_at DESC,id DESC LIMIT 1
+                """,
+                resultSet -> resultSet.next() ? resultSet.getObject(1, UUID.class) : null,
+                context.organizationId());
         jdbc.update(
                 """
                 INSERT INTO workforce_registry_versions(
                     id,organization_id,registry_entry_id,version_number,version_fields,
-                    version_digest,effective_from,maker_id,checker_id,decision_code,
-                    lifecycle_state,status,created_by,updated_by)
-                VALUES (?,?,?,?,?::jsonb,?,?,?,?, 'approved','approved','approved',?,?)
+                    version_digest,effective_from,maker_id,lifecycle_state,status,
+                    created_by,updated_by)
+                VALUES (?,?,?,?,?::jsonb,?,?,?,'draft','draft',?,?)
                 """,
-                approvedVersionId,
+                versionId,
                 context.organizationId(),
-                version.entryId(),
-                approvedNumber,
-                version.fieldsJson(),
-                version.digest(),
+                predecessor.entryId(),
+                versionNumber,
+                versionFields,
+                versionDigest,
                 Timestamp.from(command.now()),
-                version.makerId(),
                 context.actorId(),
                 context.actorId(),
                 context.actorId());
+        jdbc.update(
+                """
+                INSERT INTO workforce_configuration_change_requests(
+                    id,organization_id,parent_snapshot_id,summary,reason_code,maker_id,
+                    requested_effective_at,status,created_by,updated_by)
+                VALUES (?,?,?,?,?,?,?,'draft',?,?)
+                """,
+                requestId,
+                context.organizationId(),
+                parentSnapshot,
+                (enabled ? "Re-enable " : "Retire ") + entry.definitionLabel()
+                        + " entry " + entry.entryLabel(),
+                enabled ? "registry_entry_reenabled" : "registry_entry_retired",
+                context.actorId(),
+                Timestamp.from(command.now()),
+                context.actorId(),
+                context.actorId());
+        jdbc.update(
+                """
+                INSERT INTO workforce_configuration_change_items(
+                    id,organization_id,change_request_id,item_order,target_type,target_id,
+                    baseline_revision,new_revision,baseline_digest,new_digest,change_type,
+                    changed_fields,created_by,updated_by)
+                VALUES (?,?,?,1,'registry_version',?,?,?,?,?,?,?::varchar[],?,?)
+                """,
+                itemId,
+                context.organizationId(),
+                requestId,
+                versionId,
+                predecessor.versionNumber(),
+                versionNumber,
+                predecessor.digest(),
+                versionDigest,
+                enabled ? "changed" : "removed",
+                new String[] {"version_fields.enabled"},
+                context.actorId(),
+                context.actorId());
+        var payload = ordered(
+                "definitionId", predecessor.definitionId(),
+                "entryId", predecessor.entryId(),
+                "versionId", versionId,
+                "changeRequestId", requestId,
+                "fromState", "active",
+                "toState", "draft",
+                "resultDigest", versionDigest);
+        return result(
+                versionId,
+                "workforce_registry_version",
+                "workforce.registry.created",
+                null,
+                null,
+                payload,
+                Map.of(),
+                201,
+                0);
+    }
+
+    private MutationResult submitRegistryChange(
+            AuthorizedTenantContext context, MutationCommand command) {
+        var draftVersionId=requireTarget(command);
+        var expectedRevision=requireRevision(command);
+        var version=requireRegistryVersion(context,draftVersionId);
+        if (version.revision()!=expectedRevision || !version.status().equals("draft")
+                || !version.makerId().equals(context.actorId())) {
+            throw conflict("Only the maker can submit the current registry draft.");
+        }
+        var change=findRegistryChange(context,draftVersionId);
+        if (!change.requestStatus().equals("draft") || !change.itemStatus().equals("draft")) {
+            throw conflict("The registry change request is not a current draft.");
+        }
+        if (!exists(
+                """
+                SELECT EXISTS(SELECT 1
+                FROM workforce_registry_versions version
+                JOIN workforce_registry_entries entry
+                  ON entry.organization_id=version.organization_id
+                 AND entry.id=version.registry_entry_id
+                JOIN workforce_registry_definitions definition
+                  ON definition.organization_id=entry.organization_id
+                 AND definition.id=entry.registry_definition_id
+                JOIN workforce_configuration_change_items item
+                  ON item.organization_id=version.organization_id
+                 AND item.target_id=version.id
+                JOIN workforce_configuration_change_requests request
+                  ON request.organization_id=item.organization_id
+                 AND request.id=item.change_request_id
+                WHERE version.organization_id=? AND version.id=?
+                  AND version.status='draft' AND entry.status IN ('draft','active','retired')
+                  AND definition.status IN ('draft','active')
+                  AND request.id=? AND request.status='draft' AND request.maker_id=?
+                  AND item.id=? AND item.status='draft'
+                  AND jsonb_typeof(version.version_fields->'enabled')='boolean'
+                  AND jsonb_object_length(version.version_fields)=1
+                  AND ((request.parent_snapshot_id IS NULL AND NOT EXISTS(
+                        SELECT 1 FROM workforce_configuration_snapshots active
+                        WHERE active.organization_id=request.organization_id
+                          AND active.status='active' AND active.superseded_at IS NULL))
+                    OR request.parent_snapshot_id=(
+                        SELECT active.id FROM workforce_configuration_snapshots active
+                        WHERE active.organization_id=request.organization_id
+                          AND active.status='active' AND active.superseded_at IS NULL
+                        ORDER BY active.effective_at DESC,active.id DESC LIMIT 1)))
+                """,
+                context.organizationId(),draftVersionId,change.requestId(),context.actorId(),
+                change.itemId())) {
+            throw conflict("The registry draft failed schema, ownership, or baseline validation.");
+        }
+        var validationDigest=registryValidationDigest(context,version,change,command.now());
+        var versionChanged=jdbc.update(
+                """
+                UPDATE workforce_registry_versions
+                SET lifecycle_state='submitted',status='submitted',lock_version=lock_version+1,
+                    updated_at=clock_timestamp(),updated_by=?
+                WHERE organization_id=? AND id=? AND status='draft' AND lock_version=?
+                  AND maker_id=?
+                """,
+                context.actorId(),context.organizationId(),draftVersionId,expectedRevision,
+                context.actorId());
+        requireChanged(versionChanged,"The registry draft changed before submission.");
+        var requestChanged=jdbc.update(
+                """
+                UPDATE workforce_configuration_change_requests
+                SET validation_digest=?,validation_expires_at=?,status='submitted',
+                    lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
+                WHERE organization_id=? AND id=? AND status='draft' AND maker_id=?
+                """,
+                validationDigest,Timestamp.from(command.now().plusSeconds(900)),context.actorId(),
+                context.organizationId(),change.requestId(),context.actorId());
+        requireChanged(requestChanged,"The registry change request changed before submission.");
+        var itemChanged=jdbc.update(
+                """
+                UPDATE workforce_configuration_change_items
+                SET status='submitted',lock_version=lock_version+1,
+                    updated_at=clock_timestamp(),updated_by=?
+                WHERE organization_id=? AND id=? AND status='draft'
+                """,
+                context.actorId(),context.organizationId(),change.itemId());
+        requireChanged(itemChanged,"The registry change item changed before submission.");
+        var payload=ordered(
+                "definitionId",version.definitionId(),"entryId",version.entryId(),
+                "versionId",version.id(),"changeRequestId",change.requestId(),
+                "fromState","draft","toState","submitted","resultDigest",validationDigest);
+        return result(version.id(),"workforce_registry_version","workforce.registry.submitted",
+                null,null,payload,Map.of(),200,expectedRevision+1);
+    }
+
+    private MutationResult decideRegistryChange(
+            AuthorizedTenantContext context, MutationCommand command, boolean approved) {
+        var submittedVersionId = requireTarget(command);
+        var expectedRevision = requireRevision(command);
+        var version = requireRegistryVersion(context, submittedVersionId);
+        if (version.revision() != expectedRevision
+                || !version.status().equals("submitted")
+                || version.makerId().equals(context.actorId())) {
+            throw conflict("The submitted registry change cannot be decided by this actor.");
+        }
+        var change = findRegistryChange(context, submittedVersionId);
+        if (!change.requestStatus().equals("submitted")
+                || !change.itemStatus().equals("submitted")
+                || change.validationDigest()==null
+                || change.validationExpiresAt()==null
+                || !change.validationExpiresAt().isAfter(command.now())) {
+            throw conflict("The registry validation is stale or no longer bound to this change.");
+        }
+        var validationDigest=approved
+                ? registryValidationDigest(context,version,change,command.now())
+                : change.validationDigest();
+        if (approved && !validationDigest.equals(change.validationDigest())) {
+            throw stale("The registry baseline or referenced-value impact changed after validation.");
+        }
+        var decidedState=approved?"approved":"rejected";
+        var decisionDigest=digest("m2-registry-decision-v1|"+decidedState+"|"
+                +validationDigest+"|"+version.digest());
+        var versionChanged=jdbc.update(
+                """
+                UPDATE workforce_registry_versions
+                SET checker_id=?,decision_code=?,lifecycle_state=?,status=?,
+                    lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
+                WHERE organization_id=? AND id=? AND status='submitted' AND lock_version=?
+                  AND maker_id<>?
+                """,
+                context.actorId(),decidedState,decidedState,decidedState,context.actorId(),
+                context.organizationId(),submittedVersionId,expectedRevision,context.actorId());
+        requireChanged(versionChanged,"The registry version changed before the decision committed.");
         var requestChanged = jdbc.update(
                 """
                 UPDATE workforce_configuration_change_requests
-                SET checker_id=?,decision_digest=?,decision_expires_at=?,status='approved',
+                SET checker_id=?,decision_digest=?,decision_expires_at=?,status=?,
                     lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
-                WHERE organization_id=? AND id=? AND status='draft' AND maker_id<>?
+                WHERE organization_id=? AND id=? AND status='submitted' AND maker_id<>?
                 """,
                 context.actorId(),
-                version.digest(),
-                Timestamp.from(command.now().plusSeconds(1800)),
+                decisionDigest,
+                approved?Timestamp.from(command.now().plusSeconds(1800)):null,
+                decidedState,
                 context.actorId(),
                 context.organizationId(),
                 change.requestId(),
@@ -6150,12 +8228,11 @@ public final class JdbcWorkforceStore
         var itemChanged = jdbc.update(
                 """
                 UPDATE workforce_configuration_change_items
-                SET target_id=?,new_revision=?,status='approved',lock_version=lock_version+1,
+                SET status=?,lock_version=lock_version+1,
                     updated_at=clock_timestamp(),updated_by=?
-                WHERE organization_id=? AND id=?
+                WHERE organization_id=? AND id=? AND status='submitted'
                 """,
-                approvedVersionId,
-                approvedNumber,
+                approved?"approved":"cancelled",
                 context.actorId(),
                 context.organizationId(),
                 change.itemId());
@@ -6163,21 +8240,21 @@ public final class JdbcWorkforceStore
         var payload = ordered(
                 "definitionId", version.definitionId(),
                 "entryId", version.entryId(),
-                "versionId", approvedVersionId,
+                "versionId", submittedVersionId,
                 "changeRequestId", change.requestId(),
-                "fromState", "draft",
-                "toState", "approved",
-                "resultDigest", version.digest());
+                "fromState", "submitted",
+                "toState", decidedState,
+                "resultDigest", decisionDigest);
         return result(
-                approvedVersionId,
+                submittedVersionId,
                 "workforce_registry_version",
-                "workforce.registry.approved",
+                "workforce.registry."+decidedState,
                 null,
                 null,
                 payload,
                 Map.of(),
                 200,
-                0);
+                expectedRevision+1);
     }
 
     private MutationResult activateRegistryChange(
@@ -6199,23 +8276,23 @@ public final class JdbcWorkforceStore
             throw conflict("Registry activation requires a third independent actor.");
         }
         var change = findRegistryChange(context, approvedVersionId);
-        if (!exists(
-                """
-                SELECT EXISTS(SELECT 1
-                FROM workforce_configuration_change_requests request
-                JOIN workforce_configuration_change_items item
-                  ON item.organization_id=request.organization_id
-                 AND item.change_request_id=request.id
-                WHERE request.organization_id=? AND request.id=? AND item.id=?
-                  AND request.status='approved' AND item.status='approved'
-                  AND request.decision_digest=? AND request.decision_expires_at>?)
-                """,
-                context.organizationId(), change.requestId(), change.itemId(),
-                version.digest(), Timestamp.from(command.now()))) {
+        if (!change.requestStatus().equals("approved")
+                || !change.itemStatus().equals("approved")
+                || change.validationDigest()==null
+                || change.decisionDigest()==null
+                || change.decisionExpiresAt()==null
+                || !change.decisionExpiresAt().isAfter(command.now())) {
             throw conflict("The registry approval is stale or its decision digest changed.");
         }
-        var activeVersionId = UuidV7Generator.randomUuid();
-        var activeNumber = version.versionNumber() + 1;
+        var validationDigest=registryValidationDigest(context,version,change,command.now());
+        var expectedDecisionDigest=digest("m2-registry-decision-v1|approved|"
+                +validationDigest+"|"+version.digest());
+        if (!validationDigest.equals(change.validationDigest())
+                || !expectedDecisionDigest.equals(change.decisionDigest())) {
+            throw stale("The registry baseline or referenced-value impact changed after approval.");
+        }
+        var activeVersionId = version.id();
+        var activeNumber = version.versionNumber();
         var previousVersionId = jdbc.query(
                 """
                 SELECT id FROM workforce_registry_versions
@@ -6245,35 +8322,44 @@ public final class JdbcWorkforceStore
                     Timestamp.from(command.now()));
             requireChanged(superseded, "The current registry version changed before activation.");
         }
-        jdbc.update(
+        var activated=jdbc.update(
                 """
-                INSERT INTO workforce_registry_versions(
-                    id,organization_id,registry_entry_id,version_number,version_fields,
-                    version_digest,effective_from,maker_id,checker_id,decision_code,activated_at,
-                    lifecycle_state,status,created_by,updated_by)
-                VALUES (?,?,?,?,?::jsonb,?,?,?,?,?,?, 'active','active',?,?)
+                UPDATE workforce_registry_versions
+                SET effective_from=?,activated_at=?,lifecycle_state='active',status='active',
+                    lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
+                WHERE organization_id=? AND id=? AND status='approved' AND lock_version=?
+                  AND maker_id<>? AND checker_id<>?
                 """,
-                activeVersionId,
-                context.organizationId(),
-                version.entryId(),
-                activeNumber,
-                version.fieldsJson(),
-                version.digest(),
                 Timestamp.from(command.now()),
-                version.makerId(),
-                version.checkerId(),
-                "approved",
                 Timestamp.from(command.now()),
                 context.actorId(),
-                context.actorId());
+                context.organizationId(),approvedVersionId,expectedRevision,
+                context.actorId(),context.actorId());
+        requireChanged(activated,"The approved registry version changed before activation.");
+        var entryEnabled = Boolean.TRUE.equals(jdbc.queryForObject(
+                """
+                SELECT coalesce((version_fields->>'enabled')::boolean,false)
+                FROM workforce_registry_versions WHERE organization_id=? AND id=?
+                """,
+                Boolean.class,
+                context.organizationId(),
+                approvedVersionId));
         jdbc.update(
                 """
                 UPDATE workforce_registry_entries
-                SET lifecycle_state='active',status='active',lock_version=lock_version+1,
+                SET lifecycle_state=CASE WHEN ?::boolean THEN 'active' ELSE 'retired' END,
+                    status=CASE WHEN ?::boolean THEN 'active' ELSE 'retired' END,
+                    lock_version=lock_version+1,
                     updated_at=clock_timestamp(),updated_by=?
-                WHERE organization_id=? AND id=? AND lifecycle_state='draft'
+                WHERE organization_id=? AND id=?
+                  AND lifecycle_state<>CASE WHEN ?::boolean THEN 'active' ELSE 'retired' END
                 """,
-                context.actorId(), context.organizationId(), version.entryId());
+                entryEnabled,
+                entryEnabled,
+                context.actorId(),
+                context.organizationId(),
+                version.entryId(),
+                entryEnabled);
         jdbc.update(
                 """
                 UPDATE workforce_registry_definitions
@@ -6398,15 +8484,24 @@ public final class JdbcWorkforceStore
                 audit,
                 outbox,
                 200,
-                0);
+                expectedRevision+1);
     }
 
     private Member requireMember(AuthorizedTenantContext context, UUID memberId) {
         var member = jdbc.query(
                 """
-                SELECT id,pathway,lifecycle_state,account_access_intent,current_readiness_run_id,
-                       lock_version
-                FROM workforce_members WHERE organization_id=? AND id=?
+                SELECT member.id,member.pathway,member.lifecycle_state,
+                       member.account_access_intent,member.current_readiness_run_id,
+                       member.lock_version
+                FROM workforce_members member
+                JOIN organization_person_links link
+                  ON link.organization_id=member.organization_id
+                 AND link.id=member.organization_person_link_id
+                WHERE member.organization_id=? AND member.id=?
+                  AND (link.relationship_status='active'
+                       OR (link.relationship_status='candidate'
+                           AND nullif(current_setting('app.current_operation_key',true),'')
+                               ='workforce.person.match'))
                 """,
                 resultSet -> resultSet.next()
                         ? new Member(
@@ -6419,14 +8514,367 @@ public final class JdbcWorkforceStore
                         : null,
                 context.organizationId(),
                 memberId);
-        if (member == null) {
+        if (member == null || !canAccessMember(context, memberId)) {
             throw notFound("The workforce member was not found.");
         }
         return member;
     }
 
+    private PersonMergeMember requirePersonMergeMember(
+            AuthorizedTenantContext context, UUID memberId) {
+        requireMember(context, memberId);
+        var member = jdbc.query(
+                """
+                SELECT member.id,member.organization_person_link_id,link.person_id,
+                       member.lifecycle_state,member.lock_version,
+                       link.relationship_status,link.lock_version
+                FROM workforce_members member
+                JOIN organization_person_links link
+                  ON link.organization_id=member.organization_id
+                 AND link.id=member.organization_person_link_id
+                WHERE member.organization_id=? AND member.id=?
+                """,
+                resultSet -> resultSet.next()
+                        ? new PersonMergeMember(
+                                resultSet.getObject("id", UUID.class),
+                                resultSet.getObject("organization_person_link_id", UUID.class),
+                                resultSet.getObject("person_id", UUID.class),
+                                resultSet.getString("lifecycle_state"),
+                                resultSet.getLong(5),
+                                resultSet.getString("relationship_status"),
+                                resultSet.getLong(7))
+                        : null,
+                context.organizationId(),
+                memberId);
+        if (member == null) {
+            throw notFound("The workforce member identity link was not found.");
+        }
+        return member;
+    }
+
+    private PersonMergeRequest requirePersonMergeRequest(
+            AuthorizedTenantContext context, UUID requestId) {
+        var request = jdbc.query(
+                """
+                SELECT request.id,request.retained_link_id,request.discarded_link_id,
+                       request.requested_by,request.candidate_evidence_digest,
+                       request.impact_digest,request.decision_state,request.decision_by,
+                       request.lock_version,retained_member.id AS retained_member_id,
+                       discarded_member.id AS discarded_member_id
+                FROM person_merge_requests request
+                JOIN LATERAL (
+                    SELECT member.id FROM workforce_members member
+                    WHERE member.organization_id=request.organization_id
+                      AND member.organization_person_link_id=request.retained_link_id
+                    ORDER BY (member.lifecycle_state<>'offboarded') DESC,
+                             member.updated_at DESC,member.id DESC LIMIT 1
+                ) retained_member ON true
+                JOIN LATERAL (
+                    SELECT member.id FROM workforce_members member
+                    WHERE member.organization_id=request.organization_id
+                      AND member.organization_person_link_id=request.discarded_link_id
+                    ORDER BY (member.lifecycle_state<>'offboarded') DESC,
+                             member.updated_at DESC,member.id DESC LIMIT 1
+                ) discarded_member ON true
+                WHERE request.organization_id=? AND request.id=?
+                FOR UPDATE OF request
+                """,
+                resultSet -> resultSet.next()
+                        ? new PersonMergeRequest(
+                                resultSet.getObject("id", UUID.class),
+                                resultSet.getObject("retained_link_id", UUID.class),
+                                resultSet.getObject("discarded_link_id", UUID.class),
+                                resultSet.getObject("retained_member_id", UUID.class),
+                                resultSet.getObject("discarded_member_id", UUID.class),
+                                resultSet.getObject("requested_by", UUID.class),
+                                resultSet.getString("candidate_evidence_digest"),
+                                resultSet.getString("impact_digest"),
+                                resultSet.getString("decision_state"),
+                                resultSet.getObject("decision_by", UUID.class),
+                                resultSet.getLong("lock_version"))
+                        : null,
+                context.organizationId(),
+                requestId);
+        if (request == null) {
+            throw notFound("The person-link merge request was not found.");
+        }
+        requireMember(context, request.retainedMemberId());
+        requireMember(context, request.discardedMemberId());
+        return request;
+    }
+
+    private void lockPersonMergeLinks(
+            AuthorizedTenantContext context, UUID firstLinkId, UUID secondLinkId) {
+        var keys = java.util.stream.Stream.of(firstLinkId, secondLinkId)
+                .map(UUID::toString)
+                .sorted()
+                .toList();
+        for (var key : keys) {
+            jdbc.query(
+                    "SELECT pg_advisory_xact_lock(hashtextextended(?::text,0))",
+                    resultSet -> {
+                        resultSet.next();
+                        return Boolean.TRUE;
+                    },
+                    context.organizationId() + ":person-link:" + key);
+        }
+    }
+
+    private String personMergeCandidateDigest(
+            AuthorizedTenantContext context, UUID retainedLinkId, UUID discardedLinkId) {
+        var evidence = jdbc.queryForMap(
+                """
+                SELECT retained.person_id AS retained_person_id,
+                       retained.relationship_status AS retained_status,
+                       retained.lock_version AS retained_revision,
+                       discarded.person_id AS discarded_person_id,
+                       discarded.relationship_status AS discarded_status,
+                       discarded.lock_version AS discarded_revision,
+                       COALESCE((SELECT string_agg(
+                           key.organization_person_link_id::text||':'||key.key_type||':'||
+                           key.hmac_key_version||':'||key.keyed_digest||':'||key.status||':'||
+                           key.lock_version::text,'|' ORDER BY key.organization_person_link_id,
+                           key.key_type,key.hmac_key_version,key.keyed_digest,key.id)
+                         FROM person_match_keys key
+                         WHERE key.organization_id=retained.organization_id
+                           AND key.organization_person_link_id IN (retained.id,discarded.id)), '')
+                           AS match_evidence
+                FROM organization_person_links retained
+                JOIN organization_person_links discarded
+                  ON discarded.organization_id=retained.organization_id
+                WHERE retained.organization_id=? AND retained.id=? AND discarded.id=?
+                """,
+                context.organizationId(), retainedLinkId, discardedLinkId);
+        return digest(retainedLinkId
+                + "|" + evidence.get("retained_person_id")
+                + "|" + evidence.get("retained_status")
+                + "|" + evidence.get("retained_revision")
+                + "|" + discardedLinkId
+                + "|" + evidence.get("discarded_person_id")
+                + "|" + evidence.get("discarded_status")
+                + "|" + evidence.get("discarded_revision")
+                + "|" + evidence.get("match_evidence"));
+    }
+
+    private String personMergeImpactDigest(
+            AuthorizedTenantContext context,
+            UUID retainedLinkId,
+            UUID discardedLinkId,
+            String candidateDigest) {
+        var impact = jdbc.queryForMap(
+                """
+                SELECT COALESCE((SELECT string_agg(
+                           member.id::text||':'||member.lifecycle_state||':'||
+                           member.lock_version::text,'|' ORDER BY member.id)
+                         FROM workforce_members member
+                         WHERE member.organization_id=?
+                           AND member.organization_person_link_id IN (?,?)), '') AS members,
+                       COALESCE((SELECT string_agg(
+                           key.id::text||':'||key.organization_person_link_id::text||':'||
+                           key.status||':'||key.lock_version::text,'|' ORDER BY key.id)
+                         FROM person_match_keys key
+                         WHERE key.organization_id=?
+                           AND key.organization_person_link_id IN (?,?)), '') AS match_keys
+                """,
+                context.organizationId(), retainedLinkId, discardedLinkId,
+                context.organizationId(), retainedLinkId, discardedLinkId);
+        return digest(candidateDigest
+                + "|" + impact.get("members")
+                + "|" + impact.get("match_keys"));
+    }
+
+    private ImpactAnalysis personMergeRequestImpact(
+            AuthorizedTenantContext context, MutationCommand command) {
+        var retained = requirePersonMergeMember(context, requireTarget(command));
+        var revision = requireRevision(command);
+        if (retained.memberRevision() != revision) {
+            throw stale("The retained member changed before the merge impact was reviewed.");
+        }
+        var discarded = requirePersonMergeMember(context, uuid(command, "discardedMemberId"));
+        if (retained.memberId().equals(discarded.memberId())
+                || retained.linkId().equals(discarded.linkId())) {
+            throw invalid("The retained and discarded person links must be different.");
+        }
+        if (!retained.linkStatus().equals("active") || !discarded.linkStatus().equals("active")) {
+            throw conflict("Only active organization person links may be consolidated.");
+        }
+        if (exists(
+                """
+                SELECT EXISTS(SELECT 1 FROM person_merge_requests request
+                WHERE request.organization_id=?
+                  AND request.decision_state IN ('draft','submitted','approved')
+                  AND (request.retained_link_id IN (?,?)
+                    OR request.discarded_link_id IN (?,?)))
+                """,
+                context.organizationId(), retained.linkId(), discarded.linkId(),
+                retained.linkId(), discarded.linkId())) {
+            throw conflict("One of the person links already has an open merge request.");
+        }
+        var candidateDigest = personMergeCandidateDigest(
+                context, retained.linkId(), discarded.linkId());
+        var impactDigest = personMergeImpactDigest(
+                context, retained.linkId(), discarded.linkId(), candidateDigest);
+        var counts = jdbc.queryForMap(
+                """
+                SELECT
+                  (SELECT count(*) FROM workforce_members member
+                    WHERE member.organization_id=?
+                      AND member.organization_person_link_id IN (?,?)) AS member_count,
+                  (SELECT count(*) FROM workforce_members member
+                    WHERE member.organization_id=?
+                      AND member.organization_person_link_id IN (?,?)
+                      AND member.lifecycle_state<>'offboarded') AS live_member_count,
+                  (SELECT count(*) FROM person_match_keys match_key
+                    WHERE match_key.organization_id=?
+                      AND match_key.organization_person_link_id IN (?,?)
+                      AND match_key.status='active') AS active_match_key_count
+                """,
+                context.organizationId(), retained.linkId(), discarded.linkId(),
+                context.organizationId(), retained.linkId(), discarded.linkId(),
+                context.organizationId(), retained.linkId(), discarded.linkId());
+        var memberCount = ((Number) counts.get("member_count")).intValue();
+        var liveMemberCount = ((Number) counts.get("live_member_count")).intValue();
+        var matchKeyCount = ((Number) counts.get("active_match_key_count")).intValue();
+        return new ImpactAnalysis(impactDigest, List.of(
+                new ImpactItem("person_links_consolidated", "impact",
+                        "The discarded organization person link will be consolidated into the retained link.", 2),
+                new ImpactItem("workforce_records_reconciled",
+                        liveMemberCount > 1 ? "warning" : "impact",
+                        liveMemberCount > 1
+                                ? "Both links have live workforce records; resolve the duplicate record before execution."
+                                : "Workforce references will remain attached to the retained identity.",
+                        memberCount),
+                new ImpactItem("active_match_keys_reassigned",
+                        matchKeyCount > 0 ? "warning" : "impact",
+                        "Active organization-scoped match keys will be deduplicated and reassigned.",
+                        matchKeyCount),
+                new ImpactItem("identity_history_preserved", "impact",
+                        "Identity, decision, and attribution history will be preserved.", 2)));
+    }
+
+    private void requireCurrentPersonMergeImpact(
+            AuthorizedTenantContext context, PersonMergeRequest request) {
+        var candidateDigest = personMergeCandidateDigest(
+                context, request.retainedLinkId(), request.discardedLinkId());
+        var impactDigest = personMergeImpactDigest(
+                context, request.retainedLinkId(), request.discardedLinkId(), candidateDigest);
+        if (!candidateDigest.equals(request.candidateDigest())
+                || !impactDigest.equals(request.impactDigest())) {
+            throw conflict("The person-link merge evidence changed and requires a new request.");
+        }
+    }
+
+    private UUID currentMemberForLink(AuthorizedTenantContext context, UUID linkId) {
+        return jdbc.query(
+                """
+                SELECT id FROM workforce_members
+                WHERE organization_id=? AND organization_person_link_id=?
+                  AND lifecycle_state<>'offboarded'
+                ORDER BY updated_at DESC,id DESC LIMIT 1
+                """,
+                resultSet -> resultSet.next() ? resultSet.getObject(1, UUID.class) : null,
+                context.organizationId(),
+                linkId);
+    }
+
+    private boolean canAccessMember(AuthorizedTenantContext context, UUID memberId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT careos_m2_actor_can_access_member(?,?)",
+                Boolean.class,
+                context.organizationId(),
+                memberId));
+    }
+
+    private boolean hasActiveRole(AuthorizedTenantContext context, String roleKey) {
+        return exists(
+                """
+                SELECT EXISTS(SELECT 1 FROM organization_memberships membership
+                JOIN authorization_roles role ON role.role_key=membership.role_key
+                WHERE membership.organization_id=? AND membership.user_id=?
+                  AND membership.role_key=? AND membership.status='active'
+                  AND membership.effective_from<=clock_timestamp()
+                  AND (membership.effective_to IS NULL OR membership.effective_to>clock_timestamp())
+                  AND role.status='active' AND role.interactive)
+                """,
+                context.organizationId(), context.actorId(), roleKey);
+    }
+
+    private boolean hasAnyActiveRole(
+            AuthorizedTenantContext context, Set<String> roleKeys) {
+        return roleKeys.stream().anyMatch(roleKey -> hasActiveRole(context, roleKey));
+    }
+
+    private void requireOperationScope() {
+        if (!Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT careos_m2_actor_has_resource_scope()", Boolean.class))) {
+            throw notFound("The workforce resource is unavailable or is not assigned to this account.");
+        }
+    }
+
+    private UUID requirePractitionerMember(
+            AuthorizedTenantContext context, UUID practitionerId) {
+        var memberId = jdbc.query(
+                """
+                SELECT workforce_member_id FROM practitioner_profiles
+                WHERE organization_id=? AND id=?
+                """,
+                resultSet -> resultSet.next()
+                        ? resultSet.getObject("workforce_member_id", UUID.class)
+                        : null,
+                context.organizationId(),
+                practitionerId);
+        if (memberId == null) {
+            throw notFound("The practitioner profile was not found.");
+        }
+        requireMember(context, memberId);
+        return memberId;
+    }
+
+    private UUID lockPractitionerForEligibility(
+            AuthorizedTenantContext context, UUID practitionerId) {
+        var memberId=jdbc.query(
+                """
+                SELECT workforce_member_id FROM practitioner_profiles
+                WHERE organization_id=? AND id=?
+                FOR NO KEY UPDATE
+                """,
+                resultSet -> resultSet.next()
+                        ? resultSet.getObject("workforce_member_id",UUID.class)
+                        : null,
+                context.organizationId(),practitionerId);
+        if (memberId==null) {
+            throw notFound("The practitioner was not found for eligibility evaluation.");
+        }
+        return memberId;
+    }
+
+    private int reconcileProspectiveServiceAssignments(
+            AuthorizedTenantContext context,
+            UUID practitionerId,
+            UUID scopeId,
+            Instant now) {
+        if (practitionerId==null) {
+            return 0;
+        }
+        var assignmentIds=jdbc.query(
+                """
+                SELECT id FROM practitioner_service_assignments
+                WHERE organization_id=? AND practitioner_profile_id=?
+                  AND (?::uuid IS NULL OR scope_of_practice_id=?::uuid)
+                  AND lifecycle_state IN ('scheduled','active','suspended')
+                  AND (effective_to IS NULL OR effective_to>?)
+                ORDER BY id
+                FOR UPDATE
+                """,
+                (resultSet,rowNumber) -> resultSet.getObject("id",UUID.class),
+                context.organizationId(),practitionerId,scopeId,scopeId,Timestamp.from(now));
+        assignmentIds.forEach(assignmentId -> reconcile(context,assignmentId,now));
+        return assignmentIds.size();
+    }
+
     private UUID findPractitionerId(
             AuthorizedTenantContext context, UUID memberId, boolean required) {
+        requireMember(context, memberId);
         var practitionerId = jdbc.query(
                 """
                 SELECT id FROM practitioner_profiles
@@ -6464,6 +8912,7 @@ public final class JdbcWorkforceStore
         if (credential == null) {
             throw notFound("The credential was not found.");
         }
+        requireMember(context, credential.memberId());
         return credential;
     }
 
@@ -6494,6 +8943,7 @@ public final class JdbcWorkforceStore
                         : null,
                 context.organizationId(),sourceId,context.organizationId(),sourceId);
         if (source==null) throw notFound("The expiry item was not found.");
+        requireMember(context, source.memberId());
         if (source.expiresOn()==null) {
             throw conflict("A non-expiring credential or registration cannot be escalated.");
         }
@@ -6527,6 +8977,7 @@ public final class JdbcWorkforceStore
         if (scope == null) {
             throw notFound("The scope of practice was not found.");
         }
+        requirePractitionerMember(context, scope.practitionerId());
         return scope;
     }
 
@@ -6563,6 +9014,7 @@ public final class JdbcWorkforceStore
         if (assignment == null) {
             throw notFound("The workforce assignment was not found.");
         }
+        requireMember(context, assignment.memberId());
         return assignment;
     }
 
@@ -6592,6 +9044,7 @@ public final class JdbcWorkforceStore
         if (run == null) {
             throw notFound("The readiness run was not found.");
         }
+        requireMember(context, run.memberId());
         return run;
     }
 
@@ -6642,6 +9095,7 @@ public final class JdbcWorkforceStore
         if (request == null) {
             throw notFound("The activation request was not found.");
         }
+        requireMember(context, request.memberId());
         return request;
     }
 
@@ -6668,6 +9122,7 @@ public final class JdbcWorkforceStore
         if (request == null) {
             throw notFound("The offboarding request was not found.");
         }
+        requireMember(context, request.memberId());
         return request;
     }
 
@@ -6729,11 +9184,103 @@ public final class JdbcWorkforceStore
         return version;
     }
 
+    private String registryValidationDigest(
+            AuthorizedTenantContext context,
+            RegistryVersion version,
+            RegistryChange change,
+            Instant validationAt) {
+        jdbc.query(
+                "SELECT pg_advisory_xact_lock(hashtextextended(?::text,0))",
+                resultSet -> {
+                    resultSet.next();
+                    return Boolean.TRUE;
+                },
+                "workforce-registry-entry:"+context.organizationId()+":"+version.entryId());
+        var state=jdbc.query(
+                """
+                SELECT request.parent_snapshot_id,
+                       active_snapshot.id AS active_snapshot_id,
+                       active_snapshot.snapshot_digest AS active_snapshot_digest,
+                       item.baseline_revision,item.baseline_digest,
+                       active_version.id AS active_version_id,
+                       active_version.version_number AS active_version_number,
+                       active_version.version_digest AS active_version_digest,
+                       CASE WHEN jsonb_typeof(candidate.version_fields->'enabled')='boolean'
+                            THEN (candidate.version_fields->>'enabled')::boolean ELSE NULL END
+                            AS candidate_enabled
+                FROM workforce_configuration_change_requests request
+                JOIN workforce_configuration_change_items item
+                  ON item.organization_id=request.organization_id
+                 AND item.change_request_id=request.id
+                JOIN workforce_registry_versions candidate
+                  ON candidate.organization_id=item.organization_id
+                 AND candidate.id=item.target_id
+                LEFT JOIN LATERAL (
+                    SELECT snapshot.id,snapshot.snapshot_digest
+                    FROM workforce_configuration_snapshots snapshot
+                    WHERE snapshot.organization_id=request.organization_id
+                      AND snapshot.status='active' AND snapshot.superseded_at IS NULL
+                    ORDER BY snapshot.effective_at DESC,snapshot.id DESC LIMIT 1
+                ) active_snapshot ON true
+                LEFT JOIN LATERAL (
+                    SELECT current.id,current.version_number,current.version_digest
+                    FROM workforce_registry_versions current
+                    WHERE current.organization_id=candidate.organization_id
+                      AND current.registry_entry_id=candidate.registry_entry_id
+                      AND current.status='active' AND current.superseded_at IS NULL
+                    ORDER BY current.effective_from DESC,current.id DESC LIMIT 1
+                ) active_version ON true
+                WHERE request.organization_id=? AND request.id=? AND item.id=?
+                  AND candidate.id=?
+                """,
+                resultSet -> resultSet.next()
+                        ? new RegistryValidationState(
+                                resultSet.getObject("parent_snapshot_id",UUID.class),
+                                resultSet.getObject("active_snapshot_id",UUID.class),
+                                resultSet.getString("active_snapshot_digest"),
+                                (Long) resultSet.getObject("baseline_revision"),
+                                resultSet.getString("baseline_digest"),
+                                resultSet.getObject("active_version_id",UUID.class),
+                                (Integer) resultSet.getObject("active_version_number"),
+                                resultSet.getString("active_version_digest"),
+                                (Boolean) resultSet.getObject("candidate_enabled"))
+                        : null,
+                context.organizationId(),change.requestId(),change.itemId(),version.id());
+        if (state==null || state.candidateEnabled()==null
+                || !Objects.equals(state.parentSnapshotId(),state.activeSnapshotId())) {
+            throw conflict("The workforce configuration baseline changed during registry validation.");
+        }
+        if (state.baselineRevision()==null) {
+            if (state.baselineDigest()!=null || state.activeVersionId()!=null) {
+                throw conflict("The registry entry acquired an unexpected active baseline.");
+            }
+        } else if (state.activeVersionId()==null
+                || !Objects.equals(state.baselineRevision().intValue(),state.activeVersionNumber())
+                || !Objects.equals(state.baselineDigest(),state.activeVersionDigest())) {
+            throw conflict("The active registry version changed during validation.");
+        }
+        if (!state.candidateEnabled() && Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT careos_m2_registry_entry_has_live_references(?,?,?)",
+                Boolean.class,
+                context.organizationId(),version.entryId(),Timestamp.from(validationAt)))) {
+            throw conflict("The registry entry still has unresolved live or future references.");
+        }
+        return digest("m2-registry-validation-v1|"+version.definitionId()+"|"
+                +version.entryId()+"|"+version.id()+"|"+version.digest()+"|"
+                +Objects.toString(state.activeSnapshotId(),"root")+"|"
+                +Objects.toString(state.activeSnapshotDigest(),"root")+"|"
+                +Objects.toString(state.activeVersionId(),"none")+"|"
+                +Objects.toString(state.activeVersionDigest(),"none")+"|references-clear");
+    }
+
     private RegistryChange findRegistryChange(
             AuthorizedTenantContext context, UUID versionId) {
         var change = jdbc.query(
                 """
-                SELECT request.id AS request_id,item.id AS item_id
+                SELECT request.id AS request_id,item.id AS item_id,
+                       request.status AS request_status,item.status AS item_status,
+                       request.validation_digest,request.validation_expires_at,
+                       request.decision_digest,request.decision_expires_at
                 FROM workforce_configuration_change_items item
                 JOIN workforce_configuration_change_requests request
                   ON request.organization_id=item.organization_id
@@ -6744,7 +9291,13 @@ public final class JdbcWorkforceStore
                 resultSet -> resultSet.next()
                         ? new RegistryChange(
                                 resultSet.getObject("request_id", UUID.class),
-                                resultSet.getObject("item_id", UUID.class))
+                                resultSet.getObject("item_id", UUID.class),
+                                resultSet.getString("request_status"),
+                                resultSet.getString("item_status"),
+                                resultSet.getString("validation_digest"),
+                                instant(resultSet.getTimestamp("validation_expires_at")),
+                                resultSet.getString("decision_digest"),
+                                instant(resultSet.getTimestamp("decision_expires_at")))
                         : null,
                 context.organizationId(),
                 versionId);
@@ -6769,105 +9322,6 @@ public final class JdbcWorkforceStore
             throw invalid("reasonCode must be a stable lower-case machine key.");
         }
         return reasonCode;
-    }
-
-    private String domainImpactDigest(
-            AuthorizedTenantContext context,
-            String aggregateType,
-            UUID aggregateId,
-            String from,
-            String to,
-            Instant effectiveTime,
-            long revision) {
-        var dependencies=switch (aggregateType) {
-            case "professional_registration" -> jdbc.queryForObject(
-                    """
-                    SELECT coalesce(string_agg(assignment.id::text||':'||assignment.lock_version::text
-                        ||':'||assignment.lifecycle_state,'|' ORDER BY assignment.id),'')
-                    FROM professional_registrations registration
-                    JOIN practitioner_service_assignments assignment
-                      ON assignment.organization_id=registration.organization_id
-                     AND assignment.practitioner_profile_id=registration.practitioner_profile_id
-                    WHERE registration.organization_id=? AND registration.id=?
-                      AND assignment.lifecycle_state IN ('scheduled','active','suspended')
-                    """,
-                    String.class,context.organizationId(),aggregateId);
-            case "practitioner_credential" -> jdbc.queryForObject(
-                    """
-                    SELECT coalesce(string_agg(assignment.id::text||':'||assignment.lock_version::text
-                        ||':'||assignment.lifecycle_state,'|' ORDER BY assignment.id),'')
-                    FROM practitioner_credentials credential
-                    JOIN practitioner_service_assignments assignment
-                      ON assignment.organization_id=credential.organization_id
-                     AND assignment.practitioner_profile_id=credential.practitioner_profile_id
-                    WHERE credential.organization_id=? AND credential.id=?
-                      AND assignment.lifecycle_state IN ('scheduled','active','suspended')
-                    """,
-                    String.class,context.organizationId(),aggregateId);
-            case "scope_of_practice" -> jdbc.queryForObject(
-                    """
-                    SELECT coalesce(string_agg(id::text||':'||lock_version::text||':'||lifecycle_state,
-                        '|' ORDER BY id),'')
-                    FROM practitioner_service_assignments
-                    WHERE organization_id=? AND scope_of_practice_id=?
-                      AND lifecycle_state IN ('scheduled','active','suspended')
-                    """,
-                    String.class,context.organizationId(),aggregateId);
-            case "workforce_assignment" -> jdbc.queryForObject(
-                    """
-                    SELECT coalesce(string_agg(service_assignment.id::text||':'
-                        ||service_assignment.lock_version::text||':'||service_assignment.lifecycle_state,
-                        '|' ORDER BY service_assignment.id),'')
-                    FROM workforce_assignments assignment
-                    JOIN practitioner_profiles practitioner
-                      ON practitioner.organization_id=assignment.organization_id
-                     AND practitioner.workforce_member_id=assignment.workforce_member_id
-                    JOIN practitioner_service_assignments service_assignment
-                      ON service_assignment.organization_id=assignment.organization_id
-                     AND service_assignment.practitioner_profile_id=practitioner.id
-                     AND service_assignment.facility_id=assignment.facility_id
-                    WHERE assignment.organization_id=? AND assignment.id=?
-                      AND service_assignment.lifecycle_state IN ('scheduled','active','suspended')
-                    """,
-                    String.class,context.organizationId(),aggregateId);
-            case "practitioner_service_assignment" -> jdbc.queryForObject(
-                    """
-                    SELECT coalesce(eligibility_evidence_id::text,'')||':'
-                        ||coalesce(eligibility_digest,'')
-                    FROM practitioner_service_assignments
-                    WHERE organization_id=? AND id=?
-                    """,
-                    String.class,context.organizationId(),aggregateId);
-            default -> throw new IllegalArgumentException("unsupported lifecycle aggregate type");
-        };
-        return digest(aggregateType+"|"+aggregateId+"|"+from+"|"+to+"|"
-                +effectiveTime+"|"+revision+"|"+Objects.toString(dependencies,""));
-    }
-
-    private void recordDomainLifecycleEvidence(
-            AuthorizedTenantContext context,
-            String aggregateType,
-            UUID aggregateId,
-            UUID memberId,
-            String from,
-            String to,
-            Instant effectiveTime,
-            String reasonCode,
-            UUID authorityEvidenceId,
-            String impactDigest,
-            long aggregateRevision) {
-        jdbc.update(
-                """
-                INSERT INTO workforce_domain_lifecycle_evidence(
-                    id,organization_id,aggregate_type,aggregate_id,workforce_member_id,
-                    from_state,to_state,effective_at,reason_code,authority_evidence_id,
-                    impact_digest,aggregate_revision,actor_id,correlation_id,created_by,updated_by)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                """,
-                UuidV7Generator.randomUuid(),context.organizationId(),aggregateType,aggregateId,
-                memberId,from,to,Timestamp.from(effectiveTime),reasonCode,authorityEvidenceId,
-                impactDigest,aggregateRevision,context.actorId(),context.correlationId(),
-                context.actorId(),context.actorId());
     }
 
     private void insertTransition(
@@ -7380,6 +9834,36 @@ public final class JdbcWorkforceStore
         }
     }
 
+    private boolean availabilityMayBeOmitted(
+            AuthorizedTenantContext context, UUID memberId, Instant effectiveAt) {
+        return exists(
+                """
+                SELECT EXISTS(
+                    SELECT 1 FROM employment_engagements engagement
+                    JOIN workforce_registry_definitions definition
+                      ON definition.organization_id=engagement.organization_id
+                     AND definition.category='employment_category'
+                    JOIN workforce_registry_entries entry
+                      ON entry.organization_id=definition.organization_id
+                     AND entry.registry_definition_id=definition.id
+                     AND entry.entry_key=engagement.employment_category_key
+                    JOIN workforce_registry_versions version
+                      ON version.organization_id=entry.organization_id
+                     AND version.registry_entry_id=entry.id
+                    WHERE engagement.organization_id=?
+                      AND engagement.workforce_member_id=?
+                      AND engagement.employment_category_key='availability_not_required'
+                      AND engagement.status IN ('scheduled','active')
+                      AND engagement.effective_from<=?
+                      AND (engagement.effective_to IS NULL OR engagement.effective_to>?)
+                      AND definition.status='active' AND entry.status='active'
+                      AND version.status='active' AND version.effective_from<=?
+                      AND (version.effective_to IS NULL OR version.effective_to>?))
+                """,
+                context.organizationId(),memberId,Timestamp.from(effectiveAt),
+                Timestamp.from(effectiveAt),Timestamp.from(effectiveAt),Timestamp.from(effectiveAt));
+    }
+
     private boolean engagementCovers(
             AuthorizedTenantContext context,
             UUID memberId,
@@ -7397,6 +9881,567 @@ public final class JdbcWorkforceStore
                 """,
                 context.organizationId(), memberId, Timestamp.from(effectiveFrom),
                 timestamp(effectiveTo), timestamp(effectiveTo), timestamp(effectiveTo));
+    }
+
+    private ImpactAnalysis registrationLifecycleImpact(
+            AuthorizedTenantContext context, MutationCommand command, String toState) {
+        var registrationId=requireTarget(command);
+        var revision=requireRevision(command);
+        var effectiveTime=currentEffectiveTime(command);
+        var authorityEvidenceId=uuid(command,"authorityEvidenceId");
+        reasonCode(command);
+        var practitionerId=jdbc.query(
+                """
+                SELECT practitioner_profile_id FROM professional_registrations
+                WHERE organization_id=? AND id=?
+                """,
+                resultSet -> resultSet.next()
+                        ? resultSet.getObject("practitioner_profile_id",UUID.class)
+                        : null,
+                context.organizationId(),registrationId);
+        if (practitionerId==null) {
+            throw notFound("The professional registration was not found.");
+        }
+        lockPractitionerForEligibility(context,practitionerId);
+        var row=jdbc.queryForMap(
+                """
+                SELECT registration.practitioner_profile_id,registration.status,
+                       registration.lock_version,practitioner.workforce_member_id,
+                       member.lock_version AS member_revision,
+                       (SELECT count(*) FROM practitioner_service_assignments assignment
+                          WHERE assignment.organization_id=registration.organization_id
+                            AND assignment.practitioner_profile_id=registration.practitioner_profile_id
+                            AND assignment.lifecycle_state IN ('scheduled','active','suspended')
+                            AND (assignment.effective_to IS NULL OR assignment.effective_to>?))
+                            AS service_count,
+                       (SELECT count(*) FROM scopes_of_practice scope
+                         WHERE scope.organization_id=registration.organization_id
+                           AND scope.practitioner_profile_id=registration.practitioner_profile_id
+                           AND scope.lifecycle_state IN ('approved','suspended')) AS scope_count
+                FROM professional_registrations registration
+                JOIN practitioner_profiles practitioner
+                  ON practitioner.organization_id=registration.organization_id
+                 AND practitioner.id=registration.practitioner_profile_id
+                JOIN workforce_members member
+                  ON member.organization_id=practitioner.organization_id
+                 AND member.id=practitioner.workforce_member_id
+                WHERE registration.organization_id=? AND registration.id=?
+                """,
+                Timestamp.from(effectiveTime),context.organizationId(),registrationId);
+        requireMember(context,(UUID) row.get("workforce_member_id"));
+        var fromState=(String) row.get("status");
+        var allowed=toState.equals("suspended")?Set.of("verified"):Set.of("verified","suspended");
+        if (((Number) row.get("lock_version")).longValue()!=revision || !allowed.contains(fromState)) {
+            throw stale("The registration lifecycle transition is stale or invalid.");
+        }
+        var serviceCount=((Number) row.get("service_count")).intValue();
+        var scopeCount=((Number) row.get("scope_count")).intValue();
+        var impactDigest=digest("registration|"+registrationId+"|"+revision+"|"+fromState+"|"
+                +toState+"|"+effectiveTime+"|"+authorityEvidenceId+"|"
+                +row.get("member_revision")+"|"+serviceCount+"|"+scopeCount);
+        return new ImpactAnalysis(impactDigest,List.of(
+                new ImpactItem("prospective_eligibility_invalidated","impact",
+                        "Existing prospective registration eligibility evidence will be replaced.",1),
+                new ImpactItem("service_assignments_reconciled",serviceCount>0?"warning":"impact",
+                        "Service assignments will be re-evaluated; ineligible work is suspended.",serviceCount),
+                new ImpactItem("approved_scopes_rechecked",scopeCount>0?"warning":"impact",
+                        "Approved scopes remain historical but must be rechecked.",scopeCount)));
+    }
+
+    private ImpactAnalysis credentialLifecycleImpact(
+            AuthorizedTenantContext context, MutationCommand command, String toState) {
+        var credentialId=requireTarget(command);
+        var revision=requireRevision(command);
+        var effectiveTime=currentEffectiveTime(command);
+        var authorityEvidenceId=uuid(command,"authorityEvidenceId");
+        reasonCode(command);
+        var credential=requireCredential(context,credentialId);
+        if (credential.practitionerId()!=null) {
+            lockPractitionerForEligibility(context,credential.practitionerId());
+            credential=requireCredential(context,credentialId);
+        }
+        var allowed=toState.equals("suspended")?Set.of("verified"):Set.of("verified","suspended");
+        if (credential.revision()!=revision || !allowed.contains(credential.status())) {
+            throw stale("The credential lifecycle transition is stale or invalid.");
+        }
+        var impact=jdbc.queryForMap(
+                """
+                SELECT member.lock_version AS member_revision,
+                       (SELECT count(*) FROM practitioner_service_assignments assignment
+                          WHERE assignment.organization_id=member.organization_id
+                            AND assignment.practitioner_profile_id=credential.practitioner_profile_id
+                            AND assignment.lifecycle_state IN ('scheduled','active','suspended')
+                            AND (assignment.effective_to IS NULL OR assignment.effective_to>?))
+                            AS service_count,
+                       (SELECT count(*) FROM workforce_readiness_runs run
+                         WHERE run.organization_id=member.organization_id
+                           AND run.workforce_member_id=member.id
+                           AND run.status='complete' AND run.expires_at>?) AS readiness_count
+                FROM practitioner_credentials credential
+                JOIN workforce_members member
+                  ON member.organization_id=credential.organization_id
+                 AND member.id=credential.workforce_member_id
+                WHERE credential.organization_id=? AND credential.id=?
+                """,
+                Timestamp.from(effectiveTime),Timestamp.from(command.now()),
+                context.organizationId(),credentialId);
+        var serviceCount=((Number) impact.get("service_count")).intValue();
+        var readinessCount=((Number) impact.get("readiness_count")).intValue();
+        var impactDigest=digest("credential|"+credentialId+"|"+revision+"|"
+                +credential.status()+"|"+toState+"|"+effectiveTime+"|"+authorityEvidenceId+"|"
+                +impact.get("member_revision")+"|"+serviceCount+"|"+readinessCount);
+        return new ImpactAnalysis(impactDigest,List.of(
+                new ImpactItem("prospective_eligibility_invalidated","impact",
+                        "Existing prospective credential eligibility evidence will be replaced.",1),
+                new ImpactItem("service_assignments_reconciled",serviceCount>0?"warning":"impact",
+                        "Service assignments will be re-evaluated; ineligible work is suspended.",serviceCount),
+                new ImpactItem("readiness_invalidated",readinessCount>0?"warning":"impact",
+                        "Fresh readiness evidence will be invalidated.",readinessCount)));
+    }
+
+    private ImpactAnalysis scopeLifecycleImpact(
+            AuthorizedTenantContext context, MutationCommand command, String toState) {
+        var scopeId=requireTarget(command);
+        var revision=requireRevision(command);
+        var effectiveTime=currentEffectiveTime(command);
+        reasonCode(command);
+        var scope=requireScope(context,scopeId);
+        lockPractitionerForEligibility(context,scope.practitionerId());
+        scope=requireScope(context,scopeId);
+        var allowed=toState.equals("suspended")?Set.of("approved"):Set.of("approved","suspended");
+        if (scope.revision()!=revision || !allowed.contains(scope.status())
+                || !effectiveTime.isAfter(scope.effectiveFrom())
+                || (scope.effectiveTo()!=null && effectiveTime.isAfter(scope.effectiveTo()))) {
+            throw stale("The scope lifecycle transition is stale or invalid.");
+        }
+        var impact=jdbc.queryForMap(
+                """
+                SELECT
+                  (SELECT count(*) FROM practitioner_service_assignments assignment
+                    WHERE assignment.organization_id=? AND assignment.scope_of_practice_id=?
+                      AND assignment.lifecycle_state IN ('scheduled','active','suspended')
+                      AND (assignment.effective_to IS NULL OR assignment.effective_to>?))
+                      AS service_count,
+                  (SELECT count(*) FROM scope_activities activity
+                    WHERE activity.organization_id=? AND activity.scope_of_practice_id=?
+                      AND activity.status='active'
+                      AND (activity.effective_to IS NULL OR activity.effective_to>?)) AS activity_count,
+                  (SELECT count(*) FROM scope_restrictions restriction
+                    WHERE restriction.organization_id=? AND restriction.scope_of_practice_id=?
+                      AND restriction.status='active'
+                      AND (restriction.effective_to IS NULL OR restriction.effective_to>?)) AS restriction_count
+                """,
+                context.organizationId(),scopeId,Timestamp.from(effectiveTime),
+                context.organizationId(),scopeId,Timestamp.from(effectiveTime),
+                context.organizationId(),scopeId,
+                Timestamp.from(effectiveTime));
+        var serviceCount=((Number) impact.get("service_count")).intValue();
+        var activityCount=((Number) impact.get("activity_count")).intValue();
+        var restrictionCount=((Number) impact.get("restriction_count")).intValue();
+        var impactDigest=digest("scope|"+scopeId+"|"+revision+"|"+scope.status()+"|"
+                +toState+"|"+effectiveTime+"|"+serviceCount+"|"+activityCount+"|"
+                +restrictionCount);
+        return new ImpactAnalysis(impactDigest,List.of(
+                new ImpactItem("service_assignments_reconciled",serviceCount>0?"warning":"impact",
+                        "Linked service assignments will be re-evaluated; ineligible work is suspended.",serviceCount),
+                new ImpactItem("scope_activities_preserved","impact",
+                        "Controlled activities remain as historical evidence.",activityCount),
+                new ImpactItem("scope_restrictions_preserved","impact",
+                        "Restrictions remain as historical evidence.",restrictionCount)));
+    }
+
+    private ImpactAnalysis assignmentTransferImpact(
+            AuthorizedTenantContext context, MutationCommand command) {
+        var predecessorId=requireTarget(command);
+        var revision=requireRevision(command);
+        var predecessor=requireAssignment(context,predecessorId);
+        var practitionerId=findPractitionerId(context,predecessor.memberId(),false);
+        if (practitionerId!=null) {
+            lockPractitionerForEligibility(context,practitionerId);
+            predecessor=requireAssignment(context,predecessorId);
+        }
+        var effectiveTime=instant(command,"effectiveTime");
+        if (predecessor.revision()!=revision
+                || !Set.of("scheduled","active").contains(predecessor.status())) {
+            throw stale("The assignment cannot be transferred from its current state.");
+        }
+        if (!effectiveTime.isAfter(predecessor.effectiveFrom())
+                || (predecessor.effectiveTo()!=null
+                    && !effectiveTime.isBefore(predecessor.effectiveTo()))) {
+            throw invalid("The transfer effective time must fall inside the predecessor range.");
+        }
+        var successorFacilityId=uuid(command,"successorFacilityId");
+        var successorUnitId=optionalUuid(command,"successorOrganizationUnitId");
+        var successorLocationId=optionalUuid(command,"successorLocationId");
+        requireRegistryCategory(context,predecessor.assignmentTypeEntryId(),
+                predecessor.assignmentTypeVersionId(),"assignment_type",effectiveTime,
+                predecessor.effectiveTo());
+        if (predecessor.positionEntryId()!=null) {
+            requireRegistryCategory(context,predecessor.positionEntryId(),
+                    predecessor.positionVersionId(),"position",effectiveTime,
+                    predecessor.effectiveTo());
+        }
+        requireHierarchyContext(context,successorFacilityId,successorUnitId,successorLocationId,
+                effectiveTime,predecessor.effectiveTo());
+        if (!engagementCovers(context,predecessor.memberId(),effectiveTime,
+                predecessor.effectiveTo())) {
+            throw conflict("An engagement must cover the successor assignment range.");
+        }
+        var downstream=jdbc.queryForMap(
+                """
+                SELECT member.lock_version AS member_revision,
+                       (SELECT count(*) FROM practitioner_service_assignments service_assignment
+                         JOIN practitioner_profiles practitioner
+                           ON practitioner.organization_id=service_assignment.organization_id
+                          AND practitioner.id=service_assignment.practitioner_profile_id
+                         WHERE practitioner.organization_id=member.organization_id
+                           AND practitioner.workforce_member_id=member.id
+                           AND service_assignment.lifecycle_state IN ('scheduled','active')
+                           AND service_assignment.effective_from<=?
+                           AND (service_assignment.effective_to IS NULL
+                             OR service_assignment.effective_to>?)
+                           AND service_assignment.facility_id<>?
+                           AND NOT EXISTS(
+                               SELECT 1 FROM workforce_assignments other_assignment
+                               WHERE other_assignment.organization_id=member.organization_id
+                                 AND other_assignment.workforce_member_id=member.id
+                                 AND other_assignment.id<>?
+                                 AND other_assignment.facility_id=service_assignment.facility_id
+                                 AND other_assignment.lifecycle_state IN ('scheduled','active')
+                                 AND other_assignment.effective_from<=?
+                                 AND (other_assignment.effective_to IS NULL
+                                   OR other_assignment.effective_to>?))) AS uncovered_services
+                FROM workforce_members member
+                WHERE member.organization_id=? AND member.id=?
+                """,
+                Timestamp.from(effectiveTime),Timestamp.from(effectiveTime),successorFacilityId,
+                predecessorId,Timestamp.from(effectiveTime),Timestamp.from(effectiveTime),
+                context.organizationId(),predecessor.memberId());
+        var uncovered=((Number) downstream.get("uncovered_services")).intValue();
+        var impactDigest=digest("assignment-transfer|"+predecessorId+"|"+revision+"|"
+                +successorFacilityId+"|"+Objects.toString(successorUnitId,"")+"|"
+                +Objects.toString(successorLocationId,"")+"|"+effectiveTime+"|"
+                +Objects.toString(predecessor.effectiveTo(),"")+"|"
+                +downstream.get("member_revision")+"|"+uncovered);
+        return new ImpactAnalysis(impactDigest,List.of(
+                new ImpactItem("predecessor_ended","impact",
+                        "The predecessor assignment ends at the successor boundary.",1),
+                new ImpactItem("successor_created","impact",
+                        "One successor assignment will be created atomically.",1),
+                new ImpactItem("service_context_uncovered",uncovered>0?"blocker":"impact",
+                        uncovered>0
+                                ? "Resolve service assignments that would lose organization coverage."
+                                : "No service assignment loses organization coverage.",uncovered)));
+    }
+
+    private ImpactAnalysis assignmentLifecycleImpact(
+            AuthorizedTenantContext context, MutationCommand command, String toState) {
+        var assignmentId=requireTarget(command);
+        var revision=requireRevision(command);
+        var effectiveTime=currentEffectiveTime(command);
+        reasonCode(command);
+        var assignment=requireAssignment(context,assignmentId);
+        var practitionerId=findPractitionerId(context,assignment.memberId(),false);
+        if (practitionerId!=null) {
+            lockPractitionerForEligibility(context,practitionerId);
+            assignment=requireAssignment(context,assignmentId);
+        }
+        var allowed=switch (toState) {
+            case "suspended" -> Set.of("active");
+            case "active" -> Set.of("suspended");
+            case "ended" -> Set.of("active","suspended");
+            default -> Set.<String>of();
+        };
+        if (assignment.revision()!=revision || !allowed.contains(assignment.status())) {
+            throw stale("The assignment lifecycle transition is stale or invalid.");
+        }
+        if (!effectiveTime.isAfter(assignment.effectiveFrom())
+                || (assignment.effectiveTo()!=null && effectiveTime.isAfter(assignment.effectiveTo()))) {
+            throw invalid("The assignment lifecycle effective time must fall inside its effective range.");
+        }
+        if (toState.equals("active")) {
+            requireRegistryCategory(
+                    context,assignment.assignmentTypeEntryId(),assignment.assignmentTypeVersionId(),
+                    "assignment_type",effectiveTime,assignment.effectiveTo());
+            if (assignment.positionEntryId()!=null) {
+                requireRegistryCategory(
+                        context,assignment.positionEntryId(),assignment.positionVersionId(),
+                        "position",effectiveTime,assignment.effectiveTo());
+            }
+            requireHierarchyContext(
+                    context,assignment.facilityId(),assignment.organizationUnitId(),
+                    assignment.locationId(),effectiveTime,assignment.effectiveTo());
+            if (!engagementCovers(
+                    context,assignment.memberId(),effectiveTime,assignment.effectiveTo())) {
+                throw conflict("An active engagement must cover the reactivated assignment range.");
+            }
+        }
+        var downstream=jdbc.queryForMap(
+                """
+                SELECT member.lock_version AS member_revision,
+                       (SELECT count(*) FROM workforce_readiness_runs run
+                         WHERE run.organization_id=member.organization_id
+                           AND run.workforce_member_id=member.id
+                           AND run.status='complete' AND run.expires_at>?) AS readiness_count,
+                       (SELECT count(*) FROM practitioner_service_assignments service_assignment
+                         JOIN practitioner_profiles practitioner
+                           ON practitioner.organization_id=service_assignment.organization_id
+                          AND practitioner.id=service_assignment.practitioner_profile_id
+                         WHERE practitioner.organization_id=member.organization_id
+                           AND practitioner.workforce_member_id=member.id
+                           AND service_assignment.facility_id=?
+                           AND service_assignment.lifecycle_state IN ('scheduled','active')
+                           AND (service_assignment.effective_to IS NULL
+                             OR service_assignment.effective_to>?)
+                           AND NOT EXISTS(
+                               SELECT 1 FROM workforce_assignments other_assignment
+                               WHERE other_assignment.organization_id=member.organization_id
+                                 AND other_assignment.workforce_member_id=member.id
+                                 AND other_assignment.id<>?
+                                 AND other_assignment.facility_id=service_assignment.facility_id
+                                 AND other_assignment.lifecycle_state IN ('scheduled','active')
+                                 AND other_assignment.effective_from<=greatest(
+                                     service_assignment.effective_from,?::timestamptz)
+                                 AND ((service_assignment.effective_to IS NULL
+                                       AND other_assignment.effective_to IS NULL)
+                                   OR (service_assignment.effective_to IS NOT NULL
+                                       AND (other_assignment.effective_to IS NULL
+                                         OR other_assignment.effective_to>=service_assignment.effective_to)))))
+                           AS uncovered_service_count,
+                       (SELECT count(*) FROM practitioner_service_assignments service_assignment
+                         JOIN practitioner_profiles practitioner
+                           ON practitioner.organization_id=service_assignment.organization_id
+                          AND practitioner.id=service_assignment.practitioner_profile_id
+                         WHERE practitioner.organization_id=member.organization_id
+                           AND practitioner.workforce_member_id=member.id
+                           AND service_assignment.facility_id=?
+                           AND service_assignment.lifecycle_state='suspended'
+                           AND (service_assignment.effective_to IS NULL
+                             OR service_assignment.effective_to>?)) AS suspended_service_count
+                FROM workforce_members member
+                WHERE member.organization_id=? AND member.id=?
+                """,
+                Timestamp.from(command.now()),assignment.facilityId(),Timestamp.from(effectiveTime),
+                assignmentId,Timestamp.from(effectiveTime),assignment.facilityId(),
+                Timestamp.from(effectiveTime),context.organizationId(),assignment.memberId());
+        var readinessCount=((Number) downstream.get("readiness_count")).intValue();
+        var uncoveredServiceCount=((Number) downstream.get("uncovered_service_count")).intValue();
+        var suspendedServiceCount=((Number) downstream.get("suspended_service_count")).intValue();
+        var impactDigest=digest("assignment-lifecycle|"+assignmentId+"|"+revision+"|"
+                +assignment.status()+"|"+toState+"|"+effectiveTime+"|"
+                +assignment.memberId()+"|"+assignment.facilityId()+"|"
+                +Objects.toString(assignment.organizationUnitId(),"")+"|"
+                +Objects.toString(assignment.locationId(),"")+"|"
+                +assignment.assignmentTypeEntryId()+"|"+assignment.assignmentTypeVersionId()+"|"
+                +Objects.toString(assignment.positionEntryId(),"")+"|"
+                +Objects.toString(assignment.positionVersionId(),"")+"|"
+                +assignment.primary()+"|"+assignment.effectiveFrom()+"|"
+                +Objects.toString(assignment.effectiveTo(),"")+"|"
+                +downstream.get("member_revision")+"|"+readinessCount+"|"
+                +uncoveredServiceCount+"|"+suspendedServiceCount);
+        var serviceImpact=toState.equals("active")
+                ? new ImpactItem(
+                        "service_eligibility_recheck",
+                        suspendedServiceCount>0?"warning":"impact",
+                        suspendedServiceCount>0
+                                ? "Suspended service assignments require separate eligibility re-evaluation."
+                                : "No suspended service assignment requires re-evaluation.",
+                        suspendedServiceCount)
+                : new ImpactItem(
+                        "service_context_dependencies",
+                        uncoveredServiceCount>0?"blocker":"impact",
+                        uncoveredServiceCount>0
+                                ? "Resolve service assignments that would lose workforce coverage."
+                                : "No service assignment loses workforce coverage.",
+                        uncoveredServiceCount);
+        return new ImpactAnalysis(impactDigest,List.of(
+                serviceImpact,
+                new ImpactItem("readiness_invalidated",readinessCount>0?"warning":"impact",
+                        "Fresh readiness evidence will be invalidated.",readinessCount),
+                new ImpactItem("historical_assignment_preserved","impact",
+                        "Historical assignment attribution remains immutable.",1)));
+    }
+
+    private ImpactAnalysis memberLifecycleImpact(
+            AuthorizedTenantContext context,
+            MutationCommand command,
+            String fromState,
+            String toState) {
+        var memberId=requireTarget(command);
+        var revision=requireRevision(command);
+        var effectiveTime=currentEffectiveTime(command);
+        var categoryCode=required(command,"categoryCode");
+        if (!categoryCode.matches("[a-z][a-z0-9._:-]{1,79}")) {
+            throw invalid("categoryCode must be a stable lower-case machine key.");
+        }
+        var member=requireMember(context,memberId);
+        var practitionerId=findPractitionerId(context,memberId,false);
+        if (practitionerId!=null) {
+            lockPractitionerForEligibility(context,practitionerId);
+            member=requireMember(context,memberId);
+        }
+        if (member.revision()!=revision || !member.status().equals(fromState)) {
+            throw stale("The member lifecycle transition is stale or invalid.");
+        }
+        if (member.pathway().equals("clinical")
+                && !permissions(context).contains("practitioner.scope.lifecycle")) {
+            throw conflict("Clinical lifecycle changes require clinical governance authority.");
+        }
+        String readinessDigest="none";
+        var readinessWarnings=0;
+        if (toState.equals("active")) {
+            var run=requireReadinessRun(context,uuid(command,"readinessRunId"));
+            var currentRun=Boolean.TRUE.equals(jdbc.queryForObject(
+                    """
+                    SELECT current_readiness_run_id=? FROM workforce_members
+                    WHERE organization_id=? AND id=?
+                    """,
+                    Boolean.class,run.id(),context.organizationId(),memberId));
+            if (!run.memberId().equals(memberId) || !run.status().equals("complete")
+                    || run.blockers()!=0 || !run.expiresAt().isAfter(command.now())
+                    || run.memberRevision()+1!=revision
+                    || run.requestedBy().equals(context.actorId()) || !currentRun
+                    || !platformReady(member.pathway())) {
+                throw conflict("Reactivation requires a fresh independently evaluated zero-risk readiness result.");
+            }
+            readinessDigest=run.resultDigest();
+            readinessWarnings=run.warnings();
+        }
+        var impact=jdbc.queryForMap(
+                """
+                SELECT
+                  (SELECT count(*) FROM workforce_assignments assignment
+                    WHERE assignment.organization_id=member.organization_id
+                      AND assignment.workforce_member_id=member.id
+                      AND assignment.lifecycle_state IN ('scheduled','active')) AS assignment_count,
+                  (SELECT count(*) FROM practitioner_service_assignments service_assignment
+                    JOIN practitioner_profiles practitioner
+                      ON practitioner.organization_id=service_assignment.organization_id
+                     AND practitioner.id=service_assignment.practitioner_profile_id
+                    WHERE practitioner.organization_id=member.organization_id
+                      AND practitioner.workforce_member_id=member.id
+                      AND service_assignment.lifecycle_state IN ('scheduled','active','suspended')
+                      AND (service_assignment.effective_to IS NULL OR service_assignment.effective_to>?))
+                      AS service_count,
+                  (SELECT count(*) FROM access_assignment_scopes access_scope
+                    WHERE access_scope.organization_id=member.organization_id
+                      AND access_scope.workforce_member_id=member.id
+                      AND access_scope.status IN ('approved','active')) AS access_count
+                FROM workforce_members member
+                WHERE member.organization_id=? AND member.id=?
+                """,
+                Timestamp.from(effectiveTime),context.organizationId(),memberId);
+        var assignments=((Number) impact.get("assignment_count")).intValue();
+        var services=((Number) impact.get("service_count")).intValue();
+        var access=((Number) impact.get("access_count")).intValue();
+        var impactDigest=digest("member-lifecycle|"+memberId+"|"+revision+"|"+fromState+"|"
+                +toState+"|"+categoryCode+"|"+effectiveTime+"|"+readinessDigest+"|"
+                +readinessWarnings+"|"+assignments+"|"+services+"|"+access);
+        return new ImpactAnalysis(impactDigest,List.of(
+                new ImpactItem("readiness_and_eligibility_reconciled","impact",
+                        "Readiness and prospective eligibility are re-evaluated.",1),
+                new ImpactItem("assignments_reviewed",assignments>0?"warning":"impact",
+                        "Current and scheduled assignments require review.",assignments),
+                new ImpactItem("service_assignments_suspended",services>0?"warning":"impact",
+                        toState.equals("suspended")
+                                ? "Prospective service assignments will be re-evaluated and suspended."
+                                : "Service assignments are not automatically reactivated.",services),
+                new ImpactItem("application_access_unchanged",access>0?"warning":"impact",
+                        "Application access changes require the separate governed access workflow.",access)));
+    }
+
+    private ImpactAnalysis offboardingRequestImpact(
+            AuthorizedTenantContext context, MutationCommand command) {
+        var memberId=requireTarget(command);
+        var revision=requireRevision(command);
+        var member=requireMember(context,memberId);
+        if (member.revision()!=revision) {
+            throw stale("The member changed before the offboarding impact was calculated.");
+        }
+        if (!Set.of("active","suspended").contains(member.status())) {
+            throw conflict("Only an active or suspended member may enter offboarding.");
+        }
+        var engagementEndAt=instant(command,"engagementEndAt");
+        var effectiveAt=instant(command,"effectiveAt");
+        if (effectiveAt.isBefore(engagementEndAt)) {
+            throw invalid("The offboarding effective time cannot precede the engagement end.");
+        }
+        var accessAction=required(command,"accessAction");
+        if (!Set.of("revoke_at_effective","revoke_immediately","none").contains(accessAction)) {
+            throw invalid("The offboarding access action is not supported.");
+        }
+        requireRegistryCategory(context,uuid(command,"reasonEntryId"),uuid(command,"reasonVersionId"),
+                "offboarding_reason",command.now(),effectiveAt);
+        var counts=jdbc.queryForMap(
+                """
+                SELECT
+                  (SELECT count(*) FROM employment_engagements engagement
+                    WHERE engagement.organization_id=? AND engagement.workforce_member_id=?
+                      AND engagement.status IN ('draft','scheduled','active','suspended')) AS engagement_count,
+                  (SELECT count(*) FROM workforce_assignments assignment
+                    WHERE assignment.organization_id=? AND assignment.workforce_member_id=?
+                      AND assignment.lifecycle_state IN ('draft','scheduled','active','suspended')) AS assignment_count,
+                  (SELECT count(*) FROM practitioner_service_assignments service_assignment
+                    JOIN practitioner_profiles practitioner
+                      ON practitioner.organization_id=service_assignment.organization_id
+                     AND practitioner.id=service_assignment.practitioner_profile_id
+                    WHERE practitioner.organization_id=? AND practitioner.workforce_member_id=?
+                      AND service_assignment.lifecycle_state IN ('draft','scheduled','active','suspended')) AS service_count,
+                  (SELECT count(*) FROM practitioner_profiles practitioner
+                    WHERE practitioner.organization_id=? AND practitioner.workforce_member_id=?
+                      AND practitioner.lifecycle_state IN ('active','suspended')) AS practitioner_count,
+                  (SELECT count(*) FROM availability_profiles availability
+                    WHERE availability.organization_id=? AND availability.workforce_member_id=?
+                      AND availability.lifecycle_state IN ('draft','scheduled','active')) AS availability_count,
+                  (SELECT count(*) FROM access_assignment_scopes access_scope
+                    WHERE access_scope.organization_id=? AND access_scope.workforce_member_id=?
+                      AND access_scope.status IN ('requested','approved','active')) AS access_count
+                """,
+                context.organizationId(),memberId,context.organizationId(),memberId,
+                context.organizationId(),memberId,context.organizationId(),memberId,
+                context.organizationId(),memberId,context.organizationId(),memberId);
+        var engagements=((Number) counts.get("engagement_count")).intValue();
+        var assignments=((Number) counts.get("assignment_count")).intValue();
+        var services=((Number) counts.get("service_count")).intValue();
+        var practitioners=((Number) counts.get("practitioner_count")).intValue();
+        var availability=((Number) counts.get("availability_count")).intValue();
+        var access=((Number) counts.get("access_count")).intValue();
+        var impactDigest=offboardingImpactDigest(
+                context,memberId,engagementEndAt,effectiveAt,accessAction);
+        return new ImpactAnalysis(impactDigest,List.of(
+                new ImpactItem("engagements_ended","impact",
+                        "Current engagements will end at the governed boundary.",engagements),
+                new ImpactItem("assignments_ended","impact",
+                        "Current and future organization assignments will end or cancel.",assignments),
+                new ImpactItem("service_assignments_ended","impact",
+                        "Current and future service assignments will end or cancel.",services),
+                new ImpactItem("practitioner_profiles_ended","impact",
+                        "Current practitioner profiles will end prospectively.",practitioners),
+                new ImpactItem("availability_cancelled","impact",
+                        "Current and scheduled availability will end or cancel.",availability),
+                new ImpactItem("access_requires_m1_governance",access>0?"warning":"impact",
+                        "Canonical application access must complete through the governed M1 workflow.",access),
+                new ImpactItem("historical_attribution_preserved","impact",
+                        "Historical workforce and clinical attribution is retained.",1)));
+    }
+
+    private void requireCurrentImpact(MutationCommand command, ImpactAnalysis analysis) {
+        if (analysis.blocked()) {
+            throw conflict("The reviewed impact contains unresolved blockers.");
+        }
+        var suppliedDigest=command.fields().get("_impactDigest");
+        var suppliedExpiry=command.fields().get("_impactExpiresAt");
+        final Instant expiresAt;
+        try {
+            expiresAt=Instant.parse(Objects.requireNonNull(suppliedExpiry));
+        } catch (RuntimeException exception) {
+            throw stale("A fresh impact preview is required for this action.");
+        }
+        if (suppliedDigest==null || !suppliedDigest.equals(analysis.digest())
+                || !expiresAt.isAfter(command.now())
+                || expiresAt.isAfter(command.now().plusSeconds(605))) {
+            throw stale("The impact preview expired or authoritative impact changed.");
+        }
     }
 
     private String offboardingImpactDigest(
@@ -7427,6 +10472,18 @@ public final class JdbcWorkforceStore
                            AND service_assignment.lifecycle_state IN ('draft','scheduled','active','suspended')
                            AND (service_assignment.effective_to IS NULL
                              OR service_assignment.effective_to>?)) AS service_assignments,
+                       (SELECT count(*) FROM practitioner_profiles practitioner
+                         WHERE practitioner.organization_id=member.organization_id
+                           AND practitioner.workforce_member_id=member.id
+                           AND practitioner.lifecycle_state IN ('active','suspended')
+                           AND (practitioner.effective_to IS NULL
+                             OR practitioner.effective_to>?)) AS practitioner_profiles,
+                       (SELECT count(*) FROM availability_profiles availability
+                         WHERE availability.organization_id=member.organization_id
+                           AND availability.workforce_member_id=member.id
+                           AND availability.lifecycle_state IN ('draft','scheduled','active')
+                           AND (availability.effective_to IS NULL
+                             OR availability.effective_to>?)) AS availability_profiles,
                        (SELECT count(*) FROM access_assignment_scopes access_scope
                          WHERE access_scope.organization_id=member.organization_id
                            AND access_scope.workforce_member_id=member.id
@@ -7436,6 +10493,7 @@ public final class JdbcWorkforceStore
                 WHERE member.organization_id=? AND member.id=?
                 """,
                 Timestamp.from(engagementEndAt), Timestamp.from(effectiveAt),
+                Timestamp.from(effectiveAt), Timestamp.from(effectiveAt),
                 Timestamp.from(effectiveAt), Timestamp.from(effectiveAt),
                 context.organizationId(), memberId);
         return digest(memberId
@@ -7448,6 +10506,8 @@ public final class JdbcWorkforceStore
                 + "|" + impact.get("engagements")
                 + "|" + impact.get("assignments")
                 + "|" + impact.get("service_assignments")
+                + "|" + impact.get("practitioner_profiles")
+                + "|" + impact.get("availability_profiles")
                 + "|" + (accessAction.startsWith("revoke_")
                     ? "approved_revoke_plan"
                     : impact.get("access_scopes")));
@@ -8226,6 +11286,53 @@ public final class JdbcWorkforceStore
             UUID currentReadinessRunId,
             long revision) {}
 
+    private record PersonIdentityLink(UUID linkId, UUID personId) {}
+
+    private record PersonMatchCase(
+            UUID memberId,
+            UUID currentLinkId,
+            UUID personId,
+            String displayName,
+            String memberNumber,
+            long revision,
+            Instant updatedAt) {}
+
+    private record PersonMatchCandidate(
+            UUID linkId, String displayLabel, UUID liveMemberId, List<String> keyTypes) {
+        private PersonMatchCandidate {
+            keyTypes = List.copyOf(keyTypes);
+        }
+    }
+
+    private record CredentialEvidenceSummary(
+            UUID documentId,
+            String mediaType,
+            long byteCount,
+            String declaredDigest,
+            String promotionDigest) {}
+
+    private record PersonMergeMember(
+            UUID memberId,
+            UUID linkId,
+            UUID personId,
+            String memberStatus,
+            long memberRevision,
+            String linkStatus,
+            long linkRevision) {}
+
+    private record PersonMergeRequest(
+            UUID id,
+            UUID retainedLinkId,
+            UUID discardedLinkId,
+            UUID retainedMemberId,
+            UUID discardedMemberId,
+            UUID requestedBy,
+            String candidateDigest,
+            String impactDigest,
+            String state,
+            UUID decisionBy,
+            long revision) {}
+
     private record Credential(
             UUID id,
             UUID memberId,
@@ -8312,7 +11419,42 @@ public final class JdbcWorkforceStore
         }
     }
 
+    private record ExportRetrySource(
+            UUID id,
+            UUID requesterId,
+            String purposeKey,
+            String legalBasisKey,
+            String projection,
+            String filterDigest,
+            String sortDigest,
+            String format,
+            int rowLimit,
+            long sizeLimitBytes,
+            String policyVersion,
+            String filtersJson,
+            UUID memberId,
+            String status,
+            String failureCode,
+            long revision,
+            Instant failedAt) {
+        boolean restricted() {
+            return projection.endsWith("-detail-v1");
+        }
+    }
+
     private record EligibilityScope(UUID id,UUID activityId,boolean supervisionRequired) {}
+
+    private record ServiceAssignmentReconciliationSource(
+            UUID practitionerId,
+            UUID serviceId,
+            UUID facilityId,
+            UUID locationId,
+            UUID supervisorId,
+            Instant effectiveFrom,
+            Instant effectiveTo,
+            String state,
+            long revision,
+            UUID activityEntryId) {}
 
     private record EligibilityEvidenceSnapshot(
             long registrationRevision,
@@ -8376,5 +11518,31 @@ public final class JdbcWorkforceStore
             String status,
             long revision) {}
 
-    private record RegistryChange(UUID requestId, UUID itemId) {}
+    private record RegistryEntryContext(
+            String entryLabel,
+            String lifecycleState,
+            String definitionLabel,
+            String category,
+            boolean enabled) {}
+
+    private record RegistryValidationState(
+            UUID parentSnapshotId,
+            UUID activeSnapshotId,
+            String activeSnapshotDigest,
+            Long baselineRevision,
+            String baselineDigest,
+            UUID activeVersionId,
+            Integer activeVersionNumber,
+            String activeVersionDigest,
+            Boolean candidateEnabled) {}
+
+    private record RegistryChange(
+            UUID requestId,
+            UUID itemId,
+            String requestStatus,
+            String itemStatus,
+            String validationDigest,
+            Instant validationExpiresAt,
+            String decisionDigest,
+            Instant decisionExpiresAt) {}
 }

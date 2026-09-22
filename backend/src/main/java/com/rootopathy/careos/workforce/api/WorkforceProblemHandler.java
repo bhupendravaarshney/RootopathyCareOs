@@ -25,6 +25,7 @@ public final class WorkforceProblemHandler {
             case CONFLICT, EVIDENCE_NOT_CLEAN -> HttpStatus.CONFLICT;
             case PRECONDITION_REQUIRED -> HttpStatus.PRECONDITION_REQUIRED;
             case STALE -> HttpStatus.PRECONDITION_FAILED;
+            case DEPENDENCY_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
         };
         return response(status, "workforce-" + code(exception.reason()), exception.getMessage(), request);
     }

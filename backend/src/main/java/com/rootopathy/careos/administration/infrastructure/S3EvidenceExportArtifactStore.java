@@ -124,6 +124,31 @@ public final class S3EvidenceExportArtifactStore implements EvidenceExportArtifa
   }
 
   @Override
+  public ArtifactContent open(
+      AuthorizedTenantContext context,
+      UUID exportId,
+      String artifactReference,
+      String expectedSha256,
+      long expectedBytes) {
+    if (expectedBytes < 0) {
+      throw new IllegalArgumentException("Evidence export byte count is invalid");
+    }
+    var key = objectKey(context, exportId, artifactReference);
+    try {
+      var stat = stat(key);
+      requireArtifact(stat, exportId, expectedSha256, expectedBytes);
+      var stream = storageClient.getObject(GetObjectArgs.builder()
+          .bucket(bucket)
+          .object(key)
+          .matchETag(stat.etag())
+          .build());
+      return new ArtifactContent(stream, stat.size());
+    } catch (Exception exception) {
+      throw new IllegalStateException("Evidence export artifact read failed", exception);
+    }
+  }
+
+  @Override
   public void delete(
       AuthorizedTenantContext context,
       UUID exportId,
