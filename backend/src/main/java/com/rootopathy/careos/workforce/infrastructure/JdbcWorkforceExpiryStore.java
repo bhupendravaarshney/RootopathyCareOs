@@ -15,7 +15,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public final class JdbcWorkforceExpiryStore
+public class JdbcWorkforceExpiryStore
         implements WorkforceExpiryStore, WorkforceNotificationStore {
     private final JdbcTemplate jdbc;
 

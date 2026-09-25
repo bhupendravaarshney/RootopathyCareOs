@@ -4,15 +4,30 @@
 **Accepted predecessor baseline:** commit `2ba6c9b3b567d0371c8523e6f18945ec33138ae4` (`M1`)  
 **Input candidate:** `m2-candidate-1`  
 **Candidate package SHA-256:** `2e64bd4e1ac5192a9a4783abf58f4578b8bceda60c21c2e835a910e6760d0f8f`  
-**Implementation authorization:** `false` pending exact candidate approval
+**Approved package SHA-256:** `624df2edc0024526040271911d43a1b33a12e723fefb3beb3e985264cef89521`  
+**Approval record:** `M2-APPROVAL-20260921-01`  
+**Implementation authorization:** `true`; final implementation verification and owner acceptance remain pending
 
 ## Authority and implementation condition
 
-On 21 September 2026 the user explicitly accepted commit `2ba6c9b` as the Module 1 baseline and directed work to continue. That acceptance authorizes use of the exact commit as the predecessor baseline; it is not target-environment production acceptance and did not approve Module 2 content that had not yet been produced.
+On 21 September 2026 the user explicitly accepted commit `2ba6c9b` as the Module 1 baseline and later approved `m2-candidate-1` unchanged at exact digest `2e64bd4e1ac5192a9a4783abf58f4578b8bceda60c21c2e835a910e6760d0f8f`. That acceptance authorizes the exact approved Module 2 package against the named predecessor; it is not target-environment production acceptance.
 
-The complete Module 2 proposal is now under `candidate-inputs/module-2/`. Its verifier binds eight artifacts, all 29 screens, the exact 44-table build-specification baseline, accepted M1 commit, and specification digest. It reports `CANDIDATE_FOR_APPROVAL` and `implementationAuthorized: false`. Production implementation starts only after an accountable reviewer accepts the exact package digest and the accepted bytes are promoted to `approved-inputs/module-2/` with distinct approval evidence and a required-approval verifier.
+The original proposal remains unchanged under `candidate-inputs/module-2/` as provenance. Its eight byte-identical approved artifacts are under `approved-inputs/module-2/`. `contracts/module-2-input-gate.json` binds all 29 screens, the exact 44-table build-specification baseline, accepted M1 commit, candidate digest, promoted-package digest, and approval record; the production verifier reports `APPROVED` and `implementationAuthorized: true`.
 
-The package deliberately resolves the high-impact choices that cannot be guessed during coding: organization-scoped person matching, age boundary, credential/document lifecycle, independent verification, clinical-scope approval, supervision/eligibility, hierarchy/access scope, activation, suspension/reactivation, offboarding, expiry notifications, controlled registries, evidence projections, retention, and exports. Review may accept, change, or reject those choices.
+The approved package resolves the high-impact choices that cannot be guessed during coding: organization-scoped person matching, age boundary, credential/document lifecycle, independent verification, clinical-scope approval, supervision/eligibility, hierarchy/access scope, activation, suspension/reactivation, offboarding, expiry notifications, controlled registries, evidence projections, retention, and exports. Any replacement requires a new checksum-bound approval; implementation must not silently alter those decisions.
+
+## Current implementation checkpoint — 22 September 2026
+
+The implementation is not yet frozen and no current Module 2 runtime tests have been executed. The following records source present in the repository, not verified completion:
+
+- M2A is implemented: the exact approved input package, production input gate, authorization/operation/readiness/event registries, module boundary, and migration release are present.
+- V51-V65 provide the exact 44-table workforce baseline plus forced RLS, composite tenant references, operation/lifecycle guards, immutable evidence, invalidation coverage, review leases, internal export access, worker subscriptions, and internal-consumer authorization.
+- M2B-M2G application code is broadly present across the workforce domain/application/infrastructure/API layers. All M2-01 through M2-29 routes now use live server projections and governed actions rather than the former generic synthetic records.
+- The credential-document path includes bounded upload validation, private quarantine, fail-closed scan evidence, clean promotion, independent review, and actor/purpose-bound access. Provider-signed URLs are not persisted or placed in durable frontend state; the internal access route remints them for a no-store redirect.
+- Readiness/eligibility/history invalidation, expiry and notification processing, export/retention/access lifecycle, retry/dead-letter handling, and offboarding orchestration are implemented or being finalized. Offboarding still requires final database enforcement for its canonical M1 membership/session child effects before the implementation freeze.
+- The OpenAPI source and browser code now cover the live M2 boundary. Generated-client drift, compilation, frontend validation, migrations, security attacks, workers, accessibility/responsiveness, and regression behavior remain unverified until M2H.
+
+Remaining implementation order: finish the offboarding database guards and deterministic evidence, perform a static source/contract audit, freeze M2B-M2G, regenerate any derived client artifact, then run the complete M2H suite once and repair failures before handoff.
 
 ## Frozen architecture boundaries
 

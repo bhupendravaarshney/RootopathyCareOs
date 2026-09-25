@@ -275,7 +275,7 @@ AS $$
                                   AND (scope.organization_unit_id IS NULL
                                        OR assignment.organization_unit_id=scope.organization_unit_id)
                                   AND (scope.location_id IS NULL
-                                       OR assignment.location_id=scope.location_id))))))
+                                       OR assignment.location_id=scope.location_id)))))
           )
     );
 $$;

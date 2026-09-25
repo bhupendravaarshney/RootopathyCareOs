@@ -34,7 +34,7 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 
 @Validated
 @RestController
-public final class WorkforceExportController {
+public class WorkforceExportController {
     private static final String IDEMPOTENCY_PATTERN="[A-Za-z0-9._:-]{16,128}";
     private final WorkforceExportAccessService service;
 

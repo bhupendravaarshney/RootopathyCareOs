@@ -39,7 +39,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public final class JdbcWorkforceStore
+public class JdbcWorkforceStore
         implements WorkforceStore, WorkforceWorkerStore, WorkforceEligibilityStore,
                 WorkforceOffboardingStore {
     private static final String EMPTY_DIGEST =
@@ -741,13 +741,19 @@ public final class JdbcWorkforceStore
             throw new IllegalArgumentException("invalid offboarding failure code");
         }
         var request = requireOffboarding(context, requestId);
+        jdbc.queryForObject(
+                "SELECT set_config('app.current_offboarding_request_id',?,true)",
+                String.class,
+                requestId.toString());
         var revision = jdbc.query(
                 """
                 UPDATE workforce_offboarding_requests
                    SET status='failed',attempt_count=LEAST(attempt_count+1,5),failure_code=?,
                        next_attempt_at=CASE WHEN attempt_count+1<5
-                           THEN ?+(power(2,attempt_count)::text||' minutes')::interval ELSE NULL END,
-                       dead_lettered_at=CASE WHEN attempt_count+1>=5 THEN ? ELSE NULL END,
+                           THEN CAST(? AS timestamptz)
+                               +(power(2,attempt_count)::text||' minutes')::interval ELSE NULL END,
+                       dead_lettered_at=CASE WHEN attempt_count+1>=5
+                           THEN CAST(? AS timestamptz) ELSE NULL END,
                        dead_letter_owner=CASE WHEN attempt_count+1>=5
                            THEN 'workforce_operations' ELSE NULL END,
                        lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
@@ -7488,7 +7494,7 @@ public final class JdbcWorkforceStore
         if (!currentImpact.equals(request.impactDigest())) {
             throw conflict("The approved offboarding impact is no longer current.");
         }
-        var accessEvidence = reconcileOffboardingAccess(context,request,command.now());
+        var accessEvidence = reconcileOffboardingAccess(context,request);
         var member = requireMember(context, request.memberId());
         if (!Set.of("active", "suspended").contains(member.status())) {
             throw conflict("The member cannot enter offboarding from the current lifecycle state.");
@@ -7554,7 +7560,8 @@ public final class JdbcWorkforceStore
                     status=CASE WHEN assignment.effective_from>=? THEN 'cancelled' ELSE 'ended' END,
                     effective_to=CASE WHEN assignment.effective_from>=? THEN assignment.effective_to
                         ELSE LEAST(COALESCE(assignment.effective_to,?),?) END,
-                    lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
+                    lock_version=assignment.lock_version+1,
+                    updated_at=clock_timestamp(),updated_by=?
                 FROM practitioner_profiles practitioner
                 WHERE assignment.organization_id=? AND practitioner.organization_id=assignment.organization_id
                   AND practitioner.id=assignment.practitioner_profile_id
@@ -7677,7 +7684,7 @@ public final class JdbcWorkforceStore
     }
 
     private List<MutationEvidence> reconcileOffboardingAccess(
-            AuthorizedTenantContext context, Offboarding request, Instant now) {
+            AuthorizedTenantContext context, Offboarding request) {
         var impact=offboardingAccessImpact(context,request.memberId());
         if (impact.finalOwnerMemberships()>0) {
             throw conflict(
@@ -7692,14 +7699,13 @@ public final class JdbcWorkforceStore
                 throw conflict(
                         "Canonical access remains active and the approved plan contains no access revocation action.");
             }
-            return List.of();
         }
 
         jdbc.queryForObject(
                 "SELECT set_config('app.current_offboarding_request_id',?,true)",
                 String.class,
                 request.id().toString());
-        var memberships=jdbc.query(
+        var targetUsers=jdbc.queryForList(
                 """
                 WITH target_users AS (
                     SELECT DISTINCT linked_membership.user_id
@@ -7711,24 +7717,48 @@ public final class JdbcWorkforceStore
                       AND linked_scope.workforce_member_id=?
                       AND linked_scope.status IN ('approved','active')
                 )
-                SELECT membership.id,membership.user_id,membership.role_key,
-                       membership.lock_version
-                FROM organization_memberships membership
-                JOIN target_users target ON target.user_id=membership.user_id
-                JOIN authorization_roles role ON role.role_key=membership.role_key
-                WHERE membership.organization_id=? AND membership.status='active'
-                  AND NOT role.final_owner
-                ORDER BY membership.id
-                FOR UPDATE OF membership
+                SELECT account.id
+                FROM users account
+                JOIN target_users target ON target.user_id=account.id
+                ORDER BY account.id
+                FOR UPDATE OF account
                 """,
-                (resultSet,rowNumber) -> new OffboardingMembership(
-                        resultSet.getObject("id",UUID.class),
-                        resultSet.getObject("user_id",UUID.class),
-                        resultSet.getString("role_key"),
-                        resultSet.getLong("lock_version")),
-                context.organizationId(),request.memberId(),context.organizationId());
+                UUID.class,
+                context.organizationId(),request.memberId());
+        List<OffboardingMembership> memberships;
+        if (request.accessAction().equals("none")) {
+            memberships=List.of();
+        } else {
+            memberships=jdbc.query(
+                    """
+                    WITH target_users AS (
+                        SELECT DISTINCT linked_membership.user_id
+                        FROM access_assignment_scopes linked_scope
+                        JOIN organization_memberships linked_membership
+                          ON linked_membership.organization_id=linked_scope.organization_id
+                         AND linked_membership.id=linked_scope.access_assignment_id
+                        WHERE linked_scope.organization_id=?
+                          AND linked_scope.workforce_member_id=?
+                          AND linked_scope.status IN ('approved','active')
+                    )
+                    SELECT membership.id,membership.user_id,membership.role_key,
+                           membership.lock_version
+                    FROM organization_memberships membership
+                    JOIN target_users target ON target.user_id=membership.user_id
+                    JOIN authorization_roles role ON role.role_key=membership.role_key
+                    WHERE membership.organization_id=? AND membership.status='active'
+                      AND NOT role.final_owner
+                    ORDER BY membership.id
+                    FOR UPDATE OF membership
+                    """,
+                    (resultSet,rowNumber) -> new OffboardingMembership(
+                            resultSet.getObject("id",UUID.class),
+                            resultSet.getObject("user_id",UUID.class),
+                            resultSet.getString("role_key"),
+                            resultSet.getLong("lock_version")),
+                    context.organizationId(),request.memberId(),context.organizationId());
+        }
         var evidence=new ArrayList<MutationEvidence>();
-        var affectedUsers=new java.util.LinkedHashSet<UUID>();
         for (var membership : memberships) {
             var changed=jdbc.update(
                     """
@@ -7739,10 +7769,10 @@ public final class JdbcWorkforceStore
                         lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=?
                     WHERE organization_id=? AND id=? AND status='active' AND lock_version=?
                     """,
-                    Timestamp.from(now),Timestamp.from(now),request.checkerId(),
+                    Timestamp.from(request.effectiveAt()),Timestamp.from(request.effectiveAt()),
+                    request.checkerId(),
                     context.organizationId(),membership.id(),membership.revision());
             requireChanged(changed,"Canonical membership changed before offboarding revocation.");
-            affectedUsers.add(membership.userId());
             var payload=ordered(
                     "approvalId",request.id(),
                     "changeType","revoke",
@@ -7754,14 +7784,23 @@ public final class JdbcWorkforceStore
                     membership.id(),"membership","identity.membership.revoked",
                     "identity.membership.revoked","membership",payload,payload));
         }
-        for (var userId : affectedUsers) {
+        for (var userId : targetUsers) {
             jdbc.update(
                     """
                     UPDATE user_sessions
-                    SET revoked_at=?,revocation_reason='workforce_offboarding'
+                    SET revoked_at=clock_timestamp(),revocation_reason='workforce_offboarding'
                     WHERE user_id=? AND revoked_at IS NULL
                     """,
-                    Timestamp.from(now),userId);
+                    userId);
+            var invalidated=jdbc.update(
+                    """
+                    UPDATE users
+                    SET security_version=security_version+1,
+                        updated_at=greatest(clock_timestamp(),updated_at+interval '1 microsecond')
+                    WHERE id=? AND status='active'
+                    """,
+                    userId);
+            requireChanged(invalidated,"The linked account changed before session invalidation.");
         }
         if (offboardingAccessImpact(context,request.memberId()).activeMemberships()>0) {
             throw conflict("Canonical organization access remained active after revocation.");
@@ -9858,9 +9897,9 @@ public final class JdbcWorkforceStore
                                 resultSet.getString("request_status"),
                                 resultSet.getString("item_status"),
                                 resultSet.getString("validation_digest"),
-                                instant(resultSet.getTimestamp("validation_expires_at")),
+                                instantValue(resultSet.getTimestamp("validation_expires_at")),
                                 resultSet.getString("decision_digest"),
-                                instant(resultSet.getTimestamp("decision_expires_at")))
+                                instantValue(resultSet.getTimestamp("decision_expires_at")))
                         : null,
                 context.organizationId(),
                 versionId);
@@ -9929,7 +9968,7 @@ public final class JdbcWorkforceStore
                     member_revision,correlation_id,created_by,updated_by)
                 VALUES (?,?,?,?,?,?,?,?,?,
                         coalesce(nullif(current_setting('app.current_actor_kind',true),''),'user'),
-                        ?,?,?,?,?,?)
+                        ?,?,?,?,?)
                 """,
                 transitionId,
                 context.organizationId(),

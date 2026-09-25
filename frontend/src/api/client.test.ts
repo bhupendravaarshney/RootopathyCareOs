@@ -39,6 +39,45 @@ function mockFetch(...responses: Response[]) {
 
 type Fetch = typeof fetch;
 
+const workforceOrganizationId = '22222222-2222-4222-8222-222222222222';
+const workforceRowId = '33333333-3333-4333-8333-333333333333';
+const workforceMemberId = '44444444-4444-4444-8444-444444444444';
+
+function workforceScreenFixture() {
+  return {
+    organizationId: workforceOrganizationId,
+    screenId: 'M2-24',
+    title: 'Offboarding',
+    purpose: 'Execute a governed workforce lifecycle.',
+    generatedAt: '2026-09-25T08:00:00Z',
+    metrics: [{ key: 'active', label: 'Active', value: 1, tone: 'info' }],
+    columns: [{ key: 'primary', label: 'Member' }],
+    rows: [
+      {
+        id: workforceRowId,
+        memberId: workforceMemberId,
+        status: 'active',
+        revision: 7,
+        etag: `"m2:M2-24:${workforceRowId}:7"`,
+        values: { primary: 'Synthetic workforce member' },
+        allowedActionKeys: [],
+      },
+    ],
+    actions: [],
+    notices: [],
+    nextCursor: null,
+    pageSize: 25,
+  };
+}
+
+function validCsrfResponse() {
+  return jsonResponse({
+    headerName: 'X-XSRF-TOKEN',
+    parameterName: '_csrf',
+    token: 'valid-csrf-token-123456',
+  });
+}
+
 describe('CareOsApiClient', () => {
   it('sends credentialed correlated reads and exposes a strong ETag', async () => {
     const fetcher = mockFetch(
@@ -1268,6 +1307,154 @@ describe('CareOsApiClient', () => {
       'unit-reactivate:11111111-1111-4111-8111-111111111111',
       'unit-close:11111111-1111-4111-8111-111111111111',
     ]);
+  });
+
+  it('sends bounded Module 2 screen queries and accepts an exactly bound projection', async () => {
+    const fetcher = mockFetch(jsonResponse(workforceScreenFixture()));
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+
+    const result = await client.getWorkforceScreen(workforceOrganizationId, 'M2-24', {
+      memberId: workforceMemberId,
+      q: '  care team  ',
+      status: 'active',
+      limit: 25,
+      cursor: 'cursor_1',
+    });
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    const [url, init] = fetcher.mock.calls[0]!;
+    expect(url).toBe(
+      '/api/v1/organizations/' +
+        workforceOrganizationId +
+        '/workforce/screens/M2-24?memberId=' +
+        workforceMemberId +
+        '&q=care+team&status=active&limit=25&cursor=cursor_1',
+    );
+    expect(init?.method).toBe('GET');
+    expect(init?.credentials).toBe('include');
+    expect(new Headers(init?.headers).get('X-Correlation-Id')).toBe('request-1');
+  });
+
+  it('binds a workforce impact preview to the selected row revision and strong ETag', async () => {
+    const response = {
+      screenId: 'M2-24',
+      actionKey: 'request-offboarding',
+      targetId: workforceRowId,
+      revision: 7,
+      digest: 'b'.repeat(64),
+      token: 'c'.repeat(64),
+      expiresAt: '2099-09-25T08:10:00Z',
+      blocked: false,
+      items: [
+        {
+          code: 'historical_attribution_preserved',
+          tone: 'impact',
+          detail: 'Historical attribution remains available.',
+          affectedCount: 1,
+        },
+      ],
+    };
+    const fetcher = mockFetch(validCsrfResponse(), jsonResponse(response));
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+    const request = {
+      targetId: workforceRowId,
+      memberId: workforceMemberId,
+      reason: 'Approved workforce transition CARE-42',
+      fields: { accessAction: 'revoke_at_effective' },
+      evidenceIds: [],
+    };
+    const etag = '"m2:M2-24:' + workforceRowId + ':7"';
+
+    const result = await client.previewWorkforceImpact(
+      workforceOrganizationId,
+      'M2-24',
+      'request-offboarding',
+      request,
+      etag,
+      7,
+    );
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    const [url, init] = fetcher.mock.calls[1]!;
+    const headers = new Headers(init?.headers);
+    expect(url).toBe(
+      '/api/v1/organizations/' +
+        workforceOrganizationId +
+        '/workforce/screens/M2-24/actions/request-offboarding/impact-preview',
+    );
+    expect(init?.method).toBe('POST');
+    expect(init?.body).toBe(JSON.stringify(request));
+    expect(headers.get('If-Match')).toBe(etag);
+    expect(headers.get('X-XSRF-TOKEN')).toBe('valid-csrf-token-123456');
+  });
+
+  it('normalizes and purpose-binds restricted workforce evidence access', async () => {
+    const evidenceId = '55555555-5555-4555-8555-555555555555';
+    const response = {
+      evidenceId,
+      memberId: workforceMemberId,
+      occurredAt: '2026-09-25T08:00:00Z',
+      actorId: workforceRowId,
+      actorKind: 'service',
+      operation: 'm2.offboarding.execute',
+      eventName: 'workforce.offboarding.completed',
+      schemaVersion: 1,
+      subjectType: 'workforce_offboarding_request',
+      subjectId: '66666666-6666-4666-8666-666666666666',
+      correlationId: 'workforce-evidence-transport-001',
+      projection: 'member-evidence-detail-v1',
+      purposeCode: 'workforce_operations',
+      redactionPolicyVersion: 'workforce-evidence-v1',
+      payload: { state: 'completed' },
+    };
+    const fetcher = mockFetch(validCsrfResponse(), jsonResponse(response));
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+
+    const result = await client.accessWorkforceEvidence(
+      workforceOrganizationId,
+      evidenceId,
+      {
+        memberId: workforceMemberId,
+        projection: 'member-evidence-detail-v1',
+        purposeCode: 'workforce_operations',
+        reason: '  Review approved workforce transition evidence  ',
+      },
+      'evidence-access:11111111-1111-4111-8111-111111111111',
+    );
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    const [url, init] = fetcher.mock.calls[1]!;
+    const headers = new Headers(init?.headers);
+    expect(url).toBe(
+      '/api/v1/organizations/' +
+        workforceOrganizationId +
+        '/workforce/evidence/' +
+        evidenceId +
+        '/accesses',
+    );
+    expect(init?.method).toBe('POST');
+    expect(headers.get('Idempotency-Key')).toBe(
+      'evidence-access:11111111-1111-4111-8111-111111111111',
+    );
+    expect(JSON.parse(String(init?.body))).toEqual({
+      memberId: workforceMemberId,
+      projection: 'member-evidence-detail-v1',
+      purposeCode: 'workforce_operations',
+      reason: 'Review approved workforce transition evidence',
+    });
   });
 
   it('turns undocumented success payloads into safe contract failures', async () => {

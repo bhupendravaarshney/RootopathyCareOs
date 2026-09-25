@@ -17,7 +17,7 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 @Repository
-public final class JdbcWorkforceExportStore implements WorkforceExportStore {
+public class JdbcWorkforceExportStore implements WorkforceExportStore {
     private static final String RETURNING = """
             RETURNING id,requester_id,projection,format,filters_json::text,filters_digest,
                       purpose_key,status,snapshot_at,row_limit,size_limit_bytes,attempt_count,

@@ -889,3 +889,17 @@ This checkpoint is intentionally a **repository-verified implementation foundati
 - `MODULE_2_IMPLEMENTATION_PLAN.md` defines the M2A-M2H dependency order, screen traceability, architecture boundaries, end-only executable testing instruction, and completion criteria.
 
 No Module 2 migration, endpoint, worker, permission release, generated API, or production screen was enabled. The existing M2 routes remain synthetic until an accountable reviewer approves the exact candidate digest and byte-identical artifacts are promoted with distinct approval evidence.
+
+## Implemented during Phase 2B approved Module 2 runtime build (22 September 2026; verification pending)
+
+This section supersedes the Phase 2A candidate status above for the current working tree. It records implementation progress only; executable Module 2 testing remains deliberately deferred until implementation is complete.
+
+- The user approved `m2-candidate-1` unchanged at candidate digest `2e64bd4e1ac5192a9a4783abf58f4578b8bceda60c21c2e835a910e6760d0f8f`. Eight byte-identical artifacts were promoted under `approved-inputs/module-2/`, and `M2-APPROVAL-20260921-01` binds all 29 screens, 44 tables, and promoted-package digest `624df2edc0024526040271911d43a1b33a12e723fefb3beb3e985264cef89521`.
+- `contracts/module-2-input-gate.json` is `APPROVED`; the required-approval verifier reports `implementationAuthorized: true`. The retained candidate remains unchanged and non-authorizing provenance.
+- V51-V65 implement the approved permission/operation/readiness/event release, exact 44 workforce tables, forced tenant RLS and composite references, direct-operation/lifecycle enforcement, immutable evidence, invalidation coverage, review leases, internal export access, consumer subscriptions, and internal-worker authorization.
+- The workforce backend module and live frontend route layer now represent M2-01 through M2-29: people/member foundations, engagements, practitioner/credential/scope flows, assignments/availability/access requests, readiness/activation, lifecycle actions, expiry queues, configuration/registry/history/audit/timeline projections, exports, retention, and worker reconciliation.
+- Credential evidence uses bounded content validation, private quarantine, fail-closed scanning, clean promotion, independent verification, and audited actor/purpose-bound access. Signed provider URLs remain memory-only and are reminted only at the internal no-store redirect boundary.
+- Readiness and eligibility invalidation, expiry/notification retry and dead-letter handling, export/access/retention lifecycle processing, and offboarding orchestration are represented. The final offboarding database guards for canonical M1 membership/session child effects and deterministic evidence are the current implementation task.
+- The OpenAPI source currently contains 109 operations and the browser uses runtime-checked M2 projections/actions. Generated-client drift and all backend/frontend/migration/security/worker/accessibility/regression behavior must still be verified after the implementation freeze.
+
+No current Module 2 PASS is claimed. The next recorded status must either document completed M2H evidence or identify concrete failures found by that end-of-module run. Module 3 remains out of scope.

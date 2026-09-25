@@ -2,9 +2,28 @@
 -- This migration is additive to the checksum-bound input release; it does not alter
 -- the approved candidate artifacts or introduce another source of truth.
 
+DO $$
+DECLARE
+    original_lock_constraint text;
+BEGIN
+    SELECT constraint_definition.conname INTO original_lock_constraint
+    FROM pg_constraint constraint_definition
+    WHERE constraint_definition.conrelid='workforce_configuration_snapshots'::regclass
+      AND constraint_definition.contype='c'
+      AND pg_get_constraintdef(constraint_definition.oid) LIKE '%lock_version = 0%';
+    IF original_lock_constraint IS NULL THEN
+        RAISE EXCEPTION 'workforce configuration snapshot lock constraint is missing'
+            USING ERRCODE='42704';
+    END IF;
+    EXECUTE format(
+        'ALTER TABLE workforce_configuration_snapshots DROP CONSTRAINT %I',
+        original_lock_constraint);
+END;
+$$;
+
 ALTER TABLE workforce_configuration_snapshots
-    DROP CONSTRAINT workforce_configuration_snapshots_lock_version_check,
-    ADD CONSTRAINT workforce_configuration_snapshots_lock_version_check CHECK (lock_version >= 0);
+    ADD CONSTRAINT workforce_configuration_snapshots_lock_version_check
+    CHECK (lock_version >= 0);
 
 DROP TRIGGER workforce_configuration_snapshots_append_only ON workforce_configuration_snapshots;
 DROP TRIGGER workforce_registry_versions_append_only ON workforce_registry_versions;

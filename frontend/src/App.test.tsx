@@ -15,11 +15,13 @@ import type {
   OrganizationProfile,
   ReadinessGate,
   SessionState,
+  WorkforceScreen,
 } from './api/generated';
 import App from './App';
 import { findScreen, screens } from './data/screens';
 import type { AdministrationClient } from './features/administration/administration-types';
 import type { SessionClient } from './features/session/session-types';
+import type { WorkforceClient } from './features/workforce/workforce-types';
 
 const correlationId = 'frontend-session-test';
 const user = {
@@ -440,7 +442,93 @@ const membershipPage: OrganizationMembershipPage = {
   organizationId: selectedOrganization.id,
   page: { hasMore: false, limit: 25, nextCursor: null },
 };
-type ApplicationClient = SessionClient & AdministrationClient;
+type ApplicationClient = SessionClient & AdministrationClient & WorkforceClient;
+
+const workforceProjection: WorkforceScreen = {
+  organizationId: selectedOrganization.id,
+  screenId: 'M2-24',
+  title: 'Offboarding operations',
+  purpose: 'Execute only independently approved workforce offboarding plans.',
+  generatedAt: '2026-09-25T08:00:00Z',
+  metrics: [{ key: 'due', label: 'Due plans', value: 1, tone: 'warning' }],
+  columns: [{ key: 'primary', label: 'Member' }],
+  rows: [
+    {
+      id: '33333333-3333-4333-8333-333333333333',
+      memberId: '44444444-4444-4444-8444-444444444444',
+      status: 'approved',
+      revision: 7,
+      etag: '"m2:M2-24:33333333-3333-4333-8333-333333333333:7"',
+      values: { primary: 'Dr Asha Verma' },
+      allowedActionKeys: ['request-offboarding'],
+    },
+  ],
+  actions: [
+    {
+      key: 'request-offboarding',
+      label: 'Request offboarding',
+      style: 'primary',
+      targetRequired: true,
+      ifMatchRequired: true,
+      reasonRequired: true,
+      href: null,
+      fields: [
+        {
+          key: 'engagementEndAt',
+          label: 'Final working time',
+          inputType: 'datetime-local',
+          required: true,
+          options: [],
+        },
+        {
+          key: 'effectiveAt',
+          label: 'Effective time',
+          inputType: 'datetime-local',
+          required: true,
+          options: [],
+        },
+        {
+          key: 'reasonEntryId',
+          label: 'Offboarding reason entry',
+          inputType: 'uuid',
+          required: true,
+          options: [],
+        },
+        {
+          key: 'reasonVersionId',
+          label: 'Offboarding reason version',
+          inputType: 'uuid',
+          required: true,
+          options: [],
+        },
+        {
+          key: 'accessAction',
+          label: 'Access timing',
+          inputType: 'select',
+          required: true,
+          options: [
+            { value: 'revoke_at_effective', label: 'Revoke at effective time' },
+            { value: 'revoke_immediately', label: 'Revoke immediately' },
+            { value: 'none', label: 'No access action' },
+          ],
+        },
+      ],
+    },
+    {
+      key: 'open-timeline',
+      label: 'Open lifecycle timeline',
+      style: 'link',
+      targetRequired: false,
+      ifMatchRequired: false,
+      reasonRequired: false,
+      href: '#/M2-29',
+      fields: [],
+    },
+  ],
+  notices: [],
+  nextCursor: null,
+  pageSize: 25,
+};
 
 function success<T>(data: T, status = 200): ApiResult<T> {
   return {
@@ -887,6 +975,33 @@ describe('CareOS frontend session boundary', () => {
       'Choose one currently authorized organization workspace.',
     );
     expect(() => findScreen('M1-99')).toThrow('does not contain M1-99');
+  });
+
+  it('renders an M2 route from the live server projection and row-scoped actions', async () => {
+    window.location.hash = '#/M2-24';
+    const getWorkforceScreen = vi.fn<WorkforceClient['getWorkforceScreen']>(async () =>
+      success(workforceProjection),
+    );
+
+    render(<App client={sessionClient({ getWorkforceScreen })} />);
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Offboarding operations' }),
+    ).toBeVisible();
+    expect(screen.getByText('Dr Asha Verma')).toBeVisible();
+    expect(screen.getByText('Server governed')).toBeVisible();
+    expect(getWorkforceScreen).toHaveBeenCalledOnce();
+    expect(getWorkforceScreen.mock.calls[0]?.[0]).toBe(selectedOrganization.id);
+    expect(getWorkforceScreen.mock.calls[0]?.[1]).toBe('M2-24');
+    expect(getWorkforceScreen.mock.calls[0]?.[2]).toEqual({
+      limit: 25,
+      q: undefined,
+      status: undefined,
+    });
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Select Dr Asha Verma' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Request offboarding' }));
+    expect(screen.getByRole('heading', { level: 2, name: 'Request offboarding' })).toBeVisible();
   });
 
   it('focuses identity and workspace headings and provides hash-safe skip navigation', async () => {

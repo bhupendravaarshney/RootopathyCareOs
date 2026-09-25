@@ -492,6 +492,46 @@ const authenticatedSession = {
   state: 'authenticated',
   user,
 };
+
+function workforceScreen(screenId: string) {
+  const rowId = `33333333-3333-4333-8333-${screenId.slice(3).padStart(12, '0')}`;
+  return {
+    organizationId: organization.id,
+    screenId,
+    title: screenId === 'M2-01' ? 'Workforce dashboard' : `Server-governed ${screenId}`,
+    purpose: 'Render the current minimum-necessary workforce projection.',
+    generatedAt: '2026-09-25T08:00:00Z',
+    metrics: [{ key: 'authorized', label: 'Authorized records', value: 1, tone: 'info' }],
+    columns: [{ key: 'primary', label: 'Record' }],
+    rows: [
+      {
+        id: rowId,
+        memberId: '44444444-4444-4444-8444-444444444444',
+        status: 'active',
+        revision: 1,
+        etag: `"m2:${screenId}:${rowId}:1"`,
+        values: { primary: `Server projection ${screenId}` },
+        allowedActionKeys: [],
+      },
+    ],
+    actions: [
+      {
+        key: 'open-timeline',
+        label: 'Open lifecycle timeline',
+        style: 'link',
+        targetRequired: false,
+        ifMatchRequired: false,
+        reasonRequired: false,
+        href: '#/M2-29',
+        fields: [],
+      },
+    ],
+    notices: [],
+    nextCursor: null,
+    pageSize: 25,
+  };
+}
+
 const routeGroups = [
   { count: 23, module: 'M1', start: 5 },
   { count: 29, module: 'M2', start: 1 },
@@ -597,6 +637,10 @@ async function mockAuthenticatedSession(page: Page) {
   await page.route(`**/api/v1/organizations/${organization.id}/evidence-exports**`, (route) =>
     jsonResponse(route, evidenceExports, route.request().method() === 'POST' ? 201 : 200),
   );
+  await page.route(`**/api/v1/organizations/${organization.id}/workforce/screens/*`, (route) => {
+    const screenId = new URL(route.request().url()).pathname.split('/').at(-1) ?? '';
+    return jsonResponse(route, workforceScreen(screenId));
+  });
 }
 
 async function expectNoSeriousViolations(page: Page, label: string) {
@@ -652,11 +696,158 @@ for (const { module, count, start } of routeGroups) {
       await page.goto(`/#/${id}`);
       await expect(page.getByText(id).first()).toBeVisible();
       await expect(page.locator('main h1')).toBeVisible();
+      if (module === 'M2') {
+        await expect(page.getByText(`Server projection ${id}`, { exact: true })).toBeVisible();
+        await expect(page.getByText('Server governed', { exact: true })).toBeVisible();
+      }
       await expectNoDocumentHorizontalOverflow(page, id);
       await expectNoSeriousViolations(page, id);
     }
   });
 }
+
+test('M2-24 requires fresh server impact before submitting governed offboarding', async ({
+  page,
+}) => {
+  await mockAuthenticatedSession(page);
+  await page.unroute(`**/api/v1/organizations/${organization.id}/workforce/screens/*`);
+  const base = workforceScreen('M2-24');
+  const projection = {
+    ...base,
+    title: 'Offboarding',
+    rows: base.rows.map((row) => ({
+      ...row,
+      allowedActionKeys: ['request-offboarding'],
+    })),
+    actions: [
+      {
+        key: 'request-offboarding',
+        label: 'Request offboarding',
+        style: 'primary',
+        targetRequired: true,
+        ifMatchRequired: true,
+        reasonRequired: true,
+        href: null,
+        fields: [
+          {
+            key: 'accessAction',
+            label: 'Access action',
+            inputType: 'select',
+            required: true,
+            help: 'Revoke active access at the approved effective time.',
+            options: [
+              {
+                value: 'revoke_at_effective',
+                label: 'Revoke at effective time',
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const row = projection.rows[0]!;
+  const impactToken = 'impact_token_'.padEnd(64, 'x');
+  let previewRequests = 0;
+  let actionRequests = 0;
+
+  await page.route('**/api/v1/auth/csrf', (route) =>
+    jsonResponse(route, {
+      headerName: 'X-XSRF-TOKEN',
+      parameterName: '_csrf',
+      token: 'playwright-csrf-token-1234567890',
+    }),
+  );
+  await page.route(
+    `**/api/v1/organizations/${organization.id}/workforce/screens/M2-24**`,
+    async (route) => {
+      const request = route.request();
+      const path = new URL(request.url()).pathname;
+      if (request.method() === 'GET') {
+        await jsonResponse(route, projection);
+        return;
+      }
+      expect(request.headers()['x-xsrf-token']).toBe('playwright-csrf-token-1234567890');
+      expect(request.headers()['if-match']).toBe(row.etag);
+      if (path.endsWith('/actions/request-offboarding/impact-preview')) {
+        previewRequests += 1;
+        expect(request.postDataJSON()).toEqual({
+          decision: null,
+          evidenceIds: [],
+          fields: { accessAction: 'revoke_at_effective' },
+          memberId: row.memberId,
+          reason: 'Approved workforce transition CARE-42',
+          targetId: row.id,
+        });
+        await jsonResponse(route, {
+          screenId: 'M2-24',
+          actionKey: 'request-offboarding',
+          targetId: row.id,
+          revision: row.revision,
+          digest: 'b'.repeat(64),
+          token: impactToken,
+          expiresAt: '2099-09-25T08:10:00Z',
+          blocked: false,
+          items: [
+            {
+              code: 'active_access_revoked',
+              tone: 'impact',
+              detail: 'Two active role memberships will be revoked.',
+              affectedCount: 2,
+            },
+          ],
+        });
+        return;
+      }
+      if (path.endsWith('/actions/request-offboarding')) {
+        actionRequests += 1;
+        expect(request.headers()['idempotency-key']).toMatch(
+          /^m2:request-offboarding:[0-9a-f-]{36}$/,
+        );
+        expect(request.postDataJSON()).toEqual({
+          decision: null,
+          evidenceIds: [],
+          fields: { accessAction: 'revoke_at_effective' },
+          impactToken,
+          memberId: row.memberId,
+          reason: 'Approved workforce transition CARE-42',
+          targetId: row.id,
+        });
+        await jsonResponse(route, {
+          ...projection,
+          generatedAt: '2026-09-25T08:01:00Z',
+          rows: [
+            {
+              ...row,
+              status: 'offboarding',
+              revision: 2,
+              etag: `"m2:M2-24:${row.id}:2"`,
+            },
+          ],
+        });
+        return;
+      }
+      await route.abort('failed');
+    },
+  );
+
+  await page.goto('/#/M2-24');
+  await page.getByLabel('Select Server projection M2-24').check();
+  await page.getByRole('button', { name: 'Request offboarding' }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.getByLabel('Access action').selectOption('revoke_at_effective');
+  await page.getByLabel('Reason').fill('Approved workforce transition CARE-42');
+  await page.getByRole('button', { name: 'Review impact' }).click();
+  await expect(page.getByRole('heading', { name: 'Review before confirmation' })).toBeVisible();
+  expect(previewRequests).toBe(1);
+
+  await page.getByRole('dialog').getByRole('button', { name: 'Request offboarding' }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'server-confirmed result' }),
+  ).toBeVisible();
+  expect(actionRequests).toBe(1);
+  await expectNoSeriousViolations(page, 'M2-24 governed offboarding');
+});
 
 test('live activation and remaining synthetic screens expose honest action boundaries', async ({
   page,

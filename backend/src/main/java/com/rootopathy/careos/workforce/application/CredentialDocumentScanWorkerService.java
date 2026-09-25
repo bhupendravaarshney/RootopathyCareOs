@@ -6,8 +6,10 @@ import com.rootopathy.careos.governance.domain.GovernanceEvidence;
 import com.rootopathy.careos.governance.domain.OutboxRecord;
 import com.rootopathy.careos.platform.application.DocumentPromotionOperations;
 import com.rootopathy.careos.platform.application.DocumentSecurityOperations;
+import com.rootopathy.careos.platform.application.PlatformCapabilityUnavailableException;
 import com.rootopathy.careos.platform.domain.DocumentPromotionEvidence;
 import com.rootopathy.careos.platform.domain.MalwareScanVerdict;
+import com.rootopathy.careos.platform.domain.PlatformCapability;
 import com.rootopathy.careos.tenancy.application.ServiceIdentityAuthorizationOperations;
 import com.rootopathy.careos.tenancy.domain.OperationKey;
 import com.rootopathy.careos.tenancy.domain.ServiceIdentityAuthorizationRequest;
@@ -15,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
 
@@ -24,7 +27,7 @@ public final class CredentialDocumentScanWorkerService {
     private final ServiceIdentityAuthorizationOperations authorization;
     private final WorkforceWorkerStore store;
     private final DocumentSecurityOperations security;
-    private final DocumentPromotionOperations promotion;
+    private final ObjectProvider<DocumentPromotionOperations> promotion;
     private final GovernanceEvidenceOperations evidence;
     private final ObjectMapper objectMapper;
 
@@ -32,7 +35,7 @@ public final class CredentialDocumentScanWorkerService {
             ServiceIdentityAuthorizationOperations authorization,
             WorkforceWorkerStore store,
             DocumentSecurityOperations security,
-            DocumentPromotionOperations promotion,
+            ObjectProvider<DocumentPromotionOperations> promotion,
             GovernanceEvidenceOperations evidence,
             ObjectMapper objectMapper) {
         this.authorization = authorization;
@@ -56,7 +59,13 @@ public final class CredentialDocumentScanWorkerService {
                     var attestation = security.scan(context, work.object());
                     DocumentPromotionEvidence promoted = null;
                     if (attestation.result().verdict() == MalwareScanVerdict.CLEAN) {
-                        promoted = promotion.promote(context, work.object());
+                        var promotionOperations = promotion.getIfAvailable();
+                        if (promotionOperations == null) {
+                            throw new PlatformCapabilityUnavailableException(
+                                    PlatformCapability.DOCUMENT_PROMOTION,
+                                    "document-promotion-disabled");
+                        }
+                        promoted = promotionOperations.promote(context, work.object());
                     }
                     var bound = store.bindScan(context, work, attestation, promoted);
                     record(context, bound, attestation.result().scannerKey());

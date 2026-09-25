@@ -15,7 +15,7 @@ export type WorkforceScreen = {
   rows: Array<WorkforceRow>;
   actions: Array<WorkforceAction>;
   notices: Array<WorkforceNotice>;
-  nextCursor?: string | null;
+  nextCursor: string | null;
   pageSize: number;
 };
 
@@ -83,6 +83,112 @@ export type WorkforceActionRequest = {
     [key: string]: string;
   };
   evidenceIds: Array<string>;
+  impactToken?: string | null;
+};
+
+export type WorkforceImpactPreviewResponse = {
+  screenId: string;
+  actionKey: string;
+  targetId: string;
+  revision: number;
+  digest: string;
+  token: string;
+  expiresAt: string;
+  blocked: boolean;
+  items: Array<WorkforceImpactItem>;
+};
+
+export type WorkforceImpactItem = {
+  code: string;
+  tone: 'impact' | 'warning' | 'blocker';
+  detail: string;
+  affectedCount: number;
+};
+
+export type WorkforceEvidenceAccessRequest = {
+  memberId?: string | null;
+  projection: 'workforce-audit-detail-v1' | 'member-evidence-detail-v1';
+  purposeCode:
+    | 'workforce_operations'
+    | 'credentialing_review'
+    | 'regulatory_evidence'
+    | 'security_investigation'
+    | 'employment_record_request'
+    | 'data_correction';
+  reason: string;
+};
+
+export type WorkforceEvidenceAccessResponse = {
+  evidenceId: string;
+  memberId?: string | null;
+  occurredAt: string;
+  actorId: string;
+  actorKind: 'user' | 'service';
+  operation: string;
+  eventName: string;
+  schemaVersion: number;
+  subjectType: string;
+  subjectId: string;
+  correlationId: string;
+  projection: 'workforce-audit-detail-v1' | 'member-evidence-detail-v1';
+  purposeCode:
+    | 'workforce_operations'
+    | 'credentialing_review'
+    | 'regulatory_evidence'
+    | 'security_investigation'
+    | 'employment_record_request'
+    | 'data_correction';
+  redactionPolicyVersion: string;
+  payload: {
+    [key: string]: unknown;
+  };
+};
+
+export type WorkforceCredentialDocumentAccessRequest = {
+  purposeCode:
+    | 'credentialing_review'
+    | 'regulatory_evidence'
+    | 'security_investigation'
+    | 'employment_record_request'
+    | 'data_correction';
+  reason: string;
+};
+
+export type WorkforceCredentialDocumentAccessResponse = {
+  credentialId: string;
+  documentId: string;
+  accessIntentId: string;
+  readUrl: string;
+  expiresAt: string;
+  mediaType: string;
+  byteCount: number;
+  evidenceDigest: string;
+  purposeCode:
+    | 'credentialing_review'
+    | 'regulatory_evidence'
+    | 'security_investigation'
+    | 'employment_record_request'
+    | 'data_correction';
+};
+
+export type WorkforceExportAccessRequest = {
+  purposeKey:
+    | 'workforce_operations'
+    | 'credentialing_review'
+    | 'regulatory_evidence'
+    | 'security_investigation'
+    | 'employment_record_request'
+    | 'data_correction';
+  reason: string;
+};
+
+export type WorkforceExportAccessResponse = {
+  exportId: string;
+  downloadUrl: string;
+  expiresAt: string;
+  artifactDigest: string;
+  contentType: 'text/csv' | 'application/x-ndjson';
+  filename: string;
 };
 
 export type CredentialDocumentMetadata = {
@@ -1342,6 +1448,11 @@ export type Limit = number;
  * Strong entity tag from the latest representation. Required for protected updates and deletes.
  */
 export type IfMatch = string;
+
+/**
+ * Strong entity tag required only when the server-projected workforce action declares a revision precondition.
+ */
+export type OptionalIfMatch = string;
 
 /**
  * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
@@ -7312,10 +7423,6 @@ export type AccessAuditEvidenceDetailData = {
      * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
      */
     Origin: string;
-    /**
-     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
-     */
-    'Idempotency-Key': string;
   };
   path: {
     /**
@@ -7923,9 +8030,9 @@ export type PerformWorkforceActionData = {
      */
     Origin: string;
     /**
-     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     * Strong entity tag required only when the server-projected workforce action declares a revision precondition.
      */
-    'If-Match': string;
+    'If-Match'?: string;
     /**
      * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
      */
@@ -7994,6 +8101,381 @@ export type PerformWorkforceActionResponses = {
 
 export type PerformWorkforceActionResponse =
   PerformWorkforceActionResponses[keyof PerformWorkforceActionResponses];
+
+export type PreviewWorkforceImpactData = {
+  body: WorkforceActionRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    screenId: string;
+    actionKey: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/workforce/screens/{screenId}/actions/{actionKey}/impact-preview';
+};
+
+export type PreviewWorkforceImpactErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type PreviewWorkforceImpactError =
+  PreviewWorkforceImpactErrors[keyof PreviewWorkforceImpactErrors];
+
+export type PreviewWorkforceImpactResponses = {
+  /**
+   * Fresh server-derived impact bound to actor, action, fields and revision
+   */
+  200: WorkforceImpactPreviewResponse;
+};
+
+export type PreviewWorkforceImpactResponse =
+  PreviewWorkforceImpactResponses[keyof PreviewWorkforceImpactResponses];
+
+export type AccessWorkforceEvidenceData = {
+  body: WorkforceEvidenceAccessRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    evidenceId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/workforce/evidence/{evidenceId}/accesses';
+};
+
+export type AccessWorkforceEvidenceErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type AccessWorkforceEvidenceError =
+  AccessWorkforceEvidenceErrors[keyof AccessWorkforceEvidenceErrors];
+
+export type AccessWorkforceEvidenceResponses = {
+  /**
+   * Purpose-bound restricted workforce evidence detail; the access is audited atomically
+   */
+  200: WorkforceEvidenceAccessResponse;
+};
+
+export type AccessWorkforceEvidenceResponse =
+  AccessWorkforceEvidenceResponses[keyof AccessWorkforceEvidenceResponses];
+
+export type AccessWorkforceExportData = {
+  body: WorkforceExportAccessRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    exportId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/workforce/exports/{exportId}/accesses';
+};
+
+export type AccessWorkforceExportErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type AccessWorkforceExportError =
+  AccessWorkforceExportErrors[keyof AccessWorkforceExportErrors];
+
+export type AccessWorkforceExportResponses = {
+  /**
+   * A purpose-bound, short-lived private GET grant for a ready workforce export
+   */
+  200: WorkforceExportAccessResponse;
+};
+
+export type AccessWorkforceExportResponse =
+  AccessWorkforceExportResponses[keyof AccessWorkforceExportResponses];
+
+export type DownloadWorkforceExportData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    exportId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/workforce/exports/{exportId}/download';
+};
+
+export type DownloadWorkforceExportErrors = {
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type DownloadWorkforceExportError =
+  DownloadWorkforceExportErrors[keyof DownloadWorkforceExportErrors];
+
+export type DownloadWorkforceExportResponses = {
+  /**
+   * The authenticated, requester-bound workforce export artifact
+   */
+  200: Blob | File;
+};
+
+export type DownloadWorkforceExportResponse =
+  DownloadWorkforceExportResponses[keyof DownloadWorkforceExportResponses];
+
+export type AccessWorkforceCredentialDocumentData = {
+  body: WorkforceCredentialDocumentAccessRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    credentialId: string;
+    documentId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/workforce/credentials/{credentialId}/documents/{documentId}/accesses';
+};
+
+export type AccessWorkforceCredentialDocumentErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type AccessWorkforceCredentialDocumentError =
+  AccessWorkforceCredentialDocumentErrors[keyof AccessWorkforceCredentialDocumentErrors];
+
+export type AccessWorkforceCredentialDocumentResponses = {
+  /**
+   * A one-minute purpose-bound clean credential-document grant with URL-free audit evidence
+   */
+  200: WorkforceCredentialDocumentAccessResponse;
+};
+
+export type AccessWorkforceCredentialDocumentResponse =
+  AccessWorkforceCredentialDocumentResponses[keyof AccessWorkforceCredentialDocumentResponses];
+
+export type OpenWorkforceCredentialDocumentAccessData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    credentialId: string;
+    documentId: string;
+    accessIntentId: string;
+  };
+  query: {
+    purposeCode:
+      | 'credentialing_review'
+      | 'regulatory_evidence'
+      | 'security_investigation'
+      | 'employment_record_request'
+      | 'data_correction';
+  };
+  url: '/api/v1/organizations/{organizationId}/workforce/credentials/{credentialId}/documents/{documentId}/accesses/{accessIntentId}';
+};
+
+export type OpenWorkforceCredentialDocumentAccessErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type OpenWorkforceCredentialDocumentAccessError =
+  OpenWorkforceCredentialDocumentAccessErrors[keyof OpenWorkforceCredentialDocumentAccessErrors];
 
 export type UploadWorkforceCredentialDocumentData = {
   body: {

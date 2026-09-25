@@ -125,7 +125,7 @@ public final class WorkforceService {
         var key = requireIdempotencyKey(command.idempotencyKey());
         var reason = spec.reasonRequired() ? requireReason(command.reason()) : optionalReason(command.reason());
         var expectedRevision = spec.ifMatchRequired()
-                ? requireRevision(command.ifMatch(), command.screenId(), command.targetId())
+                ? Long.valueOf(requireRevision(command.ifMatch(), command.screenId(), command.targetId()))
                 : optionalRevision(command.ifMatch(), command.screenId(), command.targetId());
         if (spec.targetRequired() && command.targetId() == null) {
             throw invalid("targetId is required for this action.");
@@ -893,6 +893,10 @@ public final class WorkforceService {
 
     private static WorkforceException invalid(String message) {
         return new WorkforceException(WorkforceException.Reason.INVALID, message);
+    }
+
+    private static WorkforceException conflict(String message) {
+        return new WorkforceException(WorkforceException.Reason.CONFLICT, message);
     }
 
     public record ReadCommand(

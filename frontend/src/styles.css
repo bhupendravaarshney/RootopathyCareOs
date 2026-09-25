@@ -1910,7 +1910,7 @@ select:disabled {
     width: 100%;
     min-height: 44px;
   }
-.workforce-table-wrap {
+  .workforce-table-wrap {
     overflow: visible;
     border: 0;
   }

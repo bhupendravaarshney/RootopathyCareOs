@@ -8,7 +8,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public final class JdbcWorkforceReadinessInvalidationStore
+public class JdbcWorkforceReadinessInvalidationStore
         implements WorkforceReadinessInvalidationStore {
     private final JdbcTemplate jdbc;
 

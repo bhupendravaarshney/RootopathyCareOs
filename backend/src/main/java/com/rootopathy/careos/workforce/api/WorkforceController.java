@@ -43,7 +43,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 @Validated
 @RestController
-public final class WorkforceController {
+public class WorkforceController {
     private static final String SCREEN_PATTERN = "M2-(0[1-9]|1[0-9]|2[0-9])";
     private static final String ACTION_PATTERN = "[a-z][a-z0-9]*(?:-[a-z0-9]+)*";
     private static final String IDEMPOTENCY_PATTERN = "[A-Za-z0-9._:-]{16,128}";

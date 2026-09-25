@@ -744,10 +744,14 @@ function workforceScreenQuery(query: WorkforceScreenQuery): string {
     if (normalized) parameters.set('q', normalized);
   }
   if (query.status !== undefined) {
-    if (typeof query.status !== 'string' || Array.from(query.status).length > 40) {
-      throw new Error('Workforce status must contain at most 40 characters.');
-    }
     const normalized = query.status.trim().normalize('NFC');
+    if (
+      normalized &&
+      (Array.from(normalized).length > 120 ||
+        !/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$/.test(normalized))
+    ) {
+      throw new Error('Workforce status must be a stable lower-case state or event key.');
+    }
     if (normalized) parameters.set('status', normalized);
   }
   if (query.limit !== undefined) {
@@ -3426,12 +3430,7 @@ export class CareOsApiClient {
       responseBody: 'json',
       signal: options.signal,
       successStatuses: [200],
-      validateResponse: workforceImpactPreviewValidator(
-        screen,
-        action,
-        targetId,
-        expectedRevision,
-      ),
+      validateResponse: workforceImpactPreviewValidator(screen, action, targetId, expectedRevision),
     });
   }
 
@@ -3516,7 +3515,12 @@ export class CareOsApiClient {
       responseBody: 'json',
       signal: options.signal,
       successStatuses: [200],
-      validateResponse: workforceEvidenceAccessValidator(evidence, memberId),
+      validateResponse: workforceEvidenceAccessValidator(
+        evidence,
+        memberId,
+        body.projection,
+        body.purposeCode,
+      ),
     });
   }
 
@@ -3554,7 +3558,12 @@ export class CareOsApiClient {
       responseBody: 'json',
       signal: options.signal,
       successStatuses: [200],
-      validateResponse: workforceCredentialDocumentAccessValidator(credential, document),
+      validateResponse: workforceCredentialDocumentAccessValidator(
+        organization,
+        credential,
+        document,
+        body.purposeCode,
+      ),
     });
   }
 
@@ -3593,23 +3602,17 @@ export class CareOsApiClient {
     if (!permittedExtensions) {
       throw new Error('Credential document file must be a PDF, JPEG, or PNG.');
     }
-    const suppliedName = typeof File !== 'undefined' && file instanceof File
-      ? file.name.normalize('NFC')
-      : `credential-document${permittedExtensions[0]}`;
+    const suppliedName =
+      typeof File !== 'undefined' && file instanceof File
+        ? file.name.normalize('NFC')
+        : `credential-document${permittedExtensions[0]}`;
     if (!permittedExtensions.some((extension) => suppliedName.toLowerCase().endsWith(extension))) {
       throw new Error('Credential document name does not match its declared media type.');
     }
 
     const formData = new FormData();
-    formData.append(
-      'metadata',
-      new Blob([JSON.stringify(metadata)], { type: 'application/json' }),
-    );
-    formData.append(
-      'file',
-      file,
-      suppliedName,
-    );
+    formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    formData.append('file', file, suppliedName);
 
     return this.#mutation<WorkforceScreen>({
       idempotencyKey: requireIdempotencyKey(idempotencyKey),
