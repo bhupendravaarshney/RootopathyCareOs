@@ -30,6 +30,12 @@ public class PrototypeController {
                 "edition", "Java Spring Boot + React/Node",
                 "generatedAt", Instant.now(),
                 "screenCount", registry.all().size(),
-                "modules", List.of("Administration", "Workforce", "Clinical"));
+                "modules", List.of(
+                        "Administration",
+                        "Workforce",
+                        "Patient registry",
+                        "Scheduling",
+                        "Encounters",
+                        "Clinical"));
     }
 }

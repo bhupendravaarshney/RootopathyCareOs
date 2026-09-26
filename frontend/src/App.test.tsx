@@ -3,6 +3,7 @@ import type { ApiFailure, ApiResult } from './api/client';
 import type {
   AdministrationReadiness,
   FacilityDirectory,
+  EncounterScreen,
   OrganizationUnitDirectory,
   ServiceLocationDirectory,
   OrganizationAddress,
@@ -13,13 +14,18 @@ import type {
   OrganizationIdentifierCollection,
   OrganizationMembershipPage,
   OrganizationProfile,
+  PatientRegistryScreen,
   ReadinessGate,
+  SchedulingScreen,
   SessionState,
   WorkforceScreen,
 } from './api/generated';
 import App from './App';
 import { findScreen, screens } from './data/screens';
 import type { AdministrationClient } from './features/administration/administration-types';
+import type { EncounterClient } from './features/encounter/encounter-types';
+import type { PatientRegistryClient } from './features/patient/patient-types';
+import type { SchedulingClient } from './features/scheduling/scheduling-types';
 import type { SessionClient } from './features/session/session-types';
 import type { WorkforceClient } from './features/workforce/workforce-types';
 
@@ -442,7 +448,202 @@ const membershipPage: OrganizationMembershipPage = {
   organizationId: selectedOrganization.id,
   page: { hasMore: false, limit: 25, nextCursor: null },
 };
-type ApplicationClient = SessionClient & AdministrationClient & WorkforceClient;
+type ApplicationClient = SessionClient &
+  AdministrationClient &
+  WorkforceClient &
+  PatientRegistryClient &
+  SchedulingClient &
+  EncounterClient;
+
+const patientRegistryProjection: PatientRegistryScreen = {
+  actions: [],
+  columns: [
+    { key: 'primary', label: 'Record' },
+    { key: 'secondary', label: 'Type or identifier' },
+    { key: 'context', label: 'Context' },
+    { key: 'status', label: 'Status' },
+  ],
+  generatedAt: '2026-09-26T08:00:00Z',
+  metrics: [],
+  nextCursor: null,
+  notices: [],
+  organizationId: selectedOrganization.id,
+  pageSize: 25,
+  purpose: 'Review organization-local patient activity, registration and duplicate work.',
+  rows: [],
+  screenId: 'P3-01',
+  title: 'Patient registry dashboard',
+};
+
+const patientIdentityProjection: PatientRegistryScreen = {
+  ...patientRegistryProjection,
+  actions: [
+    {
+      fields: [
+        {
+          inputType: 'text',
+          key: 'nameToUse',
+          label: 'Name to use',
+          options: [],
+          required: false,
+        },
+        {
+          inputType: 'select',
+          key: 'nameState',
+          label: 'Name state',
+          options: [{ label: 'Provided', value: 'provided' }],
+          required: true,
+        },
+        {
+          inputType: 'select',
+          key: 'birthDateCertainty',
+          label: 'Birth-date certainty',
+          options: [{ label: 'Exact', value: 'exact' }],
+          required: true,
+        },
+        {
+          inputType: 'text',
+          key: 'provenanceCode',
+          label: 'Provenance code',
+          options: [],
+          required: true,
+        },
+      ],
+      href: null,
+      ifMatchRequired: true,
+      key: 'correct-identity',
+      label: 'Save identity correction',
+      reasonRequired: true,
+      style: 'primary',
+      targetRequired: true,
+    },
+  ],
+  purpose: 'Maintain patient identity with partial-date and provenance semantics.',
+  rows: [
+    {
+      allowedActionKeys: ['correct-identity'],
+      etag: '"m3:P3-05:33333333-3333-4333-8333-333333333333:2"',
+      id: '33333333-3333-4333-8333-333333333333',
+      patientId: '33333333-3333-4333-8333-333333333333',
+      revision: 2,
+      status: 'draft',
+      values: {
+        context: 'Birth date not supplied',
+        primary: 'Temporary patient',
+        secondary: 'PT-•••1234',
+      },
+    },
+  ],
+  screenId: 'P3-05',
+  title: 'Identity and demographics',
+};
+
+const schedulingRequestId = '99999999-9999-4999-8999-999999999991';
+const schedulingProjection: SchedulingScreen = {
+  actions: [
+    {
+      fields: [],
+      href: null,
+      ifMatchRequired: true,
+      key: 'confirm-appointment',
+      label: 'Confirm appointment',
+      reasonRequired: true,
+      style: 'primary',
+      targetRequired: true,
+    },
+  ],
+  columns: [
+    { key: 'primary', label: 'Request' },
+    { key: 'secondary', label: 'Patient' },
+    { key: 'context', label: 'Context' },
+    { key: 'status', label: 'Status' },
+  ],
+  generatedAt: '2026-09-26T08:00:00Z',
+  metrics: [],
+  nextCursor: null,
+  notices: [],
+  organizationId: selectedOrganization.id,
+  pageSize: 25,
+  purpose: 'Re-evaluate eligibility and consume the held slot atomically.',
+  rows: [
+    {
+      allowedActionKeys: ['confirm-appointment'],
+      appointmentId: null,
+      etag: `"m4:P4-11:${schedulingRequestId}:3"`,
+      id: schedulingRequestId,
+      patientId: '33333333-3333-4333-8333-333333333333',
+      revision: 3,
+      status: 'held',
+      values: {
+        context: 'Physiotherapy',
+        primary: 'Request 99999999',
+        secondary: 'PT-•••1234',
+      },
+    },
+  ],
+  screenId: 'P4-11',
+  title: 'Confirmation',
+};
+
+const encounterId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const encounterNoteId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const encounterProjection: EncounterScreen = {
+  actions: [
+    {
+      fields: [
+        {
+          inputType: 'textarea',
+          key: 'content',
+          label: 'Clinical note',
+          options: [],
+          required: true,
+        },
+        {
+          inputType: 'checkbox',
+          key: 'lateEntry',
+          label: 'Late entry',
+          options: [],
+          required: false,
+        },
+      ],
+      href: null,
+      ifMatchRequired: true,
+      key: 'save-note-version',
+      label: 'Save note version',
+      reasonRequired: false,
+      style: 'primary',
+      targetRequired: true,
+    },
+  ],
+  columns: [
+    { key: 'primary', label: 'Note' },
+    { key: 'context', label: 'Context' },
+    { key: 'status', label: 'Status' },
+  ],
+  generatedAt: '2026-09-26T09:00:00Z',
+  metrics: [],
+  nextCursor: null,
+  notices: [],
+  organizationId: selectedOrganization.id,
+  pageSize: 25,
+  purpose: 'Create append-only, digest-bound draft note versions.',
+  rows: [
+    {
+      allowedActionKeys: ['save-note-version'],
+      appointmentId: null,
+      encounterId,
+      episodeId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      etag: `"m5:P5-09:${encounterNoteId}:4"`,
+      id: encounterNoteId,
+      patientId: '33333333-3333-4333-8333-333333333333',
+      revision: 4,
+      status: 'draft',
+      values: { context: 'Progress note', noteId: encounterNoteId, primary: 'Version 4' },
+    },
+  ],
+  screenId: 'P5-09',
+  title: 'Encounter notes',
+};
 
 const workforceProjection: WorkforceScreen = {
   organizationId: selectedOrganization.id,
@@ -752,6 +953,31 @@ function sessionClient(overrides: Partial<ApplicationClient> = {}): ApplicationC
       ...success(organizationProfile),
       etag: '"organization-profile:4"',
     }),
+    getPatientRegistryScreen: async (_organizationId, screenId) =>
+      success({
+        ...patientRegistryProjection,
+        screenId,
+        title: findScreen(screenId).title,
+        purpose: findScreen(screenId).purpose,
+      }),
+    getSchedulingScreen: async (_organizationId, screenId) =>
+      success({
+        ...schedulingProjection,
+        screenId,
+        title: findScreen(screenId).title,
+        purpose: findScreen(screenId).purpose,
+        rows: [],
+        actions: [],
+      }),
+    getEncounterScreen: async (_organizationId, screenId) =>
+      success({
+        ...encounterProjection,
+        screenId,
+        title: findScreen(screenId).title,
+        purpose: findScreen(screenId).purpose,
+        rows: [],
+        actions: [],
+      }),
     issueInvitation: async () =>
       success(
         {
@@ -771,6 +997,50 @@ function sessionClient(overrides: Partial<ApplicationClient> = {}): ApplicationC
     regenerateRecoveryCodes: async () =>
       success({ recoveryCodes: ['2345-6789-ABCD', 'EFGH-JKLM-NPQR'] }),
     requestPasswordReset: async () => success(undefined, 202),
+    performPatientRegistryAction: async (_organizationId, screenId) =>
+      success({
+        ...patientRegistryProjection,
+        screenId,
+        title: findScreen(screenId).title,
+        purpose: findScreen(screenId).purpose,
+      }),
+    performSchedulingAction: async (_organizationId, screenId) =>
+      success({
+        ...schedulingProjection,
+        screenId,
+        title: findScreen(screenId).title,
+        purpose: findScreen(screenId).purpose,
+        rows: [],
+        actions: [],
+      }),
+    performEncounterAction: async (_organizationId, screenId) =>
+      success({
+        ...encounterProjection,
+        screenId,
+        title: findScreen(screenId).title,
+        purpose: findScreen(screenId).purpose,
+        rows: [],
+        actions: [],
+      }),
+    previewPatientRegistryImpact: async (_organizationId, screenId, actionKey, body) =>
+      success({
+        actionKey,
+        blocked: false,
+        digest: 'a'.repeat(64),
+        expiresAt: '2099-09-26T08:10:00Z',
+        items: [
+          {
+            affectedCount: 1,
+            code: 'patient_record',
+            detail: 'One patient record is affected.',
+            tone: 'impact',
+          },
+        ],
+        revision: 0,
+        screenId,
+        targetId: body.targetId!,
+        token: 'a'.repeat(64),
+      }),
     requestMfaAdministrativeReset: async (_organizationId, targetUserId) =>
       success(
         {
@@ -963,9 +1233,9 @@ describe('CareOS frontend session boundary', () => {
     window.location.hash = '#/M1-05';
   });
 
-  it('registers all M1, M2 and COS screens', () => {
-    expect(screens).toHaveLength(79);
-    expect(new Set(screens.map((item) => item.id)).size).toBe(79);
+  it('registers all M1 through M5 and COS screens', () => {
+    expect(screens).toHaveLength(122);
+    expect(new Set(screens.map((item) => item.id)).size).toBe(122);
     expect(findScreen('M1-01').purpose).toBe(
       'Authenticate securely and continue to the requested authorized workspace.',
     );
@@ -974,6 +1244,9 @@ describe('CareOS frontend session boundary', () => {
     expect(findScreen('M1-04').purpose).toBe(
       'Choose one currently authorized organization workspace.',
     );
+    expect(findScreen('P3-15').title).toBe('Merge review');
+    expect(findScreen('P4-11').title).toBe('Confirmation');
+    expect(findScreen('P5-10').title).toBe('Review and sign');
     expect(() => findScreen('M1-99')).toThrow('does not contain M1-99');
   });
 
@@ -1002,6 +1275,197 @@ describe('CareOS frontend session boundary', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Select Dr Asha Verma' }));
     fireEvent.click(screen.getByRole('button', { name: 'Request offboarding' }));
     expect(screen.getByRole('heading', { level: 2, name: 'Request offboarding' })).toBeVisible();
+  });
+
+  it('renders a P3 route and submits a revision-bound patient action', async () => {
+    window.location.hash = '#/P3-05';
+    const getPatientRegistryScreen = vi.fn<PatientRegistryClient['getPatientRegistryScreen']>(
+      async () => success(patientIdentityProjection),
+    );
+    const performPatientRegistryAction = vi.fn<
+      PatientRegistryClient['performPatientRegistryAction']
+    >(async () => success(patientIdentityProjection));
+
+    render(
+      <App client={sessionClient({ getPatientRegistryScreen, performPatientRegistryAction })} />,
+    );
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Identity and demographics' }),
+    ).toBeVisible();
+    expect(getPatientRegistryScreen).toHaveBeenCalledWith(
+      selectedOrganization.id,
+      'P3-05',
+      { limit: 25, q: undefined, status: undefined },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Select Temporary patient' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save identity correction' }));
+    const actionDialog = screen.getByRole('dialog');
+    fireEvent.change(within(actionDialog).getByLabelText('Name to use'), {
+      target: { value: 'Asha' },
+    });
+    fireEvent.change(within(actionDialog).getByLabelText('Provenance code'), {
+      target: { value: 'patient_supplied' },
+    });
+    fireEvent.change(within(actionDialog).getByRole('textbox', { name: /^Reason/ }), {
+      target: { value: 'Corrected with patient confirmation.' },
+    });
+    fireEvent.click(within(actionDialog).getByRole('button', { name: 'Save identity correction' }));
+
+    await waitFor(() => expect(performPatientRegistryAction).toHaveBeenCalledOnce());
+    expect(performPatientRegistryAction.mock.calls[0]?.slice(0, 4)).toEqual([
+      selectedOrganization.id,
+      'P3-05',
+      'correct-identity',
+      expect.objectContaining({
+        fields: expect.objectContaining({
+          birthDateCertainty: 'exact',
+          nameState: 'provided',
+          nameToUse: 'Asha',
+          provenanceCode: 'patient_supplied',
+        }),
+        patientId: '33333333-3333-4333-8333-333333333333',
+        targetId: '33333333-3333-4333-8333-333333333333',
+      }),
+    ]);
+    expect(performPatientRegistryAction.mock.calls[0]?.[4]).toBe(
+      '"m3:P3-05:33333333-3333-4333-8333-333333333333:2"',
+    );
+  });
+
+  it('loads child records only after selecting an explicit patient context', async () => {
+    window.location.hash = '#/P3-06';
+    const directory: PatientRegistryScreen = {
+      ...patientIdentityProjection,
+      actions: [],
+      screenId: 'P3-06',
+      title: 'Contacts and addresses',
+    };
+    const details: PatientRegistryScreen = {
+      ...directory,
+      rows: [
+        ...directory.rows,
+        {
+          allowedActionKeys: [],
+          etag: '"m3:P3-06:44444444-4444-4444-8444-444444444444:0"',
+          id: '44444444-4444-4444-8444-444444444444',
+          patientId: '33333333-3333-4333-8333-333333333333',
+          revision: 0,
+          status: 'active',
+          values: {
+            context: 'care-coordination',
+            primary: 'a•••@example.invalid',
+            secondary: 'email · personal',
+          },
+        },
+      ],
+    };
+    const getPatientRegistryScreen = vi.fn<PatientRegistryClient['getPatientRegistryScreen']>(
+      async (_organizationId, _screenId, query) => success(query?.patientId ? details : directory),
+    );
+
+    render(<App client={sessionClient({ getPatientRegistryScreen })} />);
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Contacts and addresses' }),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole('radio', { name: 'Select Temporary patient' }));
+    expect(await screen.findByText('a•••@example.invalid')).toBeVisible();
+    await waitFor(() => expect(getPatientRegistryScreen).toHaveBeenCalledTimes(2));
+    expect(getPatientRegistryScreen.mock.calls[1]?.[2]).toEqual(
+      expect.objectContaining({ patientId: '33333333-3333-4333-8333-333333333333' }),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'All patients' }));
+    await waitFor(() => expect(getPatientRegistryScreen).toHaveBeenCalledTimes(3));
+    expect(getPatientRegistryScreen.mock.calls[2]?.[2]).not.toHaveProperty('patientId');
+  });
+
+  it('renders a P4 route and confirms a revision-bound appointment request', async () => {
+    window.location.hash = `#/P4-11?requestId=${schedulingRequestId}`;
+    const getSchedulingScreen = vi.fn<SchedulingClient['getSchedulingScreen']>(async () =>
+      success(schedulingProjection),
+    );
+    const performSchedulingAction = vi.fn<SchedulingClient['performSchedulingAction']>(async () =>
+      success(schedulingProjection),
+    );
+
+    render(<App client={sessionClient({ getSchedulingScreen, performSchedulingAction })} />);
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Confirmation' })).toBeVisible();
+    expect(getSchedulingScreen).toHaveBeenCalledWith(
+      selectedOrganization.id,
+      'P4-11',
+      expect.objectContaining({ limit: 25, requestId: schedulingRequestId }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Select Request 99999999' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm appointment' }));
+    const actionDialog = screen.getByRole('dialog');
+    fireEvent.change(within(actionDialog).getByRole('textbox', { name: /^Reason/ }), {
+      target: { value: 'Confirmed after reviewing the exact held slot.' },
+    });
+    fireEvent.click(within(actionDialog).getByRole('button', { name: 'Confirm appointment' }));
+
+    await waitFor(() => expect(performSchedulingAction).toHaveBeenCalledOnce());
+    expect(performSchedulingAction.mock.calls[0]?.slice(0, 4)).toEqual([
+      selectedOrganization.id,
+      'P4-11',
+      'confirm-appointment',
+      expect.objectContaining({
+        requestId: schedulingRequestId,
+        targetId: schedulingRequestId,
+      }),
+    ]);
+    expect(performSchedulingAction.mock.calls[0]?.[4]).toBe(`"m4:P4-11:${schedulingRequestId}:3"`);
+  });
+
+  it('renders a P5 route and submits append-only clinical note input', async () => {
+    window.location.hash = `#/P5-09?encounterId=${encounterId}`;
+    const getEncounterScreen = vi.fn<EncounterClient['getEncounterScreen']>(async () =>
+      success(encounterProjection),
+    );
+    const performEncounterAction = vi.fn<EncounterClient['performEncounterAction']>(async () =>
+      success(encounterProjection),
+    );
+
+    render(<App client={sessionClient({ getEncounterScreen, performEncounterAction })} />);
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Encounter notes' })).toBeVisible();
+    expect(getEncounterScreen).toHaveBeenCalledWith(
+      selectedOrganization.id,
+      'P5-09',
+      expect.objectContaining({ encounterId, limit: 25 }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Select Version 4' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save note version' }));
+    const actionDialog = screen.getByRole('dialog');
+    fireEvent.change(within(actionDialog).getByRole('textbox', { name: 'Clinical note' }), {
+      target: { value: 'Patient reports improved mobility with no new red flags.' },
+    });
+    fireEvent.click(within(actionDialog).getByRole('checkbox', { name: 'Late entry' }));
+    fireEvent.click(within(actionDialog).getByRole('button', { name: 'Save note version' }));
+
+    await waitFor(() => expect(performEncounterAction).toHaveBeenCalledOnce());
+    expect(performEncounterAction.mock.calls[0]?.slice(0, 4)).toEqual([
+      selectedOrganization.id,
+      'P5-09',
+      'save-note-version',
+      expect.objectContaining({
+        encounterId,
+        fields: expect.objectContaining({
+          content: 'Patient reports improved mobility with no new red flags.',
+          lateEntry: 'true',
+        }),
+        targetId: encounterNoteId,
+      }),
+    ]);
+    expect(performEncounterAction.mock.calls[0]?.[4]).toBe(`"m5:P5-09:${encounterNoteId}:4"`);
   });
 
   it('focuses identity and workspace headings and provides hash-safe skip navigation', async () => {

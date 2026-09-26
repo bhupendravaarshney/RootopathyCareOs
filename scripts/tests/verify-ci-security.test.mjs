@@ -60,6 +60,10 @@ jobs:
       - run: node --test scripts/tests/verify-module-2-candidate-inputs.test.mjs
       - run: node scripts/verify-module-2-inputs.mjs --require-approved
       - run: node --test scripts/tests/verify-module-2-inputs.test.mjs
+      - run: node scripts/verify-module-3-candidate-inputs.mjs
+      - run: node --test scripts/tests/verify-module-3-candidate-inputs.test.mjs
+      - run: node scripts/verify-module-3-inputs.mjs --require-approved
+      - run: node --test scripts/tests/verify-module-3-inputs.test.mjs
 `;
   assert.deepEqual(validateWorkflowText("quality.yml", workflow), []);
 
@@ -87,6 +91,24 @@ jobs:
   );
   assert.match(
     validateWorkflowText("quality.yml", module2ApprovalWeakened).join("\n"),
+    /contracts job must run the required module input command/,
+  );
+
+  const module3Weakened = workflow.replace(
+    "      - run: node --test scripts/tests/verify-module-3-candidate-inputs.test.mjs\n",
+    "",
+  );
+  assert.match(
+    validateWorkflowText("quality.yml", module3Weakened).join("\n"),
+    /contracts job must run the required module input command/,
+  );
+
+  const module3ApprovalWeakened = workflow.replace(
+    "      - run: node scripts/verify-module-3-inputs.mjs --require-approved\n",
+    "",
+  );
+  assert.match(
+    validateWorkflowText("quality.yml", module3ApprovalWeakened).join("\n"),
     /contracts job must run the required module input command/,
   );
 

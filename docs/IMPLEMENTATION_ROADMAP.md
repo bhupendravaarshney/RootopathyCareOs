@@ -19,9 +19,15 @@
 
 Do not implement random screens. Each phase starts with architecture, mockup review and a gap ledger, then backend contracts, UI integration, security tests, browser tests and a verified delivery checkpoint.
 
+## Continuous execution directive
+
+On 26 September 2026, Bhupendra explicitly authorized completion of the remaining repository project without repeated phase-by-phase approval prompts and directed that review and modification occur in a later QA mode. This authorizes dependency-ordered design, implementation, migration, API/client generation, tests and documentation using the approved specifications and conservative fail-closed defaults.
+
+The directive does not fabricate unavailable COS source assets, jurisdiction-specific law, clinical-owner decisions, partner contracts, credentials, provider accounts, hosted execution evidence or production deployment acceptance. Where those external inputs are unavailable, implementation must provide a configurable fail-closed boundary, synthetic-only tests and a precise QA/activation gap, then continue with independent in-repository work rather than stopping for another routine approval request.
+
 ## Current build status
 
-**Phase 0 repository mechanics are complete; target-environment production acceptance remains open.** `m1-candidate-1` was approved unchanged by **bhupendra, developer** on 16 September 2026. The production input gate is `APPROVED` at eight of eight artifacts and package digest `19aff5ce30516b7ee2101c093a8429d8a74394995ca90d486790bcc18a392946`. Flyway V20 records the immutable approval release and activates the approved Module 1 interactive authorization catalogue; V21-V24 implement bounded membership, owner-transfer, and mandatory-MFA behavior; V25-V29 implement M1-07 through M1-11 organization core and live readiness, including confidential, gap-free governance responsibility coverage. Persisted configuration validation/activation is not claimed. The facility-scope candidate remains non-authorizing, and M1B, final M1C acceptance, and Module 1 remain in progress.
+**Phase 0 mechanics and Modules 1-5 are complete at the repository-construction boundary; consolidated QA and target-environment production acceptance remain open.** M1 is implemented through V50, M2 through V68, M3 through V78, M4 through V82 and M5 through V89. The checked boundary contains 122 route states and 116 API operations; all 96 frontend unit tests and the focused five-viewport M5 gate pass. Module 6 Clinical Assessment is the next dependency. The M1 facility-scope candidate remains non-authorizing, and consolidated QA plus target provider/worker/deployment/monitoring/backup evidence remain deferred.
 
 ### Phase 0A - build verification and reproducibility (completed 13 September 2026)
 
@@ -1008,6 +1014,151 @@ The exact input checklist, per-screen status, architecture, and exit conditions 
 - [x] Define additive deny-by-default roles/permissions/scopes/assurance, exact audit/outbox event families and consumers, clinical/non-clinical readiness, point-in-time eligibility, no-override behavior, expiry milestones, minimum-necessary history/audit/timeline projections, retention, and safe exports.
 - [x] Add a path-safe verifier binding the exact eight artifacts, all 29 screen IDs, all 44 table names, accepted baseline, build specification bytes, required decision topics, self-contained mockup boundary, and non-authorizing status.
 - [x] Run the end-of-phase integrity gate: the verifier reports eight artifacts, 29 screens, 44 tables, package digest `2e64bd4e1ac5192a9a4783abf58f4578b8bceda60c21c2e835a910e6760d0f8f`, and `implementationAuthorized: false`; all ten positive/negative verifier tests, five exact-viewport Playwright/Axe/overflow cases, frontend formatting, and the updated 13-test CI-security contract pass.
-- [ ] Obtain accountable review/approval of the exact candidate digest and promote byte-identical artifacts plus distinct approval evidence before writing Module 2 production migrations or runtime behavior.
+- [x] Obtain accountable review/approval of the exact candidate digest and promote byte-identical artifacts plus distinct approval evidence before writing Module 2 production migrations or runtime behavior. `M2-APPROVAL-20260921-01` binds the unchanged candidate digest and promoted package digest.
 
-The dependency-ordered M2A-M2H implementation, screen traceability, architecture boundaries, deferred end-of-module testing rule, and exit criteria are authoritative in `MODULE_2_IMPLEMENTATION_PLAN.md`. Current M2 runtime pages remain synthetic and disabled; the completed candidate supplies decisions for review but grants no implementation authority.
+The dependency-ordered M2A-M2H implementation, screen traceability, architecture boundaries, deferred end-of-module testing rule, and exit criteria are authoritative in `MODULE_2_IMPLEMENTATION_PLAN.md`.
+
+### Phase 2B - approved Module 2 implementation (completed 25 September 2026)
+
+- [x] Promote the exact approved M2 permission, operation, readiness, event, registry, and input releases without changing the accepted artifact bytes.
+- [x] Implement the exact 44-table workforce model, forced tenant RLS/composite references, immutable evidence, direct-SQL lifecycle guards, invalidation, leases, exports, subscriptions, and internal-worker authorization through V65.
+- [x] Implement M2-01 through M2-29 across the workforce domain/application/infrastructure/API layers and replace their synthetic route records with checked live projections/actions.
+- [x] Bind credentials to private quarantine/scan/promotion/access/retention, implement readiness/eligibility and expiry/notification processing, and coordinate lifecycle/offboarding with canonical M1 identity/RBAC/session effects.
+
+### Phase 2C - Module 2 closeout and M2H verification (completed 26 September 2026)
+
+- [x] Add V66 canonical offboarding effects, V67 forward-only runtime guard compatibility, and V68 forced-RLS/HMAC-bound invitation-token lookup security without mutating applied migrations.
+- [x] Reject non-canonical Base64URL cursor/impact-token representations and require the exact 109-operation OpenAPI registry.
+- [x] Pass the full M2H gate: 214 backend tests and V1-V68, 81 frontend unit tests, 120 browser/Axe/overflow cases, 85 repository contract/security tests, both Compose models, both image builds, and source/image vulnerability gates.
+- [x] Freeze the approved M2B-M2G repository boundary for handoff and record the evidence in `BUILD_STATUS.md` and `MODULE_2_IMPLEMENTATION_PLAN.md`.
+
+### Phase 2D - Module 2 owner completion acceptance (completed 26 September 2026)
+
+- [x] Obtain accountable owner acceptance of the completed M2 repository implementation and M2H evidence.
+- [x] Record `M2-COMPLETION-ACCEPTANCE-20260926-01`, binding repository evidence baseline `301b91e41546cd8c109a704204d676d8fe4eb5ed` and completion-delta manifest digest `8ebace1fdf479bef359fb24cfff7e1274104a811d000a4da0093928605210a58`.
+- [x] Preserve target provider/worker/deployment/monitoring/backup, hosted evidence, and production release acceptance as separate work.
+
+### Phase 3A - Module 3 patient-registry input package (completed 26 September 2026)
+
+- [x] Derive the exact P3-01 through P3-16 scope and dependency boundary from the authoritative build specification and accepted M1/M2 sources of truth in `MODULE_3_PRODUCT_DEFINITION.md`.
+- [x] Prepare `m3-product-definition-draft-1`, a non-authorizing product-review artifact covering actors/journeys, all screen states, data/validation, identity/duplicate lifecycle, authorization/consent/privacy, audit/events, jobs, safety, FHIR, history/timeline/export and acceptance decisions. High-fidelity mockups remain intentionally gated on product approval.
+- [x] Respond to the reviewer's `ACCEPT_WITH_CHANGES` direction with `m3-product-definition-draft-2`, proposing conservative, fail-closed resolutions for all fifteen decision families and preserving local legal/privacy/clinical/security/interoperability catalogues as activation gates.
+- [x] Record `M3-PRODUCT-ACCEPTANCE-20260926-01`, which binds the exact `m3-product-definition-draft-2` bytes and authorizes synthetic high-fidelity mockup/package preparation only.
+- [x] Build the eight-artifact `m3-candidate-1` package, including the self-contained P3-01 through P3-16 prototype and the seven policy/contract artifacts.
+- [x] Add a path-safe candidate verifier and 11 positive/negative tests that bind every artifact, screen, entity family, dependency and decision while reporting `implementationAuthorized: false`; the exact candidate digest is `c383cd7dbe927d2443958f71350c8cd59ac1a8eb725dc5b2a70e40ced115e21f`.
+- [x] Pass five exact-viewport Playwright/Axe/overflow cases at 1440, 1024, 768, 390 and 320 pixels.
+- [x] Obtain accountable approval of exact candidate digest `c383cd7dbe927d2443958f71350c8cd59ac1a8eb725dc5b2a70e40ced115e21f` under `M3-APPROVAL-20260926-01`.
+- [x] Promote all eight accepted artifacts byte-identically, bind promoted-package digest `3e7ced79ecc01f59e9d4d3bb15a48bd30e579a32f194b23e9f3ee0a9aed09c00`, and make the production input gate report `APPROVED` with `implementationAuthorized: true`.
+- [x] Add the schema, required-approval verifier, 12 positive/negative tests and mandatory CI-security workflow commands for the approved package.
+
+The approved package authorizes dependency-ordered repository implementation only. It does not silently carry Module 2 policy decisions into patient identity, matching/merge, proxy authority, consent/privacy or safety decisions, and it does not approve target deployment or production release.
+
+### Phase 3B - patient/registration and duplicate-candidate foundation (completed 26 September 2026)
+
+- [x] Freeze and verify the exact approved M3A input boundary before runtime changes.
+- [x] Add V69-V72 migration-owned authorization/event releases plus forced-RLS patient, registration, match and duplicate-candidate persistence with composite tenant integrity.
+- [x] Implement P3-01 through P3-04 live dashboard, directory, search-first registration and safe duplicate evidence/action flows.
+- [x] Enforce creator-or-manager staging visibility, bounded literal search, exact revisions/idempotency, tenant authorization and direct-SQL operation guards.
+
+### Phase 3C - patient identity and communication history (completed 26 September 2026)
+
+- [x] Implement P3-05 through P3-08 identity correction, effective contact/address history, communication preferences and the approved identifier boundary.
+- [x] Preserve provenance, verification, confidentiality, primary/preferred rules and append-only revision lineage.
+- [x] Keep identifier issuance and display fail closed until an approved local identifier scheme and field projection are active.
+
+### Phase 3D - authority, consent/privacy and safety (completed fail-closed boundary 26 September 2026)
+
+- [x] Implement P3-09 through P3-11 projections and caregiver-relationship evidence without treating a relationship as proxy authority.
+- [x] Enforce purpose/effective-time separation and expose explicit unavailable states for missing proxy, consent/privacy and clinical-safety catalogues.
+- [x] Prevent unavailable local policy from silently activating data access or clinical behavior.
+
+### Phase 3E - exact validation, registration and patient summary (completed 26 September 2026)
+
+- [x] Implement P3-12 exact revision/digest/schema-bound validation and atomic registration submission.
+- [x] Implement P3-13 canonical summary/action projection with final-survivor resolution for merged identifiers.
+- [x] Keep urgent temporary registration, deceased verification, export and FHIR capabilities unavailable until their workers/catalogues are active.
+
+### Phase 3F - duplicate review, merge and timeline (completed 26 September 2026)
+
+- [x] Implement P3-14 reviewer claim/lease recovery/disposition and P3-15 three-party merge request, independent decision and separate execution.
+- [x] Add V73-V75 one-use decision consumption, immutable identity revision history and effective merged-lineage resolution.
+- [x] Implement P3-16 minimum-necessary timeline correlation across patient, registration, duplicate and merge evidence without raw payload exposure.
+
+### Phase 3G - invalidation and external-integration boundary (completed fail-closed boundary 26 September 2026)
+
+- [x] Add V76-V78 exact registration-validation binding, duplicate-queue read authorization and database-enforced lifecycle/merge guards.
+- [x] Project elapsed registration and review leases safely using database time and exclude expired work from active dashboards.
+- [x] Keep reconciliation jobs, notifications, local policy catalogues, portal linkage, export/retention and FHIR adapters unavailable until separately configured and accepted.
+
+### Phase 3H - repository verification and QA handoff (completed 26 September 2026)
+
+- [x] Pass fresh V1-V78 migration, restricted-role/RLS, cross-tenant, direct-SQL, lifecycle, registration, history, duplicate and three-party merge tests.
+- [x] Pass the exact 112-operation OpenAPI/generated-client/input/security gates, frontend format/type/lint/unit/build checks and all five responsive browser projects.
+- [x] Record the implemented/fail-closed scope and remaining target-environment activation gates in `MODULE_3_COMPLETION_REPORT.md`.
+- [x] Preserve owner QA, target-provider/deployment evidence and production-release acceptance as later activities; they are not represented as repository implementation gaps.
+
+### Phase 4A - Module 4 scheduling contract and safety boundary (completed 26 September 2026)
+
+- [x] Define P4-01 through P4-15, the scheduling state model, database-time hold policy, exact-instant eligibility rule and explicit provider/financial boundaries in `MODULE_4_IMPLEMENTATION_PLAN.md`.
+- [x] Release migration-owned scheduling permissions/operations without activating unapproved reminder, calendar, payment or portal behavior.
+
+### Phase 4B - scheduling persistence and read projections (completed 26 September 2026)
+
+- [x] Add V79-V80 authorization plus the 13-table schedule/slot/request/appointment/participant/history/assignment/waitlist/reminder/cancellation/no-show/payment/calendar-link model.
+- [x] Enforce composite tenant integrity, UUIDv7 identifiers, revisions, forced RLS, slot uniqueness and bounded dashboard/calendar/directory projections.
+
+### Phase 4C - request, selection and atomic slot hold (completed 26 September 2026)
+
+- [x] Implement patient, service/facility/location and practitioner selection with current-state validation.
+- [x] Acquire five-minute holds atomically using database time and prove concurrent competitors cannot both acquire the same slot.
+
+### Phase 4D - review, payment boundary and confirmation (completed 26 September 2026)
+
+- [x] Project exact appointment review and non-financial `deferred_to_billing` evidence without promising a charge or payment result.
+- [x] Re-evaluate patient/context/practitioner eligibility for the appointment instant and consume the hold atomically with audit/outbox evidence.
+
+### Phase 4E - lifecycle, waitlist and timeline (completed 26 September 2026)
+
+- [x] Implement reschedule, cancellation, no-show, waitlist join/withdraw and minimum-necessary timeline behavior.
+- [x] Add V81 direct-SQL lifecycle guards and V82 operation-key idempotency compatibility while preserving immutable prior-state evidence.
+- [x] Keep automated offers/reminders, external calendar synchronization and portal/proxy booking unavailable until accepted policies/providers exist.
+
+### Phase 4F - repository verification and QA handoff (completed 26 September 2026)
+
+- [x] Pass fresh V1-V82 migration, restricted-role/RLS, direct-SQL, exact eligibility, concurrent hold, booking and lifecycle verification.
+- [x] Pass OpenAPI 0.43.0 with exactly 114 operations, generated-client drift, all frontend static/unit/build gates and all five responsive browser projects.
+- [x] Reconcile the public catalogue to all 110 routes and pass 234 backend, 90 frontend unit, 135 browser and 110 repository contract/security tests.
+- [x] Record the implemented/fail-closed scope in `MODULE_4_COMPLETION_REPORT.md` and preserve consolidated QA/target acceptance as later activities.
+
+### Phase 5A - Module 5 encounter definition and dependency freeze (completed 26 September 2026)
+
+- [x] Derive the exact 12-screen encounter scope, entity/state model, permissions/events and validation rules from the authoritative build specification.
+- [x] Preserve confirmed appointments only as optional encounter provenance; do not infer encounter start, clinical participation, signatures or completion from booking state.
+- [x] Define fail-closed clinical-owner boundaries for signer eligibility, red-flag escalation, orders/tasks and amendments before persistence and API work.
+
+### Phase 5B - encounter, episode and participant foundation (completed 26 September 2026)
+
+- [x] Add V83-V84 authorization and the 14-relation forced-RLS encounter model with composite tenant integrity and UUIDv7 identifiers.
+- [x] Implement explicit episode/encounter opening, appointment provenance, lifecycle history and immutable practitioner participation snapshots.
+
+### Phase 5C - clinical assertions, orders, tasks and red flags (completed 26 September 2026)
+
+- [x] Implement attributed presenting concerns, problems, diagnoses, orders and clinical tasks with bounded minimum-necessary projections.
+- [x] Couple every red flag atomically to a critical task and escalation, and block completion until attributed acknowledgement and resolution.
+
+### Phase 5D - append-only notes, signatures and amendments (completed 26 September 2026)
+
+- [x] Implement digest-bound note versions, current-version signing and signer/participant/eligibility checks.
+- [x] Preserve signed content and signatures as append-only and implement attributed amendments linked to the exact signed version.
+
+### Phase 5E - history, API and all 12 screens (completed 26 September 2026)
+
+- [x] Implement allow-listed encounter history without raw clinical audit/outbox payloads.
+- [x] Publish OpenAPI 0.44.0 with 116 operations, regenerate the checked TypeScript boundary and replace P5-01 through P5-12 with live governed routes.
+
+### Phase 5F - construction checkpoint and QA handoff (completed 26 September 2026)
+
+- [x] Compile 407 production/40 test sources, apply V1-V89 and pass the focused 5-test encounter lifecycle/catalogue/registry gate.
+- [x] Pass all 96 frontend unit tests, generated drift, architecture, formatting, typecheck, lint and production build gates.
+- [x] Pass every P5 route and the P5-09 governed note-version flow across all five exact Playwright/Axe/overflow viewport projects.
+- [x] Record the implemented/fail-closed boundary in `MODULE_5_COMPLETION_REPORT.md`; preserve the full cross-module regression and production acceptance for consolidated QA.

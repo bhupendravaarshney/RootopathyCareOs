@@ -227,6 +227,86 @@ export const expectedOperations = [
   ["post", "/api/v1/organizations/{organizationId}/evidence-exports", "requestEvidenceExport"],
   ["post", "/api/v1/organizations/{organizationId}/evidence-exports/{exportId}/decisions", "decideEvidenceExport"],
   ["post", "/api/v1/organizations/{organizationId}/evidence-exports/{exportId}/accesses", "accessEvidenceExport"],
+  [
+    "get",
+    "/api/v1/organizations/{organizationId}/workforce/screens/{screenId}",
+    "getWorkforceScreen",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/workforce/screens/{screenId}/actions/{actionKey}",
+    "performWorkforceAction",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/workforce/screens/{screenId}/actions/{actionKey}/impact-preview",
+    "previewWorkforceImpact",
+  ],
+  [
+    "get",
+    "/api/v1/organizations/{organizationId}/patients/screens/{screenId}",
+    "getPatientRegistryScreen",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/patients/screens/{screenId}/actions/{actionKey}",
+    "performPatientRegistryAction",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/patients/screens/{screenId}/actions/{actionKey}/impact-preview",
+    "previewPatientRegistryImpact",
+  ],
+  [
+    "get",
+    "/api/v1/organizations/{organizationId}/scheduling/screens/{screenId}",
+    "getSchedulingScreen",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/scheduling/screens/{screenId}/actions/{actionKey}",
+    "performSchedulingAction",
+  ],
+  [
+    "get",
+    "/api/v1/organizations/{organizationId}/encounters/screens/{screenId}",
+    "getEncounterScreen",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/encounters/screens/{screenId}/actions/{actionKey}",
+    "performEncounterAction",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/workforce/evidence/{evidenceId}/accesses",
+    "accessWorkforceEvidence",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/workforce/exports/{exportId}/accesses",
+    "accessWorkforceExport",
+  ],
+  [
+    "get",
+    "/api/v1/organizations/{organizationId}/workforce/exports/{exportId}/download",
+    "downloadWorkforceExport",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/workforce/credentials/{credentialId}/documents/{documentId}/accesses",
+    "accessWorkforceCredentialDocument",
+  ],
+  [
+    "get",
+    "/api/v1/organizations/{organizationId}/workforce/credentials/{credentialId}/documents/{documentId}/accesses/{accessIntentId}",
+    "openWorkforceCredentialDocumentAccess",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/workforce/credentials/{credentialId}/documents",
+    "uploadWorkforceCredentialDocument",
+  ],
 ];
 
 const approvedReadinessGateKeys = [
@@ -306,6 +386,22 @@ const sessionProtectedOperations = new Set([
   "requestOrganizationOwnerTransfer",
   "approveOrganizationOwnerTransfer",
   "executeOrganizationOwnerTransfer",
+  "getWorkforceScreen",
+  "performWorkforceAction",
+  "previewWorkforceImpact",
+  "getPatientRegistryScreen",
+  "performPatientRegistryAction",
+  "previewPatientRegistryImpact",
+  "getSchedulingScreen",
+  "performSchedulingAction",
+  "getEncounterScreen",
+  "performEncounterAction",
+  "accessWorkforceEvidence",
+  "accessWorkforceExport",
+  "downloadWorkforceExport",
+  "accessWorkforceCredentialDocument",
+  "openWorkforceCredentialDocumentAccess",
+  "uploadWorkforceCredentialDocument",
 ]);
 
 const idempotentOperations = new Set([
@@ -338,6 +434,14 @@ const idempotentOperations = new Set([
   "requestOrganizationOwnerTransfer",
   "approveOrganizationOwnerTransfer",
   "executeOrganizationOwnerTransfer",
+  "performWorkforceAction",
+  "performPatientRegistryAction",
+  "performSchedulingAction",
+  "performEncounterAction",
+  "accessWorkforceEvidence",
+  "accessWorkforceExport",
+  "accessWorkforceCredentialDocument",
+  "uploadWorkforceCredentialDocument",
 ]);
 
 export function verifyApiContract(contract) {
@@ -443,6 +547,26 @@ export function verifyApiContract(contract) {
       );
     }
   }
+
+  const expectedOperationKeys = new Set(
+    expectedOperations.map(
+      ([method, path]) => `${method.toUpperCase()} ${path}`,
+    ),
+  );
+  const actualOperationKeys = Object.entries(contract.paths ?? {}).flatMap(
+    ([path, pathItem]) =>
+      ["get", "post", "put", "patch", "delete", "options", "head", "trace"]
+        .filter((method) => pathItem[method])
+        .map((method) => `${method.toUpperCase()} ${path}`),
+  );
+  const unexpectedOperations = actualOperationKeys.filter(
+    (operation) => !expectedOperationKeys.has(operation),
+  );
+  assert(
+    actualOperationKeys.length === expectedOperationKeys.size &&
+      unexpectedOperations.length === 0,
+    `OpenAPI operations must exactly match the checked registry; unexpected operations: ${unexpectedOperations.join(", ") || "none"}`,
+  );
 
   assert(
     !contract.components?.securitySchemes?.basicAuthentication,
@@ -1088,6 +1212,172 @@ export function verifyApiContract(contract) {
       organizationContactReason?.required?.[0] === "reason" &&
       organizationContactReason?.properties?.reason?.maxLength === 500,
     "Address and contact mutations must require exact effective values, bounded reasons, and no response-shaped confidential field",
+  );
+
+  const schedulingRead =
+    contract.paths?.[
+      "/api/v1/organizations/{organizationId}/scheduling/screens/{screenId}"
+    ]?.get;
+  const schedulingAction =
+    contract.paths?.[
+      "/api/v1/organizations/{organizationId}/scheduling/screens/{screenId}/actions/{actionKey}"
+    ]?.post;
+  const schedulingScreen = contract.components?.schemas?.SchedulingScreen;
+  const schedulingRow = contract.components?.schemas?.SchedulingRow;
+  const schedulingRequest =
+    contract.components?.schemas?.SchedulingActionRequest;
+  const schedulingReadParameters = (schedulingRead?.parameters ?? []).map(
+    resolved,
+  );
+  assert(
+    schedulingScreen?.additionalProperties === false &&
+      schedulingScreen?.properties?.screenId?.pattern ===
+        "^P4-(0[1-9]|1[0-5])$" &&
+      schedulingScreen?.properties?.rows?.items?.$ref ===
+        "#/components/schemas/SchedulingRow" &&
+      schedulingScreen?.properties?.pageSize?.maximum === 100 &&
+      schedulingScreen?.required?.length === 12,
+    "SchedulingScreen must expose the exact bounded P4 projection",
+  );
+  assert(
+    schedulingRow?.additionalProperties === false &&
+      schedulingRow?.properties?.id?.format === "uuid" &&
+      schedulingRow?.properties?.patientId?.format === "uuid" &&
+      schedulingRow?.properties?.appointmentId?.format === "uuid" &&
+      schedulingRow?.properties?.revision?.minimum === 0 &&
+      schedulingRow?.properties?.etag?.pattern?.startsWith('^\\"m4:P4-') &&
+      schedulingRow?.properties?.allowedActionKeys?.uniqueItems === true &&
+      schedulingRow?.properties?.values?.additionalProperties?.type ===
+        "string",
+    "SchedulingRow must bind strong M4 revisions and minimum-necessary string projections",
+  );
+  assert(
+    schedulingRequest?.additionalProperties === false &&
+      schedulingRequest?.required?.length === 1 &&
+      schedulingRequest?.required?.[0] === "fields" &&
+      ["targetId", "patientId", "appointmentId", "requestId"].every(
+        (field) => schedulingRequest?.properties?.[field]?.format === "uuid",
+      ) &&
+      schedulingRequest?.properties?.reason?.maxLength === 500 &&
+      schedulingRequest?.properties?.fields?.maxProperties === 64 &&
+      schedulingRequest?.properties?.fields?.additionalProperties?.maxLength ===
+        2000,
+    "SchedulingActionRequest must keep identifiers, reasons, and dynamic fields bounded",
+  );
+  assert(
+    ["patientId", "appointmentId", "requestId"].every((name) =>
+      schedulingReadParameters.some(
+        (parameter) =>
+          parameter?.name === name &&
+          parameter?.in === "query" &&
+          parameter?.schema?.format === "uuid",
+      ),
+    ) &&
+      schedulingReadParameters.some(
+        (parameter) =>
+          parameter?.name === "limit" && parameter?.schema?.maximum === 100,
+      ) &&
+      schedulingRead?.responses?.["200"]?.content?.["application/json"]
+        ?.schema?.$ref === "#/components/schemas/SchedulingScreen" &&
+      schedulingRead?.responses?.["503"]?.$ref ===
+        "#/components/responses/ServiceUnavailable",
+    "Scheduling reads must bind optional workflow context and fail closed on unavailable dependencies",
+  );
+  assert(
+    schedulingAction?.requestBody?.content?.["application/json"]?.schema
+      ?.$ref === "#/components/schemas/SchedulingActionRequest" &&
+      schedulingAction?.responses?.["200"]?.content?.["application/json"]
+        ?.schema?.$ref === "#/components/schemas/SchedulingScreen" &&
+      schedulingAction?.responses?.["201"]?.content?.["application/json"]
+        ?.schema?.$ref === "#/components/schemas/SchedulingScreen" &&
+      schedulingAction?.responses?.["409"]?.$ref ===
+        "#/components/responses/Conflict" &&
+      schedulingAction?.responses?.["412"]?.$ref ===
+        "#/components/responses/PreconditionFailed" &&
+      schedulingAction?.responses?.["428"]?.$ref ===
+        "#/components/responses/PreconditionRequired",
+    "Scheduling mutations must use the checked action contract and revision-conflict responses",
+  );
+
+  const encounterRead =
+    contract.paths?.[
+      "/api/v1/organizations/{organizationId}/encounters/screens/{screenId}"
+    ]?.get;
+  const encounterAction =
+    contract.paths?.[
+      "/api/v1/organizations/{organizationId}/encounters/screens/{screenId}/actions/{actionKey}"
+    ]?.post;
+  const encounterScreen = contract.components?.schemas?.EncounterScreen;
+  const encounterRow = contract.components?.schemas?.EncounterRow;
+  const encounterRequest = contract.components?.schemas?.EncounterActionRequest;
+  const encounterReadParameters = (encounterRead?.parameters ?? []).map(resolved);
+  assert(
+    encounterScreen?.additionalProperties === false &&
+      encounterScreen?.properties?.screenId?.pattern ===
+        "^P5-(0[1-9]|1[0-2])$" &&
+      encounterScreen?.properties?.rows?.items?.$ref ===
+        "#/components/schemas/EncounterRow" &&
+      encounterScreen?.properties?.pageSize?.maximum === 100 &&
+      encounterScreen?.required?.length === 12,
+    "EncounterScreen must expose the exact bounded P5 projection",
+  );
+  assert(
+    encounterRow?.additionalProperties === false &&
+      encounterRow?.properties?.id?.format === "uuid" &&
+      ["patientId", "episodeId", "encounterId", "appointmentId"].every(
+        (field) => encounterRow?.properties?.[field]?.format === "uuid",
+      ) &&
+      encounterRow?.properties?.revision?.minimum === 0 &&
+      encounterRow?.properties?.etag?.pattern?.startsWith('^\\"m5:P5-') &&
+      encounterRow?.properties?.allowedActionKeys?.uniqueItems === true &&
+      encounterRow?.properties?.values?.additionalProperties?.type === "string",
+    "EncounterRow must bind strong M5 revisions and minimum-necessary string projections",
+  );
+  assert(
+    encounterRequest?.additionalProperties === false &&
+      encounterRequest?.required?.length === 1 &&
+      encounterRequest?.required?.[0] === "fields" &&
+      ["targetId", "patientId", "episodeId", "encounterId", "appointmentId"].every(
+        (field) => encounterRequest?.properties?.[field]?.format === "uuid",
+      ) &&
+      encounterRequest?.properties?.reason?.maxLength === 500 &&
+      encounterRequest?.properties?.fields?.maxProperties === 64 &&
+      encounterRequest?.properties?.fields?.additionalProperties?.maxLength === 20000,
+    "EncounterActionRequest must keep identifiers, reasons, and clinical fields bounded",
+  );
+  assert(
+    ["patientId", "episodeId", "encounterId", "appointmentId"].every((name) =>
+      encounterReadParameters.some(
+        (parameter) =>
+          parameter?.name === name &&
+          parameter?.in === "query" &&
+          parameter?.schema?.format === "uuid",
+      ),
+    ) &&
+      encounterReadParameters.some(
+        (parameter) =>
+          parameter?.name === "limit" && parameter?.schema?.maximum === 100,
+      ) &&
+      encounterRead?.responses?.["200"]?.content?.["application/json"]
+        ?.schema?.$ref === "#/components/schemas/EncounterScreen" &&
+      encounterRead?.responses?.["503"]?.$ref ===
+        "#/components/responses/ServiceUnavailable",
+    "Encounter reads must bind optional clinical context and fail closed on unavailable dependencies",
+  );
+  assert(
+    encounterAction?.requestBody?.content?.["application/json"]?.schema
+      ?.$ref === "#/components/schemas/EncounterActionRequest" &&
+      encounterAction?.responses?.["200"]?.content?.["application/json"]
+        ?.schema?.$ref === "#/components/schemas/EncounterScreen" &&
+      encounterAction?.responses?.["201"]?.content?.["application/json"]
+        ?.schema?.$ref === "#/components/schemas/EncounterScreen" &&
+      encounterAction?.responses?.["409"]?.$ref ===
+        "#/components/responses/Conflict" &&
+      encounterAction?.responses?.["412"]?.$ref ===
+        "#/components/responses/PreconditionFailed" &&
+      encounterAction?.responses?.["428"]?.$ref ===
+        "#/components/responses/PreconditionRequired",
+    "Encounter mutations must use the checked action contract and revision-conflict responses",
   );
   for (const response of [
     contract.paths?.["/api/v1/auth/session"]?.get?.responses?.["200"],

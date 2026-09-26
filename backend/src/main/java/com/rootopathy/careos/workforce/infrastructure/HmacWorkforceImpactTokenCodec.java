@@ -53,6 +53,7 @@ public final class HmacWorkforceImpactTokenCodec implements WorkforceImpactToken
     public Decoded decode(String token, Binding binding) {
         try {
             var value = DECODER.decode(token);
+            if (!ENCODER.encodeToString(value).equals(token)) throw invalid();
             if (value.length <= 32) throw invalid();
             var payload = Arrays.copyOf(value, value.length - 32);
             var signature = Arrays.copyOfRange(value, value.length - 32, value.length);

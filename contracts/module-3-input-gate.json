@@ -1,0 +1,118 @@
+{
+  "$schema": "./module-3-input-gate.schema.json",
+  "schemaVersion": 1,
+  "module": "M3",
+  "status": "APPROVED",
+  "candidateVersion": "m3-candidate-1",
+  "basis": {
+    "acceptedModule2": {
+      "path": "docs/MODULE_2_COMPLETION_ACCEPTANCE.md",
+      "recordId": "M2-COMPLETION-ACCEPTANCE-20260926-01",
+      "sha256": "677f2e78c6cc76f5d3bbd1b57ba615fc53676ae135957caa14356797edc820b8"
+    },
+    "acceptedProductDefinition": {
+      "path": "docs/MODULE_3_PRODUCT_DEFINITION.md",
+      "version": "m3-product-definition-draft-2",
+      "sha256": "c1eef920751af4547fa6b8c260b773edbfa266cfa84ac6a01302a44faa765bb5"
+    },
+    "productAcceptance": {
+      "path": "docs/MODULE_3_PRODUCT_DEFINITION_ACCEPTANCE.md",
+      "recordId": "M3-PRODUCT-ACCEPTANCE-20260926-01",
+      "sha256": "f3c6c866cec02441df006c34d6012f448ebaed505e724bce8f75fbbbc51bf144"
+    },
+    "buildSpecification": {
+      "path": "docs/CareOS_Complete_Build_Specification_Java_Spring_Boot_React_Node_Edition.pdf",
+      "sha256": "2c8f9f020c7c1a21678c795df57fd8be1b659f2141ab7c8747b5dec973db0bfe"
+    },
+    "candidatePackageSha256": "c383cd7dbe927d2443958f71350c8cd59ac1a8eb725dc5b2a70e40ced115e21f"
+  },
+  "requiredArtifacts": [
+    "screen-mockups",
+    "design-system",
+    "data-dictionary-and-validation",
+    "lifecycle-and-transition-matrix",
+    "authorization-policy",
+    "audit-and-event-registry",
+    "readiness-and-activation-policy",
+    "history-and-export-policy"
+  ],
+  "artifacts": [
+    {
+      "kind": "screen-mockups",
+      "version": "m3-candidate-1",
+      "path": "approved-inputs/module-3/01-screen-mockups.html",
+      "sha256": "4c15ddf1c28196c87a885ff68ac71ccd1ecc09da1ea9cefacd37aa5138d31b38"
+    },
+    {
+      "kind": "design-system",
+      "version": "m3-candidate-1",
+      "path": "approved-inputs/module-3/02-design-system.md",
+      "sha256": "846610a8304bb7cf194dd41c407c5f5202a6ec74fddd3d0343f54fa5424f832f"
+    },
+    {
+      "kind": "data-dictionary-and-validation",
+      "version": "m3-candidate-1",
+      "path": "approved-inputs/module-3/03-data-dictionary-and-validation.md",
+      "sha256": "bbee8599a53687c5345c3f83486d545053ed3325385970b427a9bc7fd2e96bd0"
+    },
+    {
+      "kind": "lifecycle-and-transition-matrix",
+      "version": "m3-candidate-1",
+      "path": "approved-inputs/module-3/04-lifecycle-and-transition-matrix.md",
+      "sha256": "48553a4255eef6e58f1fdedee0d7221f028477c15a05f7d2a4cd66366326bd7c"
+    },
+    {
+      "kind": "authorization-policy",
+      "version": "m3-candidate-1",
+      "path": "approved-inputs/module-3/05-authorization-policy.md",
+      "sha256": "2f72d355094802dfb740e82d4a82113034f4600c905263b8c51ece81b943e7ec"
+    },
+    {
+      "kind": "audit-and-event-registry",
+      "version": "m3-candidate-1",
+      "path": "approved-inputs/module-3/06-audit-and-event-registry.md",
+      "sha256": "4eaa55f28bd8f7349c2d0252cdf79d6325c3f9be0fa1b7fb1f2343b0cfe00580"
+    },
+    {
+      "kind": "readiness-and-activation-policy",
+      "version": "m3-candidate-1",
+      "path": "approved-inputs/module-3/07-readiness-and-activation-policy.md",
+      "sha256": "9bd9184f5542e693100564b6aaf32e627933e38ac2bec0bbee9ef36e230fd8e8"
+    },
+    {
+      "kind": "history-and-export-policy",
+      "version": "m3-candidate-1",
+      "path": "approved-inputs/module-3/08-history-and-export-policy.md",
+      "sha256": "7a8e0df4dbdc8e7f5669eb636ef9c863bc355a2e0a9e8ab65d4f136836095d53"
+    }
+  ],
+  "approval": {
+    "decision": "APPROVED",
+    "recordId": "M3-APPROVAL-20260926-01",
+    "approvedBy": "bhupendra, developer",
+    "approvedAt": "2026-09-26T10:51:24.596Z",
+    "screens": [
+      "P3-01",
+      "P3-02",
+      "P3-03",
+      "P3-04",
+      "P3-05",
+      "P3-06",
+      "P3-07",
+      "P3-08",
+      "P3-09",
+      "P3-10",
+      "P3-11",
+      "P3-12",
+      "P3-13",
+      "P3-14",
+      "P3-15",
+      "P3-16"
+    ],
+    "entityCount": 14,
+    "decisionFamilyCount": 15,
+    "packageSha256": "3e7ced79ecc01f59e9d4d3bb15a48bd30e579a32f194b23e9f3ee0a9aed09c00",
+    "evidencePath": "approved-inputs/module-3/approval-record-m3-candidate-1.md",
+    "evidenceSha256": "fc05236d7cddcf23a098b9b49601c438c8979f38c74286f86ad4f29bae285586"
+  }
+}

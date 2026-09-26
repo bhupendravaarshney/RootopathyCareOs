@@ -68,6 +68,10 @@ export function validateWorkflowText(name, text) {
       "node --test scripts/tests/verify-module-2-candidate-inputs.test.mjs",
       "node scripts/verify-module-2-inputs.mjs --require-approved",
       "node --test scripts/tests/verify-module-2-inputs.test.mjs",
+      "node scripts/verify-module-3-candidate-inputs.mjs",
+      "node --test scripts/tests/verify-module-3-candidate-inputs.test.mjs",
+      "node scripts/verify-module-3-inputs.mjs --require-approved",
+      "node --test scripts/tests/verify-module-3-inputs.test.mjs",
     ];
     for (const command of requiredModuleInputCommands) {
       if (

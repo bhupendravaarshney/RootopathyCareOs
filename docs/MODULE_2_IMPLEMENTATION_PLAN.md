@@ -6,28 +6,30 @@
 **Candidate package SHA-256:** `2e64bd4e1ac5192a9a4783abf58f4578b8bceda60c21c2e835a910e6760d0f8f`  
 **Approved package SHA-256:** `624df2edc0024526040271911d43a1b33a12e723fefb3beb3e985264cef89521`  
 **Approval record:** `M2-APPROVAL-20260921-01`  
-**Implementation authorization:** `true`; final implementation verification and owner acceptance remain pending
+**Completion acceptance:** `ACCEPTED` under `M2-COMPLETION-ACCEPTANCE-20260926-01`
+**Implementation authorization:** `true`; repository implementation, M2H verification, and owner acceptance complete
 
 ## Authority and implementation condition
 
-On 21 September 2026 the user explicitly accepted commit `2ba6c9b` as the Module 1 baseline and later approved `m2-candidate-1` unchanged at exact digest `2e64bd4e1ac5192a9a4783abf58f4578b8bceda60c21c2e835a910e6760d0f8f`. That acceptance authorizes the exact approved Module 2 package against the named predecessor; it is not target-environment production acceptance.
+On 21 September 2026 the user explicitly accepted commit `2ba6c9b` as the Module 1 baseline and later approved `m2-candidate-1` unchanged at exact digest `2e64bd4e1ac5192a9a4783abf58f4578b8bceda60c21c2e835a910e6760d0f8f`. That acceptance authorizes the exact approved Module 2 package against the named predecessor. On 26 September 2026, after the complete M2H result was presented, Bhupendra explicitly approved Module 2 and directed work to move ahead. `MODULE_2_COMPLETION_ACCEPTANCE.md` records that separate repository-completion decision; neither decision is target-environment production acceptance.
 
 The original proposal remains unchanged under `candidate-inputs/module-2/` as provenance. Its eight byte-identical approved artifacts are under `approved-inputs/module-2/`. `contracts/module-2-input-gate.json` binds all 29 screens, the exact 44-table build-specification baseline, accepted M1 commit, candidate digest, promoted-package digest, and approval record; the production verifier reports `APPROVED` and `implementationAuthorized: true`.
 
 The approved package resolves the high-impact choices that cannot be guessed during coding: organization-scoped person matching, age boundary, credential/document lifecycle, independent verification, clinical-scope approval, supervision/eligibility, hierarchy/access scope, activation, suspension/reactivation, offboarding, expiry notifications, controlled registries, evidence projections, retention, and exports. Any replacement requires a new checksum-bound approval; implementation must not silently alter those decisions.
 
-## Current implementation checkpoint — 22 September 2026
+## Current implementation checkpoint — 26 September 2026
 
-The implementation is not yet frozen and no current Module 2 runtime tests have been executed. The following records source present in the repository, not verified completion:
+The approved M2B-M2G implementation boundary is frozen for this handoff, the end-only M2H repository suite has completed successfully, and the owner has accepted the resulting repository evidence. This is Module 2 repository completion, not target-environment production acceptance:
 
 - M2A is implemented: the exact approved input package, production input gate, authorization/operation/readiness/event registries, module boundary, and migration release are present.
-- V51-V65 provide the exact 44-table workforce baseline plus forced RLS, composite tenant references, operation/lifecycle guards, immutable evidence, invalidation coverage, review leases, internal export access, worker subscriptions, and internal-consumer authorization.
-- M2B-M2G application code is broadly present across the workforce domain/application/infrastructure/API layers. All M2-01 through M2-29 routes now use live server projections and governed actions rather than the former generic synthetic records.
+- V51-V68 provide the exact 44-table workforce baseline plus forced RLS, composite tenant references, operation/lifecycle/offboarding guards, immutable evidence, invalidation coverage, review leases, internal export access, worker subscriptions, internal-consumer authorization, and forward-only runtime compatibility repairs. The broad schema audit also closed the pre-existing forced-RLS omission on the restricted invitation token index without exposing direct table access.
+- M2B-M2G application code is present across the workforce domain/application/infrastructure/API layers. All M2-01 through M2-29 routes use live server projections and governed actions rather than the former generic synthetic records.
 - The credential-document path includes bounded upload validation, private quarantine, fail-closed scan evidence, clean promotion, independent review, and actor/purpose-bound access. Provider-signed URLs are not persisted or placed in durable frontend state; the internal access route remints them for a no-store redirect.
-- Readiness/eligibility/history invalidation, expiry and notification processing, export/retention/access lifecycle, retry/dead-letter handling, and offboarding orchestration are implemented or being finalized. Offboarding still requires final database enforcement for its canonical M1 membership/session child effects before the implementation freeze.
-- The OpenAPI source and browser code now cover the live M2 boundary. Generated-client drift, compilation, frontend validation, migrations, security attacks, workers, accessibility/responsiveness, and regression behavior remain unverified until M2H.
+- Readiness/eligibility/history invalidation, expiry and notification processing, export/retention/access lifecycle, retry/dead-letter handling, and offboarding orchestration are implemented. Database guards bind canonical M1 membership, account-security-version, session-revocation, scope/access, lifecycle, audit, and outbox effects to the active offboarding request.
+- OpenAPI 0.41.0 contains exactly 109 checked operations, including all nine M2 transport operations. Generated-client drift, backend/frontend compilation, migrations, security attacks, workers, accessibility/responsiveness, and regression behavior pass the M2H repository gates.
+- Signed cursor and impact-token decoders reject non-canonical Base64URL text even when Java's permissive decoder would produce the original signed bytes. Bouncy Castle is explicitly held at 1.86 after the current vulnerability database identified MinIO's transitive 1.84 provider as vulnerable.
 
-Remaining implementation order: finish the offboarding database guards and deterministic evidence, perform a static source/contract audit, freeze M2B-M2G, regenerate any derived client artifact, then run the complete M2H suite once and repair failures before handoff.
+The Module 2 repository exit condition is met. Target provider/worker credentials, deployment, monitoring, backup/restore, hosted CI/security evidence, and production acceptance remain separate. The owner's direction to move ahead authorizes Module 3 entry planning and preparation of its review package; Module 3 production implementation remains blocked until that exact package receives its own accountable approval.
 
 ## Frozen architecture boundaries
 
@@ -98,6 +100,17 @@ Tests may be authored beside each slice, but under the user's delivery instructi
 - ArchUnit/frontend boundary, formatting, strict typecheck, lint, production build, dependency/security, secret/path, candidate/approved input, screen register, API-operation, audit/permission registry, and complete M1 regression checks.
 - Test isolation must use only disposable `careos_test`; development state must be proven unchanged. No real personal, employment, credential, document, or clinical information is permitted.
 
+### M2H repository result — 26 September 2026
+
+| Gate | Result | Evidence |
+| --- | --- | --- |
+| Database/backend | PASS | Java 25 clean verification compiles 377 production and 32 test sources, validates/applies Flyway V1-V68 to disposable PostgreSQL 18, passes 214 tests with no failure/error/skip, enforces 11 architecture rules, and packages the JAR. The focused final V68 migration/identity/tenant run separately passes 64/64. |
+| API and approved inputs | PASS | OpenAPI 3.1 version 0.41.0 matches the exact 109-operation registry; all 16 API contract cases pass. The 79-screen register, M1/M2 approved gates, retained non-authorizing packets, and 85 total repository contract/security tests pass. |
+| Frontend and browser | PASS | Generated API drift, formatting, strict typecheck, lint, 27-source/66-import architecture verification plus four negative fixtures, all 81 unit tests, and the production build pass. All 120 Playwright/Axe/overflow cases pass at 1440/1024/768/390/320. |
+| Dependency/configuration security | PASS | `npm ci` audits 288 packages with zero vulnerabilities. Trivy 0.74 reports zero fixed HIGH/CRITICAL Maven/npm findings, zero Dockerfile misconfigurations, and no secret finding after the Bouncy Castle 1.86 repair. Default and scanner-overlay Compose models resolve. |
+
+No hosted CodeQL/result upload, production provider, deployment, monitoring, backup/restore, or production-release result is inferred from these local gates. Owner acceptance is recorded separately in `M2-COMPLETION-ACCEPTANCE-20260926-01`.
+
 ## Approval and exit boundary
 
-M2 is complete only when the exact input package is approved, every visible production action is server-authorized/persisted/audited, all 44 tables and 29 screens are traceable, all M2H gates pass without skipped critical behavior, and the owner accepts the evidence. Target provider/worker/deployment/monitoring/backup acceptance remains separate. Do not commit/tag, freeze, or begin Module 3 without a distinct instruction.
+The Module 2 repository completion definition is satisfied: the exact input package is approved, every visible action is server-authorized/persisted/audited, all 44 tables and 29 screens are traceable, M2H passes without skipped critical behavior, and the owner accepted the evidence under `M2-COMPLETION-ACCEPTANCE-20260926-01`. Target provider/worker/deployment/monitoring/backup and production-release acceptance remain separate. No commit or tag is implied. Module 3 may now enter non-authorizing input preparation, but runtime implementation requires its own exact approved package.

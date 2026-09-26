@@ -1,0 +1,1636 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="careos:artifact-kind" content="screen-mockups" />
+    <meta name="careos:status" content="CANDIDATE_FOR_APPROVAL" />
+    <meta name="careos:candidate-version" content="m3-candidate-1" />
+    <title>CareOS Module 3 candidate mockups</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --canvas: #f2f7f7;
+        --navigation: #0e2630;
+        --nav-raised: #173943;
+        --surface: #ffffff;
+        --surface-alt: #eaf3f2;
+        --surface-input: #f7faf9;
+        --text: #14282d;
+        --muted: #587077;
+        --nav-text: #e9f4f5;
+        --nav-muted: #aac0c5;
+        --border: #c7d7d7;
+        --border-strong: #7fa0a2;
+        --accent: #087f73;
+        --accent-dark: #075c54;
+        --accent-soft: #d6f1ec;
+        --focus: #175cd3;
+        --info: #175cd3;
+        --info-soft: #e8f0ff;
+        --warning: #8a5b00;
+        --warning-soft: #fff2cf;
+        --danger: #a32d2d;
+        --danger-soft: #ffe8e7;
+        --success: #087443;
+        --success-soft: #dff5e9;
+        --shadow: 0 18px 42px rgb(18 55 61 / 0.12);
+        font-family: Inter, "Segoe UI", Roboto, system-ui, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        background: var(--canvas);
+      }
+      body {
+        margin: 0;
+        min-width: 0;
+        color: var(--text);
+        background: var(--canvas);
+        line-height: 1.48;
+      }
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+      }
+      button,
+      input,
+      select,
+      textarea {
+        min-height: 44px;
+      }
+      button {
+        cursor: pointer;
+      }
+      button:focus-visible,
+      input:focus-visible,
+      select:focus-visible,
+      textarea:focus-visible,
+      a:focus-visible,
+      [tabindex="0"]:focus-visible {
+        outline: 3px solid var(--focus);
+        outline-offset: 2px;
+      }
+      .skip-link {
+        position: fixed;
+        z-index: 90;
+        left: 12px;
+        top: -90px;
+        padding: 10px 14px;
+        border-radius: 8px;
+        color: white;
+        background: var(--focus);
+        font-weight: 800;
+      }
+      .skip-link:focus {
+        top: 12px;
+      }
+
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 30;
+        min-height: 72px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 12px 24px;
+        color: var(--nav-text);
+        background: rgb(14 38 48 / 0.98);
+        border-bottom: 1px solid #31505a;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 270px;
+      }
+      .brand-mark {
+        display: grid;
+        place-items: center;
+        width: 43px;
+        height: 43px;
+        border: 1px solid #4d6c75;
+        border-radius: 13px;
+        color: #72e0d2;
+        background: var(--nav-raised);
+        font-size: 23px;
+        font-weight: 900;
+      }
+      .brand strong,
+      .brand small {
+        display: block;
+      }
+      .brand small {
+        color: var(--nav-muted);
+      }
+      .workspace {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .workspace-label {
+        color: var(--nav-muted);
+        font-size: 13px;
+      }
+      .candidate-pill,
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        width: fit-content;
+        padding: 5px 10px;
+        border: 1px solid currentColor;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 800;
+        line-height: 1.25;
+      }
+      .candidate-pill {
+        color: #ffd675;
+        background: #44340d;
+      }
+      .badge.success {
+        color: var(--success);
+        background: var(--success-soft);
+      }
+      .badge.info {
+        color: var(--info);
+        background: var(--info-soft);
+      }
+      .badge.warning {
+        color: var(--warning);
+        background: var(--warning-soft);
+      }
+      .badge.danger {
+        color: var(--danger);
+        background: var(--danger-soft);
+      }
+      .badge.neutral {
+        color: var(--muted);
+        background: var(--surface-alt);
+      }
+      #menu-button {
+        display: none;
+        width: 44px;
+        border: 1px solid #55747d;
+        border-radius: 10px;
+        color: var(--nav-text);
+        background: var(--nav-raised);
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 310px minmax(0, 1fr);
+        min-height: calc(100vh - 72px);
+      }
+      .sidebar {
+        position: sticky;
+        top: 72px;
+        height: calc(100vh - 72px);
+        overflow: auto;
+        padding: 22px 16px 40px;
+        color: var(--nav-text);
+        background: var(--navigation);
+        border-right: 1px solid #31505a;
+      }
+      .sidebar label {
+        display: grid;
+        gap: 7px;
+        color: var(--nav-muted);
+        font-size: 13px;
+        font-weight: 750;
+      }
+      .sidebar input {
+        width: 100%;
+        padding: 9px 11px;
+        border: 1px solid #4d6c75;
+        border-radius: 10px;
+        color: var(--nav-text);
+        background: #0a1d25;
+      }
+      .nav-group {
+        margin-top: 22px;
+      }
+      .nav-group h2 {
+        margin: 0 8px 8px;
+        color: #83a9b2;
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .nav-group button {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 54px minmax(0, 1fr);
+        align-items: center;
+        gap: 7px;
+        padding: 9px 10px;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        color: var(--nav-muted);
+        background: transparent;
+        text-align: left;
+      }
+      .nav-group button span:first-child {
+        color: #79b9b0;
+        font:
+          750 11px ui-monospace,
+          monospace;
+      }
+      .nav-group button:hover {
+        color: white;
+        background: var(--nav-raised);
+      }
+      .nav-group button[aria-current="page"] {
+        color: white;
+        background: #20505a;
+        border-color: #4f7981;
+      }
+      .nav-group button[aria-current="page"] span:first-child {
+        color: white;
+      }
+
+      main {
+        min-width: 0;
+        padding: 30px 42px 64px;
+      }
+      .content {
+        max-width: 1440px;
+        margin: 0 auto;
+      }
+      .boundary {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 12px;
+        padding: 15px 17px;
+        margin-bottom: 24px;
+        border: 1px solid #c99731;
+        border-radius: 14px;
+        background: var(--warning-soft);
+      }
+      .boundary strong {
+        color: var(--warning);
+      }
+      .boundary p {
+        margin: 3px 0 0;
+        color: #684b16;
+      }
+      .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        gap: 22px;
+        margin-bottom: 20px;
+      }
+      .eyebrow {
+        margin: 0 0 5px;
+        color: var(--accent-dark);
+        font-size: 13px;
+        font-weight: 850;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      h1 {
+        margin: 0;
+        font-size: clamp(30px, 4vw, 42px);
+        line-height: 1.12;
+      }
+      .lede {
+        max-width: 75ch;
+        margin: 9px 0 0;
+        color: var(--muted);
+        font-size: 16px;
+      }
+      .header-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: end;
+        gap: 9px;
+      }
+      .primary,
+      .secondary,
+      .danger-button,
+      .link-button {
+        padding: 9px 15px;
+        border-radius: 10px;
+        font-weight: 800;
+      }
+      .primary {
+        border: 1px solid var(--accent);
+        color: white;
+        background: var(--accent);
+      }
+      .primary:hover {
+        background: var(--accent-dark);
+      }
+      .secondary {
+        border: 1px solid var(--border-strong);
+        color: var(--text);
+        background: var(--surface);
+      }
+      .danger-button {
+        border: 1px solid var(--danger);
+        color: var(--danger);
+        background: var(--danger-soft);
+      }
+      .link-button {
+        min-height: 36px;
+        padding: 5px 7px;
+        border: 0;
+        color: var(--accent-dark);
+        background: transparent;
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+      .review-toolbar {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 14px 16px;
+        margin-bottom: 20px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: var(--surface);
+        box-shadow: 0 4px 16px rgb(18 55 61 / 0.05);
+      }
+      .review-toolbar label {
+        display: grid;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 750;
+      }
+      .review-toolbar select {
+        min-width: 240px;
+        padding: 8px 10px;
+        border: 1px solid var(--border-strong);
+        border-radius: 9px;
+        color: var(--text);
+        background: var(--surface-input);
+      }
+      .review-toolbar p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .grid {
+        display: grid;
+        gap: 17px;
+      }
+      .stats {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+      .two-column {
+        grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.75fr);
+      }
+      .even-columns {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .form-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .panel,
+      .stat {
+        min-width: 0;
+        border: 1px solid var(--border);
+        border-radius: 15px;
+        background: var(--surface);
+        box-shadow: 0 5px 18px rgb(18 55 61 / 0.05);
+      }
+      .panel {
+        padding: 19px;
+      }
+      .stat {
+        padding: 17px;
+        background: linear-gradient(145deg, white, var(--surface-alt));
+      }
+      .stat span,
+      .stat small {
+        display: block;
+        color: var(--muted);
+      }
+      .stat strong {
+        display: block;
+        margin: 4px 0;
+        font-size: 28px;
+      }
+      .panel-heading {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 14px;
+        margin-bottom: 16px;
+      }
+      .panel-heading h2,
+      .panel-heading h3 {
+        margin: 0;
+      }
+      .panel-heading p {
+        margin: 4px 0 0;
+        color: var(--muted);
+      }
+      .panel h2 {
+        font-size: 21px;
+      }
+      .panel h3 {
+        font-size: 17px;
+      }
+      .field {
+        display: grid;
+        align-content: start;
+        gap: 6px;
+      }
+      .field > span:first-child {
+        font-size: 13px;
+        font-weight: 800;
+      }
+      .field small,
+      .help {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .field input,
+      .field select,
+      .field textarea {
+        width: 100%;
+        padding: 9px 11px;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        color: var(--text);
+        background: var(--surface-input);
+      }
+      .field textarea {
+        min-height: 88px;
+        resize: vertical;
+      }
+      .error-text {
+        color: var(--danger);
+        font-size: 13px;
+        font-weight: 750;
+      }
+      .panel-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: end;
+        gap: 9px;
+        margin-top: 18px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border);
+      }
+      .filter-grid {
+        display: grid;
+        grid-template-columns:
+          minmax(190px, 2fr) repeat(2, minmax(140px, 1fr))
+          auto;
+        align-items: end;
+        gap: 11px;
+        margin-bottom: 14px;
+      }
+      .table-wrap {
+        max-width: 100%;
+        overflow-x: auto;
+        border: 1px solid var(--border);
+        border-radius: 11px;
+      }
+      table {
+        width: 100%;
+        min-width: 740px;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        padding: 12px 13px;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        color: var(--muted);
+        background: var(--surface-alt);
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      tbody tr:last-child td {
+        border-bottom: 0;
+      }
+      td small {
+        display: block;
+        color: var(--muted);
+      }
+      .record-cards {
+        display: none;
+        gap: 11px;
+      }
+      .record-card {
+        padding: 14px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--surface-input);
+      }
+      .record-card p {
+        margin: 5px 0;
+      }
+      .record-card dl {
+        display: grid;
+        grid-template-columns: 110px 1fr;
+        gap: 6px 9px;
+        margin: 10px 0;
+      }
+      .record-card dt {
+        color: var(--muted);
+      }
+      .record-card dd {
+        margin: 0;
+      }
+      .notice {
+        padding: 13px 15px;
+        border: 1px solid #8eb0d9;
+        border-radius: 11px;
+        background: var(--info-soft);
+      }
+      .notice.warning {
+        border-color: #c99731;
+        background: var(--warning-soft);
+      }
+      .notice.danger {
+        border-color: #d17772;
+        background: var(--danger-soft);
+      }
+      .notice.success {
+        border-color: #75b491;
+        background: var(--success-soft);
+      }
+      .notice h2,
+      .notice h3,
+      .notice p {
+        margin-top: 0;
+      }
+      .notice p:last-child {
+        margin-bottom: 0;
+      }
+      .check-list {
+        display: grid;
+        gap: 9px;
+      }
+      .check-row {
+        display: grid;
+        grid-template-columns: 28px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 10px;
+        padding: 11px;
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        background: var(--surface-input);
+      }
+      .check-icon {
+        display: grid;
+        place-items: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 999px;
+        color: white;
+        background: var(--success);
+        font-weight: 900;
+      }
+      .check-icon.warning {
+        background: var(--warning);
+      }
+      .check-icon.danger {
+        background: var(--danger);
+      }
+      .check-row small {
+        display: block;
+        color: var(--muted);
+      }
+      .stepper {
+        display: grid;
+        gap: 7px;
+        counter-reset: step;
+      }
+      .step {
+        display: grid;
+        grid-template-columns: 31px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 11px;
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        background: white;
+      }
+      .step::before {
+        counter-increment: step;
+        content: counter(step);
+        display: grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        color: white;
+        background: var(--accent);
+        font-weight: 900;
+      }
+      .step.future::before {
+        color: var(--muted);
+        background: var(--surface-alt);
+        border: 1px solid var(--border);
+      }
+      .comparison {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 130px minmax(0, 1fr);
+        gap: 12px;
+        align-items: stretch;
+      }
+      .comparison-side {
+        padding: 15px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--surface-input);
+      }
+      .comparison-side h3 {
+        margin-top: 0;
+      }
+      .factor-list {
+        display: grid;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .factor {
+        padding: 9px 10px;
+        border-left: 4px solid var(--accent);
+        border-radius: 7px;
+        background: var(--accent-soft);
+      }
+      .factor.warning {
+        border-left-color: var(--warning);
+        background: var(--warning-soft);
+      }
+      .disposition {
+        display: grid;
+        align-content: center;
+        gap: 7px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .timeline {
+        position: relative;
+        display: grid;
+        gap: 0;
+        padding-left: 23px;
+      }
+      .timeline::before {
+        content: "";
+        position: absolute;
+        left: 7px;
+        top: 8px;
+        bottom: 8px;
+        width: 2px;
+        background: var(--border-strong);
+      }
+      .timeline-item {
+        position: relative;
+        padding: 0 0 21px 18px;
+      }
+      .timeline-item::before {
+        content: "";
+        position: absolute;
+        left: -22px;
+        top: 7px;
+        width: 12px;
+        height: 12px;
+        border: 3px solid white;
+        border-radius: 50%;
+        background: var(--accent);
+      }
+      .timeline-item h3,
+      .timeline-item p {
+        margin: 0;
+      }
+      .timeline-item small {
+        color: var(--muted);
+      }
+      .tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin-bottom: 15px;
+      }
+      .tabs button {
+        min-height: 38px;
+        padding: 7px 11px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        color: var(--muted);
+        background: white;
+      }
+      .tabs button[aria-selected="true"] {
+        color: white;
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      .state-shell {
+        min-height: 285px;
+        display: grid;
+        place-items: center;
+        text-align: center;
+      }
+      .state-shell > div {
+        max-width: 650px;
+      }
+      .state-shell h2 {
+        margin-bottom: 6px;
+      }
+      .state-shell p {
+        color: var(--muted);
+      }
+      .skeleton {
+        width: min(720px, 100%);
+        display: grid;
+        gap: 11px;
+      }
+      .skeleton span {
+        display: block;
+        height: 52px;
+        border-radius: 10px;
+        background: linear-gradient(
+          90deg,
+          var(--surface-alt),
+          white,
+          var(--surface-alt)
+        );
+        background-size: 220% 100%;
+        animation: shimmer 1.5s infinite;
+      }
+      @keyframes shimmer {
+        to {
+          background-position: -220% 0;
+        }
+      }
+
+      dialog {
+        width: min(700px, calc(100% - 30px));
+        padding: 0;
+        border: 1px solid var(--border-strong);
+        border-radius: 16px;
+        color: var(--text);
+        background: white;
+        box-shadow: var(--shadow);
+      }
+      dialog::backdrop {
+        background: rgb(7 26 33 / 0.66);
+      }
+      .dialog-body {
+        padding: 22px;
+      }
+      .dialog-body h2 {
+        margin: 0 0 8px;
+      }
+      .dialog-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: end;
+        gap: 9px;
+        padding: 15px 22px;
+        border-top: 1px solid var(--border);
+        background: var(--surface-alt);
+      }
+      .backdrop {
+        display: none;
+      }
+
+      @media (max-width: 1100px) {
+        .layout {
+          grid-template-columns: 260px minmax(0, 1fr);
+        }
+        main {
+          padding-inline: 28px;
+        }
+        .stats {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .two-column {
+          grid-template-columns: 1fr;
+        }
+      }
+      @media (max-width: 820px) {
+        main {
+          padding-inline: 22px;
+        }
+        .page-header,
+        .review-toolbar {
+          align-items: stretch;
+          flex-direction: column;
+        }
+        .header-actions {
+          justify-content: stretch;
+        }
+        .header-actions button {
+          flex: 1;
+        }
+        .review-toolbar select {
+          min-width: 0;
+          width: 100%;
+        }
+        .filter-grid {
+          grid-template-columns: 1fr;
+        }
+        .form-grid,
+        .even-columns {
+          grid-template-columns: 1fr;
+        }
+        .comparison {
+          grid-template-columns: 1fr;
+        }
+        .disposition {
+          grid-template-columns: repeat(3, 1fr);
+        }
+      }
+      @media (max-width: 760px) {
+        .topbar {
+          padding-inline: 12px;
+        }
+        .brand {
+          min-width: 0;
+        }
+        .brand small,
+        .workspace-label {
+          display: none;
+        }
+        .workspace {
+          gap: 7px;
+        }
+        #menu-button {
+          display: inline-grid;
+          place-items: center;
+        }
+        .layout {
+          display: block;
+        }
+        .sidebar {
+          position: fixed;
+          z-index: 60;
+          top: 0;
+          left: 0;
+          width: min(310px, calc(100vw - 42px));
+          height: 100vh;
+          transform: translateX(-105%);
+          transition: transform 0.18s ease;
+          box-shadow: var(--shadow);
+        }
+        .sidebar.open {
+          transform: translateX(0);
+        }
+        .backdrop {
+          position: fixed;
+          z-index: 50;
+          inset: 0;
+          background: rgb(7 26 33 / 0.65);
+        }
+        .backdrop.open {
+          display: block;
+        }
+        main {
+          padding: 22px 14px 54px;
+        }
+        .boundary {
+          grid-template-columns: 1fr;
+        }
+        .page-header,
+        .review-toolbar {
+          align-items: stretch;
+          flex-direction: column;
+        }
+        .header-actions {
+          justify-content: stretch;
+        }
+        .header-actions button {
+          flex: 1;
+        }
+        .review-toolbar select {
+          min-width: 0;
+          width: 100%;
+        }
+        .filter-grid {
+          grid-template-columns: 1fr;
+        }
+        .table-wrap {
+          display: none;
+        }
+        .record-cards {
+          display: grid;
+        }
+      }
+      @media (max-width: 430px) {
+        .candidate-pill {
+          max-width: 142px;
+          text-align: center;
+        }
+        .stats {
+          grid-template-columns: 1fr;
+        }
+        .panel {
+          padding: 15px;
+        }
+        .check-row {
+          grid-template-columns: 28px minmax(0, 1fr);
+        }
+        .check-row > :last-child:not(span) {
+          grid-column: 2;
+          justify-self: start;
+        }
+        .panel-actions,
+        .dialog-actions {
+          align-items: stretch;
+          flex-direction: column;
+        }
+        .panel-actions button,
+        .dialog-actions button {
+          width: 100%;
+        }
+        .record-card dl {
+          grid-template-columns: 1fr;
+        }
+      }
+      @media (max-width: 340px) {
+        main {
+          padding-inline: 12px;
+        }
+        .brand strong {
+          font-size: 14px;
+        }
+        .candidate-pill {
+          display: none;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          animation: none !important;
+          transition: none !important;
+        }
+      }
+      @media (forced-colors: active) {
+        .panel,
+        .stat,
+        .notice,
+        .record-card,
+        .check-row,
+        .step,
+        .comparison-side {
+          border: 1px solid CanvasText;
+        }
+        .badge,
+        .candidate-pill {
+          border: 1px solid CanvasText;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content"
+      >Skip to patient registry content</a
+    >
+    <header class="topbar">
+      <button
+        id="menu-button"
+        type="button"
+        aria-label="Open screen navigation"
+        aria-controls="screen-navigation"
+        aria-expanded="false"
+      >
+        ☰
+      </button>
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">C</span
+        ><span
+          ><strong>CareOS Patient Registry</strong
+          ><small>Module 3 review candidate</small></span
+        >
+      </div>
+      <div class="workspace">
+        <span class="workspace-label"
+          >Synthetic Organization · Asia/Kolkata</span
+        ><span class="candidate-pill">CANDIDATE FOR APPROVAL</span>
+      </div>
+    </header>
+    <div id="navigation-backdrop" class="backdrop" aria-hidden="true"></div>
+    <div class="layout">
+      <aside
+        id="screen-navigation"
+        class="sidebar"
+        aria-label="Module 3 screen navigation"
+      >
+        <label for="screen-search"
+          >Find a screen<input
+            id="screen-search"
+            type="search"
+            autocomplete="off"
+            placeholder="P3-01 or duplicate"
+        /></label>
+        <nav id="screen-nav" aria-label="Patient Registry screens"></nav>
+      </aside>
+      <main id="main-content" tabindex="-1">
+        <div class="content">
+          <section class="boundary" aria-label="Candidate boundary">
+            <span class="badge warning">Not approved</span>
+            <div>
+              <strong>Self-contained synthetic review only</strong>
+              <p>
+                No real patient data. This prototype performs no real save,
+                search, match, merge, consent, invitation, message, export, FHIR
+                exchange or API call. Review at 1440, 1024, 768, 390 and 320 CSS
+                pixels. Organization-only identity · Never auto-merge · No M3
+                break-glass.
+              </p>
+            </div>
+          </section>
+          <div class="review-toolbar">
+            <label for="state-select"
+              >Review state<select id="state-select">
+                <option value="default">Default populated state</option>
+                <option value="loading">Loading</option>
+                <option value="empty">Empty</option>
+                <option value="no-results">No results</option>
+                <option value="denied">Denied / hidden</option>
+                <option value="validation">Validation errors</option>
+                <option value="stale">Stale result</option>
+                <option value="conflict">Revision conflict</option>
+                <option value="dependency-failure">Dependency failure</option>
+                <option value="success">Governed success response</option>
+              </select></label
+            >
+            <p>State controls are reviewer aids and never change data.</p>
+          </div>
+          <header class="page-header">
+            <div>
+              <p id="screen-eyebrow" class="eyebrow"></p>
+              <h1 id="screen-title" tabindex="-1"></h1>
+              <p id="screen-purpose" class="lede"></p>
+            </div>
+            <div class="header-actions">
+              <button
+                class="secondary review-action"
+                type="button"
+                data-action="Review field and policy evidence"
+              >
+                Review evidence</button
+              ><button
+                id="primary-action"
+                class="primary review-action"
+                type="button"
+              ></button>
+            </div>
+          </header>
+          <div id="screen-content" aria-live="polite"></div>
+        </div>
+      </main>
+    </div>
+
+    <dialog
+      id="review-dialog"
+      aria-labelledby="dialog-title"
+      aria-describedby="dialog-description"
+    >
+      <div class="dialog-body">
+        <span class="badge warning">Review simulation</span>
+        <h2 id="dialog-title">Review action</h2>
+        <p id="dialog-description">
+          This action is represented for product review only. No patient record
+          or external system is changed.
+        </p>
+        <div class="notice warning">
+          <strong>Production gate remains closed</strong>
+          <p>
+            Exact candidate approval and a later implementation/release process
+            are required.
+          </p>
+        </div>
+      </div>
+      <div class="dialog-actions">
+        <button id="dialog-cancel" class="secondary" type="button">
+          Return to mockup</button
+        ><button id="dialog-confirm" class="primary" type="button">
+          Acknowledge review behavior
+        </button>
+      </div>
+    </dialog>
+
+    <script>
+      const screens = [
+        {
+          id: "P3-01",
+          title: "Patient registry dashboard",
+          group: "Registry",
+          purpose:
+            "Review organization-scoped registration, duplicate, authority, consent/privacy and safety work without exposing patient details.",
+          action: "Start synthetic registration",
+          kind: "dashboard",
+        },
+        {
+          id: "P3-02",
+          title: "Patient directory",
+          group: "Registry",
+          purpose:
+            "Search a bounded minimum-necessary directory with masked identifiers, safe filters and server-projected actions.",
+          action: "Review selected patient",
+          kind: "directory",
+        },
+        {
+          id: "P3-03",
+          title: "Start registration",
+          group: "Registration",
+          purpose:
+            "Create an expiring registration run with source, supplier relationship, purpose and an explicit search-before-create path.",
+          action: "Start duplicate search",
+          kind: "start",
+        },
+        {
+          id: "P3-04",
+          title: "Duplicate patient search",
+          group: "Registration",
+          purpose:
+            "Compare organization-scoped candidates using explainable factors; select, escalate or continue with reason—never auto-merge.",
+          action: "Record duplicate disposition",
+          kind: "duplicate",
+        },
+        {
+          id: "P3-05",
+          title: "Identity and demographics",
+          group: "Registration",
+          purpose:
+            "Record supplied identity with provenance, verification, partial/estimated/unknown dates and distinct sensitive demographic concepts.",
+          action: "Save identity draft",
+          kind: "demographics",
+        },
+        {
+          id: "P3-06",
+          title: "Contacts and addresses",
+          group: "Registration",
+          purpose:
+            "Maintain effective, verified, confidential contact and address history without treating a destination as consent.",
+          action: "Save contact history",
+          kind: "contacts",
+        },
+        {
+          id: "P3-07",
+          title: "Communication preferences",
+          group: "Registration",
+          purpose:
+            "Capture purpose/channel/language/accessibility/quiet-time preferences independently from consent and provider delivery.",
+          action: "Save preferences",
+          kind: "preferences",
+        },
+        {
+          id: "P3-08",
+          title: "Identifiers",
+          group: "Registration",
+          purpose:
+            "Use only approved scheme versions with masked display, scoped uniqueness, verification and immutable correction lineage.",
+          action: "Add governed identifier",
+          kind: "identifiers",
+        },
+        {
+          id: "P3-09",
+          title: "Caregivers and proxies",
+          group: "Authority",
+          purpose:
+            "Keep relationship, legal/delegated authority and portal linkage separate, scoped, effective-dated and revocable.",
+          action: "Request authority review",
+          kind: "proxy",
+        },
+        {
+          id: "P3-10",
+          title: "Consent and privacy",
+          group: "Authority",
+          purpose:
+            "Record purpose/action/data/time-specific directives and accepted restrictions without treating consent as universal legal basis.",
+          action: "Review consent consequence",
+          kind: "consent",
+        },
+        {
+          id: "P3-11",
+          title: "Clinical safety flags",
+          group: "Safety",
+          purpose:
+            "Show concise high-priority flags with source linkage, verification, visibility, acknowledgement and correction—not free-text notes.",
+          action: "Propose safety flag",
+          kind: "safety",
+        },
+        {
+          id: "P3-12",
+          title: "Review and register",
+          group: "Registration",
+          purpose:
+            "Review all sections, duplicate disposition, warnings, provenance and the exact validation digest before atomic registration.",
+          action: "Submit exact registration",
+          kind: "review",
+        },
+        {
+          id: "P3-13",
+          title: "Patient summary",
+          group: "Patient record",
+          purpose:
+            "Present a canonical permission-projected patient summary with masked identity, active policies, safety and safe actions.",
+          action: "Request patient access copy",
+          kind: "summary",
+        },
+        {
+          id: "P3-14",
+          title: "Potential duplicate queue",
+          group: "Identity governance",
+          purpose:
+            "Triage explainable duplicate/overlay risk with leases, SLA, redaction and detector-aware re-review.",
+          action: "Claim selected review",
+          kind: "queue",
+        },
+        {
+          id: "P3-15",
+          title: "Merge review",
+          group: "Identity governance",
+          purpose:
+            "Bind survivor, field dispositions, provenance and affected-reference digest to an independent decision; correction is not casual unmerge.",
+          action: "Request independent merge decision",
+          kind: "merge",
+        },
+        {
+          id: "P3-16",
+          title: "Identity and audit timeline",
+          group: "Patient record",
+          purpose:
+            "Correlate allow-listed identity evidence with purpose-bound detail, redaction and no raw audit payload or inferred causality.",
+          action: "Request timeline export",
+          kind: "timeline",
+        },
+      ];
+
+      const nav = document.querySelector("#screen-nav");
+      const sidebar = document.querySelector("#screen-navigation");
+      const backdrop = document.querySelector("#navigation-backdrop");
+      const menuButton = document.querySelector("#menu-button");
+      const search = document.querySelector("#screen-search");
+      const stateSelect = document.querySelector("#state-select");
+      const eyebrow = document.querySelector("#screen-eyebrow");
+      const title = document.querySelector("#screen-title");
+      const purpose = document.querySelector("#screen-purpose");
+      const primaryAction = document.querySelector("#primary-action");
+      const content = document.querySelector("#screen-content");
+      const dialog = document.querySelector("#review-dialog");
+      const dialogTitle = document.querySelector("#dialog-title");
+      const dialogDescription = document.querySelector("#dialog-description");
+      const dialogCancel = document.querySelector("#dialog-cancel");
+      const dialogConfirm = document.querySelector("#dialog-confirm");
+      let selectedId = screens[0].id;
+      let dialogTrigger = null;
+
+      const escapeHtml = (value) =>
+        String(value).replace(
+          /[&<>"]/g,
+          (character) =>
+            ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[
+              character
+            ],
+        );
+      const badge = (label, tone = "neutral") =>
+        `<span class="badge ${tone}">${escapeHtml(label)}</span>`;
+      const field = (
+        label,
+        id,
+        value = "Synthetic review value",
+        type = "text",
+        help = "Provenance and verification are recorded separately.",
+      ) =>
+        `<label class="field" for="${id}"><span>${label}</span><input id="${id}" type="${type}" value="${escapeHtml(value)}" /><small>${help}</small></label>`;
+      const selectField = (
+        label,
+        id,
+        options,
+        help = "The active policy controls available values.",
+      ) =>
+        `<label class="field" for="${id}"><span>${label}</span><select id="${id}">${options.map((option) => `<option>${escapeHtml(option)}</option>`).join("")}</select><small>${help}</small></label>`;
+      const safePatient = (label, id, state = "Active") =>
+        `<article class="record-card"><div class="panel-heading"><div><strong>${label}</strong><p class="help">${id} · Synthetic Organization</p></div>${badge(state, state === "Active" ? "success" : "warning")}</div><dl><dt>Birth date</dt><dd>1980-06 · month precision</dd><dt>Contact</dt><dd>•••• 0042 · verified</dd><dt>Identifier</dt><dd>SYN-••-2048</dd></dl><button class="link-button review-action" type="button" data-action="Review ${label}">Review safe projection</button></article>`;
+
+      function closeDrawer() {
+        sidebar.classList.remove("open");
+        backdrop.classList.remove("open");
+        menuButton.setAttribute("aria-expanded", "false");
+      }
+
+      function renderNavigation(query = "") {
+        const normalized = query.trim().toLocaleLowerCase("en");
+        const groups = [...new Set(screens.map((screen) => screen.group))];
+        nav.innerHTML =
+          groups
+            .map((group) => {
+              const items = screens.filter(
+                (screen) =>
+                  screen.group === group &&
+                  `${screen.id} ${screen.title}`
+                    .toLocaleLowerCase("en")
+                    .includes(normalized),
+              );
+              if (!items.length) return "";
+              return `<section class="nav-group"><h2>${group}</h2>${items.map((screen) => `<button type="button" data-screen="${screen.id}" ${screen.id === selectedId ? 'aria-current="page"' : ""}><span>${screen.id}</span><span>${screen.title}</span></button>`).join("")}</section>`;
+            })
+            .join("") || `<p>No matching screens.</p>`;
+      }
+
+      function dashboard() {
+        return `<div class="grid stats"><article class="stat"><span>Open registration runs</span><strong>12</strong><small>3 expire today</small></article><article class="stat"><span>High duplicate review</span><strong>4</strong><small>Oldest 2h 14m</small></article><article class="stat"><span>Authority review</span><strong>3</strong><small>Local policy active</small></article><article class="stat"><span>Safety verification</span><strong>2</strong><small>1 provisional critical</small></article></div><div class="grid two-column" style="margin-top:17px"><section class="panel"><div class="panel-heading"><div><h2>Priority work</h2><p>Counts and ages only; no raw patient values.</p></div>${badge("Fresh 2 min ago", "success")}</div><div class="check-list"><div class="check-row"><span class="check-icon danger">!</span><span><strong>Potential identity overlay</strong><small>Immediate assignment · candidate DUP-0042</small></span><button class="link-button review-action" type="button" data-action="Open potential identity overlay">Review</button></div><div class="check-row"><span class="check-icon warning">!</span><span><strong>Critical provisional flag</strong><small>Verification due in 48 minutes</small></span><button class="link-button review-action" type="button" data-action="Open safety verification">Review</button></div><div class="check-row"><span class="check-icon">✓</span><span><strong>Consent withdrawal processed</strong><small>Future dependent use invalidated</small></span>${badge("Complete", "success")}</div></div></section><aside class="panel"><h2>Policy availability</h2><div class="check-list"><div class="record-card"><strong>Matching detector</strong><p>m3-match-explainable-v1</p>${badge("Calibrated", "success")}</div><div class="record-card"><strong>Proxy/minor catalogue</strong><p>Synthetic jurisdiction v1</p>${badge("Review only", "warning")}</div><div class="record-card"><strong>FHIR partner profile</strong><p>No package selected</p>${badge("Unavailable", "neutral")}</div></div></aside></div>`;
+      }
+
+      function directory() {
+        return `<section class="panel"><div class="filter-grid">${field("Search permitted fields", "dir-search", "Synthetic Patient")}${selectField("Lifecycle", "dir-state", ["Active", "Temporary", "Deceased", "Merged"])}${selectField("Identifier scheme", "dir-scheme", ["Any approved scheme", "Synthetic MRN v1"])}<button class="secondary" type="button">Apply filters</button></div><p class="help">3 authorized results · stable patient number sort · values masked by purpose.</p><div class="table-wrap" role="region" aria-label="Synthetic patient directory" tabindex="0"><table><thead><tr><th>Patient</th><th>Birth date</th><th>Contact</th><th>Identity state</th><th>Action</th></tr></thead><tbody><tr><td><strong>Synthetic Patient A</strong><small>PID-SYN-001</small></td><td>1980-06<small>Month precision</small></td><td>•••• 0042<small>Verified</small></td><td>${badge("Active", "success")}</td><td><button class="link-button review-action" type="button" data-action="Open Synthetic Patient A">Open</button></td></tr><tr><td><strong>Synthetic Newborn B</strong><small>TEMP-SYN-002</small></td><td>2026-09-25<small>Exact · temporary name</small></td><td>Not present</td><td>${badge("Temporary", "warning")}</td><td><button class="link-button review-action" type="button" data-action="Open Synthetic Newborn B">Open</button></td></tr><tr><td><strong>Synthetic Patient C</strong><small>PID-SYN-003</small></td><td>Unknown</td><td>Withheld by policy</td><td>${badge("Active", "success")}</td><td><button class="link-button review-action" type="button" data-action="Open Synthetic Patient C">Open</button></td></tr></tbody></table></div><div class="record-cards">${safePatient("Synthetic Patient A", "PID-SYN-001")}${safePatient("Synthetic Newborn B", "TEMP-SYN-002", "Temporary")}${safePatient("Synthetic Patient C", "PID-SYN-003")}</div></section>`;
+      }
+
+      function startRegistration() {
+        return `<div class="grid two-column"><section class="panel"><div class="panel-heading"><div><h2>Registration context</h2><p>Creates an expiring run, not a patient.</p></div>${badge("24-hour inactivity expiry", "info")}</div><div class="grid form-grid">${selectField("Source", "reg-source", ["In-person registration", "Authorized referral", "Urgent temporary path"])}${selectField("Supplier relationship", "reg-supplier", ["Patient self", "Verified representative", "Authorized staff source"])}${selectField("Purpose", "reg-purpose", ["Register for care", "Identity correction", "Urgent care"])}${selectField("Facility", "reg-facility", ["Synthetic Central Clinic", "Not applicable"])}${field("Initial name input", "reg-name", "Synthetic Patient D")}${field("Date of birth or partial date", "reg-dob", "1992-11", "text", "Month precision · exact certainty")}</div><div class="panel-actions"><button class="secondary review-action" type="button" data-action="Review urgent temporary path">Urgent temporary path</button><button class="primary review-action" type="button" data-action="Create registration run and search">Create run and search</button></div></section><aside class="panel"><h2>Before patient creation</h2><div class="stepper"><div class="step"><strong>Context</strong>${badge("Current", "info")}</div><div class="step future"><strong>Duplicate search</strong>${badge("Required", "warning")}</div><div class="step future"><strong>Identity and policy facts</strong></div><div class="step future"><strong>Review and atomic register</strong></div></div><div class="notice warning" style="margin-top:14px"><strong>Search before create</strong><p>A failed dependency is never reported as no match. Urgent care uses a visible temporary identity.</p></div></aside></div>`;
+      }
+
+      function duplicateSearch() {
+        return `<div class="grid"><section class="panel"><div class="panel-heading"><div><h2>Explainable organization-scoped candidates</h2><p>Detector m3-match-explainable-v1 · input values remain protected.</p></div>${badge("High review", "warning")}</div><div class="comparison"><article class="comparison-side"><h3>Registration input</h3><p><strong>Synthetic Patient D</strong></p><p>1992-11 · month precision</p><p>Contact ending 0042</p><div class="factor-list"><div class="factor">Name normalization · close</div><div class="factor">Birth month/year · exact</div><div class="factor warning">Contact · conflict</div></div></article><div class="disposition"><span>Potential same person</span><strong>Not a merge</strong>${badge("Manual review", "warning")}</div><article class="comparison-side"><h3>Candidate PID-SYN-004</h3><p><strong>Synthetic Patient D-Existing</strong></p><p>1992-11 · month precision</p><p>Contact withheld</p><div class="factor-list"><div class="factor">Identifier scheme · no supplied comparison</div><div class="factor">Name provenance · source attested</div><div class="factor warning">One field withheld by purpose</div></div></article></div><div class="panel-actions"><button class="secondary review-action" type="button" data-action="Escalate ambiguous duplicate">Escalate</button><button class="secondary review-action" type="button" data-action="Continue new with independent reason">Continue new with reason</button><button class="primary review-action" type="button" data-action="Select existing patient">Select existing patient</button></div></section><div class="notice"><strong>Minimum necessary explanation</strong><p>Only factors the actor may use are shown. No global identity index or other-organization existence is disclosed.</p></div></div>`;
+      }
+
+      function demographics() {
+        return `<div class="grid two-column"><section class="panel"><div class="panel-heading"><div><h2>Identity supplied for this registration</h2><p>Display values remain separate from normalized match material.</p></div>${badge("Draft revision 4", "neutral")}</div><div class="grid form-grid">${selectField("Name use", "name-use", ["Official / supplied", "Usual / name to use", "Temporary", "Former"])}${field("Name", "identity-name", "Synthetic Patient D")}${field("Birth date value", "birth-value", "1992-11")}${selectField("Birth precision", "birth-precision", ["Month", "Day", "Year", "Unknown"])}${selectField("Certainty", "birth-certainty", ["Exact", "Estimated", "Unknown"])}${selectField("Verification", "identity-verification", ["Self or source attested", "Evidence checked", "Authoritative source verified", "Unverified"])}${selectField("Gender identity", "gender-identity", ["Not asked", "Patient-described synthetic value", "Declined to answer"], "Optional, purpose-bound and distinct from recorded sex or clinical parameters.")}${selectField("Pronouns", "pronouns", ["Not asked", "Patient-described synthetic value"], "Optional and independently restricted.")}</div><div class="panel-actions"><button class="primary review-action" type="button" data-action="Save provenance-aware identity draft">Save identity draft</button></div></section><aside class="panel"><h2>Identity confidence</h2><div class="check-list"><div class="check-row"><span class="check-icon">✓</span><span><strong>Name</strong><small>Source attested · supplied by patient</small></span>${badge("Current", "success")}</div><div class="check-row"><span class="check-icon warning">!</span><span><strong>Date of birth</strong><small>Exact certainty at month precision</small></span>${badge("Partial", "warning")}</div><div class="check-row"><span class="check-icon">✓</span><span><strong>No fabricated components</strong><small>Unknown day remains absent</small></span></div></div><div class="notice warning" style="margin-top:13px"><strong>Separate concepts</strong><p>Administrative recorded sex, gender identity, pronouns and sex parameter for clinical use are not interchangeable.</p></div></aside></div>`;
+      }
+
+      function contacts() {
+        return `<div class="grid even-columns"><section class="panel"><div class="panel-heading"><div><h2>Contact history</h2><p>Encrypted value with masked projection and effective history.</p></div>${badge("1 verified", "success")}</div><div class="grid form-grid">${selectField("Channel", "contact-channel", ["Phone", "Email"])}${selectField("Use", "contact-use", ["Personal", "Care coordination", "Emergency contact"])}${field("Contact value", "contact-value", "patient.d@example.invalid", "email")}${selectField("Verification", "contact-verify", ["Unverified", "Confirmation code verified", "Staff evidence checked"])}</div><div class="notice warning" style="margin-top:13px"><strong>Contact is not consent</strong><p>Verification proves control or evidence only. Message authorization is evaluated separately.</p></div><div class="panel-actions"><button class="primary review-action" type="button" data-action="Supersede current contact">Save as effective successor</button></div></section><section class="panel"><div class="panel-heading"><div><h2>Address history</h2><p>Structured, purpose-specific and confidential.</p></div>${badge("No raw list display", "info")}</div><div class="grid form-grid">${selectField("Address use", "address-use", ["Home", "Correspondence", "Temporary"])}${field("Country", "address-country", "IN")}${field("Locality", "address-locality", "Synthetic Locality")}${selectField("Validation", "address-verify", ["Source attested", "Provider validated", "Unverified"])}</div><div class="panel-actions"><button class="primary review-action" type="button" data-action="Save effective address">Save address history</button></div></section></div>`;
+      }
+
+      function preferences() {
+        return `<div class="grid two-column"><section class="panel"><div class="panel-heading"><div><h2>Purpose-specific communication preference</h2><p>Preference, legal authority and provider deliverability are evaluated independently.</p></div>${badge("Draft", "neutral")}</div><div class="grid form-grid">${selectField("Purpose", "pref-purpose", ["Appointment operations", "Care coordination", "Service updates"])}${selectField("Channel", "pref-channel", ["Protected portal", "Email", "SMS", "Voice"])}${selectField("Decision", "pref-decision", ["Prefer", "Allow", "Do not use"])}${selectField("Language", "pref-language", ["English (en)", "Hindi (hi)", "Synthetic alternative"])}${selectField("Accessible format", "pref-format", ["Standard text", "Large text", "Voice assistance"])}${field("Quiet interval", "pref-quiet", "21:00–08:00 Asia/Kolkata")}</div><div class="panel-actions"><button class="primary review-action" type="button" data-action="Save communication preference">Save preference</button></div></section><aside class="panel"><h2>Send-time decision</h2><div class="check-list"><div class="check-row"><span class="check-icon">1</span><span><strong>Preference</strong><small>Purpose and channel currently allowed</small></span></div><div class="check-row"><span class="check-icon">2</span><span><strong>Authority</strong><small>Consent/legal rule evaluated at send time</small></span></div><div class="check-row"><span class="check-icon">3</span><span><strong>Deliverability</strong><small>Verified destination, template and provider ready</small></span></div></div><div class="notice warning" style="margin-top:13px"><strong>Clinical escalation is separate</strong><p>A queued consumer message never proves a safety-critical clinician notification.</p></div></aside></div>`;
+      }
+
+      function identifiers() {
+        return `<div class="grid two-column"><section class="panel"><div class="panel-heading"><div><h2>Approved identifier schemes</h2><p>Values are masked; uniqueness follows exact scheme/issuer scope.</p></div>${badge("External lookup off", "neutral")}</div><div class="check-list"><div class="record-card"><div class="panel-heading"><div><strong>Synthetic MRN v1</strong><p>Issuer: Synthetic Organization · local uniqueness</p></div>${badge("Primary", "success")}</div><p>Display: SYN-••-2048 · evidence checked</p><button class="link-button review-action" type="button" data-action="Review identifier lineage">Review lineage</button></div><div class="record-card"><div class="panel-heading"><div><strong>National/provider identifier</strong><p>No approved provider contract or jurisdiction policy</p></div>${badge("Unavailable", "neutral")}</div></div></div></section><aside class="panel"><h2>Add identifier</h2><div class="grid">${selectField("Scheme version", "identifier-scheme", ["Synthetic MRN v1"])}${field("Value", "identifier-value", "SYN-TEST-4096")}${selectField("Verification", "identifier-verification", ["Evidence checked", "Source attested", "Unverified"])}</div><div class="notice warning" style="margin-top:13px"><strong>Collision behavior</strong><p>An active unique-identifier collision blocks ordinary registration and routes to independent duplicate review.</p></div><div class="panel-actions"><button class="primary review-action" type="button" data-action="Validate and add identifier">Validate identifier</button></div></aside></div>`;
+      }
+
+      function proxy() {
+        return `<div class="grid two-column"><section class="panel"><div class="panel-heading"><div><h2>Relationship and authority</h2><p>Stored and evaluated as separate facts.</p></div>${badge("Pending review", "warning")}</div><div class="record-card"><strong>Related person</strong><p>Synthetic Related Person A · relationship: caregiver</p>${badge("Relationship only", "neutral")}</div><div class="grid form-grid" style="margin-top:13px">${selectField("Authority source", "authority-source", ["Patient-delegated", "Verified legal representative", "Guardian policy"])}${selectField("Purpose scope", "authority-purpose", ["Portal record access", "Care coordination", "Communication only"])}${selectField("Action scope", "authority-action", ["Read permitted summary", "Manage appointments", "Receive approved messages"])}${field("Effective interval", "authority-period", "26 Sep 2026 – 26 Mar 2027")}</div><div class="panel-actions"><button class="primary review-action" type="button" data-action="Submit proxy authority for decision">Submit authority request</button></div></section><aside class="panel"><h2>Access calculation</h2><div class="check-list"><div class="check-row"><span class="check-icon">✓</span><span><strong>Relationship</strong><small>Recorded with provenance</small></span></div><div class="check-row"><span class="check-icon warning">!</span><span><strong>Authority grant</strong><small>Not active until policy/evidence decision</small></span></div><div class="check-row"><span class="check-icon danger">×</span><span><strong>Portal link</strong><small>Cannot start before active authority and proofing</small></span></div></div><div class="notice danger" style="margin-top:13px"><strong>Relationship ≠ authority</strong><p>No implicit parent, caregiver, surname, age or emergency access. No organization membership is granted.</p></div></aside></div>`;
+      }
+
+      function consent() {
+        return `<div class="grid even-columns"><section class="panel"><div class="panel-heading"><div><h2>Consent directive</h2><p>Human-readable source plus clearly labeled computable derivative.</p></div>${badge("Active", "success")}</div><dl><dt>Purpose</dt><dd>Care coordination</dd><dt>Decision</dt><dd>Permit named care-team role</dd><dt>Data scope</dt><dd>Approved summary projection</dd><dt>Period</dt><dd>26 Sep 2026 – 26 Mar 2027</dd><dt>Policy</dt><dd>Synthetic consent policy v1</dd></dl><div class="notice"><strong>Not universal legal basis</strong><p>Every use still requires its explicit legal/policy rule and current privacy restrictions.</p></div><div class="panel-actions"><button class="secondary review-action" type="button" data-action="Review human-readable consent source">Review source</button><button class="danger-button review-action" type="button" data-action="Withdraw future consent-dependent use">Withdraw prospectively</button></div></section><section class="panel"><div class="panel-heading"><div><h2>Privacy restriction</h2><p>Accepted projection rule; source fact remains unchanged.</p></div>${badge("Active", "warning")}</div><div class="check-list"><div class="check-row"><span class="check-icon warning">!</span><span><strong>Directory</strong><small>Hide contact and address fields</small></span>${badge("Withheld", "warning")}</div><div class="check-row"><span class="check-icon warning">!</span><span><strong>Proxy portal</strong><small>Exclude safety detail and restricted timeline</small></span>${badge("Restricted", "warning")}</div><div class="check-row"><span class="check-icon danger">×</span><span><strong>Operator override</strong><small>No M3 break-glass or free-text exception</small></span></div></div><div class="panel-actions"><button class="primary review-action" type="button" data-action="Review privacy consequence">Review consequence</button></div></section></div>`;
+      }
+
+      function safety() {
+        return `<div class="grid two-column"><section class="panel"><div class="panel-heading"><div><h2>Active and provisional flags</h2><p>Concise high-priority information with source detail elsewhere.</p></div>${badge("Clinical catalogue v1", "info")}</div><div class="check-list"><div class="record-card"><div class="panel-heading"><div><strong>Identity safety · similar record names</strong><p>Source: duplicate candidate DUP-0042</p></div>${badge("Verified · high", "warning")}</div><p>Acknowledge before identity-sensitive workflow. Review due 27 Sep 2026.</p><button class="link-button review-action" type="button" data-action="Acknowledge identity safety flag">Acknowledge</button></div><div class="record-card"><div class="panel-heading"><div><strong>Accessibility · communication assistance</strong><p>Source: governed accessibility record</p></div>${badge("Provisional · standard", "info")}</div><p>Verification due in five business days.</p></div></div></section><aside class="panel"><h2>Flag boundary</h2><div class="notice warning"><strong>Not a clinical narrative</strong><p>Open the separately authorized source record for detail. Flags do not replace allergies, conditions or order checking.</p></div><div class="notice" style="margin-top:12px"><strong>Not a message</strong><p>Communication/escalation uses its own acknowledged workflow.</p></div><div class="panel-actions"><button class="primary review-action" type="button" data-action="Propose coded safety flag">Propose flag</button></div></aside></div>`;
+      }
+
+      function reviewRegistration() {
+        const gates = [
+          ["Registration context", "Complete", "success"],
+          ["Minimum identity and provenance", "Complete", "success"],
+          [
+            "Duplicate search and disposition",
+            "High candidate independently cleared",
+            "warning",
+          ],
+          ["Identifier scheme and uniqueness", "Complete", "success"],
+          ["Contact and preference", "Complete", "success"],
+          ["Proxy authority", "Not applicable to registration", "info"],
+          ["Consent/privacy", "Active purpose rules", "success"],
+          ["Safety", "No proposed flags", "info"],
+          ["Platform integrity", "Complete", "success"],
+        ];
+        return `<div class="grid two-column"><section class="panel"><div class="panel-heading"><div><h2>Registration validation</h2><p>Run REG-SYN-0042 · revision 8 · digest 74a…20c · expires in 11 minutes</p></div>${badge("Ready with warning", "warning")}</div><div class="check-list">${gates.map(([name, note, tone]) => `<div class="check-row"><span class="check-icon ${tone === "warning" ? "warning" : ""}">${tone === "success" ? "✓" : "!"}</span><span><strong>${name}</strong><small>${note}</small></span>${badge(tone === "success" ? "Complete" : tone === "warning" ? "Warning" : "Not applicable", tone)}</div>`).join("")}</div></section><aside class="panel"><h2>Atomic outcome</h2><p><strong>Synthetic Patient D</strong><br />Month-precision birth date · masked contact · one local identifier</p><div class="notice warning"><strong>Duplicate decision acknowledged</strong><p>Independent reviewer cleared the exact detector/source revisions. A later change invalidates this digest.</p></div><div class="notice success" style="margin-top:12px"><strong>No portal account created</strong><p>Invitation/linkage is a separate proofed action.</p></div><div class="panel-actions"><button class="primary review-action" type="button" data-action="Submit exact registration digest">Submit registration</button></div></aside></div>`;
+      }
+
+      function summary() {
+        return `<section class="panel"><div class="panel-heading"><div><h2>Synthetic Patient A</h2><p>PID-SYN-001 · organization-local identity · active</p></div>${badge("Identity evidence checked", "success")}</div><div class="tabs" role="tablist" aria-label="Patient summary sections"><button type="button" role="tab" aria-selected="true">Overview</button><button type="button" role="tab" aria-selected="false">Authority</button><button type="button" role="tab" aria-selected="false">Consent & privacy</button><button type="button" role="tab" aria-selected="false">Safety</button></div><div class="grid stats"><article class="stat"><span>Birth date</span><strong style="font-size:20px">1980-06</strong><small>Month precision · source attested</small></article><article class="stat"><span>Primary contact</span><strong style="font-size:20px">•••• 0042</strong><small>Verified · contact ≠ consent</small></article><article class="stat"><span>Identifier</span><strong style="font-size:20px">SYN-••-2048</strong><small>Local scheme · primary</small></article><article class="stat"><span>Portal</span><strong style="font-size:20px">Not linked</strong><small>Patient exists independently</small></article></div><div class="grid even-columns" style="margin-top:17px"><div class="check-list"><div class="record-card"><strong>Authority</strong><p>No active proxy authority.</p>${badge("Self only", "info")}</div><div class="record-card"><strong>Consent/privacy</strong><p>Care coordination consent active; contact withheld from proxy projections.</p>${badge("Policy applied", "warning")}</div></div><div class="check-list"><div class="record-card"><strong>Safety</strong><p>One verified identity-safety flag; source detail restricted.</p>${badge("Acknowledge in workflow", "warning")}</div><div class="record-card"><strong>Duplicate state</strong><p>No open high-risk candidate; last detector run current.</p>${badge("Reviewed", "success")}</div></div></div></section>`;
+      }
+
+      function duplicateQueue() {
+        const rows = [
+          [
+            "DUP-0042",
+            "Confirmed identifier conflict",
+            "Immediate",
+            "Overlay risk",
+          ],
+          ["DUP-0043", "High review", "42 minutes", "Name + partial DOB"],
+          ["DUP-0044", "Possible review", "1 day", "Contact + transliteration"],
+        ];
+        return `<section class="panel"><div class="filter-grid">${selectField("Risk band", "queue-risk", ["All actionable", "Confirmed conflict", "High review", "Possible review"])}${selectField("Assignment", "queue-owner", ["Unassigned", "Assigned to me", "All permitted"])}${selectField("SLA", "queue-sla", ["Any", "Due now", "Due today"])}<button class="secondary" type="button">Apply filters</button></div><div class="table-wrap" role="region" aria-label="Potential duplicate queue" tabindex="0"><table><thead><tr><th>Candidate</th><th>Band</th><th>Age</th><th>Reason</th><th>Action</th></tr></thead><tbody>${rows.map(([id, band, age, reason]) => `<tr><td><strong>${id}</strong><small>Detector v1 · source revisions bound</small></td><td>${badge(band, band.startsWith("Confirmed") ? "danger" : "warning")}</td><td>${age}</td><td>${reason}</td><td><button class="link-button review-action" type="button" data-action="Claim ${id}">Claim review</button></td></tr>`).join("")}</tbody></table></div><div class="record-cards">${rows.map(([id, band, age, reason]) => `<article class="record-card"><div class="panel-heading"><strong>${id}</strong>${badge(band, "warning")}</div><p>${reason} · ${age}</p><button class="link-button review-action" type="button" data-action="Claim ${id}">Claim review</button></article>`).join("")}</div><div class="notice warning" style="margin-top:14px"><strong>Daily governance</strong><p>Dismissal binds detector, factors and source revisions; material change reopens review. Queue access is not bulk export authority.</p></div></section>`;
+      }
+
+      function mergeReview() {
+        return `<div class="grid"><section class="panel"><div class="panel-heading"><div><h2>Survivor and duplicate comparison</h2><p>MRG-SYN-0042 · exact patient revisions · impact digest 18f…9a0</p></div>${badge("Awaiting independent checker", "warning")}</div><div class="comparison"><article class="comparison-side"><h3>Survivor · PID-SYN-001</h3><p><strong>Synthetic Patient A</strong></p><p>Verified local identifier · longer care continuity</p><div class="factor-list"><div class="factor">Keep official name · evidence checked</div><div class="factor">Keep verified contact ending 0042</div><div class="factor">Retain all source identifiers</div></div></article><div class="disposition"><span>Field dispositions</span><strong>6 explicit</strong>${badge("No overwrite", "info")}</div><article class="comparison-side"><h3>Duplicate · PID-SYN-099</h3><p><strong>Synthetic Patient A-Alternate</strong></p><p>Source-attested identity · one conflicting contact</p><div class="factor-list"><div class="factor">Add former-name provenance</div><div class="factor warning">End conflicting contact; retain history</div><div class="factor">Link as replaced-by survivor</div></div></article></div></section><div class="grid even-columns"><section class="panel"><h2>Affected reference impact</h2><div class="check-list"><div class="check-row"><span class="check-icon">✓</span><span><strong>Identity/contact records</strong><small>8 references · explicit disposition</small></span></div><div class="check-row"><span class="check-icon">✓</span><span><strong>Consent/authority/safety</strong><small>3 references · preserve source attribution</small></span></div><div class="check-row"><span class="check-icon warning">!</span><span><strong>Care activity after anomaly</strong><small>Clinical-impact review required</small></span></div></div></section><section class="panel"><h2>Decision assurance</h2><div class="check-list"><div class="check-row"><span class="check-icon">✓</span><span><strong>Maker</strong><small>Synthetic registry reviewer A</small></span></div><div class="check-row"><span class="check-icon warning">!</span><span><strong>Checker</strong><small>Must be distinct · MFA · recent auth</small></span></div><div class="check-row"><span class="check-icon">✓</span><span><strong>Executor</strong><small>Constrained service consumes exact approval once</small></span></div></div><div class="notice danger" style="margin-top:12px"><strong>No routine unmerge</strong><p>Mistakes enter governed correction/disentanglement with clinical review.</p></div><div class="panel-actions"><button class="primary review-action" type="button" data-action="Request independent merge decision">Request decision</button></div></section></div></div>`;
+      }
+
+      function timeline() {
+        const items = [
+          [
+            "Identity correction recorded",
+            "26 Sep 2026 · month-precision birth date retained",
+            "Registration actor · source evidence reference",
+          ],
+          [
+            "Consent activated",
+            "25 Sep 2026 · care coordination · policy v1",
+            "Authorized grantor · derivative linked",
+          ],
+          [
+            "Privacy restriction accepted",
+            "25 Sep 2026 · proxy contact projection",
+            "Privacy reviewer · exact consequence",
+          ],
+          [
+            "Duplicate candidate dismissed",
+            "24 Sep 2026 · detector v1 · material-change reopen",
+            "Independent registry reviewer",
+          ],
+          [
+            "Patient registered",
+            "23 Sep 2026 · registration digest 74a…20c",
+            "Synthetic registration actor",
+          ],
+        ];
+        return `<div class="grid two-column"><section class="panel"><div class="filter-grid">${selectField("Evidence family", "timeline-family", ["All permitted", "Identity", "Authority", "Consent/privacy", "Safety", "Duplicate/merge"])}${field("From date", "timeline-from", "2026-09-01", "date")}${field("To date", "timeline-to", "2026-09-26", "date")}<button class="secondary" type="button">Apply filters</button></div><div class="timeline" role="region" aria-label="Synthetic patient identity timeline" tabindex="0">${items.map(([event, detail, actor]) => `<article class="timeline-item"><h3>${event}</h3><p>${detail}</p><small>${actor} · correlation available</small></article>`).join("")}</div></section><aside class="panel"><h2>Projection boundary</h2><div class="notice"><strong>Minimum necessary</strong><p>Timeline shows safe evidence labels, not audit/outbox payloads, raw values, clinical narrative or unsupported causality.</p></div><div class="notice warning" style="margin-top:12px"><strong>Purpose-bound detail</strong><p>Opening a restricted source requires its own permission, purpose and access evidence.</p></div><div class="notice" style="margin-top:12px"><strong>Export</strong><p>Template, immutable snapshot, approval, private artifact, short access and retention policy are required.</p></div></aside></div>`;
+      }
+
+      function genericState(state, screen) {
+        const variants = {
+          empty: [
+            "No records yet",
+            `There are no ${screen.title.toLocaleLowerCase()} records in the permitted scope.`,
+          ],
+          "no-results": [
+            "No matching results",
+            "No authorized records match these bounded filters. Change or clear the filters.",
+          ],
+          denied: [
+            "This patient resource is unavailable",
+            "It may not exist, may be outside the permitted scope, or may be withheld for this purpose.",
+          ],
+          validation: [
+            "Review the highlighted fields",
+            "Authoritative server validation found issues. Draft input remains available for correction.",
+          ],
+          stale: [
+            "Validation or policy result is stale",
+            "A material record, authority, policy or dependency changed. Request a fresh result before continuing.",
+          ],
+          conflict: [
+            "The record changed",
+            "Another authorized action changed the exact revision. Reload the current server projection before retrying.",
+          ],
+          "dependency-failure": [
+            "Required capability unavailable",
+            "The operation failed closed. No match, authority, delivery, export or interoperability success is assumed.",
+          ],
+          success: [
+            "Governed action recorded",
+            "A production response would include exact revision, evidence reference, policy versions and correlation ID—never optimistic client success.",
+          ],
+        };
+        if (state === "loading")
+          return `<section class="panel state-shell" role="status"><div class="skeleton" aria-label="Loading authoritative patient state"><span></span><span></span><span></span></div></section>`;
+        const [heading, detail] = variants[state];
+        const tone =
+          state === "success"
+            ? "success"
+            : ["denied", "dependency-failure"].includes(state)
+              ? "danger"
+              : ["validation", "stale", "conflict"].includes(state)
+                ? "warning"
+                : "info";
+        return `<section class="panel state-shell"><div>${badge(state.replace("-", " "), tone)}<h2>${heading}</h2><p>${detail}</p><button class="secondary review-action" type="button" data-action="Review ${state} recovery behavior">Review recovery behavior</button></div></section>`;
+      }
+
+      function renderDefault(screen) {
+        switch (screen.kind) {
+          case "dashboard":
+            return dashboard();
+          case "directory":
+            return directory();
+          case "start":
+            return startRegistration();
+          case "duplicate":
+            return duplicateSearch();
+          case "demographics":
+            return demographics();
+          case "contacts":
+            return contacts();
+          case "preferences":
+            return preferences();
+          case "identifiers":
+            return identifiers();
+          case "proxy":
+            return proxy();
+          case "consent":
+            return consent();
+          case "safety":
+            return safety();
+          case "review":
+            return reviewRegistration();
+          case "summary":
+            return summary();
+          case "queue":
+            return duplicateQueue();
+          case "merge":
+            return mergeReview();
+          case "timeline":
+            return timeline();
+          default:
+            return `<section class="panel"><h2>Candidate screen</h2></section>`;
+        }
+      }
+
+      function render() {
+        const screen =
+          screens.find((item) => item.id === selectedId) || screens[0];
+        eyebrow.textContent = `${screen.id} · ${screen.group}`;
+        title.textContent = screen.title;
+        purpose.textContent = screen.purpose;
+        primaryAction.textContent = screen.action;
+        primaryAction.dataset.action = screen.action;
+        document.title = `${screen.id} ${screen.title} · M3 candidate`;
+        content.innerHTML =
+          stateSelect.value === "default"
+            ? renderDefault(screen)
+            : genericState(stateSelect.value, screen);
+      }
+
+      function openReviewDialog(action, trigger) {
+        dialogTrigger = trigger;
+        dialogTitle.textContent = action;
+        dialogDescription.textContent = `The candidate demonstrates “${action}” for review only. Current tenant, permission, purpose, policy, authority, assurance, revision and evidence would be rechecked by a production server. No data changes here.`;
+        dialog.showModal();
+        dialogCancel.focus();
+      }
+
+      nav.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-screen]");
+        if (!button) return;
+        selectedId = button.dataset.screen;
+        stateSelect.value = "default";
+        renderNavigation(search.value);
+        render();
+        closeDrawer();
+        title.focus();
+      });
+      document.addEventListener("click", (event) => {
+        const button = event.target.closest(".review-action");
+        if (!button) return;
+        openReviewDialog(
+          button.dataset.action || button.textContent.trim(),
+          button,
+        );
+      });
+      dialogCancel.addEventListener("click", () => dialog.close("cancel"));
+      dialogConfirm.addEventListener("click", () =>
+        dialog.close("acknowledged"),
+      );
+      dialog.addEventListener("close", () => {
+        if (dialogTrigger) dialogTrigger.focus();
+      });
+      search.addEventListener("input", () => renderNavigation(search.value));
+      stateSelect.addEventListener("change", render);
+      menuButton.addEventListener("click", () => {
+        const opening = !sidebar.classList.contains("open");
+        sidebar.classList.toggle("open", opening);
+        backdrop.classList.toggle("open", opening);
+        menuButton.setAttribute("aria-expanded", String(opening));
+        if (opening) search.focus();
+      });
+      backdrop.addEventListener("click", closeDrawer);
+      window.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && sidebar.classList.contains("open")) {
+          closeDrawer();
+          menuButton.focus();
+        }
+      });
+      window.addEventListener("resize", () => {
+        if (window.innerWidth > 760) closeDrawer();
+      });
+
+      renderNavigation();
+      render();
+    </script>
+  </body>
+</html>

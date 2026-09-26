@@ -1,0 +1,228 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://careos.rootopathy.com/contracts/module-3-input-gate.schema.json",
+  "title": "CareOS Module 3 implementation input gate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "module",
+    "status",
+    "candidateVersion",
+    "basis",
+    "requiredArtifacts",
+    "artifacts",
+    "approval"
+  ],
+  "properties": {
+    "$schema": { "const": "./module-3-input-gate.schema.json" },
+    "schemaVersion": { "const": 1 },
+    "module": { "const": "M3" },
+    "status": { "enum": ["BLOCKED_INPUT", "APPROVED"] },
+    "candidateVersion": { "const": "m3-candidate-1" },
+    "basis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "acceptedModule2",
+        "acceptedProductDefinition",
+        "productAcceptance",
+        "buildSpecification",
+        "candidatePackageSha256"
+      ],
+      "properties": {
+        "acceptedModule2": {
+          "$ref": "#/$defs/acceptedModule2"
+        },
+        "acceptedProductDefinition": {
+          "$ref": "#/$defs/acceptedProductDefinition"
+        },
+        "productAcceptance": {
+          "$ref": "#/$defs/productAcceptance"
+        },
+        "buildSpecification": {
+          "$ref": "#/$defs/buildSpecification"
+        },
+        "candidatePackageSha256": {
+          "const": "c383cd7dbe927d2443958f71350c8cd59ac1a8eb725dc5b2a70e40ced115e21f"
+        }
+      }
+    },
+    "requiredArtifacts": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "prefixItems": [
+        { "const": "screen-mockups" },
+        { "const": "design-system" },
+        { "const": "data-dictionary-and-validation" },
+        { "const": "lifecycle-and-transition-matrix" },
+        { "const": "authorization-policy" },
+        { "const": "audit-and-event-registry" },
+        { "const": "readiness-and-activation-policy" },
+        { "const": "history-and-export-policy" }
+      ],
+      "items": false
+    },
+    "artifacts": {
+      "type": "array",
+      "maxItems": 8,
+      "items": { "$ref": "#/$defs/artifact" }
+    },
+    "approval": {
+      "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/approval" }]
+    }
+  },
+  "$defs": {
+    "acceptedModule2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "recordId", "sha256"],
+      "properties": {
+        "path": { "const": "docs/MODULE_2_COMPLETION_ACCEPTANCE.md" },
+        "recordId": { "const": "M2-COMPLETION-ACCEPTANCE-20260926-01" },
+        "sha256": {
+          "const": "677f2e78c6cc76f5d3bbd1b57ba615fc53676ae135957caa14356797edc820b8"
+        }
+      }
+    },
+    "acceptedProductDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "version", "sha256"],
+      "properties": {
+        "path": { "const": "docs/MODULE_3_PRODUCT_DEFINITION.md" },
+        "version": { "const": "m3-product-definition-draft-2" },
+        "sha256": {
+          "const": "c1eef920751af4547fa6b8c260b773edbfa266cfa84ac6a01302a44faa765bb5"
+        }
+      }
+    },
+    "productAcceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "recordId", "sha256"],
+      "properties": {
+        "path": { "const": "docs/MODULE_3_PRODUCT_DEFINITION_ACCEPTANCE.md" },
+        "recordId": { "const": "M3-PRODUCT-ACCEPTANCE-20260926-01" },
+        "sha256": {
+          "const": "f3c6c866cec02441df006c34d6012f448ebaed505e724bce8f75fbbbc51bf144"
+        }
+      }
+    },
+    "buildSpecification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "const": "docs/CareOS_Complete_Build_Specification_Java_Spring_Boot_React_Node_Edition.pdf"
+        },
+        "sha256": {
+          "const": "2c8f9f020c7c1a21678c795df57fd8be1b659f2141ab7c8747b5dec973db0bfe"
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "version", "path", "sha256"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "screen-mockups",
+            "design-system",
+            "data-dictionary-and-validation",
+            "lifecycle-and-transition-matrix",
+            "authorization-policy",
+            "audit-and-event-registry",
+            "readiness-and-activation-policy",
+            "history-and-export-policy"
+          ]
+        },
+        "version": { "const": "m3-candidate-1" },
+        "path": {
+          "type": "string",
+          "pattern": "^approved-inputs/module-3/[A-Za-z0-9][A-Za-z0-9._/-]{0,479}$"
+        },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision",
+        "recordId",
+        "approvedBy",
+        "approvedAt",
+        "screens",
+        "entityCount",
+        "decisionFamilyCount",
+        "packageSha256",
+        "evidencePath",
+        "evidenceSha256"
+      ],
+      "properties": {
+        "decision": { "const": "APPROVED" },
+        "recordId": { "const": "M3-APPROVAL-20260926-01" },
+        "approvedBy": { "type": "string", "minLength": 3, "maxLength": 200 },
+        "approvedAt": { "type": "string", "format": "date-time" },
+        "screens": {
+          "type": "array",
+          "minItems": 16,
+          "maxItems": 16,
+          "prefixItems": [
+            { "const": "P3-01" },
+            { "const": "P3-02" },
+            { "const": "P3-03" },
+            { "const": "P3-04" },
+            { "const": "P3-05" },
+            { "const": "P3-06" },
+            { "const": "P3-07" },
+            { "const": "P3-08" },
+            { "const": "P3-09" },
+            { "const": "P3-10" },
+            { "const": "P3-11" },
+            { "const": "P3-12" },
+            { "const": "P3-13" },
+            { "const": "P3-14" },
+            { "const": "P3-15" },
+            { "const": "P3-16" }
+          ],
+          "items": false
+        },
+        "entityCount": { "const": 14 },
+        "decisionFamilyCount": { "const": 15 },
+        "packageSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "evidencePath": {
+          "type": "string",
+          "pattern": "^approved-inputs/module-3/[A-Za-z0-9][A-Za-z0-9._/-]{0,479}$"
+        },
+        "evidenceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "const": "BLOCKED_INPUT" } },
+        "required": ["status"]
+      },
+      "then": { "properties": { "approval": { "type": "null" } } }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "APPROVED" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "artifacts": { "minItems": 8 },
+          "approval": { "$ref": "#/$defs/approval" }
+        }
+      }
+    }
+  ]
+}

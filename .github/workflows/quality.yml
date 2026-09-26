@@ -107,5 +107,9 @@ jobs:
       - run: node --test scripts/tests/verify-module-2-candidate-inputs.test.mjs
       - run: node scripts/verify-module-2-inputs.mjs --require-approved
       - run: node --test scripts/tests/verify-module-2-inputs.test.mjs
+      - run: node scripts/verify-module-3-candidate-inputs.mjs
+      - run: node --test scripts/tests/verify-module-3-candidate-inputs.test.mjs
+      - run: node scripts/verify-module-3-inputs.mjs --require-approved
+      - run: node --test scripts/tests/verify-module-3-inputs.test.mjs
       - run: node scripts/verify-ci-security.mjs
       - run: node --test scripts/tests/verify-ci-security.test.mjs

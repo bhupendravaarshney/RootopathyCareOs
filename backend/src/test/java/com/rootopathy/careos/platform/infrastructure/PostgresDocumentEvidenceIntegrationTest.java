@@ -108,6 +108,7 @@ class PostgresDocumentEvidenceIntegrationTest {
         registry.add("spring.flyway.placeholders.applicationRole", () -> APP_USER);
         registry.add("spring.data.redis.host", REDIS::getHost);
         registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
+        registry.add("careos.authorization.reference-policy-enabled", () -> true);
     }
 
     @Autowired
@@ -125,8 +126,10 @@ class PostgresDocumentEvidenceIntegrationTest {
                         POSTGRES.getJdbcUrl(), MIGRATOR_USER, MIGRATOR_PASSWORD);
                 var statement = connection.createStatement()) {
             statement.executeUpdate(
-                    "TRUNCATE document_retention_evidence, document_access_grant_evidence, document_promotion_evidence, "
-                            + "document_scan_attestations, document_quarantine_evidence");
+                    "TRUNCATE credential_scan_attempts, credential_legal_holds, credential_documents, "
+                            + "document_retention_evidence, document_access_grant_evidence, "
+                            + "document_promotion_evidence, document_scan_attestations, "
+                            + "document_quarantine_evidence");
             statement.executeUpdate("""
                     INSERT INTO users (id, email, display_name, status)
                     VALUES ('01900000-0000-7000-8000-000000000201',
@@ -150,16 +153,16 @@ class PostgresDocumentEvidenceIntegrationTest {
                     """);
             statement.executeUpdate("""
                     INSERT INTO authorization_permissions
-                        (permission_key, display_name, description, registry_version)
+                        (permission_key, display_name, description, status, registry_version)
                     VALUES ('test.document-evidence', 'Document evidence test',
-                            'Synthetic document evidence permission', 'test-v1')
+                            'Synthetic document evidence permission', 'reference', 'test-v1')
                     ON CONFLICT (permission_key) DO NOTHING
                     """);
             statement.executeUpdate("""
                     INSERT INTO authorization_roles
-                        (role_key, display_name, description, registry_version)
+                        (role_key, display_name, description, status, registry_version)
                     VALUES ('document_test_actor', 'Document test actor',
-                            'Synthetic document evidence role', 'test-v1')
+                            'Synthetic document evidence role', 'reference', 'test-v1')
                     ON CONFLICT (role_key) DO NOTHING
                     """);
             statement.executeUpdate("""
@@ -169,10 +172,11 @@ class PostgresDocumentEvidenceIntegrationTest {
                     """);
             statement.executeUpdate("""
                     INSERT INTO authorization_operations
-                        (operation_key, permission_key, display_name, description, registry_version)
+                        (operation_key, permission_key, display_name, description,
+                         status, registry_version)
                     VALUES ('test.document-evidence', 'test.document-evidence',
                             'Document evidence test operation',
-                            'Synthetic document evidence operation', 'test-v1')
+                            'Synthetic document evidence operation', 'reference', 'test-v1')
                     ON CONFLICT (operation_key) DO NOTHING
                     """);
             statement.executeUpdate("""

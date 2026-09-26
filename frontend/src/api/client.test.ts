@@ -70,6 +70,97 @@ function workforceScreenFixture() {
   };
 }
 
+const schedulingOrganizationId = '55555555-5555-4555-8555-555555555555';
+const schedulingRequestId = '66666666-6666-4666-8666-666666666666';
+const schedulingPatientId = '77777777-7777-4777-8777-777777777777';
+const schedulingAppointmentId = '88888888-8888-4888-8888-888888888888';
+
+function schedulingScreenFixture() {
+  return {
+    actions: [
+      {
+        fields: [],
+        href: null,
+        ifMatchRequired: true,
+        key: 'confirm-appointment',
+        label: 'Confirm appointment',
+        reasonRequired: true,
+        style: 'primary',
+        targetRequired: true,
+      },
+    ],
+    columns: [{ key: 'primary', label: 'Request' }],
+    generatedAt: '2026-09-26T08:00:00Z',
+    metrics: [{ key: 'held', label: 'Held', tone: 'warning', value: 1 }],
+    nextCursor: null,
+    notices: [],
+    organizationId: schedulingOrganizationId,
+    pageSize: 25,
+    purpose: 'Confirm an exact held scheduling request.',
+    rows: [
+      {
+        allowedActionKeys: ['confirm-appointment'],
+        appointmentId: null,
+        etag: `"m4:P4-11:${schedulingRequestId}:3"`,
+        id: schedulingRequestId,
+        patientId: schedulingPatientId,
+        revision: 3,
+        status: 'held',
+        values: { primary: 'Synthetic appointment request' },
+      },
+    ],
+    screenId: 'P4-11',
+    title: 'Confirmation',
+  };
+}
+
+const encounterOrganizationId = '99999999-9999-4999-8999-999999999999';
+const encounterId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const encounterEpisodeId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const encounterPatientId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const encounterAppointmentId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+
+function encounterScreenFixture() {
+  return {
+    actions: [
+      {
+        fields: [],
+        href: null,
+        ifMatchRequired: true,
+        key: 'complete-encounter',
+        label: 'Complete encounter',
+        reasonRequired: true,
+        style: 'primary',
+        targetRequired: true,
+      },
+    ],
+    columns: [{ key: 'primary', label: 'Encounter' }],
+    generatedAt: '2026-09-26T09:00:00Z',
+    metrics: [{ key: 'active', label: 'Active', tone: 'info', value: 1 }],
+    nextCursor: null,
+    notices: [],
+    organizationId: encounterOrganizationId,
+    pageSize: 25,
+    purpose: 'Review exact encounter lifecycle context.',
+    rows: [
+      {
+        allowedActionKeys: ['complete-encounter'],
+        appointmentId: encounterAppointmentId,
+        encounterId,
+        episodeId: encounterEpisodeId,
+        etag: `"m5:P5-03:${encounterId}:8"`,
+        id: encounterId,
+        patientId: encounterPatientId,
+        revision: 8,
+        status: 'in_progress',
+        values: { primary: 'Synthetic encounter' },
+      },
+    ],
+    screenId: 'P5-03',
+    title: 'Patient and appointment context',
+  };
+}
+
 function validCsrfResponse() {
   return jsonResponse({
     headerName: 'X-XSRF-TOKEN',
@@ -87,7 +178,7 @@ describe('CareOsApiClient', () => {
           generatedAt: '2026-09-14T00:00:00Z',
           modules: ['M1'],
           product: 'CareOS',
-          screenCount: 79,
+          screenCount: 122,
         },
         { headers: { ETag: '"summary-v1"' } },
       ),
@@ -1455,6 +1546,143 @@ describe('CareOsApiClient', () => {
       purposeCode: 'workforce_operations',
       reason: 'Review approved workforce transition evidence',
     });
+  });
+
+  it('sends bounded Module 4 context queries and accepts an exactly bound projection', async () => {
+    const fetcher = mockFetch(jsonResponse(schedulingScreenFixture()));
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+
+    const result = await client.getSchedulingScreen(schedulingOrganizationId, 'P4-11', {
+      appointmentId: schedulingAppointmentId,
+      limit: 25,
+      patientId: schedulingPatientId,
+      q: '  physiotherapy  ',
+      requestId: schedulingRequestId,
+      status: 'held',
+    });
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    const [url, init] = fetcher.mock.calls[0]!;
+    expect(url).toBe(
+      `/api/v1/organizations/${schedulingOrganizationId}/scheduling/screens/P4-11` +
+        `?patientId=${schedulingPatientId}&appointmentId=${schedulingAppointmentId}` +
+        `&requestId=${schedulingRequestId}&q=physiotherapy&status=held&limit=25`,
+    );
+    expect(init?.method).toBe('GET');
+    expect(init?.credentials).toBe('include');
+  });
+
+  it('submits a revision and idempotency-bound Module 4 action', async () => {
+    const fetcher = mockFetch(validCsrfResponse(), jsonResponse(schedulingScreenFixture()));
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+    const body = {
+      appointmentId: null,
+      fields: {},
+      patientId: schedulingPatientId,
+      reason: 'Confirmed after reviewing the exact held slot.',
+      requestId: schedulingRequestId,
+      targetId: schedulingRequestId,
+    };
+    const etag = `"m4:P4-11:${schedulingRequestId}:3"`;
+
+    const result = await client.performSchedulingAction(
+      schedulingOrganizationId,
+      'P4-11',
+      'confirm-appointment',
+      body,
+      etag,
+      'm4:confirm:test-request-0001',
+    );
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    const [url, init] = fetcher.mock.calls[1]!;
+    const headers = new Headers(init?.headers);
+    expect(url).toBe(
+      `/api/v1/organizations/${schedulingOrganizationId}/scheduling/screens/P4-11/actions/confirm-appointment`,
+    );
+    expect(init?.method).toBe('POST');
+    expect(headers.get('If-Match')).toBe(etag);
+    expect(headers.get('Idempotency-Key')).toBe('m4:confirm:test-request-0001');
+    expect(headers.get('X-XSRF-TOKEN')).toBe('valid-csrf-token-123456');
+    expect(JSON.parse(String(init?.body))).toEqual(body);
+  });
+
+  it('sends bounded Module 5 context queries and accepts an exactly bound projection', async () => {
+    const fetcher = mockFetch(jsonResponse(encounterScreenFixture()));
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+
+    const result = await client.getEncounterScreen(encounterOrganizationId, 'P5-03', {
+      appointmentId: encounterAppointmentId,
+      encounterId,
+      episodeId: encounterEpisodeId,
+      limit: 25,
+      patientId: encounterPatientId,
+      q: '  follow-up  ',
+      status: 'in_progress',
+    });
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    const [url, init] = fetcher.mock.calls[0]!;
+    expect(url).toBe(
+      `/api/v1/organizations/${encounterOrganizationId}/encounters/screens/P5-03` +
+        `?patientId=${encounterPatientId}&episodeId=${encounterEpisodeId}` +
+        `&encounterId=${encounterId}&appointmentId=${encounterAppointmentId}` +
+        '&q=follow-up&status=in_progress&limit=25',
+    );
+    expect(init?.method).toBe('GET');
+    expect(init?.credentials).toBe('include');
+  });
+
+  it('submits a revision and idempotency-bound Module 5 action', async () => {
+    const fetcher = mockFetch(validCsrfResponse(), jsonResponse(encounterScreenFixture()));
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+    const body = {
+      appointmentId: encounterAppointmentId,
+      encounterId,
+      episodeId: encounterEpisodeId,
+      fields: {},
+      patientId: encounterPatientId,
+      reason: 'Completed after reviewing signed notes and safety tasks.',
+      targetId: encounterId,
+    };
+    const etag = `"m5:P5-03:${encounterId}:8"`;
+
+    const result = await client.performEncounterAction(
+      encounterOrganizationId,
+      'P5-03',
+      'complete-encounter',
+      body,
+      etag,
+      'm5:complete:test-request-0001',
+    );
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    const [url, init] = fetcher.mock.calls[1]!;
+    const headers = new Headers(init?.headers);
+    expect(url).toBe(
+      `/api/v1/organizations/${encounterOrganizationId}/encounters/screens/P5-03/actions/complete-encounter`,
+    );
+    expect(init?.method).toBe('POST');
+    expect(headers.get('If-Match')).toBe(etag);
+    expect(headers.get('Idempotency-Key')).toBe('m5:complete:test-request-0001');
+    expect(headers.get('X-XSRF-TOKEN')).toBe('valid-csrf-token-123456');
+    expect(JSON.parse(String(init?.body))).toEqual(body);
   });
 
   it('turns undocumented success payloads into safe contract failures', async () => {

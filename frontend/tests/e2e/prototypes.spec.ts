@@ -532,9 +532,94 @@ function workforceScreen(screenId: string) {
   };
 }
 
+function schedulingScreen(screenId: string) {
+  const rowId = `99999999-9999-4999-8999-${screenId.slice(3).padStart(12, '0')}`;
+  return {
+    actions: [
+      {
+        fields: [],
+        href: '#/P4-15',
+        ifMatchRequired: false,
+        key: 'open-timeline',
+        label: 'Open appointment timeline',
+        reasonRequired: false,
+        style: 'link',
+        targetRequired: false,
+      },
+    ],
+    columns: [{ key: 'primary', label: 'Record' }],
+    generatedAt: '2026-09-26T08:00:00Z',
+    metrics: [{ key: 'authorized', label: 'Authorized records', value: 1, tone: 'info' }],
+    nextCursor: null,
+    notices: [],
+    organizationId: organization.id,
+    pageSize: 25,
+    purpose: 'Render the current minimum-necessary scheduling projection.',
+    rows: [
+      {
+        allowedActionKeys: [],
+        appointmentId: null,
+        etag: `"m4:${screenId}:${rowId}:1"`,
+        id: rowId,
+        patientId: '44444444-4444-4444-8444-444444444444',
+        revision: 1,
+        status: 'active',
+        values: { primary: `Server projection ${screenId}` },
+      },
+    ],
+    screenId,
+    title: screenId === 'P4-01' ? 'Scheduling dashboard' : `Server-governed ${screenId}`,
+  };
+}
+
+function encounterScreen(screenId: string) {
+  const rowId = `eeeeeeee-eeee-4eee-8eee-${screenId.slice(3).padStart(12, '0')}`;
+  const encounterId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  return {
+    actions: [
+      {
+        fields: [],
+        href: '#/P5-12',
+        ifMatchRequired: false,
+        key: 'open-history',
+        label: 'Open encounter history',
+        reasonRequired: false,
+        style: 'link',
+        targetRequired: false,
+      },
+    ],
+    columns: [{ key: 'primary', label: 'Record' }],
+    generatedAt: '2026-09-26T09:00:00Z',
+    metrics: [{ key: 'authorized', label: 'Authorized records', value: 1, tone: 'info' }],
+    nextCursor: null,
+    notices: [],
+    organizationId: organization.id,
+    pageSize: 25,
+    purpose: 'Render the current minimum-necessary encounter projection.',
+    rows: [
+      {
+        allowedActionKeys: [],
+        appointmentId: null,
+        encounterId,
+        episodeId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        etag: `"m5:${screenId}:${rowId}:1"`,
+        id: rowId,
+        patientId: '44444444-4444-4444-8444-444444444444',
+        revision: 1,
+        status: 'in_progress',
+        values: { primary: `Server projection ${screenId}` },
+      },
+    ],
+    screenId,
+    title: screenId === 'P5-01' ? 'Encounter dashboard' : `Server-governed ${screenId}`,
+  };
+}
+
 const routeGroups = [
   { count: 23, module: 'M1', start: 5 },
   { count: 29, module: 'M2', start: 1 },
+  { count: 15, module: 'P4', start: 1 },
+  { count: 12, module: 'P5', start: 1 },
   { count: 27, module: 'COS', start: 1 },
 ];
 const routeSweepTimeout = 120_000;
@@ -641,6 +726,14 @@ async function mockAuthenticatedSession(page: Page) {
     const screenId = new URL(route.request().url()).pathname.split('/').at(-1) ?? '';
     return jsonResponse(route, workforceScreen(screenId));
   });
+  await page.route(`**/api/v1/organizations/${organization.id}/scheduling/screens/*`, (route) => {
+    const screenId = new URL(route.request().url()).pathname.split('/').at(-1) ?? '';
+    return jsonResponse(route, schedulingScreen(screenId));
+  });
+  await page.route(`**/api/v1/organizations/${organization.id}/encounters/screens/*`, (route) => {
+    const screenId = new URL(route.request().url()).pathname.split('/').at(-1) ?? '';
+    return jsonResponse(route, encounterScreen(screenId));
+  });
 }
 
 async function expectNoSeriousViolations(page: Page, label: string) {
@@ -700,11 +793,195 @@ for (const { module, count, start } of routeGroups) {
         await expect(page.getByText(`Server projection ${id}`, { exact: true })).toBeVisible();
         await expect(page.getByText('Server governed', { exact: true })).toBeVisible();
       }
+      if (module === 'P4') {
+        await expect(page.getByText(`Server projection ${id}`, { exact: true })).toBeVisible();
+        await expect(page.getByText('Server governed', { exact: true })).toBeVisible();
+      }
+      if (module === 'P5') {
+        await expect(page.getByText(`Server projection ${id}`, { exact: true })).toBeVisible();
+        await expect(page.getByText('Server governed', { exact: true })).toBeVisible();
+      }
       await expectNoDocumentHorizontalOverflow(page, id);
       await expectNoSeriousViolations(page, id);
     }
   });
 }
+
+test('P4-11 preserves workflow context and submits a governed confirmation', async ({ page }) => {
+  await mockAuthenticatedSession(page);
+  await page.unroute(`**/api/v1/organizations/${organization.id}/scheduling/screens/*`);
+  const base = schedulingScreen('P4-11');
+  const row = {
+    ...base.rows[0]!,
+    allowedActionKeys: ['confirm-appointment'],
+    status: 'held',
+  };
+  const projection = {
+    ...base,
+    actions: [
+      {
+        fields: [],
+        href: null,
+        ifMatchRequired: true,
+        key: 'confirm-appointment',
+        label: 'Confirm appointment',
+        reasonRequired: true,
+        style: 'primary',
+        targetRequired: true,
+      },
+    ],
+    rows: [row],
+    title: 'Confirmation',
+  };
+  let actionRequests = 0;
+
+  await page.route('**/api/v1/auth/csrf', (route) =>
+    jsonResponse(route, {
+      headerName: 'X-XSRF-TOKEN',
+      parameterName: '_csrf',
+      token: 'scheduling-csrf-token-1234567890',
+    }),
+  );
+  await page.route(
+    `**/api/v1/organizations/${organization.id}/scheduling/screens/P4-11**`,
+    async (route) => {
+      const request = route.request();
+      if (request.method() === 'GET') {
+        expect(new URL(request.url()).searchParams.get('requestId')).toBe(row.id);
+        await jsonResponse(route, projection);
+        return;
+      }
+      actionRequests += 1;
+      expect(request.headers()['x-xsrf-token']).toBe('scheduling-csrf-token-1234567890');
+      expect(request.headers()['if-match']).toBe(row.etag);
+      expect(request.headers()['idempotency-key']).toMatch(
+        /^m4:confirm-appointment:[0-9a-f-]{36}$/,
+      );
+      expect(request.postDataJSON()).toEqual({
+        appointmentId: null,
+        fields: {},
+        patientId: row.patientId,
+        reason: 'Confirmed after exact patient, clinician, and slot review.',
+        requestId: row.id,
+        targetId: row.id,
+      });
+      await jsonResponse(route, projection);
+    },
+  );
+
+  await page.goto(`/#/P4-11?requestId=${row.id}`);
+  await expect(page.getByRole('heading', { name: 'Confirmation' })).toBeVisible();
+  await page.getByLabel('Select Server projection P4-11').check();
+  await page.getByRole('button', { name: 'Confirm appointment' }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('textbox', { name: /^Reason/ })
+    .fill('Confirmed after exact patient, clinician, and slot review.');
+  await page.getByRole('dialog').getByRole('button', { name: 'Confirm appointment' }).click();
+
+  await expect.poll(() => actionRequests).toBe(1);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expectNoDocumentHorizontalOverflow(page, 'P4-11 governed confirmation');
+  await expectNoSeriousViolations(page, 'P4-11 governed confirmation');
+});
+
+test('P5-09 preserves encounter context and submits append-only clinical note input', async ({
+  page,
+}) => {
+  await mockAuthenticatedSession(page);
+  await page.unroute(`**/api/v1/organizations/${organization.id}/encounters/screens/*`);
+  const base = encounterScreen('P5-09');
+  const row = {
+    ...base.rows[0]!,
+    allowedActionKeys: ['save-note-version'],
+    status: 'draft',
+  };
+  const projection = {
+    ...base,
+    actions: [
+      {
+        fields: [
+          {
+            inputType: 'textarea',
+            key: 'content',
+            label: 'Clinical note',
+            options: [],
+            required: true,
+          },
+          {
+            inputType: 'checkbox',
+            key: 'lateEntry',
+            label: 'Late entry',
+            options: [],
+            required: false,
+          },
+        ],
+        href: null,
+        ifMatchRequired: true,
+        key: 'save-note-version',
+        label: 'Save note version',
+        reasonRequired: false,
+        style: 'primary',
+        targetRequired: true,
+      },
+    ],
+    rows: [row],
+    title: 'Encounter notes',
+  };
+  let actionRequests = 0;
+
+  await page.route('**/api/v1/auth/csrf', (route) =>
+    jsonResponse(route, {
+      headerName: 'X-XSRF-TOKEN',
+      parameterName: '_csrf',
+      token: 'encounter-csrf-token-1234567890',
+    }),
+  );
+  await page.route(
+    `**/api/v1/organizations/${organization.id}/encounters/screens/P5-09**`,
+    async (route) => {
+      const request = route.request();
+      if (request.method() === 'GET') {
+        expect(new URL(request.url()).searchParams.get('encounterId')).toBe(row.encounterId);
+        await jsonResponse(route, projection);
+        return;
+      }
+      actionRequests += 1;
+      expect(request.headers()['x-xsrf-token']).toBe('encounter-csrf-token-1234567890');
+      expect(request.headers()['if-match']).toBe(row.etag);
+      expect(request.headers()['idempotency-key']).toMatch(/^m5:save-note-version:[0-9a-f-]{36}$/);
+      expect(request.postDataJSON()).toEqual({
+        appointmentId: null,
+        encounterId: row.encounterId,
+        episodeId: row.episodeId,
+        fields: {
+          content: 'Patient reports improved mobility with no new red flags.',
+          lateEntry: 'true',
+        },
+        patientId: row.patientId,
+        reason: null,
+        targetId: row.id,
+      });
+      await jsonResponse(route, projection);
+    },
+  );
+
+  await page.goto(`/#/P5-09?encounterId=${row.encounterId}`);
+  await expect(page.getByRole('heading', { name: 'Encounter notes' })).toBeVisible();
+  await page.getByLabel('Select Server projection P5-09').check();
+  await page.getByRole('button', { name: 'Save note version' }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('textbox', { name: 'Clinical note' })
+    .fill('Patient reports improved mobility with no new red flags.');
+  await page.getByRole('dialog').getByRole('checkbox', { name: 'Late entry' }).check();
+  await page.getByRole('dialog').getByRole('button', { name: 'Save note version' }).click();
+
+  await expect.poll(() => actionRequests).toBe(1);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expectNoDocumentHorizontalOverflow(page, 'P5-09 governed note version');
+  await expectNoSeriousViolations(page, 'P5-09 governed note version');
+});
 
 test('M2-24 requires fresh server impact before submitting governed offboarding', async ({
   page,

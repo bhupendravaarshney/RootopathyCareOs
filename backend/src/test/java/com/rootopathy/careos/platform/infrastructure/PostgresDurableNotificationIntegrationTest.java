@@ -94,6 +94,7 @@ class PostgresDurableNotificationIntegrationTest {
         registry.add("spring.flyway.placeholders.applicationRole", () -> APP_USER);
         registry.add("spring.data.redis.host", REDIS::getHost);
         registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
+        registry.add("careos.authorization.reference-policy-enabled", () -> true);
         registry.add("careos.notifications.postgres.enabled", () -> "true");
         registry.add(
                 "careos.notifications.postgres.active-encryption-key-id", () -> "test-v1");
@@ -163,16 +164,17 @@ class PostgresDurableNotificationIntegrationTest {
                     """);
             statement.executeUpdate("""
                     INSERT INTO authorization_permissions
-                        (permission_key, display_name, description, registry_version)
+                        (permission_key, display_name, description, status, registry_version)
                     VALUES ('test.notification-store', 'Notification store test',
-                            'Synthetic notification mechanics permission', 'test-v1')
+                            'Synthetic notification mechanics permission',
+                            'reference', 'test-v1')
                     ON CONFLICT (permission_key) DO NOTHING
                     """);
             statement.executeUpdate("""
                     INSERT INTO authorization_roles
-                        (role_key, display_name, description, registry_version)
+                        (role_key, display_name, description, status, registry_version)
                     VALUES ('notification_test_actor', 'Notification test actor',
-                            'Synthetic notification mechanics role', 'test-v1')
+                            'Synthetic notification mechanics role', 'reference', 'test-v1')
                     ON CONFLICT (role_key) DO NOTHING
                     """);
             statement.executeUpdate("""
@@ -182,10 +184,12 @@ class PostgresDurableNotificationIntegrationTest {
                     """);
             statement.executeUpdate("""
                     INSERT INTO authorization_operations
-                        (operation_key, permission_key, display_name, description, registry_version)
+                        (operation_key, permission_key, display_name, description,
+                         status, registry_version)
                     VALUES ('test.notification-store', 'test.notification-store',
                             'Notification store test operation',
-                            'Synthetic notification mechanics operation', 'test-v1')
+                            'Synthetic notification mechanics operation',
+                            'reference', 'test-v1')
                     ON CONFLICT (operation_key) DO NOTHING
                     """);
             statement.executeUpdate("""

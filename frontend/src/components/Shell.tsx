@@ -18,8 +18,20 @@ type ShellProps = ShellSessionProps & { currentId?: string; children: ReactNode 
 const workspaceLabels: Record<ModuleKey, string> = {
   M1: 'Administration',
   M2: 'Workforce',
+  M3: 'Patients',
+  M4: 'Appointments',
+  M5: 'Encounters',
   COS: 'Clinician workspace',
 };
+
+const workspaces: Array<{ key: ModuleKey; href: string }> = [
+  { key: 'M1', href: '#/M1-01' },
+  { key: 'M2', href: '#/M2-01' },
+  { key: 'M3', href: '#/P3-01' },
+  { key: 'M4', href: '#/P4-01' },
+  { key: 'M5', href: '#/P5-01' },
+  { key: 'COS', href: '#/COS-01' },
+];
 
 export function Shell({
   actorDisplayName,
@@ -139,13 +151,13 @@ export function Shell({
           />
         </label>
         <div className="module-tabs" role="navigation" aria-label="Workspace selector">
-          {(['M1', 'M2', 'COS'] as const).map((module) => (
+          {workspaces.map((workspace) => (
             <a
-              key={module}
-              className={currentModule === module ? 'active' : ''}
-              href={`#/${module}-01`}
+              key={workspace.key}
+              className={currentModule === workspace.key ? 'active' : ''}
+              href={workspace.href}
             >
-              {module}
+              {workspace.key}
             </a>
           ))}
         </div>

@@ -21,6 +21,32 @@ test("accepts the checked foundation contract", () => {
   assert.equal(verifyApiContract(source).status, "PASS");
 });
 
+test("rejects a missing Module 2 workforce operation", () => {
+  const contract = changed((candidate) => {
+    delete candidate.paths[
+      "/api/v1/organizations/{organizationId}/workforce/screens/{screenId}"
+    ].get;
+  });
+
+  assert.throws(
+    () => verifyApiContract(contract),
+    /Missing GET .*workforce\/screens\/\{screenId\}/,
+  );
+});
+
+test("rejects an operation outside the checked registry", () => {
+  const contract = changed((candidate) => {
+    candidate.paths["/api/public/unregistered"] = {
+      get: structuredClone(candidate.paths["/api/public/system-summary"].get),
+    };
+  });
+
+  assert.throws(
+    () => verifyApiContract(contract),
+    /operations must exactly match the checked registry.*unregistered/,
+  );
+});
+
 test("rejects an ambiguous protected tenant path", () => {
   const contract = changed((candidate) => {
     candidate["x-careos-conventions"].tenantPathPrefix = "/api/v1";
@@ -150,6 +176,54 @@ test("rejects a raw confidential contact value in the response projection", () =
   assert.throws(
     () => verifyApiContract(contract),
     /exact approved masked effective projection/,
+  );
+});
+
+test("rejects Module 4 screen-range drift", () => {
+  const contract = changed((candidate) => {
+    candidate.components.schemas.SchedulingScreen.properties.screenId.pattern =
+      "^P4-[0-9]{2}$";
+  });
+
+  assert.throws(
+    () => verifyApiContract(contract),
+    /exact bounded P4 projection/,
+  );
+});
+
+test("rejects unbounded Module 4 action fields", () => {
+  const contract = changed((candidate) => {
+    delete candidate.components.schemas.SchedulingActionRequest.properties
+      .fields.maxProperties;
+  });
+
+  assert.throws(
+    () => verifyApiContract(contract),
+    /identifiers, reasons, and dynamic fields bounded/,
+  );
+});
+
+test("rejects Module 5 screen-range drift", () => {
+  const contract = changed((candidate) => {
+    candidate.components.schemas.EncounterScreen.properties.screenId.pattern =
+      "^P5-[0-9]{2}$";
+  });
+
+  assert.throws(
+    () => verifyApiContract(contract),
+    /exact bounded P5 projection/,
+  );
+});
+
+test("rejects unbounded Module 5 clinical fields", () => {
+  const contract = changed((candidate) => {
+    delete candidate.components.schemas.EncounterActionRequest.properties
+      .fields.additionalProperties.maxLength;
+  });
+
+  assert.throws(
+    () => verifyApiContract(contract),
+    /clinical fields bounded/,
   );
 });
 

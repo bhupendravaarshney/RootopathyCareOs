@@ -123,6 +123,7 @@ class TenantRlsIntegrationTest {
         registry.add("spring.flyway.placeholders.applicationRole", () -> APP_USER);
         registry.add("spring.data.redis.host", REDIS::getHost);
         registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
+        registry.add("careos.authorization.reference-policy-enabled", () -> true);
     }
 
     @Autowired
@@ -184,18 +185,19 @@ class TenantRlsIntegrationTest {
                     """);
             statement.executeUpdate("""
                     INSERT INTO authorization_permissions
-                        (permission_key, display_name, description, registry_version)
+                        (permission_key, display_name, description, status, registry_version)
                     VALUES
                         ('test.rls-access', 'RLS test access',
-                         'Synthetic test-only permission', 'test-v1'),
+                         'Synthetic test-only permission', 'reference', 'test-v1'),
                         ('test.ungranted', 'Ungranted test access',
-                         'Synthetic ungranted permission', 'test-v1')
+                         'Synthetic ungranted permission', 'reference', 'test-v1')
                     ON CONFLICT (permission_key) DO NOTHING
                     """);
             statement.executeUpdate("""
                     INSERT INTO authorization_roles
-                        (role_key, display_name, description, registry_version)
-                    VALUES ('test_actor', 'RLS test actor', 'Synthetic test-only role', 'test-v1')
+                        (role_key, display_name, description, status, registry_version)
+                    VALUES ('test_actor', 'RLS test actor', 'Synthetic test-only role',
+                            'reference', 'test-v1')
                     ON CONFLICT (role_key) DO NOTHING
                     """);
             statement.executeUpdate("""
@@ -205,12 +207,13 @@ class TenantRlsIntegrationTest {
                     """);
             statement.executeUpdate("""
                     INSERT INTO authorization_operations
-                        (operation_key, permission_key, display_name, description, registry_version)
+                        (operation_key, permission_key, display_name, description,
+                         status, registry_version)
                     VALUES
                         ('test.rls-access', 'test.rls-access', 'RLS test access',
-                         'Synthetic test-only read operation', 'test-v1'),
+                         'Synthetic test-only read operation', 'reference', 'test-v1'),
                         ('test.entity.change', 'test.rls-access', 'Entity test change',
-                         'Synthetic test-only governed mutation', 'test-v1')
+                         'Synthetic test-only governed mutation', 'reference', 'test-v1')
                     ON CONFLICT (operation_key) DO NOTHING
                     """);
             statement.executeUpdate("""
@@ -219,23 +222,23 @@ class TenantRlsIntegrationTest {
                          mutation, denial_mode, reason_required,
                          recent_authentication_required,
                          recent_authentication_max_age_seconds, maximum_future_skew_seconds,
-                         maker_checker_required, registry_version)
+                         maker_checker_required, status, registry_version)
                     VALUES
                         ('test.reason-required', 'test.rls-access', 'Reason test',
                          'Synthetic reason requirement', true, 'explicit', true,
-                         false, NULL, NULL, false, 'test-v1'),
+                         false, NULL, NULL, false, 'reference', 'test-v1'),
                         ('test.recent-required', 'test.rls-access', 'Recent authentication test',
                          'Synthetic recent authentication requirement', true, 'explicit', false,
-                         true, 300, 5, false, 'test-v1'),
+                         true, 300, 5, false, 'reference', 'test-v1'),
                         ('test.approval-required', 'test.rls-access', 'Approval test',
                          'Synthetic independent approval requirement', true, 'explicit', true,
-                         true, 300, 5, true, 'test-v1'),
+                         true, 300, 5, true, 'reference', 'test-v1'),
                         ('test.hidden-denial', 'test.ungranted', 'Hidden denial test',
                          'Synthetic hidden denial behavior', false, 'hidden', false,
-                         false, NULL, NULL, false, 'test-v1'),
+                         false, NULL, NULL, false, 'reference', 'test-v1'),
                         ('test.explicit-denial', 'test.ungranted', 'Explicit denial test',
                          'Synthetic explicit denial behavior', false, 'explicit', false,
-                         false, NULL, NULL, false, 'test-v1')
+                         false, NULL, NULL, false, 'reference', 'test-v1')
                     ON CONFLICT (operation_key) DO NOTHING
                     """);
             statement.executeUpdate("""
@@ -408,62 +411,27 @@ class TenantRlsIntegrationTest {
                 """
                 SELECT relations.relname,
                        pg_get_expr(defaults.adbin, defaults.adrelid) AS default_expression
-                FROM pg_attrdef defaults
-                JOIN pg_attribute columns
-                  ON columns.attrelid = defaults.adrelid
-                 AND columns.attnum = defaults.adnum
-                JOIN pg_class relations ON relations.oid = defaults.adrelid
+                FROM pg_attribute columns
+                JOIN pg_class relations ON relations.oid = columns.attrelid
                 JOIN pg_namespace schemas ON schemas.oid = relations.relnamespace
+                LEFT JOIN pg_attrdef defaults
+                  ON defaults.adrelid = columns.attrelid
+                 AND defaults.adnum = columns.attnum
                 WHERE schemas.nspname = 'public'
                   AND columns.attname = 'id'
+                  AND columns.atttypid = 'uuid'::regtype
+                  AND relations.relkind IN ('r', 'p')
+                  AND NOT columns.attisdropped
                 ORDER BY relations.relname
                 """,
-                (result, rowNumber) -> Map.entry(
+                (result, rowNumber) -> new java.util.AbstractMap.SimpleImmutableEntry<>(
                         result.getString("relname"), result.getString("default_expression")));
         assertThat(identifierDefaults)
-                .containsExactly(
-                        Map.entry("audit_events", "uuidv7()"),
-                        Map.entry("authentication_events", "uuidv7()"),
-                        Map.entry("authorization_approval_requests", "uuidv7()"),
-                        Map.entry("configuration_activation_runs", "uuidv7()"),
-                        Map.entry("configuration_approvals", "uuidv7()"),
-                        Map.entry("configuration_change_items", "uuidv7()"),
-                        Map.entry("configuration_validation_results", "uuidv7()"),
-                        Map.entry("configuration_versions", "uuidv7()"),
-                        Map.entry("evidence_export_accesses", "uuidv7()"),
-                        Map.entry("evidence_export_jobs", "uuidv7()"),
-                        Map.entry("facilities", "uuidv7()"),
-                        Map.entry("idempotency_records", "uuidv7()"),
-                        Map.entry("identifier_scheme_versions", "uuidv7()"),
-                        Map.entry("identifier_schemes", "uuidv7()"),
-                        Map.entry("invitations", "uuidv7()"),
-                        Map.entry("issued_identifiers", "uuidv7()"),
-                        Map.entry("membership_change_requests", "uuidv7()"),
-                        Map.entry("mfa_methods", "uuidv7()"),
-                        Map.entry("operating_hours_batches", "uuidv7()"),
-                        Map.entry("operating_hours_exception_intervals", "uuidv7()"),
-                        Map.entry("operating_hours_exceptions", "uuidv7()"),
-                        Map.entry("operating_hours_intervals", "uuidv7()"),
-                        Map.entry("organization_addresses", "uuidv7()"),
-                        Map.entry("organization_contacts", "uuidv7()"),
-                        Map.entry("organization_governance_responsibilities", "uuidv7()"),
-                        Map.entry("organization_identifiers", "uuidv7()"),
-                        Map.entry("organization_international_settings", "uuidv7()"),
-                        Map.entry("organization_memberships", "uuidv7()"),
-                        Map.entry("organization_unit_parent_history", "uuidv7()"),
-                        Map.entry("organization_units", "uuidv7()"),
-                        Map.entry("organizations", "uuidv7()"),
-                        Map.entry("outbox_events", "uuidv7()"),
-                        Map.entry("owner_transfer_requests", "uuidv7()"),
-                        Map.entry("password_reset_tokens", "uuidv7()"),
-                        Map.entry("recovery_codes", "uuidv7()"),
-                        Map.entry("service_assignments", "uuidv7()"),
-                        Map.entry("service_definitions", "uuidv7()"),
-                        Map.entry("service_identities", "uuidv7()"),
-                        Map.entry("service_identity_credentials", "uuidv7()"),
-                        Map.entry("service_location_parent_history", "uuidv7()"),
-                        Map.entry("service_locations", "uuidv7()"),
-                        Map.entry("users", "uuidv7()"));
+                .isNotEmpty()
+                .allSatisfy(identifierDefault ->
+                        assertThat(identifierDefault.getValue())
+                                .as("UUID default for %s", identifierDefault.getKey())
+                                .isEqualTo("uuidv7()"));
 
         try (var connection = DriverManager.getConnection(
                         POSTGRES.getJdbcUrl(), MIGRATOR_USER, MIGRATOR_PASSWORD);
@@ -726,6 +694,10 @@ class TenantRlsIntegrationTest {
                         SELECT role_key
                         FROM authorization_roles
                         WHERE status = 'reference'
+                          AND registry_version IN (
+                              'careos-phase0-reference-v1',
+                              'm1-candidate-1',
+                              'm2-candidate-1')
                         ORDER BY role_key
                         """,
                         String.class))
@@ -763,19 +735,29 @@ class TenantRlsIntegrationTest {
                         String.class))
                 .containsExactly("evidence.export.access", "evidence.export.request");
         assertThat(jdbcTemplate.queryForObject(
-                        "SELECT count(*) FROM authorization_operations WHERE status = 'reference'",
+                        "SELECT count(*) FROM authorization_operations "
+                                + "WHERE status = 'reference' "
+                                + "AND registry_version IN ("
+                                + "'careos-phase0-reference-v1',"
+                                + "'m1-candidate-1',"
+                                + "'m2-candidate-1')",
                         Integer.class))
                 .isEqualTo(13);
         assertThat(jdbcTemplate.queryForObject(
                         "SELECT count(*) FROM authorization_role_delegations", Integer.class))
-                .isEqualTo(17);
+                .isEqualTo(29);
         executeAsMigrator("""
                 UPDATE organization_memberships
                 SET role_key = 'local_bootstrap'
                 WHERE organization_id = '01900000-0000-7000-8000-000000000003'
                   AND user_id = '01900000-0000-7000-8000-000000000203'
                 """);
-        assertAuthorizationReason(request, TenantAuthorizationException.Reason.MEMBERSHIP_NOT_FOUND);
+        var approvedOnlyAuthorization = new PostgresTenantAuthorizationOperations(
+                jdbcTemplate, transactionManager, clock, false);
+        assertThatThrownBy(() -> approvedOnlyAuthorization.execute(request, () -> true))
+                .isInstanceOf(TenantAuthorizationException.class)
+                .extracting(exception -> ((TenantAuthorizationException) exception).reason())
+                .isEqualTo(TenantAuthorizationException.Reason.MEMBERSHIP_NOT_FOUND);
         var referenceAuthorization = new PostgresTenantAuthorizationOperations(
                 jdbcTemplate, transactionManager, clock, true);
         assertThat(referenceAuthorization.execute(request, () -> true)).isTrue();

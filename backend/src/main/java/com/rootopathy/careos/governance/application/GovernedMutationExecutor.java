@@ -43,6 +43,8 @@ public final class GovernedMutationExecutor {
                     var mutation = Objects.requireNonNull(
                             firstExecution.apply(context), "firstExecution result");
                     evidence.record(context, mutation.evidence());
+                    mutation.additionalEvidence()
+                            .forEach(additional -> evidence.record(context, additional));
                     return mutation.response();
                 }));
     }

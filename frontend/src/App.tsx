@@ -23,6 +23,12 @@ import {
   SessionLoadingScreen,
 } from './features/session/SessionScreens';
 import { SessionIssueAlert } from './features/session/SessionIssueAlert';
+import { PatientRegistryScreenPage } from './features/patient/PatientRegistryScreens';
+import type { PatientRegistryClient } from './features/patient/patient-types';
+import { SchedulingScreenPage } from './features/scheduling/SchedulingScreens';
+import type { SchedulingClient } from './features/scheduling/scheduling-types';
+import { EncounterScreenPage } from './features/encounter/EncounterScreens';
+import type { EncounterClient } from './features/encounter/encounter-types';
 import { WorkforceScreenPage } from './features/workforce/WorkforceScreens';
 import type { WorkforceClient } from './features/workforce/workforce-types';
 import { PrototypeScreenPage } from './pages/PrototypeScreenPage';
@@ -47,13 +53,24 @@ function readHashRoute(hash = window.location.hash): HashRoute {
 
 const identityRoutes = new Set(['M1-01', 'M1-02', 'M1-03', 'M1-04']);
 const registeredScreenIds = new Set(screens.map((screen) => screen.id));
-type ApplicationClient = SessionClient & AdministrationClient & WorkforceClient;
+type ApplicationClient = SessionClient &
+  AdministrationClient &
+  WorkforceClient &
+  PatientRegistryClient &
+  SchedulingClient &
+  EncounterClient;
 
 function RoutedApp({
   administrationClient,
+  encounterClient,
+  patientClient,
+  schedulingClient,
   workforceClient,
 }: {
   administrationClient: AdministrationClient;
+  encounterClient: EncounterClient;
+  patientClient: PatientRegistryClient;
+  schedulingClient: SchedulingClient;
   workforceClient: WorkforceClient;
 }) {
   const [route, setRoute] = useState<HashRoute>(readHashRoute);
@@ -296,6 +313,39 @@ function RoutedApp({
       />
     );
   }
+  if (screenId.startsWith('P3-')) {
+    return (
+      <PatientRegistryScreenPage
+        key={`${machine.selectedOrganization.id}:${screenId}`}
+        client={patientClient}
+        id={screenId}
+        organizationId={machine.selectedOrganization.id}
+        shell={shell}
+      />
+    );
+  }
+  if (screenId.startsWith('P4-')) {
+    return (
+      <SchedulingScreenPage
+        key={`${machine.selectedOrganization.id}:${screenId}`}
+        client={schedulingClient}
+        id={screenId}
+        organizationId={machine.selectedOrganization.id}
+        shell={shell}
+      />
+    );
+  }
+  if (screenId.startsWith('P5-')) {
+    return (
+      <EncounterScreenPage
+        key={`${machine.selectedOrganization.id}:${screenId}`}
+        client={encounterClient}
+        id={screenId}
+        organizationId={machine.selectedOrganization.id}
+        shell={shell}
+      />
+    );
+  }
   if (
     screenId === 'M1-05' ||
     screenId === 'M1-06' ||
@@ -334,7 +384,13 @@ export default function App({ client }: { client?: ApplicationClient }) {
   const resolvedClient = client ?? careOsApi;
   return (
     <SessionProvider client={resolvedClient}>
-      <RoutedApp administrationClient={resolvedClient} workforceClient={resolvedClient} />
+      <RoutedApp
+        administrationClient={resolvedClient}
+        encounterClient={resolvedClient}
+        patientClient={resolvedClient}
+        schedulingClient={resolvedClient}
+        workforceClient={resolvedClient}
+      />
     </SessionProvider>
   );
 }

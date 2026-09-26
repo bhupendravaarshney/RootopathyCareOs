@@ -61,6 +61,9 @@ public final class HmacOrganizationMembershipCursorCodec
     public CursorPosition decode(String cursor, CursorBinding binding) {
         try {
             var combined = DECODER.decode(cursor);
+            if (!ENCODER.encodeToString(combined).equals(cursor)) {
+                throw invalid();
+            }
             if (combined.length <= SIGNATURE_BYTES) {
                 throw invalid();
             }

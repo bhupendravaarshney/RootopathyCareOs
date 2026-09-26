@@ -10,7 +10,7 @@
 - Vitest API-client/component/registry tests
 - Vite production build
 - npm dependency audit
-- Static 79-screen register contract: M1 23, M2 29 and COS 27
+- Static 122-screen register contract: M1 23, M2 29, M3 16, M4 15, M5 12 and COS 27
 - Git secret/path checks
 
 ## Verified during Phase 0 start (13 September 2026)
@@ -903,3 +903,125 @@ This section supersedes the Phase 2A candidate status above for the current work
 - The OpenAPI source currently contains 109 operations and the browser uses runtime-checked M2 projections/actions. Generated-client drift and all backend/frontend/migration/security/worker/accessibility/regression behavior must still be verified after the implementation freeze.
 
 No current Module 2 PASS is claimed. The next recorded status must either document completed M2H evidence or identify concrete failures found by that end-of-module run. Module 3 remains out of scope.
+
+## Verified during Phase 2C Module 2 M2H closeout (26 September 2026)
+
+This section supersedes the Phase 2B verification-pending status for the current working tree. The approved M2B-M2G source boundary is frozen for this handoff and its local M2H repository gates pass; accountable owner review and target-environment acceptance remain open.
+
+- V66 binds canonical M1 membership, account-security-version, Redis session revocation, workforce scope/access, lifecycle, audit, and outbox effects to the active offboarding request. V67 forward-repairs nullable operation guards and readiness triggers without changing the already-applied V59/V66 migrations.
+- The expanded clean-schema audit found that the restricted pre-authentication `invitation_token_index` was the only public relation carrying `organization_id` without enabled/forced RLS and a policy. V68 adds tenant isolation plus one HMAC-token-bound lookup path while retaining revoked direct table access. The final audit proves all 44 approved M2 tables exist and every tenant-owned public relation has enabled/forced RLS and at least one policy.
+- All HMAC-backed organization, evidence, workforce-screen, and offboarding-impact decoders now require canonical unpadded Base64URL text after decoding, closing equivalent-text tampering accepted by Java's permissive decoder.
+- The API verifier now registers all nine M2 operations, requires the appropriate session/idempotency controls, and rejects both missing M2 routes and any unregistered extra operation. OpenAPI 0.41.0 verifies exactly 109 operations and all 16 API contract tests pass.
+- The current vulnerability database identified fixed HIGH/CRITICAL findings in MinIO 9.0.1's transitive Bouncy Castle 1.84 provider. The backend now resolves explicit `bcprov-jdk18on` 1.86; the repeated Trivy 0.74 filesystem scan reports zero fixed HIGH/CRITICAL Maven/npm findings, zero Dockerfile misconfigurations, and no secret finding.
+
+| M2H gate                         | Result | Local evidence                                                                                                                                                                                                                                                                                                            |
+| -------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Clean backend verification       | PASS   | Maven 3.9.11/Java 25 compiles 377 production and 32 test sources, validates/applies all 68 migrations to disposable PostgreSQL 18, passes all 214 tests with zero failure/error/skip, enforces all 11 architecture rules, and packages the bootable JAR. A separate final V68 migration/identity/tenant run passes 64/64. |
+| Frontend static/unit/build       | PASS   | Node 24.16 satisfies the declared 24.15 floor. Clean `npm ci` installs 287/audits 288 packages with zero vulnerabilities; API drift, formatting, strict typecheck, lint, the 27-source/3-feature/66-import architecture boundary and four negative fixtures, all 81 unit tests, and the Vite production build pass.       |
+| Browser/accessibility/responsive | PASS   | All 120 Playwright cases pass across exact 1440, 1024, 768, 390, and 320 projects, including the 79-route Axe/overflow matrix and governed M2-24 impact-preview confirmation behavior.                                                                                                                                    |
+| Repository contracts             | PASS   | The 79-screen registry reports M1 23/M2 29/COS 27; the exact 109-operation API verifier, both approved package gates, retained draft/candidate gates, and all 85 contract/security tests pass.                                                                                                                            |
+| Compose and supply chain         | PASS   | Default and scanner-overlay Compose configurations resolve. Both final application images build from the checked contexts. Trivy reports zero fixed HIGH/CRITICAL findings in the Debian backend OS/JAR and Alpine frontend image; the source-tree secret scan reports no finding.                                        |
+
+At this Phase 2C checkpoint, hosted workflow/CodeQL execution and result upload, target provider/worker credentials, deployed controls, monitoring/alerting, backup/restore, signed provenance/admission, and explicit Module 2 owner acceptance remained required. It was not production release approval and implied no commit, tag, or Module 3 authorization. Phase 2D below records the later owner decision and the resulting M3 entry authority.
+
+## Accepted during Phase 2D Module 2 repository completion (26 September 2026)
+
+This section supersedes only the Phase 2C owner-acceptance-pending statement. It does not convert repository evidence into target-environment or production deployment approval.
+
+- After the complete M2H result was presented, Bhupendra, acting as developer, explicitly approved Module 2 and directed work to move ahead.
+- `M2-COMPLETION-ACCEPTANCE-20260926-01` records the decision separately from the immutable `M2-APPROVAL-20260921-01` implementation-input approval.
+- The completion record binds the accepted input package, repository evidence baseline `301b91e41546cd8c109a704204d676d8fe4eb5ed`, exact completion-delta manifest digest `8ebace1fdf479bef359fb24cfff7e1274104a811d000a4da0093928605210a58`, all 29 M2 screens, 44 M2 tables, V51-V68, and the passing M2H evidence.
+- Module 2 now satisfies its repository implementation, verification, traceability, and accountable owner-acceptance exit conditions.
+- Target provider/worker credentials, hosted CI/security execution, deployment, monitoring/alerting, backup/restore, provenance/admission, environment security/performance evidence, and production release approval remain separate.
+- The direction to move ahead authorizes Module 3 entry planning. `m3-product-definition-draft-1` and `MODULE_3_IMPLEMENTATION_PLAN.md` now define the non-authorizing Patient Registry review boundary, all 16 screens, 14 core entity families, dependency-ordered slices and fifteen policy-decision families. No high-fidelity M3 mockup or production migration, permission, API, worker, or screen is authorized until the product definition and later exact package receive their required approvals.
+
+No commit or tag was created by this acceptance record.
+
+## Prepared during Phase 3A Module 3 recommended changes (26 September 2026)
+
+This section supersedes the current-review-artifact portion of the Phase 2D entry note; it does not alter Module 2 acceptance.
+
+- The reviewer returned `ACCEPT_WITH_CHANGES` for the first Module 3 product-definition draft and requested recommended changes.
+- `m3-product-definition-draft-2` proposes conservative resolutions for all fifteen decision families, including organization-only patient identity, structured unknown/partial demographics, separate portal proofing, governed identifiers, explainable manual duplicate handling, maker-checker merge, explicit proxy authority, purpose-bound consent/privacy, clinically governed flags, proofed portal linkage, separated communication authority, policy-gated retention/export and profile-first FHIR adapters.
+- Jurisdiction-, clinical-, privacy-, security- and partner-specific catalogues remain explicit fail-closed activation gates. The proposal does not guess local law or activate a missing capability.
+- The exact recommended changes await accountable acceptance. No high-fidelity mockup, candidate-input approval, production migration, permission, API, worker, generated client or live P3 behavior is authorized by this proposal.
+
+## Prepared during Phase 3A Module 3 mockup candidate (26 September 2026)
+
+This section supersedes the acceptance-pending and mockup-not-created statements immediately above. It does not authorize Module 3 runtime implementation.
+
+- Bhupendra accepted the exact 60,105-byte `m3-product-definition-draft-2` artifact for mockup preparation under `M3-PRODUCT-ACCEPTANCE-20260926-01`; its SHA-256 remains `c1eef920751af4547fa6b8c260b773edbfa266cfa84ac6a01302a44faa765bb5`.
+- `candidate-inputs/module-3/` now contains eight internally consistent `m3-candidate-1` artifacts: a self-contained 16-screen interactive review prototype plus design-system, data/validation, lifecycle, authorization, audit/event, readiness/activation, and history/export/FHIR policy contracts.
+- The package binds the accepted M2 completion record, accepted M3 product-definition bytes and sidecar acceptance, the authoritative build specification, all P3-01 through P3-16 screens, the exact 14 core entity families and all fifteen accepted decision families.
+- The path-safe verifier reports exact candidate digest `c383cd7dbe927d2443958f71350c8cd59ac1a8eb725dc5b2a70e40ced115e21f`, eight artifacts, 16 screens, 14 entities, 15 decision families and `implementationAuthorized: false`. All 11 positive/negative verifier tests pass.
+- The mockup is synthetic, keyboard-operable, self-contained and non-persistent. Five Playwright projects pass Axe serious/critical checks and document-overflow checks at exact widths 1440, 1024, 768, 390 and 320.
+- Repository quality and CI-security wiring now require the M3 candidate verifier and its negative suite, so a missing check or mutated bound source fails the checked workflow contract.
+
+Separate accountable approval of the exact candidate digest remains required. Until then, no production M3 migration, table, permission, registry entry, API, worker, generated client, live route, notification, export or FHIR endpoint is authorized. No commit or tag was created by the product-definition acceptance or candidate preparation.
+
+## Approved during Phase 3A Module 3 implementation-input promotion (26 September 2026)
+
+This section supersedes only the approval-pending and implementation-blocked statements in the Phase 3A candidate entry above. It does not claim that any Module 3 runtime slice is implemented or approve a target deployment or production release.
+
+- Bhupendra, acting as developer, returned `ACCEPT` for exact `m3-candidate-1` digest `c383cd7dbe927d2443958f71350c8cd59ac1a8eb725dc5b2a70e40ced115e21f`.
+- `M3-APPROVAL-20260926-01` records the approval separately from product-definition acceptance and binds P3-01 through P3-16, the exact 14 core entity families, all fifteen accepted decision families, the M2 completion predecessor, the accepted product-definition bytes and the build specification.
+- All eight candidate artifacts were promoted byte-identically under `approved-inputs/module-3/`; their approved-path package digest is `3e7ced79ecc01f59e9d4d3bb15a48bd30e579a32f194b23e9f3ee0a9aed09c00`. The retained candidate remains unchanged as non-authorizing provenance.
+- `contracts/module-3-input-gate.json` reports `APPROVED`, eight of eight artifacts, 16 screens, 14 entities, 15 decision families, approval record `M3-APPROVAL-20260926-01` and `implementationAuthorized: true`.
+- Required-approval verification and all 12 production-gate positive/negative tests pass. The combined repository script suite passes 108/108. The CI contracts job now requires both the candidate checks and approved M3 gate checks, and the CI-security verifier rejects their removal.
+
+Dependency-ordered Module 3 repository implementation is now authorized, beginning with M3B/P3-01 through P3-04. Jurisdictional, privacy, clinical, security, identity-proofing, matching, identifier, communication, retention, residency, legal-hold, export and partner-profile catalogues remain fail-closed until separately approved where required. No commit or tag was created by this approval record.
+
+## Verified during Phase 3B-M3H Module 3 repository implementation (26 September 2026)
+
+This section supersedes the runtime-not-implemented statement immediately above. It records repository implementation and verification, not owner QA, target deployment or production-release acceptance.
+
+- V69-V78 implement the approved M3 authorization and event releases, 17-table patient-registry model, forced tenant RLS/composite references, duplicate evidence and operation guards, one-use merge decisions, immutable identity revision history, effective merge lineage, exact registration-validation binding, queue-read authorization and direct lifecycle/merge guards.
+- P3-01 through P3-16 now use live checked projections/actions for dashboard/directory, search-first registration, identity/contact/address/preference/relationship history, exact validation and submission, patient summary, duplicate leases/dispositions, independent three-party merge and minimum-necessary timeline correlation.
+- Registration staging is creator-or-manager scoped. Literal search rejects wildcard expansion. Elapsed registration and review leases project safely using database time. Merged identifiers resolve recursively to the final survivor while preserving lineage.
+- Missing identifier, authority, consent/privacy, safety, urgent-reconciliation, deceased-verification, export/retention, portal and FHIR inputs remain explicit fail-closed states. No local legal, clinical or partner catalogue was fabricated.
+
+| M3H gate | Result | Local evidence |
+| --- | --- | --- |
+| Complete backend verification | PASS | Java 25/Maven 3.9.11 compiles 391 production and 37 test sources, validates/applies V1-V78, passes 234 tests in 38 suites with zero failure/error/skip, enforces 11 architecture rules and packages the bootable JAR. |
+| API/input/security contracts | PASS | OpenAPI 3.1 verifies exactly 112 operations. Generated-client drift, all 16 API tests and the complete 108-test repository contract/security suite pass. |
+| Frontend static/unit/build | PASS | Formatting, strict typecheck, lint, the 31-source/4-feature/81-import boundary plus four negative fixtures, all 85 unit tests and the production build pass. |
+| Browser/accessibility/responsive | PASS | All 125 Playwright cases pass across exact 1440, 1024, 768, 390 and 320 projects, including the M3 Axe and overflow checks. |
+
+The detailed scope and activation boundary are recorded in `MODULE_3_COMPLETION_REPORT.md`. Per the user's standing direction, repository work may continue to the next module before the deferred QA pass. Hosted controls, target providers/workers, local policy catalogues and production acceptance remain open.
+
+## Verified during Phase 4A-M4F Module 4 repository implementation (26 September 2026)
+
+This checkpoint records completed repository construction and verification for Appointments. It does not claim consolidated owner QA, target deployment or production-release acceptance.
+
+- V79 releases the migration-owned scheduling authorization catalogue. V80 adds the 13-table scheduling model with composite tenant integrity and forced RLS. V81 registers payload-minimized events and direct lifecycle guards. V82 forward-repairs the shared operation-key idempotency constraint.
+- P4-01 through P4-15 use live checked projections/actions for schedule, slot, appointment-request, booking, lifecycle, waitlist and timeline behavior.
+- Database-time five-minute holds, concurrent slot competition and confirmation-time patient/context/practitioner eligibility are enforced. Reschedule, cancellation and no-show retain exact immutable evidence.
+- Reminder delivery, automated waitlist offers, calendar-provider synchronization, portal/proxy self-booking and financial charging remain fail closed pending later modules and accepted target policies/providers.
+- The public route catalogue was reconciled with the implemented frontend and now reports all 110 screens, including M3/P3 and M4/P4.
+
+| M4F gate | Result | Local evidence |
+| --- | --- | --- |
+| Complete backend verification | PASS | Java 25/Maven 3.9.11 compiles 399 production and 38 test sources, validates/applies V1-V82, passes 234 tests in 38 suites with zero failure/error/skip, enforces 11 architecture rules and packages the bootable JAR. |
+| API/input/security contracts | PASS | OpenAPI 3.1 version 0.43.0 verifies exactly 114 operations. Generated-client drift, all 18 API tests and the complete 110-test repository contract/security suite pass. |
+| Frontend static/unit/build | PASS | Formatting, strict typecheck, lint, the 35-source/5-feature/94-import boundary plus four negative fixtures, all 90 unit tests and the production build pass. |
+| Browser/accessibility/responsive | PASS | All 135 Playwright cases pass across exact 1440, 1024, 768, 390 and 320 projects, including all P4 screens and governed P4-11 confirmation. |
+
+The detailed scope is recorded in `MODULE_4_COMPLETION_REPORT.md`. Per the standing construction direction, Module 5 may proceed before the consolidated QA pass. Hosted controls, target providers/workers, local policy catalogues and production acceptance remain open.
+
+## Verified during Phase 5A-M5F Module 5 repository construction (26 September 2026)
+
+This checkpoint records completed encounter construction and module-focused verification. The broader cross-module QA/release pass remains deferred by explicit direction.
+
+- V83-V89 release the encounter authorization/events, 14-relation forced-RLS model, lifecycle/evidence guards, runtime-safe clinical authorship and dependency-free SHA-256 note/amendment binding.
+- P5-01 through P5-12 use live checked projections/actions for encounter context and lifecycle, participant snapshots, concerns, clinical timeline, problems/diagnoses, orders/tasks, notes, signing, amendments and history.
+- Red flags atomically create critical tasks/escalations and block completion until attributed acknowledgement and resolution. Signed notes are append-only and amendments preserve the exact prior version.
+- The public catalogue reports 122 screens, and OpenAPI 0.44.0 checks exactly 116 operations.
+
+| M5 construction gate | Result | Local evidence |
+| --- | --- | --- |
+| Backend encounter gate | PASS | Java 25/Maven 3.9.11 compiles 407 production and 40 test sources, applies V1-V89 to disposable PostgreSQL 18, and passes the focused 5/5 catalogue, registry and complete lifecycle tests. |
+| API contract | PASS | OpenAPI 0.44.0 verifies 116 operations; generated-client drift and all 20 positive/negative API tests pass. |
+| Frontend static/unit/build | PASS | Formatting, strict typecheck, lint, the 39-source/6-feature/107-import boundary plus four negative fixtures, all 96 unit tests and the production build pass. |
+| M5 browser/accessibility/responsive | PASS | All 12 P5 routes and the governed P5-09 note-version flow pass in 10 Playwright cases across 1440/1024/768/390/320, including Axe and overflow checks. |
+
+See `MODULE_5_COMPLETION_REPORT.md`. Full cross-module browser/backend regression, image/deployment/security reruns, target clinical-policy acceptance and production release remain later QA/activation work.

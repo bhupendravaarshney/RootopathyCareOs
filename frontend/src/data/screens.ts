@@ -1,4 +1,4 @@
-export type ModuleKey = 'M1' | 'M2' | 'COS';
+export type ModuleKey = 'M1' | 'M2' | 'M3' | 'M4' | 'M5' | 'COS';
 
 export type Screen = {
   id: string;
@@ -142,6 +142,210 @@ const m2: Array<[string, string, string]> = [
   ['Lifecycle and evidence timeline', 'Correlate lifecycle, decisions and evidence.', 'Governance'],
 ];
 
+const m3: Array<[string, string, string]> = [
+  [
+    'Patient registry dashboard',
+    'Review organization-local patient activity, registration and duplicate work.',
+    'Overview',
+  ],
+  [
+    'Patient directory',
+    'Search minimum-necessary organization-local patient records.',
+    'Directory',
+  ],
+  [
+    'Start patient registration',
+    'Create an expiring governed registration run before collecting patient data.',
+    'Registration',
+  ],
+  [
+    'Duplicate search',
+    'Search before create and record an explicit duplicate disposition.',
+    'Registration',
+  ],
+  [
+    'Identity and demographics',
+    'Maintain patient identity with partial-date and provenance semantics.',
+    'Patient record',
+  ],
+  [
+    'Contacts and addresses',
+    'Maintain protected contact and address records without inferring consent.',
+    'Patient record',
+  ],
+  [
+    'Communication preferences',
+    'Record preferences independently from consent and provider availability.',
+    'Patient record',
+  ],
+  [
+    'Patient identifiers',
+    'Review masked identifiers; activation remains closed until a local scheme is approved.',
+    'Identity governance',
+  ],
+  [
+    'Caregivers and proxies',
+    'Record relationship facts separately from proxy authority and portal linkage.',
+    'Identity governance',
+  ],
+  [
+    'Consent and privacy',
+    'Review directives and restrictions without treating consent as a universal legal basis.',
+    'Privacy and safety',
+  ],
+  [
+    'Clinical safety flags',
+    'Review concise governed flags; detailed clinical records remain separate.',
+    'Privacy and safety',
+  ],
+  [
+    'Review and register',
+    'Validate the exact registration revision and complete it atomically.',
+    'Registration',
+  ],
+  [
+    'Patient summary',
+    'Review the canonical minimum-necessary patient record and lifecycle.',
+    'Directory',
+  ],
+  [
+    'Duplicate review queue',
+    'Claim and disposition explainable organization-local duplicate candidates.',
+    'Duplicate governance',
+  ],
+  [
+    'Merge review',
+    'Request, independently decide and execute an exact impact-bound merge.',
+    'Duplicate governance',
+  ],
+  [
+    'Identity and audit timeline',
+    'Review allow-listed patient identity evidence without raw audit payloads.',
+    'Governance',
+  ],
+];
+
+const m4: Array<[string, string, string]> = [
+  [
+    'Scheduling dashboard',
+    'Review appointment activity, expiring holds and waitlist work.',
+    'Overview',
+  ],
+  ['Calendar', 'Manage internal schedules and exact UTC appointment slots.', 'Scheduling'],
+  [
+    'Appointment directory',
+    'Search bounded minimum-necessary appointment records.',
+    'Appointments',
+  ],
+  ['New appointment', 'Start a staff-authorized expiring appointment request.', 'Booking workflow'],
+  [
+    'Patient selection',
+    'Review or replace the selected patient before a slot is held.',
+    'Booking workflow',
+  ],
+  [
+    'Service, facility and location',
+    'Select an active service context for the appointment request.',
+    'Booking workflow',
+  ],
+  [
+    'Eligible clinician selection',
+    'Select a practitioner; eligibility is re-evaluated for the final slot instant.',
+    'Booking workflow',
+  ],
+  ['Slot selection', 'Atomically acquire a five-minute internal slot hold.', 'Booking workflow'],
+  [
+    'Appointment review',
+    'Review the exact patient, service, clinician, slot and hold expiry.',
+    'Booking workflow',
+  ],
+  [
+    'Payment requirement',
+    'Review non-financial payment state; charging is deferred to Module 11.',
+    'Booking workflow',
+  ],
+  [
+    'Confirmation',
+    'Re-evaluate eligibility and consume the held slot atomically.',
+    'Booking workflow',
+  ],
+  [
+    'Reschedule',
+    'Move a confirmed appointment while retaining immutable prior-slot evidence.',
+    'Lifecycle',
+  ],
+  [
+    'Cancel or no-show',
+    'Record an operational outcome without inventing a fee or refund decision.',
+    'Lifecycle',
+  ],
+  ['Waitlist', 'Manage internal waitlist requests without sending unapproved offers.', 'Waitlist'],
+  [
+    'Appointment timeline',
+    'Review allow-listed lifecycle evidence without raw audit/provider payloads.',
+    'Governance',
+  ],
+];
+
+const m5: Array<[string, string, string]> = [
+  [
+    'Encounter dashboard',
+    'Review active encounters, unresolved red flags and unsigned clinical work.',
+    'Overview',
+  ],
+  [
+    'Open encounter',
+    'Create an explicit episode and planned encounter from exact patient and care context.',
+    'Encounter workflow',
+  ],
+  [
+    'Patient and appointment context',
+    'Review exact patient, appointment and encounter lifecycle context.',
+    'Encounter workflow',
+  ],
+  [
+    'Participants',
+    'Manage immutable identity, role, assignment and eligibility snapshots.',
+    'Encounter workflow',
+  ],
+  [
+    'Presenting concerns',
+    'Append attributed presenting concerns and create visible red-flag escalation when required.',
+    'Clinical record',
+  ],
+  [
+    'Clinical timeline',
+    'Review minimum-necessary correlated clinical activity in encounter order.',
+    'Clinical record',
+  ],
+  [
+    'Problems and diagnoses',
+    'Append explicitly coded or text-only problems and diagnoses.',
+    'Clinical record',
+  ],
+  [
+    'Orders and tasks',
+    'Manage internal orders, attributed tasks and explicit red-flag acknowledgement.',
+    'Clinical record',
+  ],
+  ['Encounter notes', 'Create append-only, digest-bound draft note versions.', 'Documentation'],
+  [
+    'Review and sign',
+    'Sign the exact current note version using current practitioner identity and eligibility.',
+    'Documentation',
+  ],
+  [
+    'Amendment',
+    'Append a signed correction linked to the exact signed note version.',
+    'Documentation',
+  ],
+  [
+    'Encounter history',
+    'Review allow-listed lifecycle, signature and amendment evidence without raw payloads.',
+    'Governance',
+  ],
+];
+
 const cosTitles = [
   'Consultation context',
   'Patient story',
@@ -184,6 +388,9 @@ const build = (module: ModuleKey, source: Array<[string, string, string]>): Scre
 export const screens: Screen[] = [
   ...build('M1', m1),
   ...build('M2', m2),
+  ...build('M3', m3).map((screen) => ({ ...screen, id: screen.id.replace(/^M3-/, 'P3-') })),
+  ...build('M4', m4).map((screen) => ({ ...screen, id: screen.id.replace(/^M4-/, 'P4-') })),
+  ...build('M5', m5).map((screen) => ({ ...screen, id: screen.id.replace(/^M5-/, 'P5-') })),
   ...cosTitles.map((title, index) => ({
     id: `COS-${String(index + 1).padStart(2, '0')}`,
     module: 'COS' as const,

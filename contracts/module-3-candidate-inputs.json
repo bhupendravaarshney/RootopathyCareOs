@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "module": "M3",
+  "status": "CANDIDATE_FOR_APPROVAL",
+  "candidateVersion": "m3-candidate-1",
+  "basis": {
+    "acceptedModule2": {
+      "path": "docs/MODULE_2_COMPLETION_ACCEPTANCE.md",
+      "recordId": "M2-COMPLETION-ACCEPTANCE-20260926-01",
+      "sha256": "677f2e78c6cc76f5d3bbd1b57ba615fc53676ae135957caa14356797edc820b8"
+    },
+    "acceptedProductDefinition": {
+      "path": "docs/MODULE_3_PRODUCT_DEFINITION.md",
+      "version": "m3-product-definition-draft-2",
+      "sha256": "c1eef920751af4547fa6b8c260b773edbfa266cfa84ac6a01302a44faa765bb5"
+    },
+    "productAcceptance": {
+      "path": "docs/MODULE_3_PRODUCT_DEFINITION_ACCEPTANCE.md",
+      "recordId": "M3-PRODUCT-ACCEPTANCE-20260926-01",
+      "sha256": "f3c6c866cec02441df006c34d6012f448ebaed505e724bce8f75fbbbc51bf144"
+    },
+    "buildSpecification": {
+      "path": "docs/CareOS_Complete_Build_Specification_Java_Spring_Boot_React_Node_Edition.pdf",
+      "sha256": "2c8f9f020c7c1a21678c795df57fd8be1b659f2141ab7c8747b5dec973db0bfe"
+    }
+  },
+  "artifacts": [
+    {
+      "kind": "screen-mockups",
+      "version": "m3-candidate-1",
+      "path": "candidate-inputs/module-3/01-screen-mockups.html"
+    },
+    {
+      "kind": "design-system",
+      "version": "m3-candidate-1",
+      "path": "candidate-inputs/module-3/02-design-system.md"
+    },
+    {
+      "kind": "data-dictionary-and-validation",
+      "version": "m3-candidate-1",
+      "path": "candidate-inputs/module-3/03-data-dictionary-and-validation.md"
+    },
+    {
+      "kind": "lifecycle-and-transition-matrix",
+      "version": "m3-candidate-1",
+      "path": "candidate-inputs/module-3/04-lifecycle-and-transition-matrix.md"
+    },
+    {
+      "kind": "authorization-policy",
+      "version": "m3-candidate-1",
+      "path": "candidate-inputs/module-3/05-authorization-policy.md"
+    },
+    {
+      "kind": "audit-and-event-registry",
+      "version": "m3-candidate-1",
+      "path": "candidate-inputs/module-3/06-audit-and-event-registry.md"
+    },
+    {
+      "kind": "readiness-and-activation-policy",
+      "version": "m3-candidate-1",
+      "path": "candidate-inputs/module-3/07-readiness-and-activation-policy.md"
+    },
+    {
+      "kind": "history-and-export-policy",
+      "version": "m3-candidate-1",
+      "path": "candidate-inputs/module-3/08-history-and-export-policy.md"
+    }
+  ]
+}

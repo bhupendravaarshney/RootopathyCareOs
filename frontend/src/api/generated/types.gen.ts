@@ -4,6 +4,138 @@ export type ClientOptions = {
   baseUrl: 'http://localhost:8080' | (string & {});
 };
 
+export type PatientRegistryScreen = {
+  organizationId: string;
+  screenId: string;
+  title: string;
+  purpose: string;
+  generatedAt: string;
+  metrics: Array<WorkforceMetric>;
+  columns: Array<WorkforceColumn>;
+  rows: Array<PatientRegistryRow>;
+  actions: Array<WorkforceAction>;
+  notices: Array<WorkforceNotice>;
+  nextCursor: string | null;
+  pageSize: number;
+};
+
+export type PatientRegistryRow = {
+  id: string;
+  patientId?: string | null;
+  status: string;
+  revision: number;
+  etag: string;
+  values: {
+    [key: string]: string;
+  };
+  allowedActionKeys: Array<string>;
+};
+
+export type PatientRegistryActionRequest = {
+  targetId?: string | null;
+  patientId?: string | null;
+  registrationId?: string | null;
+  decision?: string | null;
+  reason?: string | null;
+  fields: {
+    [key: string]: string;
+  };
+  impactToken?: string | null;
+};
+
+export type SchedulingScreen = {
+  organizationId: string;
+  screenId: string;
+  title: string;
+  purpose: string;
+  generatedAt: string;
+  metrics: Array<WorkforceMetric>;
+  columns: Array<WorkforceColumn>;
+  rows: Array<SchedulingRow>;
+  actions: Array<WorkforceAction>;
+  notices: Array<WorkforceNotice>;
+  nextCursor: string | null;
+  pageSize: number;
+};
+
+export type SchedulingRow = {
+  id: string;
+  patientId?: string | null;
+  appointmentId?: string | null;
+  status: string;
+  revision: number;
+  etag: string;
+  values: {
+    [key: string]: string;
+  };
+  allowedActionKeys: Array<string>;
+};
+
+export type SchedulingActionRequest = {
+  targetId?: string | null;
+  patientId?: string | null;
+  appointmentId?: string | null;
+  requestId?: string | null;
+  reason?: string | null;
+  fields: {
+    [key: string]: string;
+  };
+};
+
+export type EncounterScreen = {
+  organizationId: string;
+  screenId: string;
+  title: string;
+  purpose: string;
+  generatedAt: string;
+  metrics: Array<WorkforceMetric>;
+  columns: Array<WorkforceColumn>;
+  rows: Array<EncounterRow>;
+  actions: Array<WorkforceAction>;
+  notices: Array<WorkforceNotice>;
+  nextCursor: string | null;
+  pageSize: number;
+};
+
+export type EncounterRow = {
+  id: string;
+  patientId?: string | null;
+  episodeId?: string | null;
+  encounterId?: string | null;
+  appointmentId?: string | null;
+  status: string;
+  revision: number;
+  etag: string;
+  values: {
+    [key: string]: string;
+  };
+  allowedActionKeys: Array<string>;
+};
+
+export type EncounterActionRequest = {
+  targetId?: string | null;
+  patientId?: string | null;
+  episodeId?: string | null;
+  encounterId?: string | null;
+  appointmentId?: string | null;
+  reason?: string | null;
+  fields: {
+    [key: string]: string;
+  };
+};
+
+export type PatientRegistryImpactPreviewResponse = {
+  screenId: string;
+  actionKey: string;
+  targetId: string;
+  revision: number;
+  digest: string;
+  token: string;
+  expiresAt: string;
+  blocked: boolean;
+  items: Array<WorkforceImpactItem>;
+};
+
 export type WorkforceScreen = {
   organizationId: string;
   screenId: string;
@@ -200,7 +332,7 @@ export type CredentialDocumentMetadata = {
 
 export type PrototypeScreen = {
   id: string;
-  module: 'M1' | 'M2' | 'COS';
+  module: 'M1' | 'M2' | 'M3' | 'M4' | 'COS';
   title: string;
   purpose: string;
   status: 'prototype';
@@ -210,7 +342,7 @@ export type SystemSummary = {
   product: string;
   edition: string;
   generatedAt: string;
-  screenCount: 79;
+  screenCount: 122;
   modules: Array<string>;
 };
 
@@ -8173,6 +8305,503 @@ export type PreviewWorkforceImpactResponses = {
 
 export type PreviewWorkforceImpactResponse =
   PreviewWorkforceImpactResponses[keyof PreviewWorkforceImpactResponses];
+
+export type GetPatientRegistryScreenData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    screenId: string;
+  };
+  query?: {
+    patientId?: string;
+    registrationId?: string;
+    q?: string;
+    status?: string;
+    limit?: number;
+    cursor?: string;
+  };
+  url: '/api/v1/organizations/{organizationId}/patients/screens/{screenId}';
+};
+
+export type GetPatientRegistryScreenErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type GetPatientRegistryScreenError =
+  GetPatientRegistryScreenErrors[keyof GetPatientRegistryScreenErrors];
+
+export type GetPatientRegistryScreenResponses = {
+  /**
+   * Authorized minimum-necessary Module 3 patient registry screen projection
+   */
+  200: PatientRegistryScreen;
+};
+
+export type GetPatientRegistryScreenResponse =
+  GetPatientRegistryScreenResponses[keyof GetPatientRegistryScreenResponses];
+
+export type PerformPatientRegistryActionData = {
+  body: PatientRegistryActionRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag required only when the server-projected workforce action declares a revision precondition.
+     */
+    'If-Match'?: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    screenId: string;
+    actionKey: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/patients/screens/{screenId}/actions/{actionKey}';
+};
+
+export type PerformPatientRegistryActionErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type PerformPatientRegistryActionError =
+  PerformPatientRegistryActionErrors[keyof PerformPatientRegistryActionErrors];
+
+export type PerformPatientRegistryActionResponses = {
+  /**
+   * Successful governed patient registry action
+   */
+  200: PatientRegistryScreen;
+  /**
+   * Successful governed patient registry creation
+   */
+  201: PatientRegistryScreen;
+};
+
+export type PerformPatientRegistryActionResponse =
+  PerformPatientRegistryActionResponses[keyof PerformPatientRegistryActionResponses];
+
+export type PreviewPatientRegistryImpactData = {
+  body: PatientRegistryActionRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag from the latest representation. Required for protected updates and deletes.
+     */
+    'If-Match': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    screenId: string;
+    actionKey: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/patients/screens/{screenId}/actions/{actionKey}/impact-preview';
+};
+
+export type PreviewPatientRegistryImpactErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+};
+
+export type PreviewPatientRegistryImpactError =
+  PreviewPatientRegistryImpactErrors[keyof PreviewPatientRegistryImpactErrors];
+
+export type PreviewPatientRegistryImpactResponses = {
+  /**
+   * Fresh server-derived patient impact bound to actor, action, fields and revision
+   */
+  200: PatientRegistryImpactPreviewResponse;
+};
+
+export type PreviewPatientRegistryImpactResponse =
+  PreviewPatientRegistryImpactResponses[keyof PreviewPatientRegistryImpactResponses];
+
+export type GetSchedulingScreenData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    screenId: string;
+  };
+  query?: {
+    patientId?: string;
+    appointmentId?: string;
+    requestId?: string;
+    q?: string;
+    status?: string;
+    limit?: number;
+    cursor?: string;
+  };
+  url: '/api/v1/organizations/{organizationId}/scheduling/screens/{screenId}';
+};
+
+export type GetSchedulingScreenErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type GetSchedulingScreenError = GetSchedulingScreenErrors[keyof GetSchedulingScreenErrors];
+
+export type GetSchedulingScreenResponses = {
+  /**
+   * Authorized minimum-necessary Module 4 scheduling screen projection
+   */
+  200: SchedulingScreen;
+};
+
+export type GetSchedulingScreenResponse =
+  GetSchedulingScreenResponses[keyof GetSchedulingScreenResponses];
+
+export type PerformSchedulingActionData = {
+  body: SchedulingActionRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag required only when the server-projected workforce action declares a revision precondition.
+     */
+    'If-Match'?: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    screenId: string;
+    actionKey: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/scheduling/screens/{screenId}/actions/{actionKey}';
+};
+
+export type PerformSchedulingActionErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type PerformSchedulingActionError =
+  PerformSchedulingActionErrors[keyof PerformSchedulingActionErrors];
+
+export type PerformSchedulingActionResponses = {
+  /**
+   * Successful governed scheduling action
+   */
+  200: SchedulingScreen;
+  /**
+   * Successful governed scheduling creation
+   */
+  201: SchedulingScreen;
+};
+
+export type PerformSchedulingActionResponse =
+  PerformSchedulingActionResponses[keyof PerformSchedulingActionResponses];
+
+export type GetEncounterScreenData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    screenId: string;
+  };
+  query?: {
+    patientId?: string;
+    episodeId?: string;
+    encounterId?: string;
+    appointmentId?: string;
+    q?: string;
+    status?: string;
+    limit?: number;
+    cursor?: string;
+  };
+  url: '/api/v1/organizations/{organizationId}/encounters/screens/{screenId}';
+};
+
+export type GetEncounterScreenErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type GetEncounterScreenError = GetEncounterScreenErrors[keyof GetEncounterScreenErrors];
+
+export type GetEncounterScreenResponses = {
+  /**
+   * Authorized minimum-necessary Module 5 encounter screen projection
+   */
+  200: EncounterScreen;
+};
+
+export type GetEncounterScreenResponse =
+  GetEncounterScreenResponses[keyof GetEncounterScreenResponses];
+
+export type PerformEncounterActionData = {
+  body: EncounterActionRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag required only when the server-projected workforce action declares a revision precondition.
+     */
+    'If-Match'?: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    screenId: string;
+    actionKey: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/encounters/screens/{screenId}/actions/{actionKey}';
+};
+
+export type PerformEncounterActionErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type PerformEncounterActionError =
+  PerformEncounterActionErrors[keyof PerformEncounterActionErrors];
+
+export type PerformEncounterActionResponses = {
+  /**
+   * Successful governed encounter action
+   */
+  200: EncounterScreen;
+  /**
+   * Successful governed encounter creation
+   */
+  201: EncounterScreen;
+};
+
+export type PerformEncounterActionResponse =
+  PerformEncounterActionResponses[keyof PerformEncounterActionResponses];
 
 export type AccessWorkforceEvidenceData = {
   body: WorkforceEvidenceAccessRequest;

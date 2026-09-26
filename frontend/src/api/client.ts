@@ -106,6 +106,8 @@ import type {
   GetAuthenticationSessionData,
   GetAuthenticationSessionResponse,
   GetAuthenticationSessionResponses,
+  GetEncounterScreenData,
+  GetEncounterScreenResponse,
   GetFacilityDirectoryData,
   GetFacilityDirectoryResponse,
   GetFacilityDirectoryResponses,
@@ -124,6 +126,10 @@ import type {
   GetOrganizationGovernanceDirectoryData,
   GetOrganizationGovernanceDirectoryResponse,
   GetOrganizationGovernanceDirectoryResponses,
+  GetPatientRegistryScreenData,
+  GetPatientRegistryScreenResponse,
+  GetSchedulingScreenData,
+  GetSchedulingScreenResponse,
   GetSystemSummaryData,
   GetSystemSummaryResponse,
   GetSystemSummaryResponses,
@@ -165,6 +171,7 @@ import type {
   ConfigurationResultRequest,
   ConfigurationValidationRequest,
   CredentialDocumentMetadata,
+  EncounterActionRequest,
   EvidenceExportAccessRequest,
   EvidenceExportAccessResponse,
   EvidenceExportDecisionRequest,
@@ -175,6 +182,10 @@ import type {
   OperatingHoursBatchRequest,
   OperatingHoursDirectory,
   OperatingHoursOverview,
+  PatientRegistryActionRequest,
+  PerformPatientRegistryActionResponse,
+  PerformEncounterActionResponse,
+  PerformSchedulingActionResponse,
   PerformWorkforceActionResponse,
   Problem,
   RegenerateRecoveryCodesData,
@@ -207,6 +218,7 @@ import type {
   ScheduleOrganizationInternationalSettingsData,
   ScheduleOrganizationInternationalSettingsResponse,
   ScheduleOrganizationInternationalSettingsResponses,
+  SchedulingActionRequest,
   StartMfaEnrollmentData,
   StartMfaEnrollmentResponse,
   StartMfaEnrollmentResponses,
@@ -243,6 +255,7 @@ import type {
   WorkforceActionRequest,
   WorkforceScreen,
 } from './generated';
+import { encounterScreenValidator } from './encounter-contracts';
 import {
   auditEvidenceDetailValidator,
   auditEvidencePageValidator,
@@ -256,6 +269,12 @@ import {
   serviceAssignmentDirectoryValidator,
   serviceCatalogueValidator,
 } from './live-administration-contracts';
+import {
+  patientRegistryImpactPreviewValidator,
+  patientRegistryScreenValidator,
+  type PatientRegistryImpactPreviewResponse,
+} from './patient-contracts';
+import { schedulingScreenValidator } from './scheduling-contracts';
 import {
   workforceCredentialDocumentAccessValidator,
   workforceEvidenceAccessValidator,
@@ -716,6 +735,180 @@ function requireStrongEtag(value: string): string {
 }
 
 type WorkforceScreenQuery = NonNullable<GetWorkforceScreenData['query']>;
+type PatientRegistryScreenQuery = NonNullable<GetPatientRegistryScreenData['query']>;
+type SchedulingScreenQuery = NonNullable<GetSchedulingScreenData['query']>;
+type EncounterScreenQuery = NonNullable<GetEncounterScreenData['query']>;
+
+function requirePatientRegistryScreenId(value: string): string {
+  if (!/^P3-(0[1-9]|1[0-6])$/.test(value)) {
+    throw new Error('screenId must identify a Module 3 screen from P3-01 through P3-16.');
+  }
+  return value;
+}
+
+function requirePatientRegistryActionKey(value: string): string {
+  if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(value)) {
+    throw new Error('actionKey has an invalid format.');
+  }
+  return value;
+}
+
+function patientRegistryScreenQuery(query: PatientRegistryScreenQuery): string {
+  const parameters = new URLSearchParams();
+  if (query.patientId !== undefined) {
+    parameters.set('patientId', requireUuid(query.patientId, 'patientId'));
+  }
+  if (query.registrationId !== undefined) {
+    parameters.set('registrationId', requireUuid(query.registrationId, 'registrationId'));
+  }
+  if (query.q !== undefined) {
+    if (typeof query.q !== 'string' || Array.from(query.q).length > 100) {
+      throw new Error('Patient search must contain at most 100 characters.');
+    }
+    const normalized = query.q.trim().normalize('NFC');
+    if (normalized) parameters.set('q', normalized);
+  }
+  if (query.status !== undefined) {
+    const normalized = query.status.trim().normalize('NFC');
+    if (
+      normalized &&
+      (Array.from(normalized).length > 120 ||
+        !/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$/.test(normalized))
+    ) {
+      throw new Error('Patient status must be a stable lower-case state or event key.');
+    }
+    if (normalized) parameters.set('status', normalized);
+  }
+  if (query.limit !== undefined) {
+    if (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > 100) {
+      throw new Error('Patient page limit must be an integer from 1 to 100.');
+    }
+    parameters.set('limit', String(query.limit));
+  }
+  if (query.cursor !== undefined) {
+    if (!/^[A-Za-z0-9_-]{1,2048}$/.test(query.cursor)) {
+      throw new Error('Patient page cursor has an invalid format.');
+    }
+    parameters.set('cursor', query.cursor);
+  }
+  const serialized = parameters.toString();
+  return serialized ? `?${serialized}` : '';
+}
+
+function requireSchedulingScreenId(value: string): string {
+  if (!/^P4-(0[1-9]|1[0-5])$/.test(value)) {
+    throw new Error('screenId must identify a Module 4 screen from P4-01 through P4-15.');
+  }
+  return value;
+}
+
+function requireSchedulingActionKey(value: string): string {
+  if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(value)) {
+    throw new Error('actionKey has an invalid format.');
+  }
+  return value;
+}
+
+function schedulingScreenQuery(query: SchedulingScreenQuery): string {
+  const parameters = new URLSearchParams();
+  for (const [key, value] of [
+    ['patientId', query.patientId],
+    ['appointmentId', query.appointmentId],
+    ['requestId', query.requestId],
+  ] as const) {
+    if (value !== undefined) parameters.set(key, requireUuid(value, key));
+  }
+  if (query.q !== undefined) {
+    if (typeof query.q !== 'string' || Array.from(query.q).length > 100) {
+      throw new Error('Scheduling search must contain at most 100 characters.');
+    }
+    const normalized = query.q.trim().normalize('NFC');
+    if (normalized) parameters.set('q', normalized);
+  }
+  if (query.status !== undefined) {
+    const normalized = query.status.trim().normalize('NFC');
+    if (
+      normalized &&
+      (Array.from(normalized).length > 120 ||
+        !/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$/.test(normalized))
+    ) {
+      throw new Error('Scheduling status must be a stable lower-case state or event key.');
+    }
+    if (normalized) parameters.set('status', normalized);
+  }
+  if (query.limit !== undefined) {
+    if (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > 100) {
+      throw new Error('Scheduling page limit must be an integer from 1 to 100.');
+    }
+    parameters.set('limit', String(query.limit));
+  }
+  if (query.cursor !== undefined) {
+    if (!/^[A-Za-z0-9_-]{1,2048}$/.test(query.cursor)) {
+      throw new Error('Scheduling page cursor has an invalid format.');
+    }
+    parameters.set('cursor', query.cursor);
+  }
+  const serialized = parameters.toString();
+  return serialized ? `?${serialized}` : '';
+}
+
+function requireEncounterScreenId(value: string): string {
+  if (!/^P5-(0[1-9]|1[0-2])$/.test(value)) {
+    throw new Error('screenId must identify a Module 5 screen from P5-01 through P5-12.');
+  }
+  return value;
+}
+
+function requireEncounterActionKey(value: string): string {
+  if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(value)) {
+    throw new Error('actionKey has an invalid format.');
+  }
+  return value;
+}
+
+function encounterScreenQuery(query: EncounterScreenQuery): string {
+  const parameters = new URLSearchParams();
+  for (const [key, value] of [
+    ['patientId', query.patientId],
+    ['episodeId', query.episodeId],
+    ['encounterId', query.encounterId],
+    ['appointmentId', query.appointmentId],
+  ] as const) {
+    if (value !== undefined) parameters.set(key, requireUuid(value, key));
+  }
+  if (query.q !== undefined) {
+    if (typeof query.q !== 'string' || Array.from(query.q).length > 100) {
+      throw new Error('Encounter search must contain at most 100 characters.');
+    }
+    const normalized = query.q.trim().normalize('NFC');
+    if (normalized) parameters.set('q', normalized);
+  }
+  if (query.status !== undefined) {
+    const normalized = query.status.trim().normalize('NFC');
+    if (
+      normalized &&
+      (Array.from(normalized).length > 120 ||
+        !/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$/.test(normalized))
+    ) {
+      throw new Error('Encounter status must be a stable lower-case state or event key.');
+    }
+    if (normalized) parameters.set('status', normalized);
+  }
+  if (query.limit !== undefined) {
+    if (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > 100) {
+      throw new Error('Encounter page limit must be an integer from 1 to 100.');
+    }
+    parameters.set('limit', String(query.limit));
+  }
+  if (query.cursor !== undefined) {
+    if (!/^[A-Za-z0-9_-]{1,2048}$/.test(query.cursor)) {
+      throw new Error('Encounter page cursor has an invalid format.');
+    }
+    parameters.set('cursor', query.cursor);
+  }
+  const serialized = parameters.toString();
+  return serialized ? `?${serialized}` : '';
+}
 
 function requireWorkforceScreenId(value: string): string {
   if (!/^M2-(0[1-9]|1[0-9]|2[0-9])$/.test(value)) {
@@ -3360,6 +3553,168 @@ export class CareOsApiClient {
       signal: options.signal,
       successStatuses: [200],
       validateResponse: evidenceExportAccessValidator(exportJob),
+    });
+  }
+
+  getPatientRegistryScreen(
+    organizationId: string,
+    screenId: string,
+    query: PatientRegistryScreenQuery = {},
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requirePatientRegistryScreenId(screenId);
+    return this.#request<GetPatientRegistryScreenResponse>({
+      method: 'GET',
+      path: `/v1/organizations/${organization}/patients/screens/${screen}${patientRegistryScreenQuery(query)}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: patientRegistryScreenValidator(organization, screen),
+    });
+  }
+
+  performPatientRegistryAction(
+    organizationId: string,
+    screenId: string,
+    actionKey: string,
+    body: PatientRegistryActionRequest,
+    ifMatch: string | undefined,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requirePatientRegistryScreenId(screenId);
+    const action = requirePatientRegistryActionKey(actionKey);
+    return this.#mutation<PerformPatientRegistryActionResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ...(ifMatch === undefined ? {} : { ifMatch: requireStrongEtag(ifMatch) }),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/patients/screens/${screen}/actions/${action}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200, 201],
+      validateResponse: patientRegistryScreenValidator(organization, screen),
+    });
+  }
+
+  previewPatientRegistryImpact(
+    organizationId: string,
+    screenId: string,
+    actionKey: string,
+    body: PatientRegistryActionRequest,
+    ifMatch: string,
+    expectedRevision: number,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requirePatientRegistryScreenId(screenId);
+    const action = requirePatientRegistryActionKey(actionKey);
+    const targetId = requireUuid(body.targetId ?? '', 'targetId');
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+      throw new Error('Patient impact preview revision is invalid.');
+    }
+    return this.#mutation<PatientRegistryImpactPreviewResponse>({
+      body,
+      ifMatch: requireStrongEtag(ifMatch),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/patients/screens/${screen}/actions/${action}/impact-preview`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: patientRegistryImpactPreviewValidator(
+        screen,
+        action,
+        targetId,
+        expectedRevision,
+      ),
+    });
+  }
+
+  getSchedulingScreen(
+    organizationId: string,
+    screenId: string,
+    query: SchedulingScreenQuery = {},
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requireSchedulingScreenId(screenId);
+    return this.#request<GetSchedulingScreenResponse>({
+      method: 'GET',
+      path: `/v1/organizations/${organization}/scheduling/screens/${screen}${schedulingScreenQuery(query)}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: schedulingScreenValidator(organization, screen),
+    });
+  }
+
+  performSchedulingAction(
+    organizationId: string,
+    screenId: string,
+    actionKey: string,
+    body: SchedulingActionRequest,
+    ifMatch: string | undefined,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requireSchedulingScreenId(screenId);
+    const action = requireSchedulingActionKey(actionKey);
+    return this.#mutation<PerformSchedulingActionResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ...(ifMatch === undefined ? {} : { ifMatch: requireStrongEtag(ifMatch) }),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/scheduling/screens/${screen}/actions/${action}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200, 201],
+      validateResponse: schedulingScreenValidator(organization, screen),
+    });
+  }
+
+  getEncounterScreen(
+    organizationId: string,
+    screenId: string,
+    query: EncounterScreenQuery = {},
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requireEncounterScreenId(screenId);
+    return this.#request<GetEncounterScreenResponse>({
+      method: 'GET',
+      path: `/v1/organizations/${organization}/encounters/screens/${screen}${encounterScreenQuery(query)}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: encounterScreenValidator(organization, screen),
+    });
+  }
+
+  performEncounterAction(
+    organizationId: string,
+    screenId: string,
+    actionKey: string,
+    body: EncounterActionRequest,
+    ifMatch: string | undefined,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requireEncounterScreenId(screenId);
+    const action = requireEncounterActionKey(actionKey);
+    return this.#mutation<PerformEncounterActionResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ...(ifMatch === undefined ? {} : { ifMatch: requireStrongEtag(ifMatch) }),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/encounters/screens/${screen}/actions/${action}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200, 201],
+      validateResponse: encounterScreenValidator(organization, screen),
     });
   }
 

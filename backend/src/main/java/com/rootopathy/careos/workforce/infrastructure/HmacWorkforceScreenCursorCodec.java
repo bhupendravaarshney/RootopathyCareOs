@@ -56,6 +56,7 @@ public final class HmacWorkforceScreenCursorCodec implements WorkforceScreenCurs
     public Position decode(String cursor, Binding binding) {
         try {
             var token = DECODER.decode(cursor);
+            if (!ENCODER.encodeToString(token).equals(cursor)) throw invalid();
             if (token.length <= 32) throw invalid();
             var payload = Arrays.copyOf(token, token.length - 32);
             var signature = Arrays.copyOfRange(token, token.length - 32, token.length);
