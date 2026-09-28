@@ -615,12 +615,321 @@ function encounterScreen(screenId: string) {
   };
 }
 
+function assessmentScreen(screenId: string) {
+  const rowId = `abababab-abab-4aba-8aba-${screenId.slice(4).padStart(12, '0')}`;
+  return {
+    actions: [],
+    columns: [
+      { key: 'primary', label: 'Patient' },
+      { key: 'clinician', label: 'Responsible clinician' },
+      { key: 'completion', label: 'Completion' },
+    ],
+    generatedAt: '2026-09-28T09:00:00Z',
+    metrics: [{ key: 'authorized', label: 'Authorized assessments', value: 1, tone: 'info' }],
+    nextCursor: null,
+    notices: [
+      {
+        detail:
+          'Protected visual source package is unavailable; this is a safe structural runtime.',
+        title: 'Source package unavailable',
+        tone: 'warning',
+      },
+    ],
+    organizationId: organization.id,
+    pageSize: 25,
+    purpose: 'Render the minimum-necessary governed clinical assessment projection.',
+    rows: [
+      {
+        allowedActionKeys: [],
+        assessmentSessionId: rowId,
+        encounterId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        etag: `"m6:${screenId}:${rowId}:3"`,
+        id: rowId,
+        patientId: '44444444-4444-4444-8444-444444444444',
+        revision: 3,
+        status: 'in_progress',
+        values: {
+          clinician: 'Dr Asha Verma',
+          completion: `${Math.max(0, Number(screenId.slice(4)) - 1)}/27`,
+          openRedFlags: '0',
+          patientAlerts: '0',
+          patientVerification: 'verified',
+          primary: `Server projection ${screenId}`,
+          responsiblePractitionerId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+          secondary: 'PT-•••1234',
+          sourcePackageStatus: 'unavailable',
+        },
+      },
+    ],
+    screenId,
+    title: screenId === 'COS-01' ? 'Consultation context' : `Server-governed ${screenId}`,
+  };
+}
+
+function documentScreen(screenId: string) {
+  const rowId = `cdcdcdcd-cdcd-4cdc-8cdc-${screenId.slice(3).padStart(12, '0')}`;
+  return {
+    actions: [],
+    columns: [
+      { key: 'primary', label: 'Document or result' },
+      { key: 'context', label: 'Context' },
+    ],
+    generatedAt: '2026-09-28T10:00:00Z',
+    metrics: [{ key: 'authorized', label: 'Authorized records', value: 1, tone: 'info' }],
+    nextCursor: null,
+    notices: [],
+    organizationId: organization.id,
+    pageSize: 25,
+    purpose: 'Render the minimum-necessary governed document and result projection.',
+    rows: [
+      {
+        allowedActionKeys: [],
+        documentId: rowId,
+        documentVersionId: 'dededede-dede-4ede-8ede-dededededede',
+        etag: `"m7:${screenId}:${rowId}:2"`,
+        id: rowId,
+        patientId: '44444444-4444-4444-8444-444444444444',
+        revision: 2,
+        status: 'clean',
+        values: {
+          context: 'Clean promoted version',
+          primary: `Server projection ${screenId}`,
+        },
+      },
+    ],
+    screenId,
+    title: screenId === 'P7-01' ? 'Document dashboard' : `Server-governed ${screenId}`,
+  };
+}
+
+function aiScreen(screenId: string) {
+  const rowId = `efefefef-efef-4fef-8fef-${screenId.slice(3).padStart(12, '0')}`;
+  return {
+    actions: [],
+    columns: [
+      { key: 'patient', label: 'Patient' },
+      { key: 'sessionType', label: 'Task' },
+      { key: 'purpose', label: 'Purpose' },
+    ],
+    generatedAt: '2026-09-28T11:00:00Z',
+    metrics: [{ key: 'sessions', label: 'AI sessions', value: 1, tone: 'info' }],
+    nextCursor: null,
+    notices: [
+      {
+        detail: 'No provider output changes a clinical source of truth without clinician review.',
+        title: 'AI output is always a draft',
+        tone: 'warning',
+      },
+    ],
+    organizationId: organization.id,
+    pageSize: 25,
+    purpose: 'Render the minimum-necessary governed AI session projection.',
+    rows: [
+      {
+        allowedActionKeys: [],
+        encounterId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        etag: `"m8:${screenId}:${rowId}:4"`,
+        id: rowId,
+        patientId: '44444444-4444-4444-8444-444444444444',
+        revision: 4,
+        status: 'draft_ready',
+        values: {
+          patient: '••••4444',
+          purpose: 'Clinical documentation',
+          sessionType: 'Summary',
+        },
+      },
+    ],
+    screenId,
+    title: screenId === 'P8-01' ? 'AI session launcher' : `Server-governed ${screenId}`,
+  };
+}
+
+function carePlanScreen(screenId: string) {
+  const rowId = `16161616-1616-4616-8616-${screenId.slice(3).padStart(12, '0')}`;
+  return {
+    actions: [],
+    columns: [
+      { key: 'planTitle', label: 'Plan' },
+      { key: 'patient', label: 'Patient' },
+      { key: 'reviewState', label: 'Review state' },
+    ],
+    generatedAt: '2026-09-28T12:00:00Z',
+    metrics: [{ key: 'plans', label: 'Care plans', value: 1, tone: 'info' }],
+    nextCursor: null,
+    notices: [
+      {
+        detail: 'Approval requires current ownership, consent and cross-modality safety evidence.',
+        title: 'Exact-version clinical review',
+        tone: 'warning',
+      },
+    ],
+    organizationId: organization.id,
+    pageSize: 25,
+    purpose: 'Render the minimum-necessary coordinated care-plan projection.',
+    rows: [
+      {
+        allowedActionKeys: [],
+        carePlanVersionId: '17171717-1717-4717-8717-171717171717',
+        encounterId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        etag: `"m9:${screenId}:${rowId}:5"`,
+        id: rowId,
+        patientId: '44444444-4444-4444-8444-444444444444',
+        revision: 5,
+        status: 'draft',
+        values: {
+          patient: 'PT-•••4444',
+          planTitle: `Server projection ${screenId}`,
+          reviewState: 'Ownership and safety review pending',
+        },
+      },
+    ],
+    screenId,
+    title: screenId === 'P9-01' ? 'Care plan dashboard' : `Server-governed ${screenId}`,
+  };
+}
+
+function followupScreen(screenId: string) {
+  const rowId = `27272727-2727-4727-8727-${screenId.slice(4).padStart(12, '0')}`;
+  return {
+    actions: [],
+    columns: [
+      { key: 'plan', label: 'Monitoring plan' },
+      { key: 'patient', label: 'Patient' },
+      { key: 'openEscalations', label: 'Open escalations' },
+    ],
+    generatedAt: '2026-09-28T12:30:00Z',
+    metrics: [{ key: 'plans', label: 'Monitoring plans', value: 1, tone: 'info' }],
+    nextCursor: null,
+    notices: [
+      {
+        detail: 'Every threshold breach creates an owned acknowledgement-required clinical task.',
+        title: 'Owned escalation evidence',
+        tone: 'warning',
+      },
+    ],
+    organizationId: organization.id,
+    pageSize: 25,
+    purpose: 'Render the minimum-necessary follow-up and outcome projection.',
+    rows: [
+      {
+        allowedActionKeys: [],
+        carePlanId: '28282828-2828-4828-8828-282828282828',
+        carePlanVersionId: '29292929-2929-4929-8929-292929292929',
+        encounterId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        etag: `"m10:${screenId}:${rowId}:6"`,
+        followupPlanId: rowId,
+        id: rowId,
+        patientId: '44444444-4444-4444-8444-444444444444',
+        revision: 6,
+        status: 'active',
+        values: {
+          openEscalations: '0',
+          patient: 'PT-•••4444',
+          plan: `Server projection ${screenId}`,
+        },
+      },
+    ],
+    screenId,
+    title: screenId === 'P10-01' ? 'Monitoring dashboard' : `Server-governed ${screenId}`,
+  };
+}
+
+function billingScreen(screenId: string) {
+  const rowId = `37373737-3737-4737-8737-${screenId.slice(4).padStart(12, '0')}`;
+  return {
+    actions: [],
+    columns: [
+      { key: 'number', label: 'Invoice or artifact' },
+      { key: 'amountMinor', label: 'Amount' },
+      { key: 'currency', label: 'Currency' },
+    ],
+    generatedAt: '2026-09-28T13:00:00Z',
+    metrics: [{ key: 'openInvoices', label: 'Open invoices', value: 1, tone: 'warning' }],
+    nextCursor: null,
+    notices: [
+      {
+        detail: 'Financial state never completes, blocks, reopens or rewrites a clinical record.',
+        title: 'Clinical independence',
+        tone: 'info',
+      },
+    ],
+    organizationId: organization.id,
+    pageSize: 25,
+    purpose: 'Render the minimum-necessary billing and payment projection.',
+    rows: [
+      {
+        allowedActionKeys: [],
+        etag: `"m11:${screenId}:${rowId}:4"`,
+        id: rowId,
+        invoiceId: rowId,
+        patientId: '44444444-4444-4444-8444-444444444444',
+        revision: 4,
+        status: 'partially_paid',
+        values: {
+          amountMinor: '23600',
+          currency: 'INR',
+          number: `Server projection ${screenId}`,
+        },
+      },
+    ],
+    screenId,
+    title: screenId === 'P11-01' ? 'Billing dashboard' : `Server-governed ${screenId}`,
+  };
+}
+
+function reportingScreen(screenId: string) {
+  const rowId = `38383838-3838-4838-8838-${screenId.slice(4).padStart(12, '0')}`;
+  return {
+    actions: [],
+    columns: [
+      { key: 'reportFamily', label: 'Report family' },
+      { key: 'metrics', label: 'Aggregate metrics' },
+    ],
+    generatedAt: '2026-09-28T14:00:00Z',
+    metrics: [{ key: 'completedRuns', label: 'Completed runs', tone: 'success', value: 1 }],
+    nextCursor: null,
+    notices: [
+      {
+        detail: 'Source clinical, identity and payment records are excluded.',
+        title: 'Minimum necessary',
+        tone: 'info',
+      },
+    ],
+    organizationId: organization.id,
+    pageSize: 25,
+    purpose: 'Render the minimum-necessary aggregate reporting projection.',
+    rows: [
+      {
+        allowedActionKeys: [],
+        etag: `"m12:${screenId}:${rowId}:1"`,
+        id: rowId,
+        reportRunId: rowId,
+        revision: 1,
+        status: 'completed',
+        values: {
+          metrics: 'aggregate_total=7',
+          reportFamily: `Server projection ${screenId}`,
+        },
+      },
+    ],
+    screenId,
+    title: screenId === 'P12-01' ? 'Reporting dashboard' : `Server-governed ${screenId}`,
+  };
+}
+
 const routeGroups = [
   { count: 23, module: 'M1', start: 5 },
   { count: 29, module: 'M2', start: 1 },
   { count: 15, module: 'P4', start: 1 },
   { count: 12, module: 'P5', start: 1 },
   { count: 27, module: 'COS', start: 1 },
+  { count: 11, module: 'P7', start: 1 },
+  { count: 10, module: 'P8', start: 1 },
+  { count: 12, module: 'P9', start: 1 },
+  { count: 9, module: 'P10', start: 1 },
+  { count: 11, module: 'P11', start: 1 },
+  { count: 10, module: 'P12', start: 1 },
 ];
 const routeSweepTimeout = 120_000;
 
@@ -734,6 +1043,34 @@ async function mockAuthenticatedSession(page: Page) {
     const screenId = new URL(route.request().url()).pathname.split('/').at(-1) ?? '';
     return jsonResponse(route, encounterScreen(screenId));
   });
+  await page.route(`**/api/v1/organizations/${organization.id}/assessments/screens/*`, (route) => {
+    const screenId = new URL(route.request().url()).pathname.split('/').at(-1) ?? '';
+    return jsonResponse(route, assessmentScreen(screenId));
+  });
+  await page.route(`**/api/v1/organizations/${organization.id}/documents/screens/*`, (route) => {
+    const screenId = new URL(route.request().url()).pathname.split('/').at(-1) ?? '';
+    return jsonResponse(route, documentScreen(screenId));
+  });
+  await page.route(`**/api/v1/organizations/${organization.id}/ai/screens/*`, (route) => {
+    const screenId = new URL(route.request().url()).pathname.split('/').at(-1) ?? '';
+    return jsonResponse(route, aiScreen(screenId));
+  });
+  await page.route(`**/api/v1/organizations/${organization.id}/care-plans/screens/*`, (route) => {
+    const screenId = new URL(route.request().url()).pathname.split('/').at(-1) ?? '';
+    return jsonResponse(route, carePlanScreen(screenId));
+  });
+  await page.route(`**/api/v1/organizations/${organization.id}/followups/screens/*`, (route) => {
+    const screenId = new URL(route.request().url()).pathname.split('/').at(-1) ?? '';
+    return jsonResponse(route, followupScreen(screenId));
+  });
+  await page.route(`**/api/v1/organizations/${organization.id}/billing/screens/*`, (route) => {
+    const screenId = new URL(route.request().url()).pathname.split('/').at(-1) ?? '';
+    return jsonResponse(route, billingScreen(screenId));
+  });
+  await page.route(`**/api/v1/organizations/${organization.id}/reporting/screens/*`, (route) => {
+    const screenId = new URL(route.request().url()).pathname.split('/').at(-1) ?? '';
+    return jsonResponse(route, reportingScreen(screenId));
+  });
 }
 
 async function expectNoSeriousViolations(page: Page, label: string) {
@@ -800,6 +1137,34 @@ for (const { module, count, start } of routeGroups) {
       if (module === 'P5') {
         await expect(page.getByText(`Server projection ${id}`, { exact: true })).toBeVisible();
         await expect(page.getByText('Server governed', { exact: true })).toBeVisible();
+      }
+      if (module === 'COS') {
+        await expect(page.getByText(`Server projection ${id}`, { exact: true })).toBeVisible();
+        await expect(page.getByText('Server governed', { exact: true })).toBeVisible();
+      }
+      if (module === 'P7') {
+        await expect(page.getByText(`Server projection ${id}`, { exact: true })).toBeVisible();
+        await expect(page.getByText('Server governed', { exact: true })).toBeVisible();
+      }
+      if (module === 'P8') {
+        await expect(page.getByText('••••4444', { exact: true })).toBeVisible();
+        await expect(page.getByText('Clinician governed', { exact: true })).toBeVisible();
+      }
+      if (module === 'P9') {
+        await expect(page.getByText(`Server projection ${id}`, { exact: true })).toBeVisible();
+        await expect(page.getByText('Clinician governed', { exact: true })).toBeVisible();
+      }
+      if (module === 'P10') {
+        await expect(page.getByText(`Server projection ${id}`, { exact: true })).toBeVisible();
+        await expect(page.getByText('Clinician governed', { exact: true })).toBeVisible();
+      }
+      if (module === 'P11') {
+        await expect(page.getByText(`Server projection ${id}`, { exact: true })).toBeVisible();
+        await expect(page.getByText('Financially governed', { exact: true })).toBeVisible();
+      }
+      if (module === 'P12') {
+        await expect(page.getByText(`Server projection ${id}`, { exact: true })).toBeVisible();
+        await expect(page.getByText('Aggregate only', { exact: true })).toBeVisible();
       }
       await expectNoDocumentHorizontalOverflow(page, id);
       await expectNoSeriousViolations(page, id);
@@ -983,6 +1348,141 @@ test('P5-09 preserves encounter context and submits append-only clinical note in
   await expectNoSeriousViolations(page, 'P5-09 governed note version');
 });
 
+test('COS-09 exposes verified context and debounced conflict-aware response autosave', async ({
+  page,
+}) => {
+  await mockAuthenticatedSession(page);
+  await page.unroute(`**/api/v1/organizations/${organization.id}/assessments/screens/*`);
+  const base = assessmentScreen('COS-09');
+  const row = {
+    ...base.rows[0]!,
+    allowedActionKeys: ['save-section-response'],
+  };
+  const projection = {
+    ...base,
+    actions: [
+      {
+        fields: [
+          {
+            inputType: 'uuid',
+            key: 'authorPractitionerId',
+            label: 'Author clinician',
+            options: [],
+            required: true,
+          },
+          {
+            inputType: 'text',
+            key: 'responseKey',
+            label: 'Response key',
+            options: [],
+            required: true,
+          },
+          {
+            inputType: 'textarea',
+            key: 'content',
+            label: 'Clinical response',
+            options: [],
+            required: true,
+          },
+          {
+            inputType: 'text',
+            key: 'sourceKey',
+            label: 'Source',
+            options: [],
+            required: true,
+          },
+          {
+            inputType: 'text',
+            key: 'methodKey',
+            label: 'Method',
+            options: [],
+            required: true,
+          },
+          {
+            inputType: 'select',
+            key: 'interpretationStatus',
+            label: 'Interpretation status',
+            options: [{ label: 'Uninterpreted', value: 'uninterpreted' }],
+            required: true,
+          },
+        ],
+        href: null,
+        ifMatchRequired: true,
+        key: 'save-section-response',
+        label: 'Save response',
+        reasonRequired: false,
+        style: 'primary',
+        targetRequired: true,
+      },
+    ],
+    rows: [row],
+    title: 'Clinical examination',
+  };
+  let actionRequests = 0;
+
+  await page.route('**/api/v1/auth/csrf', (route) =>
+    jsonResponse(route, {
+      headerName: 'X-XSRF-TOKEN',
+      parameterName: '_csrf',
+      token: 'assessment-csrf-token-1234567890',
+    }),
+  );
+  await page.route(
+    `**/api/v1/organizations/${organization.id}/assessments/screens/COS-09**`,
+    async (route) => {
+      const request = route.request();
+      if (request.method() === 'GET') {
+        expect(new URL(request.url()).searchParams.get('assessmentSessionId')).toBe(row.id);
+        await jsonResponse(route, projection);
+        return;
+      }
+      actionRequests += 1;
+      expect(request.headers()['x-xsrf-token']).toBe('assessment-csrf-token-1234567890');
+      expect(request.headers()['if-match']).toBe(row.etag);
+      expect(request.headers()['idempotency-key']).toMatch(
+        /^m6:save-section-response:[0-9a-f-]{36}$/,
+      );
+      expect(request.postDataJSON()).toEqual({
+        assessmentSessionId: row.assessmentSessionId,
+        encounterId: row.encounterId,
+        fields: {
+          authorPractitionerId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+          content: 'Mobility improved with no new red-flag finding.',
+          interpretationStatus: 'uninterpreted',
+          methodKey: 'structured_examination',
+          responseKey: 'clinical.examination',
+          sourceKey: 'direct_observation',
+        },
+        patientId: row.patientId,
+        reason: null,
+        targetId: row.id,
+      });
+      await jsonResponse(route, projection);
+    },
+  );
+
+  await page.goto(`/#/COS-09?assessmentSessionId=${row.id}`);
+  await expect(page.getByRole('heading', { name: 'Clinical examination' })).toBeVisible();
+  await page.getByLabel('Select Server projection COS-09').check();
+  await expect(page.getByRole('region', { name: 'Verified patient context' })).toContainText(
+    'Dr Asha Verma',
+  );
+  await page.getByRole('button', { name: 'Save response' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('textbox', { name: 'Response key' }).fill('clinical.examination');
+  await dialog
+    .getByRole('textbox', { name: 'Clinical response' })
+    .fill('Mobility improved with no new red-flag finding.');
+  await dialog.getByRole('textbox', { name: 'Source' }).fill('direct_observation');
+  await dialog.getByRole('textbox', { name: 'Method' }).fill('structured_examination');
+  await expect(dialog.getByText('Autosave queued')).toBeVisible();
+
+  await expect.poll(() => actionRequests).toBe(1);
+  await expect(dialog).toHaveCount(0);
+  await expectNoDocumentHorizontalOverflow(page, 'COS-09 governed assessment autosave');
+  await expectNoSeriousViolations(page, 'COS-09 governed assessment autosave');
+});
+
 test('M2-24 requires fresh server impact before submitting governed offboarding', async ({
   page,
 }) => {
@@ -1126,7 +1626,7 @@ test('M2-24 requires fresh server impact before submitting governed offboarding'
   await expectNoSeriousViolations(page, 'M2-24 governed offboarding');
 });
 
-test('live activation and remaining synthetic screens expose honest action boundaries', async ({
+test('live activation and assessment closeout expose honest action boundaries', async ({
   page,
 }) => {
   await mockAuthenticatedSession(page);
@@ -1137,17 +1637,16 @@ test('live activation and remaining synthetic screens expose honest action bound
   await expect(page.getByRole('button', { name: /Review.*unavailable/ })).toHaveCount(0);
 
   await page.goto('/#/COS-27');
-  await expect(page.getByText('Synthetic patient')).toBeVisible();
-  await expect(page.getByLabel('Clinical note')).toHaveAttribute('readonly', '');
-  await expect(page.getByRole('button', { name: /Save draft.*unavailable/ })).toBeDisabled();
+  await expect(page.getByText('Server projection COS-27', { exact: true })).toBeVisible();
+  await expect(page.getByText('Source package unavailable')).toBeVisible();
   await expect(
-    page.getByRole('button', { name: /Confirm and continue.*unavailable/ }),
-  ).toBeDisabled();
-  const pagination = page.getByRole('navigation', { name: 'Prototype pagination' });
+    page.getByText('No governed actions are available for this account and selection.'),
+  ).toBeVisible();
+  const pagination = page.getByRole('navigation', { name: 'Assessment screen pagination' });
   await expect(pagination.getByRole('link', { name: /COS-27/ })).toHaveCount(0);
   await expect(pagination.getByText('COS-27')).toHaveAttribute('aria-disabled', 'true');
-  await expectNoDocumentHorizontalOverflow(page, 'honest synthetic prototype boundary');
-  await expectNoSeriousViolations(page, 'honest synthetic prototype boundary');
+  await expectNoDocumentHorizontalOverflow(page, 'honest assessment activation boundary');
+  await expectNoSeriousViolations(page, 'honest assessment activation boundary');
 });
 
 test('M1-22 refreshes an active export with bounded polling and stops at ready', async ({

@@ -10,7 +10,7 @@
 - Vitest API-client/component/registry tests
 - Vite production build
 - npm dependency audit
-- Static 122-screen register contract: M1 23, M2 29, M3 16, M4 15, M5 12 and COS 27
+- Static 185-screen register contract: M1 23, M2 29, M3 16, M4 15, M5 12, COS 27, P7 11, P8 10, P9 12, P10 9, P11 11 and P12 10
 - Git secret/path checks
 
 ## Verified during Phase 0 start (13 September 2026)
@@ -1025,3 +1025,129 @@ This checkpoint records completed encounter construction and module-focused veri
 | M5 browser/accessibility/responsive | PASS | All 12 P5 routes and the governed P5-09 note-version flow pass in 10 Playwright cases across 1440/1024/768/390/320, including Axe and overflow checks. |
 
 See `MODULE_5_COMPLETION_REPORT.md`. Full cross-module browser/backend regression, image/deployment/security reruns, target clinical-policy acceptance and production release remain later QA/activation work.
+
+## Verified during Phase 6A-M6F Module 6 repository construction (28 September 2026)
+
+This checkpoint records completed clinical-assessment repository construction and module-focused verification. It does not claim that the unavailable protected COS source package has received visual/content acceptance, nor does it claim target clinical-policy or production approval.
+
+- V90-V92 release nine assessment permissions/operations, the twelve required forced-RLS relations, append-only response/review/signature/amendment evidence, payload-minimized events and direct lifecycle/provenance guards.
+- COS-01 through COS-27 now use live checked projections/actions with verified patient and responsible-clinician context, 27-step progress and strong-ETag conflict-aware autosave.
+- The complete path proves 27-section creation, two response versions, a purpose-bound measurement, red-flag review blocking/acknowledgement/resolution, completeness/source/uncertainty review, recent-authenticated MFA signing, amendment, completion and direct rewrite rejection.
+- Protected visual copy/components, approved instruments, local red-flag/interpretation policy, attestation text and AI synthesis remain explicit fail-closed activation inputs. COS-24 exposes no AI action.
+
+| M6 construction gate | Result | Local evidence |
+| --- | --- | --- |
+| Backend assessment gate | PASS | Java 25/Maven 3.9.11 compiles 415 production and 42 test sources, validates/applies V1-V92 to disposable PostgreSQL 18, and passes the focused 5/5 catalogue, registry and complete lifecycle tests. |
+| API contract | PASS | OpenAPI 0.45.0 verifies exactly 118 operations; generated-client drift and all 22 positive/negative API tests pass. |
+| Frontend static/unit/build | PASS | Formatting, strict typecheck, lint, the 43-source/7-feature/120-import boundary plus four negative fixtures, all 102 unit tests and the production build pass. |
+| M6 browser/accessibility/responsive | PASS | Every COS route, governed COS-09 autosave and COS-27 closeout pass in 15 Playwright cases across 1440/1024/768/390/320, including Axe and overflow checks. |
+
+See `MODULE_6_COMPLETION_REPORT.md`. Full cross-module regression, protected-source review, image/deployment/security reruns, target clinical-policy acceptance and production release remain later QA/activation work. Module 7 Documents and Results is the next repository dependency.
+
+## Verified during Phase 7A-M7F Module 7 repository construction (28 September 2026)
+
+This checkpoint records completed documents/results repository construction and module-focused verification. It does not claim production provider, clinical-policy, retention, target-deployment or release acceptance.
+
+- V93-V95 release Module 7 permissions/operations, the twelve required forced-RLS relations, immutable version/classification/scan/result/review/escalation/access evidence, payload-minimized events and direct lifecycle/provenance guards.
+- P7-01 through P7-11 use live checked projections/actions for bounded digest-checked private upload, immutable replacement versions, classification, scan/promotion state, purpose-bound viewing, diagnostic result provenance, critical-result workflow, history and export/share intent.
+- The complete path proves quarantine, classification, clean scan/promotion, a fully sourced critical laboratory result, unsafe-resolution rejection, acknowledgement, escalation, resolution, signed-access evidence, export intent and replacement without prior-version overwrite.
+- Provider URLs remain memory-only and cannot enter the access response contract; export/share remains an intent rather than a delivery claim. External providers and accountable policies remain fail closed.
+
+| M7 construction gate | Result | Local evidence |
+| --- | --- | --- |
+| Backend document/result gate | PASS | Java 25/Maven 3.9.11 compiles 423 production and 44 test sources, validates/applies V1-V95 to disposable PostgreSQL 18, and passes the focused 5/5 catalogue, registry and complete lifecycle tests. |
+| API contract | PASS | OpenAPI 0.46.0 verifies exactly 123 operations; generated-client drift and all 26 positive/negative API tests pass. |
+| Frontend static/unit/build | PASS | Formatting, strict typecheck, lint, the 47-source/8-feature/133-import boundary plus four negative fixtures, all 111 unit tests and the production build pass. |
+| M7 browser/accessibility/responsive | PASS | Every P7 route passes in 5/5 Playwright cases across 1440/1024/768/390/320, including Axe and overflow checks. |
+
+See `MODULE_7_COMPLETION_REPORT.md`. Full cross-module regression, protected COS source review, image/deployment/security reruns, production provider/policy activation and release acceptance remain later QA/activation work. Module 8 AI Governance is the next repository dependency.
+
+## Verified during Phase 8A-M8E Module 8 repository construction (28 September 2026)
+
+This checkpoint records completed AI-governance repository construction and module-focused verification. It does not claim production AI provider, model/prompt, clinical-use, safety-policy, target-deployment or release acceptance.
+
+- V96-V98 release Module 8 permissions/operations/events, 17 forced-RLS AI relations, immutable purpose/manifest/model/prompt/evaluation/job/output/citation/safety/review/usage/retention evidence, payload-minimized events and direct lifecycle/provenance guards.
+- P8-01 through P8-10 use live checked projections/actions for launch, purpose/consent, minimum-necessary input selection, processing, draft output/suggestions, safety/uncertainty flags, provenance, clinician review and session history.
+- The complete path proves fail-closed processing, immutable failed-attempt evidence, explicit resubmission, exact release/schema/manifest binding, cited draft ingestion, visible safety escalation, append-only clinician editing with citation lineage and recent-MFA acceptance only after resolution.
+- AI output remains draft until explicit review and cannot mutate an owning clinical aggregate. The production processing adapter and all accountable provider/policy activation inputs remain fail closed.
+
+| M8 construction gate | Result | Local evidence |
+| --- | --- | --- |
+| Backend AI-governance gate | PASS | Java 25/Maven 3.9.11 compiles 433 production and 46 test sources, validates/applies V1-V98 to disposable PostgreSQL 18, and passes the focused 5/5 catalogue, registry and complete lifecycle tests. |
+| API contract | PASS | OpenAPI 0.47.0 verifies exactly 125 operations; generated-client drift and all 28 positive/negative API tests pass. |
+| Frontend static/unit/build | PASS | Formatting, strict typecheck, lint, the 51-source/9-feature/146-import boundary plus four negative fixtures, all 116 unit tests and the production build pass. |
+| M8 browser/accessibility/responsive | PASS | Every P8 route passes in 5/5 Playwright cases across 1440/1024/768/390/320, including Axe and overflow checks. |
+
+See `MODULE_8_COMPLETION_REPORT.md`. Full cross-module regression, protected COS source review, image/deployment/security reruns, production AI/provider/policy activation and release acceptance remain later QA/activation work. Module 9 Care Planning is the next repository dependency.
+
+## Verified during Phase 9A-M9F Module 9 repository construction (28 September 2026)
+
+This checkpoint records completed care-planning repository construction and module-focused verification. It does not claim production clinical catalogue, interaction/consent/escalation policy, patient-delivery, target-deployment or release acceptance.
+
+- V99-V101 release Module 9 permissions/operations/events, ten forced-RLS care-plan relations, exact plan provenance on the existing clinical-task model, immutable priority/goal/intervention/assignment/consent/safety/approval/amendment evidence, payload-minimized events and direct lifecycle/version guards.
+- P9-01 through P9-12 use live checked projections/actions for dashboard, creation, priorities, goals, complete interventions, modality coordination, owners/tasks, consent/preferences, exact-version interaction review, separate approval/activation, patient summary and successor amendments.
+- The complete path proves intervention completeness and ownership/task coupling, unsafe-review rejection, current clear review and consent, exact-digest submission, eligible-clinician recent-MFA approval, activation, successor amendment and immutable prior goal evidence.
+- AI/assessment references remain provenance only. Clinical catalogues and delivery providers remain fail closed and cannot bypass the owning care-plan lifecycle.
+
+| M9 construction gate | Result | Local evidence |
+| --- | --- | --- |
+| Backend care-plan gate | PASS | Java 25/Maven 3.9.11 compiles 441 production and 48 test sources, validates/applies V1-V101 to disposable PostgreSQL 18, and passes the focused 5/5 catalogue, registry and complete lifecycle tests. |
+| API contract | PASS | OpenAPI 0.48.0 verifies exactly 127 operations; generated-client drift and all 30 positive/negative API tests pass. |
+| Frontend static/unit/build | PASS | Formatting, strict typecheck, lint, the 54-source/10-feature/155-import boundary plus four negative fixtures, all 121 unit tests and the production build pass. |
+| M9 browser/accessibility/responsive | PASS | Every P9 route passes in 5/5 Playwright cases across 1440/1024/768/390/320, including Axe and overflow checks. |
+
+See `MODULE_9_COMPLETION_REPORT.md`. Full cross-module regression, protected COS source review, image/deployment/security reruns, production clinical-policy/provider activation and release acceptance remain later QA/activation work. Module 10 Follow-up and Outcomes is the next repository dependency.
+
+## Verified during Phase 10A-M10E Module 10 repository construction (28 September 2026)
+
+This checkpoint records completed follow-up/outcomes repository construction and module-focused verification. It does not claim production outcome catalogue/instrument, threshold/cadence/escalation policy, notification-delivery, target-deployment or release acceptance.
+
+- V102-V104 release Module 10 permissions/operations/events, seven forced-RLS follow-up/outcome relations, exact escalation provenance on the existing clinical-task model, immutable definition/measurement/interpretation evidence, payload-minimized events and direct lifecycle/digest/escalation guards.
+- P10-01 through P10-09 use live checked projections/actions for monitoring, rules, domains, measures, owned escalation, scheduling, interpretation, exact-digest confirmation and outcome timeline.
+- The complete path proves active-care-plan binding, baseline/schedule capture, configuration freeze, responsible-clinician recent-MFA confirmation, atomic threshold breach with exact owned task, separate acknowledgement/resolution, attributed interpretation and completion only after escalation resolution.
+- Outcome catalogues, instruments, reference ranges, thresholds, cadence, SLA and notification delivery remain fail closed and cannot bypass the owning follow-up lifecycle.
+
+| M10 construction gate | Result | Local evidence |
+| --- | --- | --- |
+| Backend follow-up gate | PASS | Java 25/Maven 3.9.11 compiles 449 production and 50 test sources, validates/applies V1-V104 to disposable PostgreSQL 18, and passes the focused 5/5 catalogue, registry and complete lifecycle tests. |
+| API contract | PASS | OpenAPI 0.49.0 verifies exactly 129 operations; generated-client drift and all 32 positive/negative API tests pass. |
+| Frontend static/unit/build | PASS | Formatting, strict typecheck, lint, the 57-source/11-feature/163-import boundary plus four negative fixtures, all 126 unit tests and the production build pass. |
+| M10 browser/accessibility/responsive | PASS | Every P10 route passes in 5/5 Playwright cases across 1440/1024/768/390/320, including Axe and overflow checks. |
+
+See `MODULE_10_COMPLETION_REPORT.md`. Full cross-module regression, protected COS source review, image/deployment/security reruns, production clinical-policy/provider activation and release acceptance remain later QA/activation work. Module 11 Billing and Payments is the next repository dependency.
+
+## Verified during Phase 11A-M11E Module 11 repository construction (28 September 2026)
+
+This checkpoint records completed billing/payments repository construction and module-focused verification. It does not claim production finance/tax/accounting policy, merchant/provider callback activation, payer formats, export delivery, target-deployment or release acceptance.
+
+- V105-V107 release Module 11 permissions/operations/events, fifteen forced-RLS financial relations, immutable catalogue/estimate/invoice/settlement evidence, payload-minimized events and direct lifecycle/digest/balance guards.
+- P11-01 through P11-11 use live checked projections/actions for dashboards, pricing, packages, estimates, invoices, manual payment, card-data-free intents, refunds/adjustments, claims/remittances, reconciliation and export requests.
+- The complete path proves catalogue/package activation, exact estimate and immutable invoice lines, intent/payment/refund/credit evidence, claim/remittance, reconciliation resolution, purpose-bound export request, derived balance and direct rewrite/raw-card rejection.
+- Clinical completion remains independent from payment state. Unapproved provider callbacks, hosted links and export generation remain fail closed and cannot fabricate financial success.
+
+| M11 construction gate | Result | Local evidence |
+| --- | --- | --- |
+| Backend billing gate | PASS | Java 25/Maven 3.9.11 compiles 457 production and 52 test sources, validates/applies V1-V107 to disposable PostgreSQL 18, and passes the focused 5/5 catalogue, registry and complete lifecycle tests. |
+| API contract | PASS | OpenAPI 0.50.0 verifies exactly 131 operations; generated-client drift and all 34 positive/negative API tests pass. |
+| Frontend static/unit/build | PASS | Formatting, strict typecheck, lint, the 60-source/12-feature/171-import boundary plus four negative fixtures, all 131 unit tests and the production build pass. |
+| M11 browser/accessibility/responsive | PASS | Every P11 route passes in 5/5 Playwright cases across 1440/1024/768/390/320, including Axe and overflow checks. |
+
+See `MODULE_11_COMPLETION_REPORT.md`. Full cross-module regression, protected COS source review, image/deployment/security reruns, production finance/provider/policy activation and release acceptance remain later QA/activation work. Module 12 Reporting is the next repository dependency.
+
+## Verified during Phase 12A-M12E Module 12 repository construction (28 September 2026)
+
+This checkpoint records completed aggregate-reporting repository construction and module-focused verification. It does not claim production metric/legal-basis/retention policy, scheduler/worker identity, artifact storage/delivery, target-deployment or release acceptance.
+
+- V108-V110 release Module 12 permissions/operations/events, four forced-RLS reporting relations, immutable run/metric/export evidence, payload-minimized events and exact metric/digest/lifecycle guards.
+- P12-01 through P12-10 use live checked projections/actions for reporting dashboard, seven fixed report families, governed schedule definitions, exact-run export requests and report audit/history.
+- The complete path proves a bounded immutable aggregate snapshot, exact metric count and digest, schedule pause/resume/cancel revisions, one-hour-or-less export expiry, Java/PostgreSQL CSV-formula neutralization and rejection of evidence mutation.
+- Reports exclude source-record content. Scheduler execution, artifact generation and delivery remain fail closed and cannot fabricate a completed export.
+
+| M12 construction gate | Result | Local evidence |
+| --- | --- | --- |
+| Backend reporting gate | PASS | Java 25/Maven 3.9.11 compiles 466 production and 55 test sources, validates/applies V1-V110 to disposable PostgreSQL 18, and passes the focused 8/8 catalogue, CSV, registry and lifecycle tests. |
+| API contract | PASS | OpenAPI 0.51.0 verifies exactly 133 operations; generated-client drift and all 36 positive/negative API tests pass. |
+| Frontend static/unit/build | PASS | Formatting, strict typecheck, lint, the 63-source/13-feature/179-import boundary plus four negative fixtures, all 136 unit tests and the production build pass. |
+| M12 browser/accessibility/responsive | PASS | Every P12 route passes in 5/5 Playwright cases across 1440/1024/768/390/320, including Axe and overflow checks. |
+
+See `MODULE_12_COMPLETION_REPORT.md`. Full cross-module regression, protected COS source review, image/deployment/security reruns, production reporting-policy/worker/storage activation and release acceptance remain later QA/activation work. Module 13 Integrations and FHIR is the next repository dependency.

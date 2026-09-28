@@ -89,6 +89,11 @@ SELECT event_name,1,'CareOS Module 6 transactional assessment event.',aggregate_
        'active','m6-standing-direction-v1'
 FROM m6_outbox_seed;
 
+CREATE FUNCTION careos_m6_sha256(value text)
+RETURNS char(64) LANGUAGE sql IMMUTABLE STRICT AS $$
+    SELECT encode(sha256(convert_to(value,'UTF8')),'hex')::char(64)
+$$;
+
 INSERT INTO authorization_operation_events
     (operation_key,event_kind,event_name,schema_version,status,registry_version)
 SELECT operation_key,'outbox',event_name,1,'active','m6-standing-direction-v1'
@@ -325,7 +330,7 @@ BEGIN
        AND response.id=NEW.assessment_response_id AND response.status='draft' FOR UPDATE;
     IF expected_version IS NULL OR NEW.version_number<>expected_version
        OR NEW.prior_version_id IS DISTINCT FROM expected_prior
-       OR NEW.content_digest<>encode(digest(NEW.content_text,'sha256'),'hex')
+       OR NEW.content_digest<>careos_m6_sha256(NEW.content_text::text)
        OR NOT careos_m6_practitioner_can_write(
             NEW.organization_id,target_session,actor,NEW.author_practitioner_id,NEW.recorded_at) THEN
         RAISE EXCEPTION 'invalid Module 6 response version evidence' USING ERRCODE='23514';
@@ -340,33 +345,37 @@ CREATE FUNCTION careos_guard_m6_clinical_append()
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
     actor uuid:=nullif(current_setting('app.current_actor_id',true),'')::uuid;
-    target_session uuid:=NEW.assessment_session_id;
+    row_data jsonb:=to_jsonb(NEW);
+    target_session uuid;
     practitioner uuid;
+    evidence_at timestamptz;
     content_value text;
     digest_value text;
 BEGIN
     IF current_user<>'${applicationRole}' THEN RETURN NEW; END IF;
+    target_session:=(row_data->>'assessment_session_id')::uuid;
     practitioner:=CASE TG_TABLE_NAME
-        WHEN 'clinical_narratives' THEN NEW.author_practitioner_id
-        WHEN 'measurements' THEN NEW.recorded_by_practitioner_id
-        WHEN 'red_flags' THEN NEW.raised_by_practitioner_id
+        WHEN 'clinical_narratives' THEN (row_data->>'author_practitioner_id')::uuid
+        WHEN 'measurements' THEN (row_data->>'recorded_by_practitioner_id')::uuid
+        WHEN 'red_flags' THEN (row_data->>'raised_by_practitioner_id')::uuid
         ELSE NULL END;
+    evidence_at:=coalesce(row_data->>'raised_at',row_data->>'recorded_at')::timestamptz;
     IF TG_TABLE_NAME='clinical_narratives' THEN
-        content_value:=NEW.content_text; digest_value:=NEW.content_digest;
+        content_value:=row_data->>'content_text'; digest_value:=row_data->>'content_digest';
     ELSIF TG_TABLE_NAME='red_flags' THEN
-        content_value:=NEW.summary_text; digest_value:=NEW.summary_digest;
+        content_value:=row_data->>'summary_text'; digest_value:=row_data->>'summary_digest';
     END IF;
     IF TG_OP<>'INSERT' OR practitioner IS NULL
        OR NOT EXISTS (SELECT 1 FROM assessment_sessions session
             WHERE session.organization_id=NEW.organization_id
               AND session.id=target_session AND session.status='in_progress')
        OR NOT careos_m6_practitioner_can_write(
-            NEW.organization_id,target_session,actor,practitioner,
-            CASE TG_TABLE_NAME WHEN 'red_flags' THEN NEW.raised_at ELSE NEW.recorded_at END)
-       OR (content_value IS NOT NULL AND digest_value<>encode(digest(content_value,'sha256'),'hex')) THEN
+            NEW.organization_id,target_session,actor,practitioner,evidence_at)
+       OR (content_value IS NOT NULL AND digest_value<>careos_m6_sha256(content_value::text)) THEN
         RAISE EXCEPTION 'invalid Module 6 clinical append evidence' USING ERRCODE='23514';
     END IF;
-    IF TG_TABLE_NAME='measurements' AND lower(replace(NEW.measurement_key,'-','_'))='composite_cure_score' THEN
+    IF TG_TABLE_NAME='measurements'
+       AND lower(replace(row_data->>'measurement_key','-','_'))='composite_cure_score' THEN
         RAISE EXCEPTION 'composite cure scores are prohibited' USING ERRCODE='23514';
     END IF;
     RETURN NEW;
@@ -423,7 +432,7 @@ BEGIN
        AND section.status='complete';
     IF NOT NEW.completeness_confirmed OR NOT NEW.source_reviewed OR NOT NEW.uncertainty_reviewed
        OR NEW.completed_section_count<>expected_completed OR NEW.total_section_count<>27
-       OR NEW.review_digest<>encode(digest(NEW.review_summary_text,'sha256'),'hex')
+       OR NEW.review_digest<>careos_m6_sha256(NEW.review_summary_text::text)
        OR NOT EXISTS (SELECT 1 FROM assessment_sessions session
             WHERE session.organization_id=NEW.organization_id
               AND session.id=NEW.assessment_session_id
@@ -451,10 +460,10 @@ DECLARE actor uuid:=nullif(current_setting('app.current_actor_id',true),'')::uui
 BEGIN
     IF current_user<>'${applicationRole}' THEN RETURN NEW; END IF;
     IF NEW.attestation_key<>'structural-clinician-review-v1'
-       OR NEW.signature_digest<>encode(digest(concat_ws('|',
+       OR NEW.signature_digest<>careos_m6_sha256(concat_ws('|',
             NEW.assessment_session_id::text,NEW.assessment_review_id::text,
             NEW.assessment_revision::text,NEW.signer_practitioner_id::text,
-            NEW.attestation_key),'sha256'),'hex')
+            NEW.attestation_key)::text)
        OR NOT EXISTS (SELECT 1 FROM assessment_sessions session
             JOIN assessment_reviews review
               ON review.organization_id=session.organization_id
@@ -486,7 +495,7 @@ RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE actor uuid:=nullif(current_setting('app.current_actor_id',true),'')::uuid;
 BEGIN
     IF current_user<>'${applicationRole}' THEN RETURN NEW; END IF;
-    IF NEW.amendment_digest<>encode(digest(NEW.amendment_text,'sha256'),'hex')
+    IF NEW.amendment_digest<>careos_m6_sha256(NEW.amendment_text::text)
        OR NOT EXISTS (SELECT 1 FROM assessment_sessions session
             JOIN assessment_signatures signature
               ON signature.organization_id=session.organization_id

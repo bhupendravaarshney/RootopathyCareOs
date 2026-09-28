@@ -2,6 +2,9 @@ import type {
   AcceptInvitationData,
   AcceptInvitationResponse,
   AcceptInvitationResponses,
+  AiActionRequest,
+  BillingActionRequest,
+  ReportingActionRequest,
   ActivateOrganizationUnitData,
   ActivateOrganizationUnitResponse,
   ActivateOrganizationUnitResponses,
@@ -23,6 +26,8 @@ import type {
   CompletePasswordResetData,
   CompletePasswordResetResponse,
   CompletePasswordResetResponses,
+  CarePlanActionRequest,
+  FollowupActionRequest,
   CloseOrganizationUnitData,
   CloseOrganizationUnitResponse,
   CloseOrganizationUnitResponses,
@@ -32,6 +37,7 @@ import type {
   CreateFacilityDraftData,
   CreateFacilityDraftResponse,
   CreateFacilityDraftResponses,
+  CreateDocumentAccessResponse,
   CreateOrganizationUnitDraftData,
   CreateOrganizationUnitDraftResponse,
   CreateOrganizationUnitDraftResponses,
@@ -103,11 +109,25 @@ import type {
   GetAdministrationReadinessData,
   GetAdministrationReadinessResponse,
   GetAdministrationReadinessResponses,
+  GetAiScreenData,
+  GetAiScreenResponse,
+  GetBillingScreenData,
+  GetBillingScreenResponse,
+  GetReportingScreenData,
+  GetReportingScreenResponse,
   GetAuthenticationSessionData,
   GetAuthenticationSessionResponse,
   GetAuthenticationSessionResponses,
+  GetAssessmentScreenData,
+  GetAssessmentScreenResponse,
+  GetCarePlanScreenData,
+  GetCarePlanScreenResponse,
+  GetDocumentScreenData,
+  GetDocumentScreenResponse,
   GetEncounterScreenData,
   GetEncounterScreenResponse,
+  GetFollowupScreenData,
+  GetFollowupScreenResponse,
   GetFacilityDirectoryData,
   GetFacilityDirectoryResponse,
   GetFacilityDirectoryResponses,
@@ -171,6 +191,10 @@ import type {
   ConfigurationResultRequest,
   ConfigurationValidationRequest,
   CredentialDocumentMetadata,
+  AssessmentActionRequest,
+  DocumentAccessRequest,
+  DocumentActionRequest,
+  DocumentUploadMetadata,
   EncounterActionRequest,
   EvidenceExportAccessRequest,
   EvidenceExportAccessResponse,
@@ -183,8 +207,15 @@ import type {
   OperatingHoursDirectory,
   OperatingHoursOverview,
   PatientRegistryActionRequest,
+  PerformAiActionResponse,
+  PerformAssessmentActionResponse,
+  PerformBillingActionResponse,
+  PerformReportingActionResponse,
+  PerformCarePlanActionResponse,
+  PerformDocumentActionResponse,
   PerformPatientRegistryActionResponse,
   PerformEncounterActionResponse,
+  PerformFollowupActionResponse,
   PerformSchedulingActionResponse,
   PerformWorkforceActionResponse,
   Problem,
@@ -240,6 +271,7 @@ import type {
   UpdateOrganizationIdentifierData,
   UpdateOrganizationIdentifierResponse,
   UpdateOrganizationIdentifierResponses,
+  UploadDocumentResponse,
   VerifyMfaEnrollmentData,
   VerifyMfaEnrollmentResponse,
   VerifyMfaEnrollmentResponses,
@@ -255,7 +287,14 @@ import type {
   WorkforceActionRequest,
   WorkforceScreen,
 } from './generated';
+import { aiScreenValidator } from './ai-contracts';
+import { assessmentScreenValidator } from './assessment-contracts';
+import { billingScreenValidator } from './billing-contracts';
+import { reportingScreenValidator } from './reporting-contracts';
+import { carePlanScreenValidator } from './care-plan-contracts';
+import { documentAccessResponseValidator, documentScreenValidator } from './document-contracts';
 import { encounterScreenValidator } from './encounter-contracts';
+import { followupScreenValidator } from './followup-contracts';
 import {
   auditEvidenceDetailValidator,
   auditEvidencePageValidator,
@@ -734,10 +773,35 @@ function requireStrongEtag(value: string): string {
   return value;
 }
 
+function containsLikelyCardNumber(value: string): boolean {
+  for (const candidate of value.matchAll(/(?:\d[ -]?){13,19}/g)) {
+    const digits = candidate[0].replace(/[^0-9]/g, '');
+    if (digits.length < 13 || digits.length > 19) continue;
+    let sum = 0;
+    for (let index = digits.length - 1; index >= 0; index -= 1) {
+      let digit = Number(digits[index]);
+      if ((digits.length - 1 - index) % 2 === 1) {
+        digit *= 2;
+        if (digit > 9) digit -= 9;
+      }
+      sum += digit;
+    }
+    if (sum % 10 === 0) return true;
+  }
+  return false;
+}
+
 type WorkforceScreenQuery = NonNullable<GetWorkforceScreenData['query']>;
 type PatientRegistryScreenQuery = NonNullable<GetPatientRegistryScreenData['query']>;
 type SchedulingScreenQuery = NonNullable<GetSchedulingScreenData['query']>;
 type EncounterScreenQuery = NonNullable<GetEncounterScreenData['query']>;
+type AssessmentScreenQuery = NonNullable<GetAssessmentScreenData['query']>;
+type DocumentScreenQuery = NonNullable<GetDocumentScreenData['query']>;
+type AiScreenQuery = NonNullable<GetAiScreenData['query']>;
+type CarePlanScreenQuery = NonNullable<GetCarePlanScreenData['query']>;
+type FollowupScreenQuery = NonNullable<GetFollowupScreenData['query']>;
+type BillingScreenQuery = NonNullable<GetBillingScreenData['query']>;
+type ReportingScreenQuery = NonNullable<GetReportingScreenData['query']>;
 
 function requirePatientRegistryScreenId(value: string): string {
   if (!/^P3-(0[1-9]|1[0-6])$/.test(value)) {
@@ -903,6 +967,380 @@ function encounterScreenQuery(query: EncounterScreenQuery): string {
   if (query.cursor !== undefined) {
     if (!/^[A-Za-z0-9_-]{1,2048}$/.test(query.cursor)) {
       throw new Error('Encounter page cursor has an invalid format.');
+    }
+    parameters.set('cursor', query.cursor);
+  }
+  const serialized = parameters.toString();
+  return serialized ? `?${serialized}` : '';
+}
+
+function requireAssessmentScreenId(value: string): string {
+  if (!/^COS-(0[1-9]|1[0-9]|2[0-7])$/.test(value)) {
+    throw new Error('screenId must identify a Module 6 screen from COS-01 through COS-27.');
+  }
+  return value;
+}
+
+function requireAssessmentActionKey(value: string): string {
+  if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(value)) {
+    throw new Error('actionKey has an invalid format.');
+  }
+  return value;
+}
+
+function assessmentScreenQuery(query: AssessmentScreenQuery): string {
+  const parameters = new URLSearchParams();
+  for (const [key, value] of [
+    ['patientId', query.patientId],
+    ['encounterId', query.encounterId],
+    ['assessmentSessionId', query.assessmentSessionId],
+  ] as const) {
+    if (value !== undefined) parameters.set(key, requireUuid(value, key));
+  }
+  if (query.q !== undefined) {
+    if (typeof query.q !== 'string' || Array.from(query.q).length > 100) {
+      throw new Error('Assessment search must contain at most 100 characters.');
+    }
+    const normalized = query.q.trim().normalize('NFC');
+    if (normalized) parameters.set('q', normalized);
+  }
+  if (query.status !== undefined) {
+    const normalized = query.status.trim().normalize('NFC');
+    if (
+      normalized &&
+      (Array.from(normalized).length > 120 ||
+        !/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$/.test(normalized))
+    ) {
+      throw new Error('Assessment status must be a stable lower-case state or event key.');
+    }
+    if (normalized) parameters.set('status', normalized);
+  }
+  if (query.limit !== undefined) {
+    if (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > 100) {
+      throw new Error('Assessment page limit must be an integer from 1 to 100.');
+    }
+    parameters.set('limit', String(query.limit));
+  }
+  if (query.cursor !== undefined) {
+    if (!/^[A-Za-z0-9_-]{1,2048}$/.test(query.cursor)) {
+      throw new Error('Assessment page cursor has an invalid format.');
+    }
+    parameters.set('cursor', query.cursor);
+  }
+  const serialized = parameters.toString();
+  return serialized ? `?${serialized}` : '';
+}
+
+function requireDocumentScreenId(value: string): string {
+  if (!/^P7-(0[1-9]|1[01])$/.test(value)) {
+    throw new Error('screenId must identify a Module 7 screen from P7-01 through P7-11.');
+  }
+  return value;
+}
+
+function requireDocumentActionKey(value: string): string {
+  if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(value)) {
+    throw new Error('actionKey has an invalid format.');
+  }
+  return value;
+}
+
+function documentScreenQuery(query: DocumentScreenQuery): string {
+  const parameters = new URLSearchParams();
+  for (const [key, value] of [
+    ['patientId', query.patientId],
+    ['documentId', query.documentId],
+    ['diagnosticReportId', query.diagnosticReportId],
+  ] as const) {
+    if (value !== undefined) parameters.set(key, requireUuid(value, key));
+  }
+  if (query.q !== undefined) {
+    if (typeof query.q !== 'string' || Array.from(query.q).length > 100) {
+      throw new Error('Document search must contain at most 100 characters.');
+    }
+    const normalized = query.q.trim().normalize('NFC');
+    if (normalized) parameters.set('q', normalized);
+  }
+  if (query.status !== undefined) {
+    const normalized = query.status.trim().normalize('NFC');
+    if (
+      normalized &&
+      (Array.from(normalized).length > 120 ||
+        !/^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*$/.test(normalized))
+    ) {
+      throw new Error('Document status must be a stable lower-case state or event key.');
+    }
+    if (normalized) parameters.set('status', normalized);
+  }
+  if (query.limit !== undefined) {
+    if (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > 100) {
+      throw new Error('Document page limit must be an integer from 1 to 100.');
+    }
+    parameters.set('limit', String(query.limit));
+  }
+  if (query.cursor !== undefined) {
+    if (!/^[A-Za-z0-9_-]{1,2048}$/.test(query.cursor)) {
+      throw new Error('Document page cursor has an invalid format.');
+    }
+    parameters.set('cursor', query.cursor);
+  }
+  const serialized = parameters.toString();
+  return serialized ? `?${serialized}` : '';
+}
+
+function requireAiScreenId(value: string): string {
+  if (!/^P8-(0[1-9]|10)$/.test(value)) {
+    throw new Error('screenId must identify a Module 8 screen from P8-01 through P8-10.');
+  }
+  return value;
+}
+
+function requireAiActionKey(value: string): string {
+  if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(value)) {
+    throw new Error('actionKey has an invalid format.');
+  }
+  return value;
+}
+
+function aiScreenQuery(query: AiScreenQuery): string {
+  const parameters = new URLSearchParams();
+  for (const [key, value] of [
+    ['patientId', query.patientId],
+    ['encounterId', query.encounterId],
+    ['aiSessionId', query.aiSessionId],
+  ] as const) {
+    if (value !== undefined) parameters.set(key, requireUuid(value, key));
+  }
+  if (query.q !== undefined) {
+    if (typeof query.q !== 'string' || Array.from(query.q).length > 100) {
+      throw new Error('AI session search must contain at most 100 characters.');
+    }
+    const normalized = query.q.trim().normalize('NFC');
+    if (normalized) parameters.set('q', normalized);
+  }
+  if (query.status !== undefined) {
+    const normalized = query.status.trim().normalize('NFC');
+    if (normalized && Array.from(normalized).length > 80) {
+      throw new Error('AI session status must contain at most 80 characters.');
+    }
+    if (normalized) parameters.set('status', normalized);
+  }
+  if (query.limit !== undefined) {
+    if (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > 100) {
+      throw new Error('AI session page limit must be an integer from 1 to 100.');
+    }
+    parameters.set('limit', String(query.limit));
+  }
+  if (query.cursor !== undefined) {
+    if (!/^[A-Za-z0-9_-]{1,2048}$/.test(query.cursor)) {
+      throw new Error('AI session page cursor has an invalid format.');
+    }
+    parameters.set('cursor', query.cursor);
+  }
+  const serialized = parameters.toString();
+  return serialized ? `?${serialized}` : '';
+}
+
+function requireCarePlanScreenId(value: string): string {
+  if (!/^P9-(0[1-9]|1[0-2])$/.test(value)) {
+    throw new Error('screenId must identify a Module 9 screen from P9-01 through P9-12.');
+  }
+  return value;
+}
+
+function requireCarePlanActionKey(value: string): string {
+  if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(value)) {
+    throw new Error('actionKey has an invalid format.');
+  }
+  return value;
+}
+
+function carePlanScreenQuery(query: CarePlanScreenQuery): string {
+  const parameters = new URLSearchParams();
+  for (const [key, value] of [
+    ['patientId', query.patientId],
+    ['encounterId', query.encounterId],
+    ['carePlanId', query.carePlanId],
+  ] as const) {
+    if (value !== undefined) parameters.set(key, requireUuid(value, key));
+  }
+  if (query.q !== undefined) {
+    if (typeof query.q !== 'string' || Array.from(query.q).length > 100) {
+      throw new Error('Care-plan search must contain at most 100 characters.');
+    }
+    const normalized = query.q.trim().normalize('NFC');
+    if (normalized) parameters.set('q', normalized);
+  }
+  if (query.status !== undefined) {
+    const normalized = query.status.trim().normalize('NFC');
+    if (normalized && Array.from(normalized).length > 80) {
+      throw new Error('Care-plan status must contain at most 80 characters.');
+    }
+    if (normalized) parameters.set('status', normalized);
+  }
+  if (query.limit !== undefined) {
+    if (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > 100) {
+      throw new Error('Care-plan page limit must be an integer from 1 to 100.');
+    }
+    parameters.set('limit', String(query.limit));
+  }
+  if (query.cursor !== undefined) {
+    if (!/^[A-Za-z0-9_-]{1,2048}$/.test(query.cursor)) {
+      throw new Error('Care-plan page cursor has an invalid format.');
+    }
+    parameters.set('cursor', query.cursor);
+  }
+  const serialized = parameters.toString();
+  return serialized ? `?${serialized}` : '';
+}
+
+function requireFollowupScreenId(value: string): string {
+  if (!/^P10-0[1-9]$/.test(value)) {
+    throw new Error('screenId must identify a Module 10 screen from P10-01 through P10-09.');
+  }
+  return value;
+}
+
+function requireFollowupActionKey(value: string): string {
+  if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(value)) {
+    throw new Error('actionKey has an invalid format.');
+  }
+  return value;
+}
+
+function followupScreenQuery(query: FollowupScreenQuery): string {
+  const parameters = new URLSearchParams();
+  for (const [key, value] of [
+    ['patientId', query.patientId],
+    ['encounterId', query.encounterId],
+    ['followupPlanId', query.followupPlanId],
+  ] as const) {
+    if (value !== undefined) parameters.set(key, requireUuid(value, key));
+  }
+  if (query.q !== undefined) {
+    if (typeof query.q !== 'string' || Array.from(query.q).length > 100) {
+      throw new Error('Follow-up search must contain at most 100 characters.');
+    }
+    const normalized = query.q.trim().normalize('NFC');
+    if (normalized) parameters.set('q', normalized);
+  }
+  if (query.status !== undefined) {
+    const normalized = query.status.trim().normalize('NFC');
+    if (normalized && Array.from(normalized).length > 80) {
+      throw new Error('Follow-up status must contain at most 80 characters.');
+    }
+    if (normalized) parameters.set('status', normalized);
+  }
+  if (query.limit !== undefined) {
+    if (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > 100) {
+      throw new Error('Follow-up page limit must be an integer from 1 to 100.');
+    }
+    parameters.set('limit', String(query.limit));
+  }
+  if (query.cursor !== undefined) {
+    if (!/^[A-Za-z0-9_-]{1,2048}$/.test(query.cursor)) {
+      throw new Error('Follow-up page cursor has an invalid format.');
+    }
+    parameters.set('cursor', query.cursor);
+  }
+  const serialized = parameters.toString();
+  return serialized ? `?${serialized}` : '';
+}
+
+function requireBillingScreenId(value: string): string {
+  if (!/^P11-(0[1-9]|1[01])$/.test(value)) {
+    throw new Error('screenId must identify a Module 11 screen from P11-01 through P11-11.');
+  }
+  return value;
+}
+
+function requireBillingActionKey(value: string): string {
+  if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(value)) {
+    throw new Error('actionKey has an invalid format.');
+  }
+  return value;
+}
+
+function billingScreenQuery(query: BillingScreenQuery): string {
+  const parameters = new URLSearchParams();
+  for (const [key, value] of [
+    ['patientId', query.patientId],
+    ['invoiceId', query.invoiceId],
+  ] as const) {
+    if (value !== undefined) parameters.set(key, requireUuid(value, key));
+  }
+  if (query.q !== undefined) {
+    if (typeof query.q !== 'string' || Array.from(query.q).length > 100) {
+      throw new Error('Billing search must contain at most 100 characters.');
+    }
+    const normalized = query.q.trim().normalize('NFC');
+    if (normalized) parameters.set('q', normalized);
+  }
+  if (query.status !== undefined) {
+    const normalized = query.status.trim().normalize('NFC');
+    if (normalized && Array.from(normalized).length > 80) {
+      throw new Error('Billing status must contain at most 80 characters.');
+    }
+    if (normalized) parameters.set('status', normalized);
+  }
+  if (query.limit !== undefined) {
+    if (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > 100) {
+      throw new Error('Billing page limit must be an integer from 1 to 100.');
+    }
+    parameters.set('limit', String(query.limit));
+  }
+  if (query.cursor !== undefined) {
+    if (!/^[A-Za-z0-9_-]{1,2048}$/.test(query.cursor)) {
+      throw new Error('Billing page cursor has an invalid format.');
+    }
+    parameters.set('cursor', query.cursor);
+  }
+  const serialized = parameters.toString();
+  return serialized ? `?${serialized}` : '';
+}
+
+function requireReportingScreenId(value: string): string {
+  if (!/^P12-(0[1-9]|10)$/.test(value)) {
+    throw new Error('screenId must identify a Module 12 screen from P12-01 through P12-10.');
+  }
+  return value;
+}
+
+function requireReportingActionKey(value: string): string {
+  if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(value)) {
+    throw new Error('actionKey has an invalid format.');
+  }
+  return value;
+}
+
+function reportingScreenQuery(query: ReportingScreenQuery): string {
+  const parameters = new URLSearchParams();
+  if (query.reportRunId !== undefined) {
+    parameters.set('reportRunId', requireUuid(query.reportRunId, 'reportRunId'));
+  }
+  if (query.q !== undefined) {
+    if (typeof query.q !== 'string' || Array.from(query.q).length > 100) {
+      throw new Error('Reporting search must contain at most 100 characters.');
+    }
+    const normalized = query.q.trim().normalize('NFC');
+    if (normalized) parameters.set('q', normalized);
+  }
+  if (query.status !== undefined) {
+    const normalized = query.status.trim().normalize('NFC');
+    if (normalized && Array.from(normalized).length > 80) {
+      throw new Error('Reporting status must contain at most 80 characters.');
+    }
+    if (normalized) parameters.set('status', normalized);
+  }
+  if (query.limit !== undefined) {
+    if (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > 100) {
+      throw new Error('Reporting page limit must be an integer from 1 to 100.');
+    }
+    parameters.set('limit', String(query.limit));
+  }
+  if (query.cursor !== undefined) {
+    if (!/^[A-Za-z0-9_-]{1,2048}$/.test(query.cursor)) {
+      throw new Error('Reporting page cursor has an invalid format.');
     }
     parameters.set('cursor', query.cursor);
   }
@@ -3715,6 +4153,473 @@ export class CareOsApiClient {
       signal: options.signal,
       successStatuses: [200, 201],
       validateResponse: encounterScreenValidator(organization, screen),
+    });
+  }
+
+  getAssessmentScreen(
+    organizationId: string,
+    screenId: string,
+    query: AssessmentScreenQuery = {},
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requireAssessmentScreenId(screenId);
+    return this.#request<GetAssessmentScreenResponse>({
+      method: 'GET',
+      path: `/v1/organizations/${organization}/assessments/screens/${screen}${assessmentScreenQuery(query)}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: assessmentScreenValidator(organization, screen),
+    });
+  }
+
+  performAssessmentAction(
+    organizationId: string,
+    screenId: string,
+    actionKey: string,
+    body: AssessmentActionRequest,
+    ifMatch: string | undefined,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requireAssessmentScreenId(screenId);
+    const action = requireAssessmentActionKey(actionKey);
+    return this.#mutation<PerformAssessmentActionResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ...(ifMatch === undefined ? {} : { ifMatch: requireStrongEtag(ifMatch) }),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/assessments/screens/${screen}/actions/${action}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200, 201],
+      validateResponse: assessmentScreenValidator(organization, screen),
+    });
+  }
+
+  getDocumentScreen(
+    organizationId: string,
+    screenId: string,
+    query: DocumentScreenQuery = {},
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requireDocumentScreenId(screenId);
+    return this.#request<GetDocumentScreenResponse>({
+      method: 'GET',
+      path: `/v1/organizations/${organization}/documents/screens/${screen}${documentScreenQuery(query)}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: documentScreenValidator(organization, screen),
+    });
+  }
+
+  performDocumentAction(
+    organizationId: string,
+    screenId: string,
+    actionKey: string,
+    body: DocumentActionRequest,
+    ifMatch: string | undefined,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requireDocumentScreenId(screenId);
+    const action = requireDocumentActionKey(actionKey);
+    return this.#mutation<PerformDocumentActionResponse>({
+      body,
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ...(ifMatch === undefined ? {} : { ifMatch: requireStrongEtag(ifMatch) }),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/documents/screens/${screen}/actions/${action}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200, 201],
+      validateResponse: documentScreenValidator(organization, screen),
+    });
+  }
+
+  getAiScreen(
+    organizationId: string,
+    screenId: string,
+    query: AiScreenQuery = {},
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requireAiScreenId(screenId);
+    return this.#request<GetAiScreenResponse>({
+      method: 'GET',
+      path: `/v1/organizations/${organization}/ai/screens/${screen}${aiScreenQuery(query)}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: aiScreenValidator(organization, screen),
+    });
+  }
+
+  performAiAction(
+    organizationId: string,
+    screenId: string,
+    actionKey: string,
+    body: AiActionRequest,
+    ifMatch: string | undefined,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requireAiScreenId(screenId);
+    const action = requireAiActionKey(actionKey);
+    const reason = body.reason.trim().normalize('NFC');
+    if (Array.from(reason).length < 10 || Array.from(reason).length > 500) {
+      throw new Error('AI action reason must contain 10 to 500 characters.');
+    }
+    if (Object.keys(body.fields).length > 32) {
+      throw new Error('AI action fields must contain at most 32 values.');
+    }
+    return this.#mutation<PerformAiActionResponse>({
+      body: { ...body, reason },
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ...(ifMatch === undefined ? {} : { ifMatch: requireStrongEtag(ifMatch) }),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/ai/screens/${screen}/actions/${action}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200, 201],
+      validateResponse: aiScreenValidator(organization, screen),
+    });
+  }
+
+  getCarePlanScreen(
+    organizationId: string,
+    screenId: string,
+    query: CarePlanScreenQuery = {},
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requireCarePlanScreenId(screenId);
+    return this.#request<GetCarePlanScreenResponse>({
+      method: 'GET',
+      path: `/v1/organizations/${organization}/care-plans/screens/${screen}${carePlanScreenQuery(query)}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: carePlanScreenValidator(organization, screen),
+    });
+  }
+
+  performCarePlanAction(
+    organizationId: string,
+    screenId: string,
+    actionKey: string,
+    body: CarePlanActionRequest,
+    ifMatch: string | undefined,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requireCarePlanScreenId(screenId);
+    const action = requireCarePlanActionKey(actionKey);
+    const reason = body.reason.trim().normalize('NFC');
+    if (Array.from(reason).length < 10 || Array.from(reason).length > 500) {
+      throw new Error('Care-plan action reason must contain 10 to 500 characters.');
+    }
+    if (Object.keys(body.fields).length > 32) {
+      throw new Error('Care-plan action fields must contain at most 32 values.');
+    }
+    return this.#mutation<PerformCarePlanActionResponse>({
+      body: { ...body, reason },
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ...(ifMatch === undefined ? {} : { ifMatch: requireStrongEtag(ifMatch) }),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/care-plans/screens/${screen}/actions/${action}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200, 201],
+      validateResponse: carePlanScreenValidator(organization, screen),
+    });
+  }
+
+  getFollowupScreen(
+    organizationId: string,
+    screenId: string,
+    query: FollowupScreenQuery = {},
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requireFollowupScreenId(screenId);
+    return this.#request<GetFollowupScreenResponse>({
+      method: 'GET',
+      path: `/v1/organizations/${organization}/followups/screens/${screen}${followupScreenQuery(query)}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: followupScreenValidator(organization, screen),
+    });
+  }
+
+  performFollowupAction(
+    organizationId: string,
+    screenId: string,
+    actionKey: string,
+    body: FollowupActionRequest,
+    ifMatch: string | undefined,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requireFollowupScreenId(screenId);
+    const action = requireFollowupActionKey(actionKey);
+    const reason = body.reason.trim().normalize('NFC');
+    if (Array.from(reason).length < 10 || Array.from(reason).length > 500) {
+      throw new Error('Follow-up action reason must contain 10 to 500 characters.');
+    }
+    if (Object.keys(body.fields).length > 32) {
+      throw new Error('Follow-up action fields must contain at most 32 values.');
+    }
+    return this.#mutation<PerformFollowupActionResponse>({
+      body: { ...body, reason },
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ...(ifMatch === undefined ? {} : { ifMatch: requireStrongEtag(ifMatch) }),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/followups/screens/${screen}/actions/${action}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200, 201],
+      validateResponse: followupScreenValidator(organization, screen),
+    });
+  }
+
+  getBillingScreen(
+    organizationId: string,
+    screenId: string,
+    query: BillingScreenQuery = {},
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requireBillingScreenId(screenId);
+    return this.#request<GetBillingScreenResponse>({
+      method: 'GET',
+      path: `/v1/organizations/${organization}/billing/screens/${screen}${billingScreenQuery(query)}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: billingScreenValidator(organization, screen),
+    });
+  }
+
+  performBillingAction(
+    organizationId: string,
+    screenId: string,
+    actionKey: string,
+    body: BillingActionRequest,
+    ifMatch: string | undefined,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requireBillingScreenId(screenId);
+    const action = requireBillingActionKey(actionKey);
+    const reason = body.reason.trim().normalize('NFC');
+    if (Array.from(reason).length < 10 || Array.from(reason).length > 500) {
+      throw new Error('Billing action reason must contain 10 to 500 characters.');
+    }
+    if (containsLikelyCardNumber(reason)) {
+      throw new Error('Raw card data, provider tokens, and bearer links are prohibited.');
+    }
+    if (Object.keys(body.fields).length > 32) {
+      throw new Error('Billing action fields must contain at most 32 values.');
+    }
+    for (const [key, value] of Object.entries(body.fields)) {
+      if (/card|pan|cvv|cvc|token|bearer/i.test(key)) {
+        throw new Error('Raw card data, provider tokens, and bearer links are prohibited.');
+      }
+      if (containsLikelyCardNumber(value)) {
+        throw new Error('Raw card data, provider tokens, and bearer links are prohibited.');
+      }
+    }
+    return this.#mutation<PerformBillingActionResponse>({
+      body: { ...body, reason },
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ...(ifMatch === undefined ? {} : { ifMatch: requireStrongEtag(ifMatch) }),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/billing/screens/${screen}/actions/${action}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200, 201],
+      validateResponse: billingScreenValidator(organization, screen),
+    });
+  }
+
+  getReportingScreen(
+    organizationId: string,
+    screenId: string,
+    query: ReportingScreenQuery = {},
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requireReportingScreenId(screenId);
+    return this.#request<GetReportingScreenResponse>({
+      method: 'GET',
+      path: `/v1/organizations/${organization}/reporting/screens/${screen}${reportingScreenQuery(query)}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: reportingScreenValidator(organization, screen),
+    });
+  }
+
+  performReportingAction(
+    organizationId: string,
+    screenId: string,
+    actionKey: string,
+    body: ReportingActionRequest,
+    ifMatch: string | undefined,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requireReportingScreenId(screenId);
+    const action = requireReportingActionKey(actionKey);
+    const reason = body.reason.trim().normalize('NFC');
+    if (Array.from(reason).length < 10 || Array.from(reason).length > 500) {
+      throw new Error('Reporting action reason must contain 10 to 500 characters.');
+    }
+    if (Object.keys(body.fields).length > 32) {
+      throw new Error('Reporting action fields must contain at most 32 values.');
+    }
+    return this.#mutation<PerformReportingActionResponse>({
+      body: { ...body, reason },
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ...(ifMatch === undefined ? {} : { ifMatch: requireStrongEtag(ifMatch) }),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/reporting/screens/${screen}/actions/${action}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200, 201],
+      validateResponse: reportingScreenValidator(organization, screen),
+    });
+  }
+
+  uploadDocument(
+    organizationId: string,
+    metadata: DocumentUploadMetadata,
+    file: Blob | File,
+    ifMatch: string | undefined,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    requireUuid(metadata.patientId, 'patientId');
+    for (const [key, value] of [
+      ['encounterId', metadata.encounterId],
+      ['assessmentSessionId', metadata.assessmentSessionId],
+      ['replacementDocumentId', metadata.replacementDocumentId],
+    ] as const) {
+      if (value != null) requireUuid(value, key);
+    }
+    const title = metadata.title.trim().normalize('NFC');
+    if (Array.from(title).length < 2 || Array.from(title).length > 240) {
+      throw new Error('Document title must contain 2 to 240 characters.');
+    }
+    if (!/^[a-z][a-z0-9_]{1,79}$/.test(metadata.documentTypeKey)) {
+      throw new Error('Document type is invalid.');
+    }
+    if (!/^[a-z][a-z0-9_.:-]{1,119}$/.test(metadata.sourceKey)) {
+      throw new Error('Document source is invalid.');
+    }
+    if (!/^[0-9a-f]{64}$/.test(metadata.sha256)) {
+      throw new Error('Document sha256 must be a lower-case SHA-256 digest.');
+    }
+    const reason = metadata.reason.trim().normalize('NFC');
+    if (Array.from(reason).length < 10 || Array.from(reason).length > 500) {
+      throw new Error('Document upload reason must contain 10 to 500 characters.');
+    }
+    if (file.size < 1 || file.size > 20 * 1024 * 1024) {
+      throw new Error('Document file must contain 1 byte to 20 MiB.');
+    }
+    const permittedDocumentTypes = new Map([
+      ['application/pdf', ['.pdf']],
+      ['image/jpeg', ['.jpg', '.jpeg']],
+      ['image/png', ['.png']],
+      ['text/plain', ['.txt']],
+    ]);
+    const permittedExtensions = permittedDocumentTypes.get(file.type);
+    if (!permittedExtensions) {
+      throw new Error('Document file must be a PDF, JPEG, PNG, or plain-text file.');
+    }
+    const suppliedName =
+      typeof File !== 'undefined' && file instanceof File
+        ? file.name.normalize('NFC')
+        : `document${permittedExtensions[0]}`;
+    if (!permittedExtensions.some((extension) => suppliedName.toLowerCase().endsWith(extension))) {
+      throw new Error('Document name does not match its declared media type.');
+    }
+    const formData = new FormData();
+    formData.append(
+      'metadata',
+      new Blob([JSON.stringify({ ...metadata, reason, title })], { type: 'application/json' }),
+    );
+    formData.append('file', file, suppliedName);
+    return this.#mutation<UploadDocumentResponse>({
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ...(ifMatch === undefined ? {} : { ifMatch: requireStrongEtag(ifMatch) }),
+      method: 'POST',
+      multipartBody: formData,
+      path: `/v1/organizations/${organization}/documents`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200, 201],
+      validateResponse: documentScreenValidator(organization, 'P7-03'),
+    });
+  }
+
+  createDocumentAccess(
+    organizationId: string,
+    documentId: string,
+    body: DocumentAccessRequest,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const document = requireUuid(documentId, 'documentId');
+    const version =
+      body.documentVersionId == null
+        ? null
+        : requireUuid(body.documentVersionId, 'documentVersionId');
+    const purposes = new Set([
+      'clinical_care',
+      'result_review',
+      'patient_request',
+      'security_investigation',
+    ]);
+    if (!purposes.has(body.purposeKey)) {
+      throw new Error('Document access purpose is invalid.');
+    }
+    const reason = body.reason.trim().normalize('NFC');
+    if (Array.from(reason).length < 10 || Array.from(reason).length > 500) {
+      throw new Error('Document access reason must contain 10 to 500 characters.');
+    }
+    return this.#mutation<CreateDocumentAccessResponse>({
+      body: {
+        ...(version === null ? {} : { documentVersionId: version }),
+        purposeKey: body.purposeKey,
+        reason,
+      },
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/documents/${document}/accesses`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: documentAccessResponseValidator(
+        organization,
+        document,
+        version,
+        body.purposeKey,
+      ),
     });
   }
 

@@ -1,10 +1,12 @@
 # CareOS Module 6 implementation plan
 
 **Module:** M6 Clinical assessment and COS preservation (`COS-01` through `COS-27`)  
-**Current phase:** M6A repository construction in progress; consolidated QA deferred  
+**Current phase:** M6A-M6F repository construction complete; module-focused verification passed and consolidated QA deferred
 **Predecessor:** M5 repository PASS through Flyway V89  
 **Implementation direction:** user's standing approval to complete repository construction before consolidated QA  
 **Production acceptance:** not granted
+
+The completed repository evidence is recorded in `MODULE_6_COMPLETION_REPORT.md`.
 
 ## Authoritative scope
 

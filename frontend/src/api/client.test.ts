@@ -161,6 +161,351 @@ function encounterScreenFixture() {
   };
 }
 
+const assessmentOrganizationId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+const assessmentSessionId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+const assessmentEncounterId = '12121212-1212-4121-8121-121212121212';
+const assessmentPatientId = '34343434-3434-4343-8343-343434343434';
+
+function assessmentScreenFixture() {
+  return {
+    actions: [
+      {
+        fields: [],
+        href: null,
+        ifMatchRequired: true,
+        key: 'complete-assessment',
+        label: 'Complete assessment',
+        reasonRequired: true,
+        style: 'primary',
+        targetRequired: true,
+      },
+    ],
+    columns: [{ key: 'primary', label: 'Patient' }],
+    generatedAt: '2026-09-28T09:00:00Z',
+    metrics: [{ key: 'active', label: 'Active', tone: 'info', value: 1 }],
+    nextCursor: null,
+    notices: [],
+    organizationId: assessmentOrganizationId,
+    pageSize: 25,
+    purpose: 'Confirm the governed clinical assessment closeout.',
+    rows: [
+      {
+        allowedActionKeys: ['complete-assessment'],
+        assessmentSessionId,
+        encounterId: assessmentEncounterId,
+        etag: `"m6:COS-27:${assessmentSessionId}:9"`,
+        id: assessmentSessionId,
+        patientId: assessmentPatientId,
+        revision: 9,
+        status: 'signed',
+        values: { primary: 'Synthetic assessment' },
+      },
+    ],
+    screenId: 'COS-27',
+    title: 'Confirm and close',
+  };
+}
+
+const documentOrganizationId = '56565656-5656-4565-8565-565656565656';
+const documentId = '78787878-7878-4787-8787-787878787878';
+const documentVersionId = '90909090-9090-4909-8909-909090909090';
+const documentPatientId = '23232323-2323-4232-8232-232323232323';
+const diagnosticReportId = '45454545-4545-4454-8454-454545454545';
+
+function documentScreenFixture(screenId = 'P7-04') {
+  return {
+    actions: [
+      {
+        fields: [],
+        href: null,
+        ifMatchRequired: true,
+        key: 'classify-document',
+        label: 'Append classification',
+        reasonRequired: true,
+        style: 'primary',
+        targetRequired: true,
+      },
+    ],
+    columns: [{ key: 'primary', label: 'Document' }],
+    generatedAt: '2026-09-28T10:00:00Z',
+    metrics: [{ key: 'clean', label: 'Clean', tone: 'success', value: 1 }],
+    nextCursor: null,
+    notices: [],
+    organizationId: documentOrganizationId,
+    pageSize: 25,
+    purpose: 'Review immutable document evidence.',
+    rows: [
+      {
+        allowedActionKeys: ['classify-document'],
+        diagnosticReportId,
+        documentId,
+        documentVersionId,
+        etag: `"m7:${screenId}:${documentId}:4"`,
+        id: documentId,
+        patientId: documentPatientId,
+        revision: 4,
+        status: 'clean',
+        values: { primary: 'Synthetic laboratory report' },
+      },
+    ],
+    screenId,
+    title: 'Classification and metadata',
+  };
+}
+
+function documentAccessFixture() {
+  const accessIntentId = '67676767-6767-4676-8676-676767676767';
+  return {
+    accessIntentId,
+    accessPath: `/api/v1/organizations/${documentOrganizationId}/documents/${documentId}/versions/${documentVersionId}/accesses/${accessIntentId}?purposeKey=result_review`,
+    byteCount: 128,
+    documentId,
+    documentVersionId,
+    expiresAt: '2026-09-28T10:01:00Z',
+    mediaType: 'application/pdf',
+    purposeKey: 'result_review',
+    sha256: 'a'.repeat(64),
+  };
+}
+
+const aiOrganizationId = '89898989-8989-4898-8989-898989898989';
+const aiSessionId = 'abababab-abab-4bab-8bab-abababababab';
+const aiEncounterId = 'cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd';
+const aiPatientId = 'efefefef-efef-4fef-8fef-efefefefefef';
+
+function aiScreenFixture() {
+  return {
+    actions: [
+      {
+        fields: [
+          {
+            inputType: 'select',
+            key: 'decision',
+            label: 'Decision',
+            options: [
+              { label: 'Accept', value: 'accepted' },
+              { label: 'Reject', value: 'rejected' },
+            ],
+            required: true,
+          },
+        ],
+        href: null,
+        ifMatchRequired: true,
+        key: 'decide-output',
+        label: 'Record clinician decision',
+        reasonRequired: true,
+        style: 'primary',
+        targetRequired: true,
+      },
+    ],
+    columns: [{ key: 'patient', label: 'Patient' }],
+    generatedAt: '2026-09-28T11:00:00Z',
+    metrics: [{ key: 'draftReady', label: 'Drafts awaiting review', tone: 'warning', value: 1 }],
+    nextCursor: null,
+    notices: [
+      {
+        detail: 'No output is accepted automatically.',
+        title: 'AI output is always a draft',
+        tone: 'warning',
+      },
+    ],
+    organizationId: aiOrganizationId,
+    pageSize: 25,
+    purpose: 'Explicitly decide the latest AI draft.',
+    rows: [
+      {
+        allowedActionKeys: ['decide-output'],
+        encounterId: aiEncounterId,
+        etag: `"m8:P8-09:${aiSessionId}:4"`,
+        id: aiSessionId,
+        patientId: aiPatientId,
+        revision: 4,
+        status: 'draft_ready',
+        values: { patient: '••••9999' },
+      },
+    ],
+    screenId: 'P8-09',
+    title: 'Clinician review and approval',
+  };
+}
+
+const carePlanOrganizationId = '16161616-1616-4616-8616-161616161616';
+const carePlanId = '17171717-1717-4717-8717-171717171717';
+const carePlanVersionId = '18181818-1818-4818-8818-181818181818';
+const carePlanEncounterId = '19191919-1919-4919-8919-191919191919';
+const carePlanPatientId = '20202020-2020-4020-8020-202020202020';
+
+function carePlanScreenFixture() {
+  return {
+    actions: [
+      {
+        fields: [],
+        href: null,
+        ifMatchRequired: true,
+        key: 'submit-plan',
+        label: 'Submit for review',
+        reasonRequired: true,
+        style: 'primary',
+        targetRequired: true,
+      },
+    ],
+    columns: [{ key: 'planTitle', label: 'Plan' }],
+    generatedAt: '2026-09-28T12:00:00Z',
+    metrics: [{ key: 'draft', label: 'Draft plans', tone: 'warning', value: 1 }],
+    nextCursor: null,
+    notices: [],
+    organizationId: carePlanOrganizationId,
+    pageSize: 25,
+    purpose: 'Freeze the exact complete plan version for accountable review.',
+    rows: [
+      {
+        allowedActionKeys: ['submit-plan'],
+        carePlanVersionId,
+        encounterId: carePlanEncounterId,
+        etag: `"m9:P9-10:${carePlanId}:5"`,
+        id: carePlanId,
+        patientId: carePlanPatientId,
+        revision: 5,
+        status: 'draft',
+        values: { planTitle: 'Coordinated recovery plan' },
+      },
+    ],
+    screenId: 'P9-10',
+    title: 'Clinician approval',
+  };
+}
+
+const followupOrganizationId = '21212121-2121-4121-8121-212121212121';
+const followupPlanId = '22222221-2221-4221-8221-222222222221';
+const followupEventId = '23232321-2321-4321-8321-232323232321';
+const followupEncounterId = '24242421-2421-4421-8421-242424242421';
+const followupPatientId = '25252521-2521-4521-8521-252525252521';
+
+function followupScreenFixture() {
+  return {
+    actions: [
+      {
+        fields: [],
+        href: null,
+        ifMatchRequired: true,
+        key: 'record-measurement',
+        label: 'Record measurement',
+        reasonRequired: true,
+        style: 'primary',
+        targetRequired: true,
+      },
+    ],
+    columns: [{ key: 'eventType', label: 'Event' }],
+    generatedAt: '2026-09-28T12:30:00Z',
+    metrics: [{ key: 'pending', label: 'Pending follow-ups', tone: 'warning', value: 1 }],
+    nextCursor: null,
+    notices: [],
+    organizationId: followupOrganizationId,
+    pageSize: 25,
+    purpose: 'Record attributed outcome evidence.',
+    rows: [
+      {
+        allowedActionKeys: ['record-measurement'],
+        encounterId: followupEncounterId,
+        etag: `"m10:P10-04:${followupEventId}:0"`,
+        followupEventId,
+        followupPlanId,
+        id: followupEventId,
+        patientId: followupPatientId,
+        revision: 0,
+        status: 'scheduled',
+        values: { eventType: 'scheduled' },
+      },
+    ],
+    screenId: 'P10-04',
+    title: 'Measures',
+  };
+}
+
+const billingOrganizationId = '31313131-3131-4131-8131-313131313131';
+const billingInvoiceId = '32323232-3232-4232-8232-323232323232';
+const billingPatientId = '33333332-3332-4332-8332-333333333332';
+
+function billingScreenFixture() {
+  return {
+    actions: [
+      {
+        fields: [],
+        href: null,
+        ifMatchRequired: true,
+        key: 'record-payment',
+        label: 'Record payment',
+        reasonRequired: true,
+        style: 'primary',
+        targetRequired: true,
+      },
+    ],
+    columns: [{ key: 'balanceMinor', label: 'Balance' }],
+    generatedAt: '2026-09-28T13:00:00Z',
+    metrics: [{ key: 'openInvoices', label: 'Open invoices', tone: 'warning', value: 1 }],
+    nextCursor: null,
+    notices: [],
+    organizationId: billingOrganizationId,
+    pageSize: 25,
+    purpose: 'Record exact non-card settlement evidence.',
+    rows: [
+      {
+        allowedActionKeys: ['record-payment'],
+        etag: `"m11:P11-06:${billingInvoiceId}:2"`,
+        id: billingInvoiceId,
+        invoiceId: billingInvoiceId,
+        patientId: billingPatientId,
+        revision: 2,
+        status: 'partially_paid',
+        values: { balanceMinor: '18600', currency: 'INR' },
+      },
+    ],
+    screenId: 'P11-06',
+    title: 'Payment',
+  };
+}
+
+const reportingOrganizationId = '41414141-4141-4141-8141-414141414141';
+const reportingRunId = '42424242-4242-4242-8242-424242424242';
+
+function reportingScreenFixture() {
+  return {
+    actions: [
+      {
+        fields: [],
+        href: null,
+        ifMatchRequired: true,
+        key: 'request-report-export',
+        label: 'Request export',
+        reasonRequired: true,
+        style: 'primary',
+        targetRequired: true,
+      },
+    ],
+    columns: [{ key: 'reportFamily', label: 'Report family' }],
+    generatedAt: '2026-09-28T14:00:00Z',
+    metrics: [{ key: 'completedRuns', label: 'Completed runs', tone: 'success', value: 1 }],
+    nextCursor: null,
+    notices: [],
+    organizationId: reportingOrganizationId,
+    pageSize: 25,
+    purpose: 'Request an exact aggregate report export.',
+    rows: [
+      {
+        allowedActionKeys: ['request-report-export'],
+        etag: `"m12:P12-09:${reportingRunId}:1"`,
+        id: reportingRunId,
+        reportRunId: reportingRunId,
+        revision: 1,
+        status: 'completed',
+        values: { artifact: 'report_run', reportFamily: 'operational' },
+      },
+    ],
+    screenId: 'P12-09',
+    title: 'Scheduled exports',
+  };
+}
+
 function validCsrfResponse() {
   return jsonResponse({
     headerName: 'X-XSRF-TOKEN',
@@ -178,7 +523,7 @@ describe('CareOsApiClient', () => {
           generatedAt: '2026-09-14T00:00:00Z',
           modules: ['M1'],
           product: 'CareOS',
-          screenCount: 122,
+          screenCount: 185,
         },
         { headers: { ETag: '"summary-v1"' } },
       ),
@@ -1683,6 +2028,585 @@ describe('CareOsApiClient', () => {
     expect(headers.get('Idempotency-Key')).toBe('m5:complete:test-request-0001');
     expect(headers.get('X-XSRF-TOKEN')).toBe('valid-csrf-token-123456');
     expect(JSON.parse(String(init?.body))).toEqual(body);
+  });
+
+  it('sends bounded Module 6 context queries and accepts an exactly bound projection', async () => {
+    const fetcher = mockFetch(jsonResponse(assessmentScreenFixture()));
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+
+    const result = await client.getAssessmentScreen(assessmentOrganizationId, 'COS-27', {
+      assessmentSessionId,
+      encounterId: assessmentEncounterId,
+      limit: 25,
+      patientId: assessmentPatientId,
+      q: '  closeout  ',
+      status: 'signed',
+    });
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    const [url, init] = fetcher.mock.calls[0]!;
+    expect(url).toBe(
+      `/api/v1/organizations/${assessmentOrganizationId}/assessments/screens/COS-27` +
+        `?patientId=${assessmentPatientId}&encounterId=${assessmentEncounterId}` +
+        `&assessmentSessionId=${assessmentSessionId}&q=closeout&status=signed&limit=25`,
+    );
+    expect(init?.method).toBe('GET');
+    expect(init?.credentials).toBe('include');
+  });
+
+  it('submits a revision and idempotency-bound Module 6 action', async () => {
+    const fetcher = mockFetch(validCsrfResponse(), jsonResponse(assessmentScreenFixture()));
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+    const body = {
+      assessmentSessionId,
+      encounterId: assessmentEncounterId,
+      fields: {},
+      patientId: assessmentPatientId,
+      reason: 'Completed after review of signatures and all safety evidence.',
+      targetId: assessmentSessionId,
+    };
+    const etag = `"m6:COS-27:${assessmentSessionId}:9"`;
+
+    const result = await client.performAssessmentAction(
+      assessmentOrganizationId,
+      'COS-27',
+      'complete-assessment',
+      body,
+      etag,
+      'm6:complete:test-request-0001',
+    );
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    const [url, init] = fetcher.mock.calls[1]!;
+    const headers = new Headers(init?.headers);
+    expect(url).toBe(
+      `/api/v1/organizations/${assessmentOrganizationId}/assessments/screens/COS-27/actions/complete-assessment`,
+    );
+    expect(init?.method).toBe('POST');
+    expect(headers.get('If-Match')).toBe(etag);
+    expect(headers.get('Idempotency-Key')).toBe('m6:complete:test-request-0001');
+    expect(headers.get('X-XSRF-TOKEN')).toBe('valid-csrf-token-123456');
+    expect(JSON.parse(String(init?.body))).toEqual(body);
+  });
+
+  it('sends bounded Module 7 context queries and validates the exact projection', async () => {
+    const fetcher = mockFetch(jsonResponse(documentScreenFixture()));
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+
+    const result = await client.getDocumentScreen(documentOrganizationId, 'P7-04', {
+      diagnosticReportId,
+      documentId,
+      limit: 25,
+      patientId: documentPatientId,
+      q: '  laboratory  ',
+      status: 'clean',
+    });
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    const [url, init] = fetcher.mock.calls[0]!;
+    expect(url).toBe(
+      `/api/v1/organizations/${documentOrganizationId}/documents/screens/P7-04` +
+        `?patientId=${documentPatientId}&documentId=${documentId}` +
+        `&diagnosticReportId=${diagnosticReportId}&q=laboratory&status=clean&limit=25`,
+    );
+    expect(init?.method).toBe('GET');
+    expect(init?.credentials).toBe('include');
+  });
+
+  it('submits a revision and idempotency-bound Module 7 action', async () => {
+    const fetcher = mockFetch(validCsrfResponse(), jsonResponse(documentScreenFixture()));
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+    const body = {
+      diagnosticReportId,
+      documentId,
+      documentVersionId,
+      fields: { categoryKey: 'laboratory' },
+      patientId: documentPatientId,
+      reason: 'Classified against the verified source and patient context.',
+      targetId: documentId,
+    };
+    const etag = `"m7:P7-04:${documentId}:4"`;
+
+    const result = await client.performDocumentAction(
+      documentOrganizationId,
+      'P7-04',
+      'classify-document',
+      body,
+      etag,
+      'm7:classify:test-request-0001',
+    );
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    const [url, init] = fetcher.mock.calls[1]!;
+    const headers = new Headers(init?.headers);
+    expect(url).toBe(
+      `/api/v1/organizations/${documentOrganizationId}/documents/screens/P7-04/actions/classify-document`,
+    );
+    expect(init?.method).toBe('POST');
+    expect(headers.get('If-Match')).toBe(etag);
+    expect(headers.get('Idempotency-Key')).toBe('m7:classify:test-request-0001');
+    expect(headers.get('X-XSRF-TOKEN')).toBe('valid-csrf-token-123456');
+    expect(JSON.parse(String(init?.body))).toEqual(body);
+  });
+
+  it('sends bounded Module 8 context queries and validates the exact projection', async () => {
+    const fetcher = mockFetch(jsonResponse(aiScreenFixture()));
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+
+    const result = await client.getAiScreen(aiOrganizationId, 'P8-09', {
+      aiSessionId,
+      encounterId: aiEncounterId,
+      limit: 25,
+      patientId: aiPatientId,
+      q: '  review  ',
+      status: 'draft_ready',
+    });
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    const [url, init] = fetcher.mock.calls[0]!;
+    expect(url).toBe(
+      `/api/v1/organizations/${aiOrganizationId}/ai/screens/P8-09` +
+        `?patientId=${aiPatientId}&encounterId=${aiEncounterId}&aiSessionId=${aiSessionId}` +
+        '&q=review&status=draft_ready&limit=25',
+    );
+    expect(init?.method).toBe('GET');
+    expect(init?.credentials).toBe('include');
+  });
+
+  it('submits a revision and idempotency-bound Module 8 clinician decision', async () => {
+    const fetcher = mockFetch(validCsrfResponse(), jsonResponse(aiScreenFixture()));
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+    const body = {
+      fields: {
+        decision: 'accepted',
+        reviewerPractitionerId: '12121212-1212-4212-8212-121212121212',
+      },
+      reason: 'Clinician reviewed the exact draft and all cited source evidence.',
+      targetId: aiSessionId,
+    };
+    const etag = `"m8:P8-09:${aiSessionId}:4"`;
+
+    const result = await client.performAiAction(
+      aiOrganizationId,
+      'P8-09',
+      'decide-output',
+      body,
+      etag,
+      'm8:decide:test-request-0001',
+    );
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    const [url, init] = fetcher.mock.calls[1]!;
+    const headers = new Headers(init?.headers);
+    expect(url).toBe(
+      `/api/v1/organizations/${aiOrganizationId}/ai/screens/P8-09/actions/decide-output`,
+    );
+    expect(init?.method).toBe('POST');
+    expect(headers.get('If-Match')).toBe(etag);
+    expect(headers.get('Idempotency-Key')).toBe('m8:decide:test-request-0001');
+    expect(headers.get('X-XSRF-TOKEN')).toBe('valid-csrf-token-123456');
+    expect(JSON.parse(String(init?.body))).toEqual(body);
+  });
+
+  it('sends bounded Module 9 context queries and validates the exact plan projection', async () => {
+    const fetcher = mockFetch(jsonResponse(carePlanScreenFixture()));
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+
+    const result = await client.getCarePlanScreen(carePlanOrganizationId, 'P9-10', {
+      carePlanId,
+      encounterId: carePlanEncounterId,
+      limit: 25,
+      patientId: carePlanPatientId,
+      q: '  coordinated  ',
+      status: 'draft',
+    });
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    const [url, init] = fetcher.mock.calls[0]!;
+    expect(url).toBe(
+      `/api/v1/organizations/${carePlanOrganizationId}/care-plans/screens/P9-10` +
+        `?patientId=${carePlanPatientId}&encounterId=${carePlanEncounterId}` +
+        `&carePlanId=${carePlanId}&q=coordinated&status=draft&limit=25`,
+    );
+    expect(init?.method).toBe('GET');
+    expect(init?.credentials).toBe('include');
+  });
+
+  it('submits a revision and idempotency-bound Module 9 plan transition', async () => {
+    const fetcher = mockFetch(validCsrfResponse(), jsonResponse(carePlanScreenFixture()));
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+    const body = {
+      fields: {},
+      reason: 'Complete ownership, consent and safety evidence reviewed.',
+      targetId: carePlanId,
+    };
+    const etag = `"m9:P9-10:${carePlanId}:5"`;
+
+    const result = await client.performCarePlanAction(
+      carePlanOrganizationId,
+      'P9-10',
+      'submit-plan',
+      body,
+      etag,
+      'm9:submit:test-request-0001',
+    );
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    const [url, init] = fetcher.mock.calls[1]!;
+    const headers = new Headers(init?.headers);
+    expect(url).toBe(
+      `/api/v1/organizations/${carePlanOrganizationId}/care-plans/screens/P9-10/actions/submit-plan`,
+    );
+    expect(init?.method).toBe('POST');
+    expect(headers.get('If-Match')).toBe(etag);
+    expect(headers.get('Idempotency-Key')).toBe('m9:submit:test-request-0001');
+    expect(headers.get('X-XSRF-TOKEN')).toBe('valid-csrf-token-123456');
+    expect(JSON.parse(String(init?.body))).toEqual(body);
+  });
+
+  it('sends bounded Module 10 context queries and validates exact follow-up evidence', async () => {
+    const fetcher = mockFetch(jsonResponse(followupScreenFixture()));
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+
+    const result = await client.getFollowupScreen(followupOrganizationId, 'P10-04', {
+      encounterId: followupEncounterId,
+      followupPlanId,
+      limit: 25,
+      patientId: followupPatientId,
+      q: '  recovery  ',
+      status: 'scheduled',
+    });
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    const [url, init] = fetcher.mock.calls[0]!;
+    expect(url).toBe(
+      `/api/v1/organizations/${followupOrganizationId}/followups/screens/P10-04` +
+        `?patientId=${followupPatientId}&encounterId=${followupEncounterId}` +
+        `&followupPlanId=${followupPlanId}&q=recovery&status=scheduled&limit=25`,
+    );
+    expect(init?.method).toBe('GET');
+    expect(init?.credentials).toBe('include');
+  });
+
+  it('submits revision-bound Module 10 measurement evidence', async () => {
+    const fetcher = mockFetch(validCsrfResponse(), jsonResponse(followupScreenFixture()));
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+    const body = {
+      fields: {
+        numericValue: '15',
+        outcomeDefinitionId: '26262621-2621-4621-8621-262626262621',
+      },
+      reason: 'Record and evaluate the attributed outcome measurement.',
+      targetId: followupEventId,
+    };
+    const etag = `"m10:P10-04:${followupEventId}:0"`;
+
+    const result = await client.performFollowupAction(
+      followupOrganizationId,
+      'P10-04',
+      'record-measurement',
+      body,
+      etag,
+      'm10:measure:test-request-0001',
+    );
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    const [url, init] = fetcher.mock.calls[1]!;
+    const headers = new Headers(init?.headers);
+    expect(url).toBe(
+      `/api/v1/organizations/${followupOrganizationId}/followups/screens/P10-04/actions/record-measurement`,
+    );
+    expect(init?.method).toBe('POST');
+    expect(headers.get('If-Match')).toBe(etag);
+    expect(headers.get('Idempotency-Key')).toBe('m10:measure:test-request-0001');
+    expect(headers.get('X-XSRF-TOKEN')).toBe('valid-csrf-token-123456');
+    expect(JSON.parse(String(init?.body))).toEqual(body);
+  });
+
+  it('sends bounded Module 11 invoice context and validates financial evidence', async () => {
+    const fetcher = mockFetch(jsonResponse(billingScreenFixture()));
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+
+    const result = await client.getBillingScreen(billingOrganizationId, 'P11-06', {
+      invoiceId: billingInvoiceId,
+      limit: 25,
+      patientId: billingPatientId,
+      q: '  invoice  ',
+      status: 'partially_paid',
+    });
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    const [url, init] = fetcher.mock.calls[0]!;
+    expect(url).toBe(
+      `/api/v1/organizations/${billingOrganizationId}/billing/screens/P11-06` +
+        `?patientId=${billingPatientId}&invoiceId=${billingInvoiceId}` +
+        `&q=invoice&status=partially_paid&limit=25`,
+    );
+    expect(init?.method).toBe('GET');
+    expect(init?.credentials).toBe('include');
+  });
+
+  it('submits revision-bound Module 11 settlement evidence and rejects card fields', async () => {
+    const fetcher = mockFetch(validCsrfResponse(), jsonResponse(billingScreenFixture()));
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+    const body = {
+      fields: {
+        amountMinor: '5000',
+        occurredAt: '2026-09-28T13:00:00Z',
+        paymentReference: 'BANK-SETTLEMENT-0001',
+        source: 'manual_bank',
+      },
+      reason: 'Record verified bank settlement evidence for this invoice.',
+      targetId: billingInvoiceId,
+    };
+    const etag = `"m11:P11-06:${billingInvoiceId}:2"`;
+
+    const result = await client.performBillingAction(
+      billingOrganizationId,
+      'P11-06',
+      'record-payment',
+      body,
+      etag,
+      'm11:payment:test-request-0001',
+    );
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    const [url, init] = fetcher.mock.calls[1]!;
+    const headers = new Headers(init?.headers);
+    expect(url).toBe(
+      `/api/v1/organizations/${billingOrganizationId}/billing/screens/P11-06/actions/record-payment`,
+    );
+    expect(init?.method).toBe('POST');
+    expect(headers.get('If-Match')).toBe(etag);
+    expect(headers.get('Idempotency-Key')).toBe('m11:payment:test-request-0001');
+    expect(JSON.parse(String(init?.body))).toEqual(body);
+
+    expect(() =>
+      client.performBillingAction(
+        billingOrganizationId,
+        'P11-06',
+        'record-payment',
+        {
+          fields: { paymentReference: '4111 1111 1111 1111' },
+          reason: 'This prohibited field must never leave the browser.',
+          targetId: billingInvoiceId,
+        },
+        etag,
+        'm11:card:test-request-0001',
+      ),
+    ).toThrow('prohibited');
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('sends bounded Module 12 exact-run context and validates aggregate evidence', async () => {
+    const fetcher = mockFetch(jsonResponse(reportingScreenFixture()));
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+
+    const result = await client.getReportingScreen(reportingOrganizationId, 'P12-09', {
+      limit: 25,
+      q: '  operational  ',
+      reportRunId: reportingRunId,
+      status: 'completed',
+    });
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    const [url, init] = fetcher.mock.calls[0]!;
+    expect(url).toBe(
+      `/api/v1/organizations/${reportingOrganizationId}/reporting/screens/P12-09` +
+        `?reportRunId=${reportingRunId}&q=operational&status=completed&limit=25`,
+    );
+    expect(init?.method).toBe('GET');
+    expect(init?.credentials).toBe('include');
+  });
+
+  it('submits revision-bound Module 12 export requests', async () => {
+    const fetcher = mockFetch(validCsrfResponse(), jsonResponse(reportingScreenFixture()));
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+    const body = {
+      fields: { format: 'csv' },
+      reason: 'Request the exact aggregate report for governance review.',
+      targetId: reportingRunId,
+    };
+    const etag = `"m12:P12-09:${reportingRunId}:1"`;
+
+    const result = await client.performReportingAction(
+      reportingOrganizationId,
+      'P12-09',
+      'request-report-export',
+      body,
+      etag,
+      'm12:export:test-request-0001',
+    );
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    const [url, init] = fetcher.mock.calls[1]!;
+    const headers = new Headers(init?.headers);
+    expect(url).toBe(
+      `/api/v1/organizations/${reportingOrganizationId}/reporting/screens/P12-09/actions/request-report-export`,
+    );
+    expect(init?.method).toBe('POST');
+    expect(headers.get('If-Match')).toBe(etag);
+    expect(headers.get('Idempotency-Key')).toBe('m12:export:test-request-0001');
+    expect(JSON.parse(String(init?.body))).toEqual(body);
+  });
+
+  it('uploads Module 7 files as CSRF-protected multipart data without forcing a content type', async () => {
+    const fetcher = mockFetch(
+      validCsrfResponse(),
+      jsonResponse(documentScreenFixture('P7-03'), { status: 201 }),
+    );
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+    const file = new File([new Uint8Array([37, 80, 68, 70, 45, 49])], 'result.pdf', {
+      type: 'application/pdf',
+    });
+
+    const result = await client.uploadDocument(
+      documentOrganizationId,
+      {
+        documentTypeKey: 'diagnostic_report',
+        patientId: documentPatientId,
+        reason: 'Upload the verified synthetic diagnostic report.',
+        sha256: 'a'.repeat(64),
+        sourceKey: 'test_laboratory',
+        title: 'Synthetic laboratory report',
+      },
+      file,
+      undefined,
+      'm7:upload:test-request-0001',
+    );
+
+    expect(result).toMatchObject({ ok: true, status: 201 });
+    const [url, init] = fetcher.mock.calls[1]!;
+    const headers = new Headers(init?.headers);
+    expect(url).toBe(`/api/v1/organizations/${documentOrganizationId}/documents`);
+    expect(init?.body).toBeInstanceOf(FormData);
+    expect(headers.get('Content-Type')).toBeNull();
+    expect(headers.get('Idempotency-Key')).toBe('m7:upload:test-request-0001');
+    expect(headers.get('X-XSRF-TOKEN')).toBe('valid-csrf-token-123456');
+  });
+
+  it('accepts a revision-bound 200 response when Module 7 appends a replacement version', async () => {
+    const fetcher = mockFetch(validCsrfResponse(), jsonResponse(documentScreenFixture('P7-03')));
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+    const file = new File([new Uint8Array([37, 80, 68, 70, 45, 50])], 'result-v2.pdf', {
+      type: 'application/pdf',
+    });
+    const etag = `"m7:P7-03:${documentId}:4"`;
+
+    const result = await client.uploadDocument(
+      documentOrganizationId,
+      {
+        documentTypeKey: 'diagnostic_report',
+        patientId: documentPatientId,
+        reason: 'Append the corrected replacement diagnostic report.',
+        replacementDocumentId: documentId,
+        sha256: 'b'.repeat(64),
+        sourceKey: 'test_laboratory',
+        title: 'Corrected synthetic laboratory report',
+      },
+      file,
+      etag,
+      'm7:replace:test-request-0001',
+    );
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    const headers = new Headers(fetcher.mock.calls[1]?.[1]?.headers);
+    expect(headers.get('If-Match')).toBe(etag);
+  });
+
+  it('creates an exact purpose-bound Module 7 access intent', async () => {
+    const fetcher = mockFetch(validCsrfResponse(), jsonResponse(documentAccessFixture()));
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+
+    const result = await client.createDocumentAccess(
+      documentOrganizationId,
+      documentId,
+      {
+        documentVersionId,
+        purposeKey: 'result_review',
+        reason: 'Review the clean diagnostic result evidence.',
+      },
+      'm7:access:test-request-0001',
+    );
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    const [url, init] = fetcher.mock.calls[1]!;
+    expect(url).toBe(
+      `/api/v1/organizations/${documentOrganizationId}/documents/${documentId}/accesses`,
+    );
+    expect(JSON.parse(String(init?.body))).toEqual({
+      documentVersionId,
+      purposeKey: 'result_review',
+      reason: 'Review the clean diagnostic result evidence.',
+    });
   });
 
   it('turns undocumented success payloads into safe contract failures', async () => {

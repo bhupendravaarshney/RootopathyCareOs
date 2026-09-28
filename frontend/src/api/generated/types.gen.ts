@@ -124,6 +124,328 @@ export type EncounterActionRequest = {
   };
 };
 
+export type AssessmentScreen = {
+  organizationId: string;
+  screenId: string;
+  title: string;
+  purpose: string;
+  generatedAt: string;
+  metrics: Array<WorkforceMetric>;
+  columns: Array<WorkforceColumn>;
+  rows: Array<AssessmentRow>;
+  actions: Array<WorkforceAction>;
+  notices: Array<WorkforceNotice>;
+  nextCursor: string | null;
+  pageSize: number;
+};
+
+export type AssessmentRow = {
+  id: string;
+  patientId?: string | null;
+  encounterId?: string | null;
+  assessmentSessionId?: string | null;
+  status: string;
+  revision: number;
+  etag: string;
+  values: {
+    [key: string]: string;
+  };
+  allowedActionKeys: Array<string>;
+};
+
+export type AssessmentActionRequest = {
+  targetId?: string | null;
+  patientId?: string | null;
+  encounterId?: string | null;
+  assessmentSessionId?: string | null;
+  reason?: string | null;
+  fields: {
+    [key: string]: string;
+  };
+};
+
+export type DocumentScreen = {
+  organizationId: string;
+  screenId: string;
+  title: string;
+  purpose: string;
+  generatedAt: string;
+  metrics: Array<WorkforceMetric>;
+  columns: Array<WorkforceColumn>;
+  rows: Array<DocumentRow>;
+  actions: Array<WorkforceAction>;
+  notices: Array<WorkforceNotice>;
+  nextCursor: string | null;
+  pageSize: number;
+};
+
+export type DocumentRow = {
+  id: string;
+  patientId?: string | null;
+  documentId?: string | null;
+  documentVersionId?: string | null;
+  diagnosticReportId?: string | null;
+  resultFlagId?: string | null;
+  status: string;
+  revision: number;
+  etag: string;
+  values: {
+    [key: string]: string;
+  };
+  allowedActionKeys: Array<string>;
+};
+
+export type DocumentActionRequest = {
+  targetId?: string | null;
+  patientId?: string | null;
+  documentId?: string | null;
+  documentVersionId?: string | null;
+  diagnosticReportId?: string | null;
+  reason?: string | null;
+  fields: {
+    [key: string]: string;
+  };
+};
+
+export type AiScreen = {
+  organizationId: string;
+  screenId: string;
+  title: string;
+  purpose: string;
+  generatedAt: string;
+  metrics: Array<WorkforceMetric>;
+  columns: Array<WorkforceColumn>;
+  rows: Array<AiRow>;
+  actions: Array<WorkforceAction>;
+  notices: Array<WorkforceNotice>;
+  nextCursor: string | null;
+  pageSize: number;
+};
+
+export type AiRow = {
+  id: string;
+  patientId?: string | null;
+  encounterId?: string | null;
+  inputManifestId?: string | null;
+  outputId?: string | null;
+  outputVersionId?: string | null;
+  safetyFlagId?: string | null;
+  status: string;
+  revision: number;
+  etag: string;
+  values: {
+    [key: string]: string;
+  };
+  allowedActionKeys: Array<string>;
+};
+
+export type AiActionRequest = {
+  targetId?: string | null;
+  reason: string;
+  fields: {
+    [key: string]: string;
+  };
+};
+
+export type CarePlanScreen = {
+  organizationId: string;
+  screenId: string;
+  title: string;
+  purpose: string;
+  generatedAt: string;
+  metrics: Array<WorkforceMetric>;
+  columns: Array<WorkforceColumn>;
+  rows: Array<CarePlanRow>;
+  actions: Array<WorkforceAction>;
+  notices: Array<WorkforceNotice>;
+  nextCursor: string | null;
+  pageSize: number;
+};
+
+export type CarePlanRow = {
+  id: string;
+  patientId?: string | null;
+  encounterId?: string | null;
+  carePlanVersionId?: string | null;
+  interventionId?: string | null;
+  clinicalTaskId?: string | null;
+  status: string;
+  revision: number;
+  etag: string;
+  values: {
+    [key: string]: string;
+  };
+  allowedActionKeys: Array<string>;
+};
+
+export type CarePlanActionRequest = {
+  targetId?: string | null;
+  reason: string;
+  fields: {
+    [key: string]: string;
+  };
+};
+
+export type FollowupScreen = {
+  organizationId: string;
+  screenId: string;
+  title: string;
+  purpose: string;
+  generatedAt: string;
+  metrics: Array<WorkforceMetric>;
+  columns: Array<WorkforceColumn>;
+  rows: Array<FollowupRow>;
+  actions: Array<WorkforceAction>;
+  notices: Array<WorkforceNotice>;
+  nextCursor: string | null;
+  pageSize: number;
+};
+
+export type FollowupRow = {
+  id: string;
+  patientId?: string | null;
+  encounterId?: string | null;
+  carePlanId?: string | null;
+  carePlanVersionId?: string | null;
+  followupPlanId?: string | null;
+  followupEventId?: string | null;
+  outcomeDefinitionId?: string | null;
+  outcomeMeasurementId?: string | null;
+  escalationEventId?: string | null;
+  clinicalTaskId?: string | null;
+  status: string;
+  revision: number;
+  etag: string;
+  values: {
+    [key: string]: string;
+  };
+  allowedActionKeys: Array<string>;
+};
+
+export type FollowupActionRequest = {
+  targetId?: string | null;
+  reason: string;
+  fields: {
+    [key: string]: string;
+  };
+};
+
+export type BillingScreen = {
+  organizationId: string;
+  screenId: string;
+  title: string;
+  purpose: string;
+  generatedAt: string;
+  metrics: Array<WorkforceMetric>;
+  columns: Array<WorkforceColumn>;
+  rows: Array<BillingRow>;
+  actions: Array<WorkforceAction>;
+  notices: Array<WorkforceNotice>;
+  nextCursor: string | null;
+  pageSize: number;
+};
+
+export type BillingRow = {
+  id: string;
+  patientId?: string | null;
+  appointmentId?: string | null;
+  encounterId?: string | null;
+  priceBookId?: string | null;
+  packageId?: string | null;
+  estimateId?: string | null;
+  invoiceId?: string | null;
+  paymentIntentId?: string | null;
+  paymentId?: string | null;
+  refundId?: string | null;
+  adjustmentId?: string | null;
+  claimId?: string | null;
+  remittanceId?: string | null;
+  reconciliationId?: string | null;
+  financialExportId?: string | null;
+  status: string;
+  revision: number;
+  etag: string;
+  values: {
+    [key: string]: string;
+  };
+  allowedActionKeys: Array<string>;
+};
+
+export type BillingActionRequest = {
+  targetId?: string | null;
+  reason: string;
+  fields: {
+    [key: string]: string;
+  };
+};
+
+export type ReportingScreen = {
+  organizationId: string;
+  screenId: string;
+  title: string;
+  purpose: string;
+  generatedAt: string;
+  metrics: Array<WorkforceMetric>;
+  columns: Array<WorkforceColumn>;
+  rows: Array<ReportingRow>;
+  actions: Array<WorkforceAction>;
+  notices: Array<WorkforceNotice>;
+  nextCursor: string | null;
+  pageSize: number;
+};
+
+export type ReportingRow = {
+  id: string;
+  reportRunId?: string | null;
+  reportScheduleId?: string | null;
+  reportExportId?: string | null;
+  status: string;
+  revision: number;
+  etag: string;
+  values: {
+    [key: string]: string;
+  };
+  allowedActionKeys: Array<string>;
+};
+
+export type ReportingActionRequest = {
+  targetId?: string | null;
+  reason: string;
+  fields: {
+    [key: string]: string;
+  };
+};
+
+export type DocumentUploadMetadata = {
+  patientId: string;
+  encounterId?: string | null;
+  assessmentSessionId?: string | null;
+  replacementDocumentId?: string | null;
+  title: string;
+  documentTypeKey: string;
+  sourceKey: string;
+  sha256: string;
+  reason: string;
+};
+
+export type DocumentAccessRequest = {
+  documentVersionId?: string | null;
+  purposeKey: 'clinical_care' | 'result_review' | 'patient_request' | 'security_investigation';
+  reason: string;
+};
+
+export type DocumentAccessResponse = {
+  accessIntentId: string;
+  documentId: string;
+  documentVersionId: string;
+  accessPath: string;
+  expiresAt: string;
+  mediaType: 'application/pdf' | 'image/jpeg' | 'image/png' | 'text/plain';
+  byteCount: number;
+  sha256: string;
+  purposeKey: 'clinical_care' | 'result_review' | 'patient_request' | 'security_investigation';
+};
+
 export type PatientRegistryImpactPreviewResponse = {
   screenId: string;
   actionKey: string;
@@ -332,7 +654,7 @@ export type CredentialDocumentMetadata = {
 
 export type PrototypeScreen = {
   id: string;
-  module: 'M1' | 'M2' | 'M3' | 'M4' | 'COS';
+  module: 'M1' | 'M2' | 'M3' | 'M4' | 'M5' | 'COS' | 'M7' | 'M8' | 'M9' | 'M10' | 'M11' | 'M12';
   title: string;
   purpose: string;
   status: 'prototype';
@@ -342,7 +664,7 @@ export type SystemSummary = {
   product: string;
   edition: string;
   generatedAt: string;
-  screenCount: 122;
+  screenCount: 185;
   modules: Array<string>;
 };
 
@@ -8803,6 +9125,150 @@ export type PerformEncounterActionResponses = {
 export type PerformEncounterActionResponse =
   PerformEncounterActionResponses[keyof PerformEncounterActionResponses];
 
+export type GetAssessmentScreenData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    screenId: string;
+  };
+  query?: {
+    patientId?: string;
+    encounterId?: string;
+    assessmentSessionId?: string;
+    q?: string;
+    status?: string;
+    limit?: number;
+    cursor?: string;
+  };
+  url: '/api/v1/organizations/{organizationId}/assessments/screens/{screenId}';
+};
+
+export type GetAssessmentScreenErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type GetAssessmentScreenError = GetAssessmentScreenErrors[keyof GetAssessmentScreenErrors];
+
+export type GetAssessmentScreenResponses = {
+  /**
+   * Authorized minimum-necessary Module 6 clinical assessment projection
+   */
+  200: AssessmentScreen;
+};
+
+export type GetAssessmentScreenResponse =
+  GetAssessmentScreenResponses[keyof GetAssessmentScreenResponses];
+
+export type PerformAssessmentActionData = {
+  body: AssessmentActionRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag required only when the server-projected workforce action declares a revision precondition.
+     */
+    'If-Match'?: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    screenId: string;
+    actionKey: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/assessments/screens/{screenId}/actions/{actionKey}';
+};
+
+export type PerformAssessmentActionErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type PerformAssessmentActionError =
+  PerformAssessmentActionErrors[keyof PerformAssessmentActionErrors];
+
+export type PerformAssessmentActionResponses = {
+  /**
+   * Successful governed assessment action
+   */
+  200: AssessmentScreen;
+  /**
+   * Successful governed assessment creation
+   */
+  201: AssessmentScreen;
+};
+
+export type PerformAssessmentActionResponse =
+  PerformAssessmentActionResponses[keyof PerformAssessmentActionResponses];
+
 export type AccessWorkforceEvidenceData = {
   body: WorkforceEvidenceAccessRequest;
   headers: {
@@ -9171,3 +9637,1056 @@ export type UploadWorkforceCredentialDocumentResponses = {
 
 export type UploadWorkforceCredentialDocumentResponse =
   UploadWorkforceCredentialDocumentResponses[keyof UploadWorkforceCredentialDocumentResponses];
+
+export type GetDocumentScreenData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    screenId: string;
+  };
+  query?: {
+    patientId?: string;
+    documentId?: string;
+    diagnosticReportId?: string;
+    q?: string;
+    status?: string;
+    limit?: number;
+    cursor?: string;
+  };
+  url: '/api/v1/organizations/{organizationId}/documents/screens/{screenId}';
+};
+
+export type GetDocumentScreenErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type GetDocumentScreenError = GetDocumentScreenErrors[keyof GetDocumentScreenErrors];
+
+export type GetDocumentScreenResponses = {
+  /**
+   * Authorized minimum-necessary Module 7 document and result projection
+   */
+  200: DocumentScreen;
+};
+
+export type GetDocumentScreenResponse =
+  GetDocumentScreenResponses[keyof GetDocumentScreenResponses];
+
+export type PerformDocumentActionData = {
+  body: DocumentActionRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag required only when the server-projected workforce action declares a revision precondition.
+     */
+    'If-Match'?: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    screenId: string;
+    actionKey: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/documents/screens/{screenId}/actions/{actionKey}';
+};
+
+export type PerformDocumentActionErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type PerformDocumentActionError =
+  PerformDocumentActionErrors[keyof PerformDocumentActionErrors];
+
+export type PerformDocumentActionResponses = {
+  /**
+   * Successful governed document or result action
+   */
+  200: DocumentScreen;
+  /**
+   * Successful governed document or result evidence creation
+   */
+  201: DocumentScreen;
+};
+
+export type PerformDocumentActionResponse =
+  PerformDocumentActionResponses[keyof PerformDocumentActionResponses];
+
+export type GetAiScreenData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    screenId: string;
+  };
+  query?: {
+    patientId?: string;
+    encounterId?: string;
+    aiSessionId?: string;
+    q?: string;
+    status?: string;
+    limit?: number;
+    cursor?: string;
+  };
+  url: '/api/v1/organizations/{organizationId}/ai/screens/{screenId}';
+};
+
+export type GetAiScreenErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type GetAiScreenError = GetAiScreenErrors[keyof GetAiScreenErrors];
+
+export type GetAiScreenResponses = {
+  /**
+   * Authorized minimum-necessary Module 8 AI governance projection
+   */
+  200: AiScreen;
+};
+
+export type GetAiScreenResponse = GetAiScreenResponses[keyof GetAiScreenResponses];
+
+export type PerformAiActionData = {
+  body: AiActionRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag required only when the server-projected workforce action declares a revision precondition.
+     */
+    'If-Match'?: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    screenId: string;
+    actionKey: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/ai/screens/{screenId}/actions/{actionKey}';
+};
+
+export type PerformAiActionErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type PerformAiActionError = PerformAiActionErrors[keyof PerformAiActionErrors];
+
+export type PerformAiActionResponses = {
+  /**
+   * Successful governed AI session action
+   */
+  200: AiScreen;
+  /**
+   * Successful governed AI evidence creation
+   */
+  201: AiScreen;
+};
+
+export type PerformAiActionResponse = PerformAiActionResponses[keyof PerformAiActionResponses];
+
+export type GetCarePlanScreenData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    screenId: string;
+  };
+  query?: {
+    patientId?: string;
+    encounterId?: string;
+    carePlanId?: string;
+    q?: string;
+    status?: string;
+    limit?: number;
+    cursor?: string;
+  };
+  url: '/api/v1/organizations/{organizationId}/care-plans/screens/{screenId}';
+};
+
+export type GetCarePlanScreenErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type GetCarePlanScreenError = GetCarePlanScreenErrors[keyof GetCarePlanScreenErrors];
+
+export type GetCarePlanScreenResponses = {
+  /**
+   * Authorized minimum-necessary Module 9 care-planning projection
+   */
+  200: CarePlanScreen;
+};
+
+export type GetCarePlanScreenResponse =
+  GetCarePlanScreenResponses[keyof GetCarePlanScreenResponses];
+
+export type PerformCarePlanActionData = {
+  body: CarePlanActionRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag required only when the server-projected workforce action declares a revision precondition.
+     */
+    'If-Match'?: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    screenId: string;
+    actionKey: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/care-plans/screens/{screenId}/actions/{actionKey}';
+};
+
+export type PerformCarePlanActionErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type PerformCarePlanActionError =
+  PerformCarePlanActionErrors[keyof PerformCarePlanActionErrors];
+
+export type PerformCarePlanActionResponses = {
+  /**
+   * Successful governed care-plan lifecycle action
+   */
+  200: CarePlanScreen;
+  /**
+   * Successful governed care-plan evidence creation
+   */
+  201: CarePlanScreen;
+};
+
+export type PerformCarePlanActionResponse =
+  PerformCarePlanActionResponses[keyof PerformCarePlanActionResponses];
+
+export type GetFollowupScreenData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    screenId: string;
+  };
+  query?: {
+    patientId?: string;
+    encounterId?: string;
+    followupPlanId?: string;
+    q?: string;
+    status?: string;
+    limit?: number;
+    cursor?: string;
+  };
+  url: '/api/v1/organizations/{organizationId}/followups/screens/{screenId}';
+};
+
+export type GetFollowupScreenErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type GetFollowupScreenError = GetFollowupScreenErrors[keyof GetFollowupScreenErrors];
+
+export type GetFollowupScreenResponses = {
+  /**
+   * Authorized minimum-necessary Module 10 follow-up projection
+   */
+  200: FollowupScreen;
+};
+
+export type GetFollowupScreenResponse =
+  GetFollowupScreenResponses[keyof GetFollowupScreenResponses];
+
+export type PerformFollowupActionData = {
+  body: FollowupActionRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag required only when the server-projected workforce action declares a revision precondition.
+     */
+    'If-Match'?: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    screenId: string;
+    actionKey: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/followups/screens/{screenId}/actions/{actionKey}';
+};
+
+export type PerformFollowupActionErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type PerformFollowupActionError =
+  PerformFollowupActionErrors[keyof PerformFollowupActionErrors];
+
+export type PerformFollowupActionResponses = {
+  /**
+   * Successful governed follow-up lifecycle action
+   */
+  200: FollowupScreen;
+  /**
+   * Successful governed follow-up evidence creation
+   */
+  201: FollowupScreen;
+};
+
+export type PerformFollowupActionResponse =
+  PerformFollowupActionResponses[keyof PerformFollowupActionResponses];
+
+export type GetBillingScreenData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    screenId: string;
+  };
+  query?: {
+    patientId?: string;
+    invoiceId?: string;
+    q?: string;
+    status?: string;
+    limit?: number;
+    cursor?: string;
+  };
+  url: '/api/v1/organizations/{organizationId}/billing/screens/{screenId}';
+};
+
+export type GetBillingScreenErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type GetBillingScreenError = GetBillingScreenErrors[keyof GetBillingScreenErrors];
+
+export type GetBillingScreenResponses = {
+  /**
+   * Authorized minimum-necessary Module 11 billing projection
+   */
+  200: BillingScreen;
+};
+
+export type GetBillingScreenResponse = GetBillingScreenResponses[keyof GetBillingScreenResponses];
+
+export type PerformBillingActionData = {
+  body: BillingActionRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag required only when the server-projected workforce action declares a revision precondition.
+     */
+    'If-Match'?: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    screenId: string;
+    actionKey: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/billing/screens/{screenId}/actions/{actionKey}';
+};
+
+export type PerformBillingActionErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type PerformBillingActionError =
+  PerformBillingActionErrors[keyof PerformBillingActionErrors];
+
+export type PerformBillingActionResponses = {
+  /**
+   * Successful governed billing lifecycle action
+   */
+  200: BillingScreen;
+  /**
+   * Successful governed financial evidence creation
+   */
+  201: BillingScreen;
+};
+
+export type PerformBillingActionResponse =
+  PerformBillingActionResponses[keyof PerformBillingActionResponses];
+
+export type GetReportingScreenData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    screenId: string;
+  };
+  query?: {
+    reportRunId?: string;
+    q?: string;
+    status?: string;
+    limit?: number;
+    cursor?: string;
+  };
+  url: '/api/v1/organizations/{organizationId}/reporting/screens/{screenId}';
+};
+
+export type GetReportingScreenErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type GetReportingScreenError = GetReportingScreenErrors[keyof GetReportingScreenErrors];
+
+export type GetReportingScreenResponses = {
+  /**
+   * Authorized minimum-necessary Module 12 aggregate reporting projection
+   */
+  200: ReportingScreen;
+};
+
+export type GetReportingScreenResponse =
+  GetReportingScreenResponses[keyof GetReportingScreenResponses];
+
+export type PerformReportingActionData = {
+  body: ReportingActionRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag required only when the server-projected workforce action declares a revision precondition.
+     */
+    'If-Match'?: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    screenId: string;
+    actionKey: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/reporting/screens/{screenId}/actions/{actionKey}';
+};
+
+export type PerformReportingActionErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type PerformReportingActionError =
+  PerformReportingActionErrors[keyof PerformReportingActionErrors];
+
+export type PerformReportingActionResponses = {
+  /**
+   * Successful governed reporting lifecycle action
+   */
+  200: ReportingScreen;
+  /**
+   * Successful aggregate snapshot, schedule or export-request creation
+   */
+  201: ReportingScreen;
+};
+
+export type PerformReportingActionResponse =
+  PerformReportingActionResponses[keyof PerformReportingActionResponses];
+
+export type UploadDocumentData = {
+  body: {
+    metadata: DocumentUploadMetadata;
+    file: Blob | File;
+  };
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Strong entity tag required only when the server-projected workforce action declares a revision precondition.
+     */
+    'If-Match'?: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/documents';
+};
+
+export type UploadDocumentErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The supplied entity tag no longer matches the current representation
+   */
+  412: Problem;
+  /**
+   * A required precondition is missing, such as recent authentication, recent MFA, or If-Match
+   */
+  428: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type UploadDocumentError = UploadDocumentErrors[keyof UploadDocumentErrors];
+
+export type UploadDocumentResponses = {
+  /**
+   * Replacement document version accepted into private quarantine
+   */
+  200: DocumentScreen;
+  /**
+   * Document version accepted into private quarantine
+   */
+  201: DocumentScreen;
+};
+
+export type UploadDocumentResponse = UploadDocumentResponses[keyof UploadDocumentResponses];
+
+export type CreateDocumentAccessData = {
+  body: DocumentAccessRequest;
+  headers: {
+    /**
+     * Must exactly match a configured CareOS browser origin. A same-origin Referer is accepted when Origin is unavailable.
+     */
+    Origin: string;
+    /**
+     * Caller-generated key for an explicitly retryable protected mutation. Reuse is valid only for an equivalent request.
+     */
+    'Idempotency-Key': string;
+  };
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    documentId: string;
+  };
+  query?: never;
+  url: '/api/v1/organizations/{organizationId}/documents/{documentId}/accesses';
+};
+
+export type CreateDocumentAccessErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The requested transition, idempotency key, or current resource state conflicts with the operation
+   */
+  409: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type CreateDocumentAccessError =
+  CreateDocumentAccessErrors[keyof CreateDocumentAccessErrors];
+
+export type CreateDocumentAccessResponses = {
+  /**
+   * Purpose-bound clean-document access intent
+   */
+  200: DocumentAccessResponse;
+};
+
+export type CreateDocumentAccessResponse =
+  CreateDocumentAccessResponses[keyof CreateDocumentAccessResponses];
+
+export type OpenDocumentAccessData = {
+  body?: never;
+  path: {
+    /**
+     * Organization boundary for every protected business-resource route.
+     */
+    organizationId: string;
+    documentId: string;
+    documentVersionId: string;
+    accessIntentId: string;
+  };
+  query: {
+    purposeKey: 'clinical_care' | 'result_review' | 'patient_request' | 'security_investigation';
+  };
+  url: '/api/v1/organizations/{organizationId}/documents/{documentId}/versions/{documentVersionId}/accesses/{accessIntentId}';
+};
+
+export type OpenDocumentAccessErrors = {
+  /**
+   * Request validation, password policy, or one-time-token failure
+   */
+  400: Problem;
+  /**
+   * Credentials, verification evidence, or session is invalid
+   */
+  401: Problem;
+  /**
+   * Origin, CSRF, or authorization check failed
+   */
+  403: Problem;
+  /**
+   * The resource is unavailable or hidden from the current actor
+   */
+  404: Problem;
+  /**
+   * The request failed without exposing sensitive implementation details.
+   */
+  500: Problem;
+  /**
+   * The service is temporarily unable to process this request
+   */
+  503: Problem;
+};
+
+export type OpenDocumentAccessError = OpenDocumentAccessErrors[keyof OpenDocumentAccessErrors];

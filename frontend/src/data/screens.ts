@@ -1,4 +1,5 @@
-export type ModuleKey = 'M1' | 'M2' | 'M3' | 'M4' | 'M5' | 'COS';
+export type ModuleKey =
+  'M1' | 'M2' | 'M3' | 'M4' | 'M5' | 'COS' | 'M7' | 'M8' | 'M9' | 'M10' | 'M11' | 'M12';
 
 export type Screen = {
   id: string;
@@ -376,6 +377,295 @@ const cosTitles = [
   'Confirm and close',
 ] as const;
 
+const m7: Array<[string, string, string]> = [
+  [
+    'Document dashboard',
+    'Review document processing, results and acknowledgement safety.',
+    'Overview',
+  ],
+  [
+    'Patient document list',
+    'Review minimum-necessary patient-linked document records.',
+    'Documents',
+  ],
+  ['Upload document', 'Place an exact bounded file in private quarantine.', 'Documents'],
+  [
+    'Classification and metadata',
+    'Append governed classification and retention metadata.',
+    'Documents',
+  ],
+  ['Scan status', 'Review quarantine, scan and promotion evidence.', 'Security'],
+  ['Document viewer', 'Open a clean version through purpose-bound short-lived access.', 'Security'],
+  ['Result inbox', 'Review diagnostic reports and abnormal or critical state.', 'Results'],
+  ['Result detail', 'Record source-preserving laboratory or imaging result evidence.', 'Results'],
+  ['Acknowledge or escalate', 'Acknowledge, escalate and resolve result safety flags.', 'Results'],
+  [
+    'Version history',
+    'Review immutable document version and classification lineage.',
+    'Governance',
+  ],
+  [
+    'Export or share intent',
+    'Record purpose-bound export or share intent without claiming delivery.',
+    'Governance',
+  ],
+];
+
+const m8: Array<[string, string, string]> = [
+  ['AI session launcher', 'Launch a draft AI session without invoking a model.', 'Session setup'],
+  [
+    'Purpose and consent check',
+    'Record purpose, legal basis, consent and minimum-necessary confirmation.',
+    'Session setup',
+  ],
+  ['Input selection', 'Approve exact source references, revisions and digests.', 'Inputs'],
+  [
+    'Transcription and extraction',
+    'Request a versioned provider job through the fail-closed processing boundary.',
+    'Processing',
+  ],
+  ['Draft summary', 'Review and append clinician edits to a visibly labeled AI draft.', 'Drafts'],
+  [
+    'Clinical suggestion panel',
+    'Review suggestions without automatic clinical adoption.',
+    'Drafts',
+  ],
+  [
+    'Safety and uncertainty flags',
+    'Review uncertainty, acknowledge safety flags and complete escalation.',
+    'Safety',
+  ],
+  [
+    'Source and provenance viewer',
+    'Trace model, prompt and draft claims to approved input evidence.',
+    'Governance',
+  ],
+  [
+    'Clinician review and approval',
+    'Explicitly accept or reject the exact latest draft version.',
+    'Review',
+  ],
+  [
+    'AI session history',
+    'Review immutable session, provider, safety, usage and decision history.',
+    'Governance',
+  ],
+];
+
+const m9: Array<[string, string, string]> = [
+  [
+    'Care plan dashboard',
+    'Review coordinated-plan readiness, ownership, safety and lifecycle state.',
+    'Overview',
+  ],
+  [
+    'Create coordinated plan',
+    'Create a draft plan bound to one verified patient, encounter and responsible clinician.',
+    'Plan construction',
+  ],
+  [
+    'Problems and priorities',
+    'Append sourced problems and explicit priorities to the current draft version.',
+    'Plan construction',
+  ],
+  ['Goals', 'Append measurable clinical and patient-stated goals.', 'Plan construction'],
+  [
+    'Interventions',
+    'Append complete interventions with rationale, timing, stop criteria and monitoring.',
+    'Coordination',
+  ],
+  [
+    'Modality coordination',
+    'Review cross-modality sequencing, ownership and coordination without hiding uncertainty.',
+    'Coordination',
+  ],
+  [
+    'Owners and tasks',
+    'Assign every intervention to an eligible owner and create an attributable clinical task.',
+    'Coordination',
+  ],
+  [
+    'Consent and preferences',
+    'Append visible patient consent, preferences and communication needs.',
+    'Safety and approval',
+  ],
+  [
+    'Safety and interaction review',
+    'Record an exact-version cross-modality interaction and safety review.',
+    'Safety and approval',
+  ],
+  [
+    'Clinician approval',
+    'Freeze, approve and activate the exact complete plan version with accountable review.',
+    'Safety and approval',
+  ],
+  [
+    'Patient summary',
+    'Present the current approved plan in bounded patient-facing language.',
+    'Summary and lineage',
+  ],
+  [
+    'Plan versions and amendments',
+    'Review immutable versions and create a reason-bound successor amendment.',
+    'Summary and lineage',
+  ],
+];
+
+const m10: Array<[string, string, string]> = [
+  [
+    'Monitoring dashboard',
+    'Review active monitoring plans, due events and unresolved escalations.',
+    'Overview',
+  ],
+  [
+    'Rules',
+    'Define exact thresholds, severity, owner, task priority and acknowledgement target.',
+    'Monitoring design',
+  ],
+  [
+    'Domains',
+    'Define version-frozen outcome domains, measures, units, direction and targets.',
+    'Monitoring design',
+  ],
+  [
+    'Measures',
+    'Record an attributed value and evaluate every applicable threshold atomically.',
+    'Outcome evidence',
+  ],
+  [
+    'Escalation',
+    'Acknowledge and resolve owned threshold breaches with explicit evidence.',
+    'Outcome evidence',
+  ],
+  [
+    'Follow-up schedule',
+    'Schedule baseline and future monitoring events with accountable ownership.',
+    'Monitoring design',
+  ],
+  [
+    'Interpretation',
+    'Append clinical interpretation and recommendation to an exact completed measurement.',
+    'Clinical review',
+  ],
+  [
+    'Confirm plan',
+    'Freeze the complete monitoring definition, then confirm it with recent MFA.',
+    'Clinical review',
+  ],
+  [
+    'Outcome timeline',
+    'Review immutable measurements, interpretations and escalation outcomes over time.',
+    'Governance',
+  ],
+];
+
+const m11: Array<[string, string, string]> = [
+  [
+    'Billing dashboard',
+    'Review open invoices, settlement state, claims and reconciliation exceptions.',
+    'Overview',
+  ],
+  ['Price books', 'Version, populate and activate currency-bound price books.', 'Pricing'],
+  [
+    'Packages',
+    'Version packages and exact service entitlements against active pricing.',
+    'Pricing',
+  ],
+  [
+    'Estimate',
+    'Create and freeze a patient-bound estimate from authoritative active pricing.',
+    'Receivables',
+  ],
+  [
+    'Invoice',
+    'Issue immutable invoice lines from a valid finalized estimate without changing clinical state.',
+    'Receivables',
+  ],
+  [
+    'Payment',
+    'Record non-card manual settlement evidence using exact invoice amount and currency.',
+    'Settlement',
+  ],
+  [
+    'Payment link',
+    'Create a card-data-free payment intent while provider-hosted delivery remains fail closed.',
+    'Settlement',
+  ],
+  [
+    'Refund or adjustment',
+    'Append authorized refunds or debit and credit adjustments without rewriting settlement history.',
+    'Settlement',
+  ],
+  [
+    'Claims',
+    'Create invoice-bound claims, submit exact amounts and append remittance evidence.',
+    'Claims',
+  ],
+  [
+    'Reconciliation',
+    'Snapshot expected and observed totals and explicitly resolve every variance.',
+    'Governance',
+  ],
+  [
+    'Financial audit or export',
+    'Review financial evidence and request bounded purpose-specific exports.',
+    'Governance',
+  ],
+];
+
+const m12: Array<[string, string, string]> = [
+  [
+    'Reporting dashboard',
+    'Review aggregate report coverage, active schedules and export exceptions.',
+    'Overview',
+  ],
+  [
+    'Operational reports',
+    'Run bounded aggregate appointment and encounter reports without patient detail.',
+    'Operations',
+  ],
+  [
+    'Clinical safety reports',
+    'Run bounded aggregate result-safety reports without result values or narratives.',
+    'Clinical governance',
+  ],
+  [
+    'Outcome reports',
+    'Run bounded aggregate outcome and escalation reports without measurement values.',
+    'Clinical governance',
+  ],
+  [
+    'Workforce governance',
+    'Run bounded aggregate workforce-readiness and credential-governance reports.',
+    'Governance',
+  ],
+  [
+    'Access and security reports',
+    'Run bounded aggregate access and security evidence reports.',
+    'Governance',
+  ],
+  [
+    'AI governance',
+    'Run bounded aggregate AI lifecycle and safety-governance reports.',
+    'Governance',
+  ],
+  [
+    'Financial reports',
+    'Run bounded aggregate invoice and reconciliation reports without payment references.',
+    'Finance',
+  ],
+  [
+    'Scheduled exports',
+    'Define governed schedules and request an expiring private export for one exact report run.',
+    'Exports',
+  ],
+  [
+    'Report audit and history',
+    'Review attributable report-run, schedule and export history without source-record content.',
+    'Governance',
+  ],
+];
+
 const build = (module: ModuleKey, source: Array<[string, string, string]>): Screen[] =>
   source.map(([title, purpose, group], index) => ({
     id: `${module}-${String(index + 1).padStart(2, '0')}`,
@@ -399,6 +689,12 @@ export const screens: Screen[] = [
     group:
       index < 12 ? 'Clinical assessment' : index < 20 ? 'Clinical synthesis' : 'Plan and follow-up',
   })),
+  ...build('M7', m7).map((screen) => ({ ...screen, id: screen.id.replace(/^M7-/, 'P7-') })),
+  ...build('M8', m8).map((screen) => ({ ...screen, id: screen.id.replace(/^M8-/, 'P8-') })),
+  ...build('M9', m9).map((screen) => ({ ...screen, id: screen.id.replace(/^M9-/, 'P9-') })),
+  ...build('M10', m10).map((screen) => ({ ...screen, id: screen.id.replace(/^M10-/, 'P10-') })),
+  ...build('M11', m11).map((screen) => ({ ...screen, id: screen.id.replace(/^M11-/, 'P11-') })),
+  ...build('M12', m12).map((screen) => ({ ...screen, id: screen.id.replace(/^M12-/, 'P12-') })),
 ];
 
 export const findScreen = (id: string): Screen => {

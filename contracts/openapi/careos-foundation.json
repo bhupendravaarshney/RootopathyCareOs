@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "ROOTOPATHY CareOS Foundation API",
-    "version": "0.44.0",
-    "description": "Checked contract for the Module 1 foundation, Module 2 workforce, Module 3 patient registry, Module 4 staff scheduling, and Module 5 governed encounter lifecycle, clinical documentation, signing, amendment, and history API surface."
+    "version": "0.51.0",
+    "description": "Checked contract for the Module 1 foundation through Module 12 aggregate reporting API surface."
   },
   "servers": [
     {
@@ -39,14 +39,8 @@
     },
     "retry": {
       "policy": "caller-controlled",
-      "retryableMethods": [
-        "GET",
-        "HEAD"
-      ],
-      "statusCodes": [
-        429,
-        503
-      ],
+      "retryableMethods": ["GET", "HEAD"],
+      "statusCodes": [429, 503],
       "responseHeader": "#/components/headers/RetryAfter",
       "maximumDelaySeconds": 86400,
       "automaticMutationRetry": false
@@ -1661,13 +1655,7 @@
             "description": "Derived access-state filter evaluated at the page snapshot time.",
             "schema": {
               "type": "string",
-              "enum": [
-                "active",
-                "scheduled",
-                "suspended",
-                "expired",
-                "revoked"
-              ]
+              "enum": ["active", "scheduled", "suspended", "expired", "revoked"]
             }
           },
           {
@@ -1796,13 +1784,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "enum": [
-                "draft",
-                "under_review",
-                "active",
-                "suspended",
-                "closed"
-              ]
+              "enum": ["draft", "under_review", "active", "suspended", "closed"]
             }
           }
         ],
@@ -6008,12 +5990,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "enum": [
-                "activations",
-                "suspensions",
-                "endings",
-                "cancellations"
-              ]
+              "enum": ["activations", "suspensions", "endings", "cancellations"]
             }
           },
           {
@@ -6722,14 +6699,68 @@
           {
             "$ref": "#/components/parameters/OrganizationId"
           },
-          { "name": "from", "in": "query", "required": true, "schema": { "type": "string", "format": "date-time" } },
-          { "name": "to", "in": "query", "required": true, "schema": { "type": "string", "format": "date-time" } },
-          { "name": "status", "in": "query", "required": false, "schema": { "type": "string", "enum": ["draft", "validated", "submitted", "approved", "rejected", "active", "superseded"] } },
-          { "name": "changeType", "in": "query", "required": false, "schema": { "type": "string", "enum": ["activated", "closed", "retired", "ended"] } },
-          { "name": "actorId", "in": "query", "required": false, "schema": { "type": "string", "format": "uuid" } },
-          { "name": "subjectType", "in": "query", "required": false, "schema": { "type": "string", "maxLength": 80 } },
-          { "name": "subjectId", "in": "query", "required": false, "schema": { "type": "string", "format": "uuid" } },
-          { "name": "correlationId", "in": "query", "required": false, "schema": { "type": "string", "maxLength": 128 } },
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "date-time" }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "date-time" }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "draft",
+                "validated",
+                "submitted",
+                "approved",
+                "rejected",
+                "active",
+                "superseded"
+              ]
+            }
+          },
+          {
+            "name": "changeType",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["activated", "closed", "retired", "ended"]
+            }
+          },
+          {
+            "name": "actorId",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "subjectType",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "maxLength": 80 }
+          },
+          {
+            "name": "subjectId",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "correlationId",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "maxLength": 128 }
+          },
           {
             "$ref": "#/components/parameters/Limit"
           },
@@ -6795,17 +6826,75 @@
           {
             "$ref": "#/components/parameters/OrganizationId"
           },
-          { "name": "from", "in": "query", "required": true, "schema": { "type": "string", "format": "date-time" } },
-          { "name": "to", "in": "query", "required": true, "schema": { "type": "string", "format": "date-time" } },
-          { "name": "actorId", "in": "query", "required": false, "schema": { "type": "string", "format": "uuid" } },
-          { "name": "operation", "in": "query", "required": false, "schema": { "type": "string", "maxLength": 160 } },
-          { "name": "eventName", "in": "query", "required": false, "schema": { "type": "string", "maxLength": 160 } },
-          { "name": "schemaVersion", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1 } },
-          { "name": "subjectType", "in": "query", "required": false, "schema": { "type": "string", "maxLength": 80 } },
-          { "name": "subjectId", "in": "query", "required": false, "schema": { "type": "string", "format": "uuid" } },
-          { "name": "outcome", "in": "query", "required": false, "schema": { "type": "string", "enum": ["success", "failure"] } },
-          { "name": "risk", "in": "query", "required": false, "schema": { "type": "string", "enum": ["standard", "high", "restricted"] } },
-          { "name": "correlationId", "in": "query", "required": false, "schema": { "type": "string", "maxLength": 128 } },
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "date-time" }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "date-time" }
+          },
+          {
+            "name": "actorId",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "operation",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "maxLength": 160 }
+          },
+          {
+            "name": "eventName",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "maxLength": 160 }
+          },
+          {
+            "name": "schemaVersion",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1 }
+          },
+          {
+            "name": "subjectType",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "maxLength": 80 }
+          },
+          {
+            "name": "subjectId",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "outcome",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "enum": ["success", "failure"] }
+          },
+          {
+            "name": "risk",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["standard", "high", "restricted"]
+            }
+          },
+          {
+            "name": "correlationId",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "maxLength": 128 }
+          },
           {
             "$ref": "#/components/parameters/Limit"
           },
@@ -6869,19 +6958,56 @@
         "operationId": "accessAuditEvidenceDetail",
         "parameters": [
           { "$ref": "#/components/parameters/OrganizationId" },
-          { "name": "eventId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
           { "$ref": "#/components/parameters/BrowserOrigin" }
         ],
-        "security": [{ "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }],
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "additionalProperties": false, "required": ["purposeCode"], "properties": { "purposeCode": { "type": "string", "enum": ["configuration_review", "regulatory_evidence", "security_investigation", "data_correction"] } } } } } },
+        "security": [
+          { "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["purposeCode"],
+                "properties": {
+                  "purposeCode": {
+                    "type": "string",
+                    "enum": [
+                      "configuration_review",
+                      "regulatory_evidence",
+                      "security_investigation",
+                      "data_correction"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Purpose-bound minimum-necessary audit detail",
             "headers": {
-              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
-              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
             },
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuditEvidenceDetail" } } }
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AuditEvidenceDetail" }
+              }
+            }
           },
           "400": { "$ref": "#/components/responses/BadRequest" },
           "401": { "$ref": "#/components/responses/Unauthorized" },
@@ -7140,12 +7266,16 @@
           { "$ref": "#/components/parameters/BrowserOrigin" },
           { "$ref": "#/components/parameters/IdempotencyKey" }
         ],
-        "security": [{ "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }],
+        "security": [
+          { "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/EvidenceExportAccessRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/EvidenceExportAccessRequest"
+              }
             }
           }
         },
@@ -7153,12 +7283,18 @@
           "200": {
             "description": "A short-lived private GET grant",
             "headers": {
-              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
-              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
             },
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EvidenceExportAccessResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceExportAccessResponse"
+                }
               }
             }
           },
@@ -7186,10 +7322,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "enum": [
-                "facility",
-                "location"
-              ]
+              "enum": ["facility", "location"]
             }
           },
           {
@@ -7266,10 +7399,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "enum": [
-                "facility",
-                "location"
-              ]
+              "enum": ["facility", "location"]
             }
           },
           {
@@ -7364,10 +7494,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "enum": [
-                "facility",
-                "location"
-              ]
+              "enum": ["facility", "location"]
             }
           },
           {
@@ -7622,8 +7749,12 @@
           "200": {
             "description": "Successful governed workforce action",
             "headers": {
-              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
-              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
             },
             "content": {
               "application/json": {
@@ -7636,8 +7767,12 @@
           "201": {
             "description": "Successful governed workforce creation",
             "headers": {
-              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
-              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
             },
             "content": {
               "application/json": {
@@ -7707,7 +7842,9 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/WorkforceActionRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/WorkforceActionRequest"
+              }
             }
           }
         },
@@ -7715,12 +7852,18 @@
           "200": {
             "description": "Fresh server-derived impact bound to actor, action, fields and revision",
             "headers": {
-              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
-              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
             },
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/WorkforceImpactPreviewResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/WorkforceImpactPreviewResponse"
+                }
               }
             }
           },
@@ -8101,7 +8244,12 @@
           {
             "name": "limit",
             "in": "query",
-            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 }
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
           },
           {
             "name": "cursor",
@@ -8119,8 +8267,12 @@
           "200": {
             "description": "Authorized minimum-necessary Module 4 scheduling screen projection",
             "headers": {
-              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
-              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
             },
             "content": {
               "application/json": {
@@ -8161,12 +8313,16 @@
           { "$ref": "#/components/parameters/OptionalIfMatch" },
           { "$ref": "#/components/parameters/IdempotencyKey" }
         ],
-        "security": [{ "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }],
+        "security": [
+          { "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/SchedulingActionRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/SchedulingActionRequest"
+              }
             }
           }
         },
@@ -8174,8 +8330,12 @@
           "200": {
             "description": "Successful governed scheduling action",
             "headers": {
-              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
-              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
             },
             "content": {
               "application/json": {
@@ -8186,8 +8346,12 @@
           "201": {
             "description": "Successful governed scheduling creation",
             "headers": {
-              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
-              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
             },
             "content": {
               "application/json": {
@@ -8255,7 +8419,12 @@
           {
             "name": "limit",
             "in": "query",
-            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 }
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
           },
           {
             "name": "cursor",
@@ -8273,8 +8442,12 @@
           "200": {
             "description": "Authorized minimum-necessary Module 5 encounter screen projection",
             "headers": {
-              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
-              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
             },
             "content": {
               "application/json": {
@@ -8315,12 +8488,16 @@
           { "$ref": "#/components/parameters/OptionalIfMatch" },
           { "$ref": "#/components/parameters/IdempotencyKey" }
         ],
-        "security": [{ "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }],
+        "security": [
+          { "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/EncounterActionRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/EncounterActionRequest"
+              }
             }
           }
         },
@@ -8328,8 +8505,12 @@
           "200": {
             "description": "Successful governed encounter action",
             "headers": {
-              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
-              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
             },
             "content": {
               "application/json": {
@@ -8340,12 +8521,192 @@
           "201": {
             "description": "Successful governed encounter creation",
             "headers": {
-              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
-              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
             },
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/EncounterScreen" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "412": { "$ref": "#/components/responses/PreconditionFailed" },
+          "428": { "$ref": "#/components/responses/PreconditionRequired" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/assessments/screens/{screenId}": {
+      "get": {
+        "operationId": "getAssessmentScreen",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          {
+            "name": "screenId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^COS-(0[1-9]|1[0-9]|2[0-7])$"
+            }
+          },
+          {
+            "name": "patientId",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "encounterId",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "assessmentSessionId",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": { "type": "string", "maxLength": 100 }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 120,
+              "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          }
+        ],
+        "security": [{ "sessionCookie": [] }],
+        "responses": {
+          "200": {
+            "description": "Authorized minimum-necessary Module 6 clinical assessment projection",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AssessmentScreen" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/assessments/screens/{screenId}/actions/{actionKey}": {
+      "post": {
+        "operationId": "performAssessmentAction",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          {
+            "name": "screenId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^COS-(0[1-9]|1[0-9]|2[0-7])$"
+            }
+          },
+          {
+            "name": "actionKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+            }
+          },
+          { "$ref": "#/components/parameters/BrowserOrigin" },
+          { "$ref": "#/components/parameters/OptionalIfMatch" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "security": [
+          { "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssessmentActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful governed assessment action",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AssessmentScreen" }
+              }
+            }
+          },
+          "201": {
+            "description": "Successful governed assessment creation",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AssessmentScreen" }
               }
             }
           },
@@ -8382,7 +8743,9 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/WorkforceEvidenceAccessRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/WorkforceEvidenceAccessRequest"
+              }
             }
           }
         },
@@ -8390,12 +8753,18 @@
           "200": {
             "description": "Purpose-bound restricted workforce evidence detail; the access is audited atomically",
             "headers": {
-              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
-              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
             },
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/WorkforceEvidenceAccessResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/WorkforceEvidenceAccessResponse"
+                }
               }
             }
           },
@@ -8430,7 +8799,9 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/WorkforceExportAccessRequest" }
+              "schema": {
+                "$ref": "#/components/schemas/WorkforceExportAccessRequest"
+              }
             }
           }
         },
@@ -8438,12 +8809,18 @@
           "200": {
             "description": "A purpose-bound, short-lived private GET grant for a ready workforce export",
             "headers": {
-              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
-              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
             },
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/WorkforceExportAccessResponse" }
+                "schema": {
+                  "$ref": "#/components/schemas/WorkforceExportAccessResponse"
+                }
               }
             }
           },
@@ -8470,9 +8847,7 @@
             "schema": { "type": "string", "format": "uuid" }
           }
         ],
-        "security": [
-          { "sessionCookie": [] }
-        ],
+        "security": [{ "sessionCookie": [] }],
         "responses": {
           "200": {
             "description": "The authenticated, requester-bound workforce export artifact",
@@ -8481,8 +8856,12 @@
                 "description": "Safe server-owned attachment filename",
                 "schema": { "type": "string" }
               },
-              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
-              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
             },
             "content": {
               "text/csv": {
@@ -8537,8 +8916,12 @@
           "200": {
             "description": "A one-minute purpose-bound clean credential-document grant with URL-free audit evidence",
             "headers": {
-              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
-              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
             },
             "content": {
               "application/json": {
@@ -8597,9 +8980,7 @@
             }
           }
         ],
-        "security": [
-          { "sessionCookie": [] }
-        ],
+        "security": [{ "sessionCookie": [] }],
         "responses": {
           "307": {
             "description": "No-store redirect to a newly minted provider URL for the existing actor-bound access grant",
@@ -8608,8 +8989,12 @@
                 "required": true,
                 "schema": { "type": "string", "format": "uri" }
               },
-              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
-              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
             }
           },
           "400": { "$ref": "#/components/responses/BadRequest" },
@@ -8658,10 +9043,7 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": [
-                  "metadata",
-                  "file"
-                ],
+                "required": ["metadata", "file"],
                 "properties": {
                   "metadata": {
                     "$ref": "#/components/schemas/CredentialDocumentMetadata"
@@ -8679,8 +9061,12 @@
           "201": {
             "description": "Credential document accepted into private quarantine",
             "headers": {
-              "X-Correlation-Id": { "$ref": "#/components/headers/CorrelationId" },
-              "X-CareOS-Session-Expires-In": { "$ref": "#/components/headers/SessionExpiresIn" }
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
             },
             "content": {
               "application/json": {
@@ -8708,6 +9094,1174 @@
           "500": {
             "$ref": "#/components/responses/InternalError"
           }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/documents/screens/{screenId}": {
+      "get": {
+        "operationId": "getDocumentScreen",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          {
+            "name": "screenId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "pattern": "^P7-(0[1-9]|1[01])$" }
+          },
+          {
+            "name": "patientId",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "documentId",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "diagnosticReportId",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": { "type": "string", "maxLength": 100 }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 120,
+              "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          }
+        ],
+        "security": [{ "sessionCookie": [] }],
+        "responses": {
+          "200": {
+            "description": "Authorized minimum-necessary Module 7 document and result projection",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DocumentScreen" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/documents/screens/{screenId}/actions/{actionKey}": {
+      "post": {
+        "operationId": "performDocumentAction",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          {
+            "name": "screenId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "pattern": "^P7-(0[1-9]|1[01])$" }
+          },
+          {
+            "name": "actionKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+            }
+          },
+          { "$ref": "#/components/parameters/BrowserOrigin" },
+          { "$ref": "#/components/parameters/OptionalIfMatch" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "security": [
+          { "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DocumentActionRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful governed document or result action",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DocumentScreen" }
+              }
+            }
+          },
+          "201": {
+            "description": "Successful governed document or result evidence creation",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DocumentScreen" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "412": { "$ref": "#/components/responses/PreconditionFailed" },
+          "428": { "$ref": "#/components/responses/PreconditionRequired" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/ai/screens/{screenId}": {
+      "get": {
+        "operationId": "getAiScreen",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          {
+            "name": "screenId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "pattern": "^P8-(0[1-9]|10)$" }
+          },
+          {
+            "name": "patientId",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "encounterId",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "aiSessionId",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": { "type": "string", "maxLength": 100 }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": { "type": "string", "maxLength": 80 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          }
+        ],
+        "security": [{ "sessionCookie": [] }],
+        "responses": {
+          "200": {
+            "description": "Authorized minimum-necessary Module 8 AI governance projection",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AiScreen" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/ai/screens/{screenId}/actions/{actionKey}": {
+      "post": {
+        "operationId": "performAiAction",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          {
+            "name": "screenId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "pattern": "^P8-(0[1-9]|10)$" }
+          },
+          {
+            "name": "actionKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+            }
+          },
+          { "$ref": "#/components/parameters/BrowserOrigin" },
+          { "$ref": "#/components/parameters/OptionalIfMatch" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "security": [
+          { "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AiActionRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful governed AI session action",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AiScreen" }
+              }
+            }
+          },
+          "201": {
+            "description": "Successful governed AI evidence creation",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AiScreen" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "412": { "$ref": "#/components/responses/PreconditionFailed" },
+          "428": { "$ref": "#/components/responses/PreconditionRequired" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/care-plans/screens/{screenId}": {
+      "get": {
+        "operationId": "getCarePlanScreen",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          {
+            "name": "screenId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "pattern": "^P9-(0[1-9]|1[0-2])$" }
+          },
+          {
+            "name": "patientId",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "encounterId",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "carePlanId",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": { "type": "string", "maxLength": 100 }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": { "type": "string", "maxLength": 80 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          }
+        ],
+        "security": [{ "sessionCookie": [] }],
+        "responses": {
+          "200": {
+            "description": "Authorized minimum-necessary Module 9 care-planning projection",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CarePlanScreen" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/care-plans/screens/{screenId}/actions/{actionKey}": {
+      "post": {
+        "operationId": "performCarePlanAction",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          {
+            "name": "screenId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "pattern": "^P9-(0[1-9]|1[0-2])$" }
+          },
+          {
+            "name": "actionKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+            }
+          },
+          { "$ref": "#/components/parameters/BrowserOrigin" },
+          { "$ref": "#/components/parameters/OptionalIfMatch" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "security": [
+          { "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CarePlanActionRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful governed care-plan lifecycle action",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CarePlanScreen" }
+              }
+            }
+          },
+          "201": {
+            "description": "Successful governed care-plan evidence creation",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CarePlanScreen" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "412": { "$ref": "#/components/responses/PreconditionFailed" },
+          "428": { "$ref": "#/components/responses/PreconditionRequired" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/followups/screens/{screenId}": {
+      "get": {
+        "operationId": "getFollowupScreen",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          {
+            "name": "screenId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "pattern": "^P10-0[1-9]$" }
+          },
+          {
+            "name": "patientId",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "encounterId",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "followupPlanId",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": { "type": "string", "maxLength": 100 }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": { "type": "string", "maxLength": 80 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          }
+        ],
+        "security": [{ "sessionCookie": [] }],
+        "responses": {
+          "200": {
+            "description": "Authorized minimum-necessary Module 10 follow-up projection",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FollowupScreen" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/followups/screens/{screenId}/actions/{actionKey}": {
+      "post": {
+        "operationId": "performFollowupAction",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          {
+            "name": "screenId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "pattern": "^P10-0[1-9]$" }
+          },
+          {
+            "name": "actionKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+            }
+          },
+          { "$ref": "#/components/parameters/BrowserOrigin" },
+          { "$ref": "#/components/parameters/OptionalIfMatch" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "security": [
+          { "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/FollowupActionRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful governed follow-up lifecycle action",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FollowupScreen" }
+              }
+            }
+          },
+          "201": {
+            "description": "Successful governed follow-up evidence creation",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FollowupScreen" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "412": { "$ref": "#/components/responses/PreconditionFailed" },
+          "428": { "$ref": "#/components/responses/PreconditionRequired" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/billing/screens/{screenId}": {
+      "get": {
+        "operationId": "getBillingScreen",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          {
+            "name": "screenId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "pattern": "^P11-(0[1-9]|1[01])$" }
+          },
+          {
+            "name": "patientId",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "invoiceId",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": { "type": "string", "maxLength": 100 }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": { "type": "string", "maxLength": 80 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          }
+        ],
+        "security": [{ "sessionCookie": [] }],
+        "responses": {
+          "200": {
+            "description": "Authorized minimum-necessary Module 11 billing projection",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/BillingScreen" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/billing/screens/{screenId}/actions/{actionKey}": {
+      "post": {
+        "operationId": "performBillingAction",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          {
+            "name": "screenId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "pattern": "^P11-(0[1-9]|1[01])$" }
+          },
+          {
+            "name": "actionKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+            }
+          },
+          { "$ref": "#/components/parameters/BrowserOrigin" },
+          { "$ref": "#/components/parameters/OptionalIfMatch" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "security": [
+          { "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/BillingActionRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful governed billing lifecycle action",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/BillingScreen" }
+              }
+            }
+          },
+          "201": {
+            "description": "Successful governed financial evidence creation",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/BillingScreen" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "412": { "$ref": "#/components/responses/PreconditionFailed" },
+          "428": { "$ref": "#/components/responses/PreconditionRequired" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/reporting/screens/{screenId}": {
+      "get": {
+        "operationId": "getReportingScreen",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          {
+            "name": "screenId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "pattern": "^P12-(0[1-9]|10)$" }
+          },
+          {
+            "name": "reportRunId",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": { "type": "string", "maxLength": 100 }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": { "type": "string", "maxLength": 80 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          }
+        ],
+        "security": [{ "sessionCookie": [] }],
+        "responses": {
+          "200": {
+            "description": "Authorized minimum-necessary Module 12 aggregate reporting projection",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ReportingScreen" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/reporting/screens/{screenId}/actions/{actionKey}": {
+      "post": {
+        "operationId": "performReportingAction",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          {
+            "name": "screenId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "pattern": "^P12-(0[1-9]|10)$" }
+          },
+          {
+            "name": "actionKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+            }
+          },
+          { "$ref": "#/components/parameters/BrowserOrigin" },
+          { "$ref": "#/components/parameters/OptionalIfMatch" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "security": [
+          { "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportingActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful governed reporting lifecycle action",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ReportingScreen" }
+              }
+            }
+          },
+          "201": {
+            "description": "Successful aggregate snapshot, schedule or export-request creation",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ReportingScreen" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "412": { "$ref": "#/components/responses/PreconditionFailed" },
+          "428": { "$ref": "#/components/responses/PreconditionRequired" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/documents": {
+      "post": {
+        "operationId": "uploadDocument",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          { "$ref": "#/components/parameters/BrowserOrigin" },
+          { "$ref": "#/components/parameters/OptionalIfMatch" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "security": [
+          { "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["metadata", "file"],
+                "properties": {
+                  "metadata": {
+                    "$ref": "#/components/schemas/DocumentUploadMetadata"
+                  },
+                  "file": { "type": "string", "format": "binary" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Replacement document version accepted into private quarantine",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DocumentScreen" }
+              }
+            }
+          },
+          "201": {
+            "description": "Document version accepted into private quarantine",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DocumentScreen" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "412": { "$ref": "#/components/responses/PreconditionFailed" },
+          "428": { "$ref": "#/components/responses/PreconditionRequired" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/documents/{documentId}/accesses": {
+      "post": {
+        "operationId": "createDocumentAccess",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          { "$ref": "#/components/parameters/BrowserOrigin" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "security": [
+          { "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DocumentAccessRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Purpose-bound clean-document access intent",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentAccessResponse"
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/documents/{documentId}/versions/{documentVersionId}/accesses/{accessIntentId}": {
+      "get": {
+        "operationId": "openDocumentAccess",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          {
+            "name": "documentId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "documentVersionId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "accessIntentId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "purposeKey",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "clinical_care",
+                "result_review",
+                "patient_request",
+                "security_investigation"
+              ]
+            }
+          }
+        ],
+        "security": [{ "sessionCookie": [] }],
+        "responses": {
+          "303": {
+            "description": "No-store redirect to a newly minted provider URL for the actor-bound access grant",
+            "headers": {
+              "Location": {
+                "required": true,
+                "schema": { "type": "string", "format": "uri" }
+              },
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
         }
       }
     }
@@ -9245,10 +10799,7 @@
             }
           },
           "nextCursor": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 2048,
             "pattern": "^[A-Za-z0-9_-]+$"
           },
@@ -9276,10 +10827,7 @@
             "format": "uuid"
           },
           "patientId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "status": {
@@ -9313,43 +10861,26 @@
       "PatientRegistryActionRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "fields"
-        ],
+        "required": ["fields"],
         "properties": {
           "targetId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "patientId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "registrationId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "decision": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 80
           },
           "reason": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 500
           },
           "fields": {
@@ -9361,10 +10892,7 @@
             }
           },
           "impactToken": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "minLength": 32,
             "maxLength": 4096,
             "pattern": "^[A-Za-z0-9_-]+$"
@@ -9425,7 +10953,14 @@
       "SchedulingRow": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "status", "revision", "etag", "values", "allowedActionKeys"],
+        "required": [
+          "id",
+          "status",
+          "revision",
+          "etag",
+          "values",
+          "allowedActionKeys"
+        ],
         "properties": {
           "id": { "type": "string", "format": "uuid" },
           "patientId": { "type": ["string", "null"], "format": "uuid" },
@@ -9521,7 +11056,14 @@
       "EncounterRow": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "status", "revision", "etag", "values", "allowedActionKeys"],
+        "required": [
+          "id",
+          "status",
+          "revision",
+          "etag",
+          "values",
+          "allowedActionKeys"
+        ],
         "properties": {
           "id": { "type": "string", "format": "uuid" },
           "patientId": { "type": ["string", "null"], "format": "uuid" },
@@ -9563,6 +11105,865 @@
             "type": "object",
             "maxProperties": 64,
             "additionalProperties": { "type": "string", "maxLength": 20000 }
+          }
+        }
+      },
+      "AssessmentScreen": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "organizationId",
+          "screenId",
+          "title",
+          "purpose",
+          "generatedAt",
+          "metrics",
+          "columns",
+          "rows",
+          "actions",
+          "notices",
+          "nextCursor",
+          "pageSize"
+        ],
+        "properties": {
+          "organizationId": { "type": "string", "format": "uuid" },
+          "screenId": {
+            "type": "string",
+            "pattern": "^COS-(0[1-9]|1[0-9]|2[0-7])$"
+          },
+          "title": { "type": "string" },
+          "purpose": { "type": "string" },
+          "generatedAt": { "type": "string", "format": "date-time" },
+          "metrics": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceMetric" }
+          },
+          "columns": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceColumn" }
+          },
+          "rows": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AssessmentRow" }
+          },
+          "actions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceAction" }
+          },
+          "notices": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceNotice" }
+          },
+          "nextCursor": {
+            "type": ["string", "null"],
+            "maxLength": 2048,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "pageSize": { "type": "integer", "minimum": 1, "maximum": 100 }
+        }
+      },
+      "AssessmentRow": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "revision",
+          "etag",
+          "values",
+          "allowedActionKeys"
+        ],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "patientId": { "type": ["string", "null"], "format": "uuid" },
+          "encounterId": { "type": ["string", "null"], "format": "uuid" },
+          "assessmentSessionId": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "status": { "type": "string" },
+          "revision": { "type": "integer", "format": "int64", "minimum": 0 },
+          "etag": {
+            "type": "string",
+            "pattern": "^\\\"m6:COS-[0-9]{2}:[0-9a-fA-F-]{36}:[0-9]+\\\"$"
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "allowedActionKeys": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+            }
+          }
+        }
+      },
+      "AssessmentActionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fields"],
+        "properties": {
+          "targetId": { "type": ["string", "null"], "format": "uuid" },
+          "patientId": { "type": ["string", "null"], "format": "uuid" },
+          "encounterId": { "type": ["string", "null"], "format": "uuid" },
+          "assessmentSessionId": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "reason": { "type": ["string", "null"], "maxLength": 500 },
+          "fields": {
+            "type": "object",
+            "maxProperties": 64,
+            "additionalProperties": { "type": "string", "maxLength": 20000 }
+          }
+        }
+      },
+      "DocumentScreen": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "organizationId",
+          "screenId",
+          "title",
+          "purpose",
+          "generatedAt",
+          "metrics",
+          "columns",
+          "rows",
+          "actions",
+          "notices",
+          "nextCursor",
+          "pageSize"
+        ],
+        "properties": {
+          "organizationId": { "type": "string", "format": "uuid" },
+          "screenId": { "type": "string", "pattern": "^P7-(0[1-9]|1[01])$" },
+          "title": { "type": "string" },
+          "purpose": { "type": "string" },
+          "generatedAt": { "type": "string", "format": "date-time" },
+          "metrics": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceMetric" }
+          },
+          "columns": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceColumn" }
+          },
+          "rows": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/DocumentRow" }
+          },
+          "actions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceAction" }
+          },
+          "notices": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceNotice" }
+          },
+          "nextCursor": {
+            "type": ["string", "null"],
+            "maxLength": 2048,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "pageSize": { "type": "integer", "minimum": 1, "maximum": 100 }
+        }
+      },
+      "DocumentRow": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "revision",
+          "etag",
+          "values",
+          "allowedActionKeys"
+        ],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "patientId": { "type": ["string", "null"], "format": "uuid" },
+          "documentId": { "type": ["string", "null"], "format": "uuid" },
+          "documentVersionId": { "type": ["string", "null"], "format": "uuid" },
+          "diagnosticReportId": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "resultFlagId": { "type": ["string", "null"], "format": "uuid" },
+          "status": { "type": "string" },
+          "revision": { "type": "integer", "format": "int64", "minimum": 0 },
+          "etag": {
+            "type": "string",
+            "pattern": "^\\\"m7:P7-[0-9]{2}:[0-9a-fA-F-]{36}:[0-9]+\\\"$"
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "allowedActionKeys": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+            }
+          }
+        }
+      },
+      "DocumentActionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fields"],
+        "properties": {
+          "targetId": { "type": ["string", "null"], "format": "uuid" },
+          "patientId": { "type": ["string", "null"], "format": "uuid" },
+          "documentId": { "type": ["string", "null"], "format": "uuid" },
+          "documentVersionId": { "type": ["string", "null"], "format": "uuid" },
+          "diagnosticReportId": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "reason": { "type": ["string", "null"], "maxLength": 500 },
+          "fields": {
+            "type": "object",
+            "maxProperties": 64,
+            "additionalProperties": { "type": "string", "maxLength": 20000 }
+          }
+        }
+      },
+      "AiScreen": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "organizationId",
+          "screenId",
+          "title",
+          "purpose",
+          "generatedAt",
+          "metrics",
+          "columns",
+          "rows",
+          "actions",
+          "notices",
+          "nextCursor",
+          "pageSize"
+        ],
+        "properties": {
+          "organizationId": { "type": "string", "format": "uuid" },
+          "screenId": { "type": "string", "pattern": "^P8-(0[1-9]|10)$" },
+          "title": { "type": "string" },
+          "purpose": { "type": "string" },
+          "generatedAt": { "type": "string", "format": "date-time" },
+          "metrics": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceMetric" }
+          },
+          "columns": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceColumn" }
+          },
+          "rows": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AiRow" }
+          },
+          "actions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceAction" }
+          },
+          "notices": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceNotice" }
+          },
+          "nextCursor": {
+            "type": ["string", "null"],
+            "maxLength": 2048,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "pageSize": { "type": "integer", "minimum": 1, "maximum": 100 }
+        }
+      },
+      "AiRow": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "revision",
+          "etag",
+          "values",
+          "allowedActionKeys"
+        ],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "patientId": { "type": ["string", "null"], "format": "uuid" },
+          "encounterId": { "type": ["string", "null"], "format": "uuid" },
+          "inputManifestId": { "type": ["string", "null"], "format": "uuid" },
+          "outputId": { "type": ["string", "null"], "format": "uuid" },
+          "outputVersionId": { "type": ["string", "null"], "format": "uuid" },
+          "safetyFlagId": { "type": ["string", "null"], "format": "uuid" },
+          "status": { "type": "string" },
+          "revision": { "type": "integer", "format": "int64", "minimum": 0 },
+          "etag": {
+            "type": "string",
+            "pattern": "^\\\"m8:P8-[0-9]{2}:[0-9a-fA-F-]{36}:[0-9]+\\\"$"
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "allowedActionKeys": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+            }
+          }
+        }
+      },
+      "AiActionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason", "fields"],
+        "properties": {
+          "targetId": { "type": ["string", "null"], "format": "uuid" },
+          "reason": { "type": "string", "minLength": 10, "maxLength": 500 },
+          "fields": {
+            "type": "object",
+            "maxProperties": 32,
+            "additionalProperties": { "type": "string", "maxLength": 20000 }
+          }
+        }
+      },
+      "CarePlanScreen": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "organizationId",
+          "screenId",
+          "title",
+          "purpose",
+          "generatedAt",
+          "metrics",
+          "columns",
+          "rows",
+          "actions",
+          "notices",
+          "nextCursor",
+          "pageSize"
+        ],
+        "properties": {
+          "organizationId": { "type": "string", "format": "uuid" },
+          "screenId": { "type": "string", "pattern": "^P9-(0[1-9]|1[0-2])$" },
+          "title": { "type": "string" },
+          "purpose": { "type": "string" },
+          "generatedAt": { "type": "string", "format": "date-time" },
+          "metrics": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceMetric" }
+          },
+          "columns": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceColumn" }
+          },
+          "rows": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/CarePlanRow" }
+          },
+          "actions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceAction" }
+          },
+          "notices": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceNotice" }
+          },
+          "nextCursor": {
+            "type": ["string", "null"],
+            "maxLength": 2048,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "pageSize": { "type": "integer", "minimum": 1, "maximum": 100 }
+        }
+      },
+      "CarePlanRow": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "revision",
+          "etag",
+          "values",
+          "allowedActionKeys"
+        ],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "patientId": { "type": ["string", "null"], "format": "uuid" },
+          "encounterId": { "type": ["string", "null"], "format": "uuid" },
+          "carePlanVersionId": { "type": ["string", "null"], "format": "uuid" },
+          "interventionId": { "type": ["string", "null"], "format": "uuid" },
+          "clinicalTaskId": { "type": ["string", "null"], "format": "uuid" },
+          "status": { "type": "string" },
+          "revision": { "type": "integer", "format": "int64", "minimum": 0 },
+          "etag": {
+            "type": "string",
+            "pattern": "^\\\"m9:P9-[0-9]{2}:[0-9a-fA-F-]{36}:[0-9]+\\\"$"
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "allowedActionKeys": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+            }
+          }
+        }
+      },
+      "CarePlanActionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason", "fields"],
+        "properties": {
+          "targetId": { "type": ["string", "null"], "format": "uuid" },
+          "reason": { "type": "string", "minLength": 10, "maxLength": 500 },
+          "fields": {
+            "type": "object",
+            "maxProperties": 32,
+            "additionalProperties": { "type": "string", "maxLength": 20000 }
+          }
+        }
+      },
+      "FollowupScreen": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "organizationId",
+          "screenId",
+          "title",
+          "purpose",
+          "generatedAt",
+          "metrics",
+          "columns",
+          "rows",
+          "actions",
+          "notices",
+          "nextCursor",
+          "pageSize"
+        ],
+        "properties": {
+          "organizationId": { "type": "string", "format": "uuid" },
+          "screenId": { "type": "string", "pattern": "^P10-0[1-9]$" },
+          "title": { "type": "string" },
+          "purpose": { "type": "string" },
+          "generatedAt": { "type": "string", "format": "date-time" },
+          "metrics": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceMetric" }
+          },
+          "columns": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceColumn" }
+          },
+          "rows": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/FollowupRow" }
+          },
+          "actions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceAction" }
+          },
+          "notices": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceNotice" }
+          },
+          "nextCursor": {
+            "type": ["string", "null"],
+            "maxLength": 2048,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "pageSize": { "type": "integer", "minimum": 1, "maximum": 100 }
+        }
+      },
+      "FollowupRow": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "revision",
+          "etag",
+          "values",
+          "allowedActionKeys"
+        ],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "patientId": { "type": ["string", "null"], "format": "uuid" },
+          "encounterId": { "type": ["string", "null"], "format": "uuid" },
+          "carePlanId": { "type": ["string", "null"], "format": "uuid" },
+          "carePlanVersionId": { "type": ["string", "null"], "format": "uuid" },
+          "followupPlanId": { "type": ["string", "null"], "format": "uuid" },
+          "followupEventId": { "type": ["string", "null"], "format": "uuid" },
+          "outcomeDefinitionId": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "outcomeMeasurementId": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "escalationEventId": { "type": ["string", "null"], "format": "uuid" },
+          "clinicalTaskId": { "type": ["string", "null"], "format": "uuid" },
+          "status": { "type": "string" },
+          "revision": { "type": "integer", "format": "int64", "minimum": 0 },
+          "etag": {
+            "type": "string",
+            "pattern": "^\\\"m10:P10-[0-9]{2}:[0-9a-fA-F-]{36}:[0-9]+\\\"$"
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "allowedActionKeys": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+            }
+          }
+        }
+      },
+      "FollowupActionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason", "fields"],
+        "properties": {
+          "targetId": { "type": ["string", "null"], "format": "uuid" },
+          "reason": { "type": "string", "minLength": 10, "maxLength": 500 },
+          "fields": {
+            "type": "object",
+            "maxProperties": 32,
+            "additionalProperties": { "type": "string", "maxLength": 20000 }
+          }
+        }
+      },
+      "BillingScreen": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "organizationId",
+          "screenId",
+          "title",
+          "purpose",
+          "generatedAt",
+          "metrics",
+          "columns",
+          "rows",
+          "actions",
+          "notices",
+          "nextCursor",
+          "pageSize"
+        ],
+        "properties": {
+          "organizationId": { "type": "string", "format": "uuid" },
+          "screenId": { "type": "string", "pattern": "^P11-(0[1-9]|1[01])$" },
+          "title": { "type": "string" },
+          "purpose": { "type": "string" },
+          "generatedAt": { "type": "string", "format": "date-time" },
+          "metrics": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceMetric" }
+          },
+          "columns": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceColumn" }
+          },
+          "rows": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/BillingRow" }
+          },
+          "actions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceAction" }
+          },
+          "notices": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceNotice" }
+          },
+          "nextCursor": {
+            "type": ["string", "null"],
+            "maxLength": 2048,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "pageSize": { "type": "integer", "minimum": 1, "maximum": 100 }
+        }
+      },
+      "BillingRow": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "revision",
+          "etag",
+          "values",
+          "allowedActionKeys"
+        ],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "patientId": { "type": ["string", "null"], "format": "uuid" },
+          "appointmentId": { "type": ["string", "null"], "format": "uuid" },
+          "encounterId": { "type": ["string", "null"], "format": "uuid" },
+          "priceBookId": { "type": ["string", "null"], "format": "uuid" },
+          "packageId": { "type": ["string", "null"], "format": "uuid" },
+          "estimateId": { "type": ["string", "null"], "format": "uuid" },
+          "invoiceId": { "type": ["string", "null"], "format": "uuid" },
+          "paymentIntentId": { "type": ["string", "null"], "format": "uuid" },
+          "paymentId": { "type": ["string", "null"], "format": "uuid" },
+          "refundId": { "type": ["string", "null"], "format": "uuid" },
+          "adjustmentId": { "type": ["string", "null"], "format": "uuid" },
+          "claimId": { "type": ["string", "null"], "format": "uuid" },
+          "remittanceId": { "type": ["string", "null"], "format": "uuid" },
+          "reconciliationId": { "type": ["string", "null"], "format": "uuid" },
+          "financialExportId": { "type": ["string", "null"], "format": "uuid" },
+          "status": { "type": "string" },
+          "revision": { "type": "integer", "format": "int64", "minimum": 0 },
+          "etag": {
+            "type": "string",
+            "pattern": "^\\\"m11:P11-[0-9]{2}:[0-9a-fA-F-]{36}:[0-9]+\\\"$"
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "allowedActionKeys": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+            }
+          }
+        }
+      },
+      "BillingActionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason", "fields"],
+        "properties": {
+          "targetId": { "type": ["string", "null"], "format": "uuid" },
+          "reason": { "type": "string", "minLength": 10, "maxLength": 500 },
+          "fields": {
+            "type": "object",
+            "maxProperties": 32,
+            "additionalProperties": { "type": "string", "maxLength": 20000 }
+          }
+        }
+      },
+      "ReportingScreen": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "organizationId",
+          "screenId",
+          "title",
+          "purpose",
+          "generatedAt",
+          "metrics",
+          "columns",
+          "rows",
+          "actions",
+          "notices",
+          "nextCursor",
+          "pageSize"
+        ],
+        "properties": {
+          "organizationId": { "type": "string", "format": "uuid" },
+          "screenId": { "type": "string", "pattern": "^P12-(0[1-9]|10)$" },
+          "title": { "type": "string" },
+          "purpose": { "type": "string" },
+          "generatedAt": { "type": "string", "format": "date-time" },
+          "metrics": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceMetric" }
+          },
+          "columns": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceColumn" }
+          },
+          "rows": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ReportingRow" }
+          },
+          "actions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceAction" }
+          },
+          "notices": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceNotice" }
+          },
+          "nextCursor": {
+            "type": ["string", "null"],
+            "maxLength": 2048,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "pageSize": { "type": "integer", "minimum": 1, "maximum": 100 }
+        }
+      },
+      "ReportingRow": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "revision",
+          "etag",
+          "values",
+          "allowedActionKeys"
+        ],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "reportRunId": { "type": ["string", "null"], "format": "uuid" },
+          "reportScheduleId": { "type": ["string", "null"], "format": "uuid" },
+          "reportExportId": { "type": ["string", "null"], "format": "uuid" },
+          "status": { "type": "string" },
+          "revision": { "type": "integer", "format": "int64", "minimum": 0 },
+          "etag": {
+            "type": "string",
+            "pattern": "^\\\"m12:P12-[0-9]{2}:[0-9a-fA-F-]{36}:[0-9]+\\\"$"
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "allowedActionKeys": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+            }
+          }
+        }
+      },
+      "ReportingActionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason", "fields"],
+        "properties": {
+          "targetId": { "type": ["string", "null"], "format": "uuid" },
+          "reason": { "type": "string", "minLength": 10, "maxLength": 500 },
+          "fields": {
+            "type": "object",
+            "maxProperties": 32,
+            "additionalProperties": { "type": "string", "maxLength": 20000 }
+          }
+        }
+      },
+      "DocumentUploadMetadata": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "patientId",
+          "title",
+          "documentTypeKey",
+          "sourceKey",
+          "sha256",
+          "reason"
+        ],
+        "properties": {
+          "patientId": { "type": "string", "format": "uuid" },
+          "encounterId": { "type": ["string", "null"], "format": "uuid" },
+          "assessmentSessionId": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "replacementDocumentId": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
+          "title": { "type": "string", "minLength": 2, "maxLength": 240 },
+          "documentTypeKey": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,79}$"
+          },
+          "sourceKey": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.:-]{1,119}$"
+          },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "reason": { "type": "string", "minLength": 10, "maxLength": 500 }
+        }
+      },
+      "DocumentAccessRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["purposeKey", "reason"],
+        "properties": {
+          "documentVersionId": { "type": ["string", "null"], "format": "uuid" },
+          "purposeKey": {
+            "type": "string",
+            "enum": [
+              "clinical_care",
+              "result_review",
+              "patient_request",
+              "security_investigation"
+            ]
+          },
+          "reason": { "type": "string", "minLength": 10, "maxLength": 500 }
+        }
+      },
+      "DocumentAccessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "accessIntentId",
+          "documentId",
+          "documentVersionId",
+          "accessPath",
+          "expiresAt",
+          "mediaType",
+          "byteCount",
+          "sha256",
+          "purposeKey"
+        ],
+        "properties": {
+          "accessIntentId": { "type": "string", "format": "uuid" },
+          "documentId": { "type": "string", "format": "uuid" },
+          "documentVersionId": { "type": "string", "format": "uuid" },
+          "accessPath": {
+            "type": "string",
+            "pattern": "^/api/v1/organizations/[0-9a-fA-F-]{36}/documents/[0-9a-fA-F-]{36}/versions/[0-9a-fA-F-]{36}/accesses/[0-9a-fA-F-]{36}\\?purposeKey=[a-z][a-z0-9_]{1,79}$"
+          },
+          "expiresAt": { "type": "string", "format": "date-time" },
+          "mediaType": {
+            "type": "string",
+            "enum": ["application/pdf", "image/jpeg", "image/png", "text/plain"]
+          },
+          "byteCount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "maximum": 20971520
+          },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "purposeKey": {
+            "type": "string",
+            "enum": [
+              "clinical_care",
+              "result_review",
+              "patient_request",
+              "security_investigation"
+            ]
           }
         }
       },
@@ -9706,12 +12107,7 @@
       "WorkforceMetric": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "key",
-          "label",
-          "value",
-          "tone"
-        ],
+        "required": ["key", "label", "value", "tone"],
         "properties": {
           "key": {
             "type": "string"
@@ -9725,22 +12121,14 @@
           },
           "tone": {
             "type": "string",
-            "enum": [
-              "neutral",
-              "info",
-              "success",
-              "warning"
-            ]
+            "enum": ["neutral", "info", "success", "warning"]
           }
         }
       },
       "WorkforceColumn": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "key",
-          "label"
-        ],
+        "required": ["key", "label"],
         "properties": {
           "key": {
             "type": "string"
@@ -9767,10 +12155,7 @@
             "format": "uuid"
           },
           "memberId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "status": {
@@ -9822,10 +12207,7 @@
           },
           "style": {
             "type": "string",
-            "enum": [
-              "primary",
-              "link"
-            ]
+            "enum": ["primary", "link"]
           },
           "targetRequired": {
             "type": "boolean"
@@ -9837,10 +12219,7 @@
             "type": "boolean"
           },
           "href": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "fields": {
             "type": "array",
@@ -9853,13 +12232,7 @@
       "WorkforceField": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "key",
-          "label",
-          "inputType",
-          "required",
-          "options"
-        ],
+        "required": ["key", "label", "inputType", "required", "options"],
         "properties": {
           "key": {
             "type": "string"
@@ -9874,10 +12247,7 @@
             "type": "boolean"
           },
           "help": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "options": {
             "type": "array",
@@ -9890,10 +12260,7 @@
       "WorkforceOption": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "value",
-          "label"
-        ],
+        "required": ["value", "label"],
         "properties": {
           "value": {
             "type": "string"
@@ -9906,11 +12273,7 @@
       "WorkforceNotice": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "tone",
-          "title",
-          "detail"
-        ],
+        "required": ["tone", "title", "detail"],
         "properties": {
           "tone": {
             "type": "string"
@@ -9926,37 +12289,22 @@
       "WorkforceActionRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "fields",
-          "evidenceIds"
-        ],
+        "required": ["fields", "evidenceIds"],
         "properties": {
           "targetId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "memberId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "decision": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 80
           },
           "reason": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 500
           },
           "fields": {
@@ -10103,7 +12451,11 @@
           "schemaVersion": { "type": "integer", "minimum": 1 },
           "subjectType": { "type": "string", "minLength": 1 },
           "subjectId": { "type": "string", "format": "uuid" },
-          "correlationId": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "correlationId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
           "projection": {
             "type": "string",
             "enum": ["workforce-audit-detail-v1", "member-evidence-detail-v1"]
@@ -10246,17 +12598,10 @@
       "CredentialDocumentMetadata": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "sha256",
-          "retentionClass",
-          "reason"
-        ],
+        "required": ["sha256", "retentionClass", "reason"],
         "properties": {
           "memberId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "sha256": {
@@ -10277,17 +12622,11 @@
       "PrototypeScreen": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "id",
-          "module",
-          "title",
-          "purpose",
-          "status"
-        ],
+        "required": ["id", "module", "title", "purpose", "status"],
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^(M1|M2|P3|P4|P5|COS)-[0-9]{2}$"
+            "pattern": "^(M1|M2|P3|P4|P5|COS|P7|P8|P9|P10|P11|P12)-[0-9]{2}$"
           },
           "module": {
             "type": "string",
@@ -10296,7 +12635,14 @@
               "M2",
               "M3",
               "M4",
-              "COS"
+              "M5",
+              "COS",
+              "M7",
+              "M8",
+              "M9",
+              "M10",
+              "M11",
+              "M12"
             ]
           },
           "title": {
@@ -10336,7 +12682,7 @@
           },
           "screenCount": {
             "type": "integer",
-            "const": 122
+            "const": 185
           },
           "modules": {
             "type": "array",
@@ -10349,11 +12695,7 @@
       "CsrfToken": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "headerName",
-          "parameterName",
-          "token"
-        ],
+        "required": ["headerName", "parameterName", "token"],
         "properties": {
           "headerName": {
             "type": "string",
@@ -10414,11 +12756,7 @@
       "User": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "id",
-          "email",
-          "displayName"
-        ],
+        "required": ["id", "email", "displayName"],
         "properties": {
           "id": {
             "type": "string",
@@ -10439,10 +12777,7 @@
       "LoginRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "email",
-          "password"
-        ],
+        "required": ["email", "password"],
         "properties": {
           "email": {
             "type": "string",
@@ -10460,9 +12795,7 @@
       "PasswordResetRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "email"
-        ],
+        "required": ["email"],
         "properties": {
           "email": {
             "type": "string",
@@ -10474,10 +12807,7 @@
       "PasswordResetCompletion": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "token",
-          "newPassword"
-        ],
+        "required": ["token", "newPassword"],
         "properties": {
           "token": {
             "type": "string",
@@ -10497,10 +12827,7 @@
         "additionalProperties": false,
         "properties": {
           "label": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 80
           }
         }
@@ -10508,10 +12835,7 @@
       "MfaEnrollment": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "secret",
-          "provisioningUri"
-        ],
+        "required": ["secret", "provisioningUri"],
         "properties": {
           "secret": {
             "type": "string",
@@ -10527,9 +12851,7 @@
       "MfaCodeRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "code"
-        ],
+        "required": ["code"],
         "properties": {
           "code": {
             "type": "string",
@@ -10541,9 +12863,7 @@
       "RecoveryCodes": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "recoveryCodes"
-        ],
+        "required": ["recoveryCodes"],
         "properties": {
           "recoveryCodes": {
             "type": "array",
@@ -10559,9 +12879,7 @@
       "RecentAuthenticationRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "password"
-        ],
+        "required": ["password"],
         "properties": {
           "password": {
             "type": "string",
@@ -10570,10 +12888,7 @@
             "maxLength": 128
           },
           "secondFactor": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 32
           }
         }
@@ -10581,12 +12896,7 @@
       "InvitationIssueRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "email",
-          "displayName",
-          "roleKey",
-          "reason"
-        ],
+        "required": ["email", "displayName", "roleKey", "reason"],
         "properties": {
           "email": {
             "type": "string",
@@ -10614,9 +12924,7 @@
       "InvitationRevocationRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "reason"
-        ],
+        "required": ["reason"],
         "properties": {
           "reason": {
             "type": "string",
@@ -10628,9 +12936,7 @@
       "MfaAdministrationReasonRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "reason"
-        ],
+        "required": ["reason"],
         "properties": {
           "reason": {
             "type": "string",
@@ -10724,12 +13030,7 @@
           },
           "accountStatus": {
             "type": "string",
-            "enum": [
-              "invited",
-              "active",
-              "suspended",
-              "disabled"
-            ]
+            "enum": ["invited", "active", "suspended", "disabled"]
           },
           "roleKey": {
             "type": "string",
@@ -10744,34 +13045,21 @@
           },
           "roleStatus": {
             "type": "string",
-            "enum": [
-              "active",
-              "reference",
-              "retired"
-            ]
+            "enum": ["active", "reference", "retired"]
           },
           "finalOwner": {
             "type": "boolean"
           },
           "accessState": {
             "type": "string",
-            "enum": [
-              "active",
-              "scheduled",
-              "suspended",
-              "expired",
-              "revoked"
-            ]
+            "enum": ["active", "scheduled", "suspended", "expired", "revoked"]
           },
           "effectiveFrom": {
             "type": "string",
             "format": "date-time"
           },
           "effectiveTo": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "lockVersion": {
@@ -10825,13 +13113,7 @@
           },
           "lifecycleStatus": {
             "type": "string",
-            "enum": [
-              "draft",
-              "under_review",
-              "active",
-              "suspended",
-              "closed"
-            ]
+            "enum": ["draft", "under_review", "active", "suspended", "closed"]
           },
           "catalogueVersion": {
             "type": "string",
@@ -10943,12 +13225,7 @@
           },
           "outcome": {
             "type": "string",
-            "enum": [
-              "complete",
-              "warning",
-              "blocked",
-              "not_applicable"
-            ]
+            "enum": ["complete", "warning", "blocked", "not_applicable"]
           },
           "reasonCode": {
             "type": "string",
@@ -10984,10 +13261,7 @@
       "FacilityType": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "key",
-          "displayName"
-        ],
+        "required": ["key", "displayName"],
         "properties": {
           "key": {
             "type": "string"
@@ -11030,20 +13304,11 @@
             "type": "string"
           },
           "timezone": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "status": {
             "type": "string",
-            "enum": [
-              "draft",
-              "under_review",
-              "active",
-              "suspended",
-              "closed"
-            ]
+            "enum": ["draft", "under_review", "active", "suspended", "closed"]
           },
           "lockVersion": {
             "type": "integer",
@@ -11129,24 +13394,15 @@
             "type": "string"
           },
           "addressId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "contactId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "timezone": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 64
           },
           "reason": {
@@ -11159,9 +13415,7 @@
       "ReasonRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "reason"
-        ],
+        "required": ["reason"],
         "properties": {
           "reason": {
             "type": "string",
@@ -11173,9 +13427,7 @@
       "OrganizationUnitLifecycleRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "reason"
-        ],
+        "required": ["reason"],
         "properties": {
           "reason": {
             "type": "string",
@@ -11204,10 +13456,7 @@
             "format": "uuid"
           },
           "parentId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "unitCode": {
@@ -11216,10 +13465,7 @@
           },
           "unitType": {
             "type": "string",
-            "enum": [
-              "department",
-              "unit"
-            ]
+            "enum": ["department", "unit"]
           },
           "name": {
             "type": "string",
@@ -11231,20 +13477,12 @@
             "format": "date-time"
           },
           "effectiveTo": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "status": {
             "type": "string",
-            "enum": [
-              "draft",
-              "active",
-              "suspended",
-              "closed"
-            ]
+            "enum": ["draft", "active", "suspended", "closed"]
           },
           "lockVersion": {
             "type": "integer",
@@ -11302,19 +13540,10 @@
       "OrganizationUnitCreateRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "unitCode",
-          "unitType",
-          "name",
-          "effectiveFrom",
-          "reason"
-        ],
+        "required": ["unitCode", "unitType", "name", "effectiveFrom", "reason"],
         "properties": {
           "parentId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "unitCode": {
@@ -11323,10 +13552,7 @@
           },
           "unitType": {
             "type": "string",
-            "enum": [
-              "department",
-              "unit"
-            ]
+            "enum": ["department", "unit"]
           },
           "name": {
             "type": "string",
@@ -11338,10 +13564,7 @@
             "format": "date-time"
           },
           "effectiveTo": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "reason": {
@@ -11354,16 +13577,10 @@
       "OrganizationUnitReparentRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "effectiveFrom",
-          "reason"
-        ],
+        "required": ["effectiveFrom", "reason"],
         "properties": {
           "parentId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "effectiveFrom": {
@@ -11380,10 +13597,7 @@
       "OrganizationUnitClosureRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "effectiveTo",
-          "reason"
-        ],
+        "required": ["effectiveTo", "reason"],
         "properties": {
           "effectiveTo": {
             "type": "string",
@@ -11416,24 +13630,15 @@
             "format": "uuid"
           },
           "unitId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "parentId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "addressId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "locationCode": {
@@ -11442,10 +13647,7 @@
           },
           "locationType": {
             "type": "string",
-            "enum": [
-              "physical",
-              "virtual"
-            ]
+            "enum": ["physical", "virtual"]
           },
           "name": {
             "type": "string",
@@ -11453,26 +13655,17 @@
             "maxLength": 120
           },
           "virtualServiceType": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "minLength": 2,
             "maxLength": 80
           },
           "capacity": {
-            "type": [
-              "integer",
-              "null"
-            ],
+            "type": ["integer", "null"],
             "minimum": 1,
             "maximum": 100000
           },
           "accessibilityNotes": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 500
           },
           "effectiveFrom": {
@@ -11480,20 +13673,12 @@
             "format": "date-time"
           },
           "effectiveTo": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "status": {
             "type": "string",
-            "enum": [
-              "draft",
-              "active",
-              "suspended",
-              "closed"
-            ]
+            "enum": ["draft", "active", "suspended", "closed"]
           },
           "lockVersion": {
             "type": "integer",
@@ -11560,24 +13745,15 @@
         ],
         "properties": {
           "unitId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "parentId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "addressId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "locationCode": {
@@ -11586,10 +13762,7 @@
           },
           "locationType": {
             "type": "string",
-            "enum": [
-              "physical",
-              "virtual"
-            ]
+            "enum": ["physical", "virtual"]
           },
           "name": {
             "type": "string",
@@ -11597,26 +13770,17 @@
             "maxLength": 120
           },
           "virtualServiceType": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "minLength": 2,
             "maxLength": 80
           },
           "capacity": {
-            "type": [
-              "integer",
-              "null"
-            ],
+            "type": ["integer", "null"],
             "minimum": 1,
             "maximum": 100000
           },
           "accessibilityNotes": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 500
           },
           "effectiveFrom": {
@@ -11624,10 +13788,7 @@
             "format": "date-time"
           },
           "effectiveTo": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "reason": {
@@ -11649,17 +13810,11 @@
         ],
         "properties": {
           "unitId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "addressId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "locationCode": {
@@ -11668,10 +13823,7 @@
           },
           "locationType": {
             "type": "string",
-            "enum": [
-              "physical",
-              "virtual"
-            ]
+            "enum": ["physical", "virtual"]
           },
           "name": {
             "type": "string",
@@ -11679,26 +13831,17 @@
             "maxLength": 120
           },
           "virtualServiceType": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "minLength": 2,
             "maxLength": 80
           },
           "capacity": {
-            "type": [
-              "integer",
-              "null"
-            ],
+            "type": ["integer", "null"],
             "minimum": 1,
             "maximum": 100000
           },
           "accessibilityNotes": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 500
           },
           "effectiveFrom": {
@@ -11706,10 +13849,7 @@
             "format": "date-time"
           },
           "effectiveTo": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "reason": {
@@ -11722,17 +13862,10 @@
       "ServiceLocationReparentRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "parentId",
-          "effectiveFrom",
-          "reason"
-        ],
+        "required": ["parentId", "effectiveFrom", "reason"],
         "properties": {
           "parentId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "effectiveFrom": {
@@ -11749,11 +13882,7 @@
       "GovernanceAssignee": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "id",
-          "type",
-          "display"
-        ],
+        "required": ["id", "type", "display"],
         "properties": {
           "id": {
             "type": "string",
@@ -11761,10 +13890,7 @@
           },
           "type": {
             "type": "string",
-            "enum": [
-              "membership",
-              "external_contact"
-            ]
+            "enum": ["membership", "external_contact"]
           },
           "display": {
             "type": "string",
@@ -11801,19 +13927,11 @@
           },
           "responsibilityType": {
             "type": "string",
-            "enum": [
-              "clinical",
-              "privacy",
-              "security",
-              "billing"
-            ]
+            "enum": ["clinical", "privacy", "security", "billing"]
           },
           "assigneeType": {
             "type": "string",
-            "enum": [
-              "membership",
-              "external_contact"
-            ]
+            "enum": ["membership", "external_contact"]
           },
           "assigneeId": {
             "type": "string",
@@ -11825,18 +13943,12 @@
             "maxLength": 200
           },
           "escalationEmailMasked": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "minLength": 3,
             "maxLength": 254
           },
           "escalationPhoneMasked": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "minLength": 3,
             "maxLength": 32
           },
@@ -11848,37 +13960,23 @@
             "format": "date-time"
           },
           "effectiveTo": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "supersedesId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "status": {
             "type": "string",
-            "enum": [
-              "scheduled",
-              "active",
-              "ended",
-              "superseded"
-            ]
+            "enum": ["scheduled", "active", "ended", "superseded"]
           },
           "availableActions": {
             "type": "array",
             "uniqueItems": true,
             "items": {
               "type": "string",
-              "enum": [
-                "supersede",
-                "end"
-              ]
+              "enum": ["supersede", "end"]
             }
           },
           "lockVersion": {
@@ -11967,39 +14065,22 @@
         "properties": {
           "responsibilityType": {
             "type": "string",
-            "enum": [
-              "clinical",
-              "privacy",
-              "security",
-              "billing"
-            ]
+            "enum": ["clinical", "privacy", "security", "billing"]
           },
           "membershipId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "externalContactId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "escalationEmail": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 254
           },
           "escalationPhone": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 32
           },
           "effectiveFrom": {
@@ -12016,10 +14097,7 @@
       "GovernanceResponsibilityEndRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "effectiveTo",
-          "reason"
-        ],
+        "required": ["effectiveTo", "reason"],
         "properties": {
           "effectiveTo": {
             "type": "string",
@@ -12068,12 +14146,7 @@
       "InternationalSettingsImpact": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "field",
-          "code",
-          "severity",
-          "description"
-        ],
+        "required": ["field", "code", "severity", "description"],
         "properties": {
           "field": {
             "type": "string",
@@ -12092,10 +14165,7 @@
           },
           "severity": {
             "type": "string",
-            "enum": [
-              "information",
-              "warning"
-            ]
+            "enum": ["information", "warning"]
           },
           "description": {
             "type": "string",
@@ -12125,18 +14195,12 @@
         ],
         "properties": {
           "settingsId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "source": {
             "type": "string",
-            "enum": [
-              "organization_default",
-              "configured"
-            ]
+            "enum": ["organization_default", "configured"]
           },
           "countryCode": {
             "type": "string",
@@ -12180,26 +14244,15 @@
             "format": "date-time"
           },
           "effectiveTo": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "lifecycle": {
             "type": "string",
-            "enum": [
-              "default",
-              "active",
-              "scheduled",
-              "superseded"
-            ]
+            "enum": ["default", "active", "scheduled", "superseded"]
           },
           "supersedesId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "lockVersion": {
@@ -12379,24 +14432,13 @@
             "maxLength": 120
           },
           "tradingName": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "minLength": 2,
             "maxLength": 160
           },
           "organizationType": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "enum": [
-              "care_provider",
-              "care_network",
-              "administrative",
-              null
-            ]
+            "type": ["string", "null"],
+            "enum": ["care_provider", "care_network", "administrative", null]
           },
           "countryCode": {
             "type": "string",
@@ -12408,23 +14450,14 @@
             "maxLength": 80
           },
           "locale": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "minLength": 2,
             "maxLength": 255,
             "pattern": "^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$"
           },
           "lifecycleStatus": {
             "type": "string",
-            "enum": [
-              "draft",
-              "under_review",
-              "active",
-              "suspended",
-              "closed"
-            ]
+            "enum": ["draft", "under_review", "active", "suspended", "closed"]
           },
           "editable": {
             "type": "boolean",
@@ -12466,20 +14499,13 @@
             "maxLength": 120
           },
           "tradingName": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "minLength": 2,
             "maxLength": 160
           },
           "organizationType": {
             "type": "string",
-            "enum": [
-              "care_provider",
-              "care_network",
-              "administrative"
-            ]
+            "enum": ["care_provider", "care_network", "administrative"]
           },
           "countryCode": {
             "type": "string",
@@ -12525,10 +14551,7 @@
             "maxLength": 120
           },
           "jurisdictionCountryCode": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "pattern": "^[A-Z]{2}$"
           },
           "primaryRequired": {
@@ -12587,24 +14610,15 @@
             "maxLength": 128
           },
           "jurisdictionCountryCode": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "pattern": "^[A-Z]{2}$"
           },
           "verificationStatus": {
             "type": "string",
-            "enum": [
-              "unverified",
-              "verified"
-            ]
+            "enum": ["unverified", "verified"]
           },
           "evidenceReference": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "minLength": 1,
             "maxLength": 160,
             "description": "Confidential bounded evidence reference projected only to actors with live verification permission."
@@ -12613,17 +14627,11 @@
             "type": "boolean"
           },
           "issueDate": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date"
           },
           "expiryDate": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date"
           },
           "effectiveFrom": {
@@ -12631,17 +14639,11 @@
             "format": "date-time"
           },
           "effectiveTo": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "supersedesId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid",
             "description": "The immutable predecessor linked by an atomic supersession, when this identifier is a replacement."
           },
@@ -12662,12 +14664,7 @@
             "uniqueItems": true,
             "items": {
               "type": "string",
-              "enum": [
-                "edit",
-                "verify",
-                "revoke",
-                "supersede"
-              ]
+              "enum": ["edit", "verify", "revoke", "supersede"]
             },
             "description": "Actions derived from live permission, lifecycle, and primary-replacement policy."
           },
@@ -12689,12 +14686,7 @@
       "OrganizationIdentifierCollection": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "organizationId",
-          "canCreate",
-          "types",
-          "items"
-        ],
+        "required": ["organizationId", "canCreate", "types", "items"],
         "properties": {
           "organizationId": {
             "type": "string",
@@ -12753,27 +14745,18 @@
             "maxLength": 128
           },
           "jurisdictionCountryCode": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "pattern": "^[A-Za-z]{2}$"
           },
           "isPrimary": {
             "type": "boolean"
           },
           "issueDate": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date"
           },
           "expiryDate": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date"
           },
           "effectiveFrom": {
@@ -12781,10 +14764,7 @@
             "format": "date-time"
           },
           "effectiveTo": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "reason": {
@@ -12797,10 +14777,7 @@
       "OrganizationIdentifierVerificationRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "evidenceReference",
-          "reason"
-        ],
+        "required": ["evidenceReference", "reason"],
         "properties": {
           "evidenceReference": {
             "type": "string",
@@ -12817,9 +14794,7 @@
       "OrganizationIdentifierRevocationRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "reason"
-        ],
+        "required": ["reason"],
         "properties": {
           "reason": {
             "type": "string",
@@ -12831,11 +14806,7 @@
       "OrganizationIdentifierSupersessionRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "replacementId",
-          "replacementEtag",
-          "reason"
-        ],
+        "required": ["replacementId", "replacementEtag", "reason"],
         "properties": {
           "replacementId": {
             "type": "string",
@@ -12855,11 +14826,7 @@
       "OrganizationContactPurpose": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "key",
-          "displayName",
-          "publicProjectionAllowed"
-        ],
+        "required": ["key", "displayName", "publicProjectionAllowed"],
         "properties": {
           "key": {
             "type": "string",
@@ -12908,12 +14875,7 @@
           },
           "addressType": {
             "type": "string",
-            "enum": [
-              "registered",
-              "postal",
-              "service",
-              "billing"
-            ]
+            "enum": ["registered", "postal", "service", "billing"]
           },
           "addressLines": {
             "type": "array",
@@ -12946,16 +14908,10 @@
           },
           "validationStatus": {
             "type": "string",
-            "enum": [
-              "unvalidated",
-              "validated"
-            ]
+            "enum": ["unvalidated", "validated"]
           },
           "validationSource": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "minLength": 2,
             "maxLength": 160
           },
@@ -12967,27 +14923,16 @@
             "format": "date-time"
           },
           "effectiveTo": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "supersedesId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "status": {
             "type": "string",
-            "enum": [
-              "scheduled",
-              "active",
-              "ended",
-              "superseded"
-            ]
+            "enum": ["scheduled", "active", "ended", "superseded"]
           },
           "availableActions": {
             "type": "array",
@@ -12995,10 +14940,7 @@
             "uniqueItems": true,
             "items": {
               "type": "string",
-              "enum": [
-                "supersede",
-                "end"
-              ]
+              "enum": ["supersede", "end"]
             }
           },
           "lockVersion": {
@@ -13044,11 +14986,7 @@
           },
           "channel": {
             "type": "string",
-            "enum": [
-              "email",
-              "phone",
-              "web"
-            ]
+            "enum": ["email", "phone", "web"]
           },
           "purpose": {
             "type": "string",
@@ -13069,10 +15007,7 @@
           },
           "verificationStatus": {
             "type": "string",
-            "enum": [
-              "unverified",
-              "verified"
-            ]
+            "enum": ["unverified", "verified"]
           },
           "isPrimary": {
             "type": "boolean"
@@ -13085,27 +15020,16 @@
             "format": "date-time"
           },
           "effectiveTo": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "supersedesId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "status": {
             "type": "string",
-            "enum": [
-              "scheduled",
-              "active",
-              "ended",
-              "superseded"
-            ]
+            "enum": ["scheduled", "active", "ended", "superseded"]
           },
           "availableActions": {
             "type": "array",
@@ -13113,11 +15037,7 @@
             "uniqueItems": true,
             "items": {
               "type": "string",
-              "enum": [
-                "verify",
-                "supersede",
-                "end"
-              ]
+              "enum": ["verify", "supersede", "end"]
             }
           },
           "lockVersion": {
@@ -13218,12 +15138,7 @@
         "properties": {
           "addressType": {
             "type": "string",
-            "enum": [
-              "registered",
-              "postal",
-              "service",
-              "billing"
-            ]
+            "enum": ["registered", "postal", "service", "billing"]
           },
           "addressLines": {
             "type": "array",
@@ -13256,16 +15171,10 @@
           },
           "validationStatus": {
             "type": "string",
-            "enum": [
-              "unvalidated",
-              "validated"
-            ]
+            "enum": ["unvalidated", "validated"]
           },
           "validationSource": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "minLength": 2,
             "maxLength": 160
           },
@@ -13277,10 +15186,7 @@
             "format": "date-time"
           },
           "effectiveTo": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "reason": {
@@ -13306,11 +15212,7 @@
         "properties": {
           "channel": {
             "type": "string",
-            "enum": [
-              "email",
-              "phone",
-              "web"
-            ]
+            "enum": ["email", "phone", "web"]
           },
           "purpose": {
             "type": "string",
@@ -13335,10 +15237,7 @@
             "format": "date-time"
           },
           "effectiveTo": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "reason": {
@@ -13351,9 +15250,7 @@
       "OrganizationContactReasonRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "reason"
-        ],
+        "required": ["reason"],
         "properties": {
           "reason": {
             "type": "string",
@@ -13365,12 +15262,7 @@
       "MfaResetMutation": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "approvalId",
-          "targetUserId",
-          "status",
-          "expiresAt"
-        ],
+        "required": ["approvalId", "targetUserId", "status", "expiresAt"],
         "properties": {
           "approvalId": {
             "type": "string",
@@ -13382,11 +15274,7 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "pending",
-              "approved",
-              "reset"
-            ]
+            "enum": ["pending", "approved", "reset"]
           },
           "expiresAt": {
             "type": "string",
@@ -13397,23 +15285,14 @@
       "MembershipChangeRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "changeType",
-          "reason"
-        ],
+        "required": ["changeType", "reason"],
         "properties": {
           "changeType": {
             "type": "string",
-            "enum": [
-              "role_change",
-              "revoke"
-            ]
+            "enum": ["role_change", "revoke"]
           },
           "toRoleKey": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "minLength": 1,
             "maxLength": 100,
             "pattern": "^[a-z][a-z0-9]*([._:-][a-z0-9]+)*$"
@@ -13428,9 +15307,7 @@
       "MembershipChangeReasonRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "reason"
-        ],
+        "required": ["reason"],
         "properties": {
           "reason": {
             "type": "string",
@@ -13442,10 +15319,7 @@
       "OwnerTransferRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "toRoleKey",
-          "reason"
-        ],
+        "required": ["toRoleKey", "reason"],
         "properties": {
           "toRoleKey": {
             "type": "string",
@@ -13502,10 +15376,7 @@
             "maxLength": 100
           },
           "toRoleKey": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "maxLength": 100
           },
           "lockVersion": {
@@ -13515,13 +15386,7 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "pending",
-              "approved",
-              "changed",
-              "revoked",
-              "transferred"
-            ]
+            "enum": ["pending", "approved", "changed", "revoked", "transferred"]
           },
           "expiresAt": {
             "type": "string",
@@ -13532,9 +15397,7 @@
       "InvitationAcceptanceRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "token"
-        ],
+        "required": ["token"],
         "properties": {
           "token": {
             "type": "string",
@@ -13542,10 +15405,7 @@
             "maxLength": 512
           },
           "newPassword": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "password",
             "minLength": 12,
             "maxLength": 128
@@ -13555,12 +15415,7 @@
       "InvitationMutation": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "invitationId",
-          "status",
-          "roleKey",
-          "expiresAt"
-        ],
+        "required": ["invitationId", "status", "roleKey", "expiresAt"],
         "properties": {
           "invitationId": {
             "type": "string",
@@ -13568,10 +15423,7 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "pending",
-              "revoked"
-            ]
+            "enum": ["pending", "revoked"]
           },
           "roleKey": {
             "type": "string",
@@ -13614,19 +15466,14 @@
           },
           "accountLink": {
             "type": "string",
-            "enum": [
-              "existing",
-              "created"
-            ]
+            "enum": ["existing", "created"]
           }
         }
       },
       "OrganizationSelectionRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "organizationId"
-        ],
+        "required": ["organizationId"],
         "properties": {
           "organizationId": {
             "type": "string",
@@ -13637,13 +15484,7 @@
       "OrganizationAccess": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "id",
-          "displayName",
-          "status",
-          "roleKeys",
-          "selected"
-        ],
+        "required": ["id", "displayName", "status", "roleKeys", "selected"],
         "properties": {
           "id": {
             "type": "string",
@@ -13656,10 +15497,7 @@
           },
           "status": {
             "type": "string",
-            "enum": [
-              "draft",
-              "active"
-            ]
+            "enum": ["draft", "active"]
           },
           "roleKeys": {
             "type": "array",
@@ -13679,11 +15517,7 @@
       "CursorPageMetadata": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "limit",
-          "hasMore",
-          "nextCursor"
-        ],
+        "required": ["limit", "hasMore", "nextCursor"],
         "properties": {
           "limit": {
             "type": "integer",
@@ -13694,10 +15528,7 @@
             "type": "boolean"
           },
           "nextCursor": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "minLength": 1,
             "maxLength": 512,
             "pattern": "^[A-Za-z0-9_-]+$"
@@ -13707,11 +15538,7 @@
       "FieldViolation": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "path",
-          "code",
-          "message"
-        ],
+        "required": ["path", "code", "message"],
         "properties": {
           "path": {
             "type": "string",
@@ -13773,12 +15600,7 @@
       "OperatingHoursOverview": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "organizationId",
-          "canManage",
-          "batches",
-          "evaluatedAt"
-        ],
+        "required": ["organizationId", "canManage", "batches", "evaluatedAt"],
         "properties": {
           "organizationId": {
             "type": "string",
@@ -13819,10 +15641,7 @@
           },
           "targetType": {
             "type": "string",
-            "enum": [
-              "facility",
-              "location"
-            ]
+            "enum": ["facility", "location"]
           },
           "targetId": {
             "type": "string",
@@ -13836,10 +15655,7 @@
             "format": "date-time"
           },
           "effectiveTo": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "status": {
@@ -13914,44 +15730,26 @@
             "type": "string"
           },
           "clinicalName": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "description": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "codingSystem": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "codingCode": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "ownerResponsibilityId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "status": {
             "type": "string"
           },
           "retirementReason": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "lockVersion": {
             "type": "integer",
@@ -13970,11 +15768,7 @@
       "ServiceWriteRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "serviceCode",
-          "displayName",
-          "reason"
-        ],
+        "required": ["serviceCode", "displayName", "reason"],
         "properties": {
           "serviceCode": {
             "type": "string"
@@ -13983,34 +15777,19 @@
             "type": "string"
           },
           "clinicalName": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "description": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "codingSystem": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "codingCode": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "ownerResponsibilityId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "reason": {
@@ -14083,23 +15862,14 @@
             "format": "uuid"
           },
           "locationId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "capacity": {
-            "type": [
-              "integer",
-              "null"
-            ]
+            "type": ["integer", "null"]
           },
           "availabilityNotes": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "prerequisites": {
             "type": "array",
@@ -14112,10 +15882,7 @@
             "format": "date-time"
           },
           "effectiveTo": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "status": {
@@ -14155,23 +15922,14 @@
             "format": "uuid"
           },
           "locationId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "capacity": {
-            "type": [
-              "integer",
-              "null"
-            ]
+            "type": ["integer", "null"]
           },
           "availabilityNotes": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "prerequisites": {
             "type": "array",
@@ -14184,10 +15942,7 @@
             "format": "date-time"
           },
           "effectiveTo": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "reason": {
@@ -14198,10 +15953,7 @@
       "LifecycleFromStateRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "fromState",
-          "reason"
-        ],
+        "required": ["fromState", "reason"],
         "properties": {
           "fromState": {
             "type": "string"
@@ -14273,17 +16025,11 @@
             "type": "string"
           },
           "scopeId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "description": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "status": {
             "type": "string"
@@ -14336,10 +16082,7 @@
             "type": "string"
           },
           "checkDigitAlgorithm": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "sequenceStart": {
             "type": "integer",
@@ -14385,36 +16128,21 @@
         ],
         "properties": {
           "versionId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "schemeKey": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "scopeType": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "scopeId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "description": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "prefix": {
             "type": "string"
@@ -14436,10 +16164,7 @@
             "type": "integer"
           },
           "checkDigitAlgorithm": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "effectiveFrom": {
             "type": "string",
@@ -14501,7 +16226,14 @@
       "ConfigurationPendingChange": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["subjectType", "subjectId", "expectedRevision", "changeType", "label", "currentStatus"],
+        "required": [
+          "subjectType",
+          "subjectId",
+          "expectedRevision",
+          "changeType",
+          "label",
+          "currentStatus"
+        ],
         "properties": {
           "subjectType": { "type": "string" },
           "subjectId": { "type": "string", "format": "uuid" },
@@ -14547,10 +16279,7 @@
             "type": "string"
           },
           "parentVersionId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "baselineDigest": {
@@ -14587,17 +16316,11 @@
             "description": "Actor-specific action projection requiring fresh approved evidence and maker/activator separation."
           },
           "validationResultId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "resultDigest": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "blockerCount": {
             "type": "integer"
@@ -14606,44 +16329,26 @@
             "type": "integer"
           },
           "validationExpiresAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "approvalId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "decision": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "checkerId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "approvalExpiresAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "activatedAt": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           }
         }
@@ -14659,10 +16364,7 @@
         ],
         "properties": {
           "configurationId": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "uuid"
           },
           "changeSummary": {
@@ -14682,7 +16384,12 @@
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["subjectType", "subjectId", "expectedRevision", "changeType"],
+              "required": [
+                "subjectType",
+                "subjectId",
+                "expectedRevision",
+                "changeType"
+              ],
               "properties": {
                 "subjectType": { "type": "string" },
                 "subjectId": { "type": "string", "format": "uuid" },
@@ -14696,11 +16403,7 @@
       "ConfigurationResultRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "resultId",
-          "resultDigest",
-          "reason"
-        ],
+        "required": ["resultId", "resultDigest", "reason"],
         "properties": {
           "resultId": {
             "type": "string",
@@ -14746,12 +16449,7 @@
       "ConfigurationActivationRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "approvalId",
-          "resultDigest",
-          "effectiveFrom",
-          "reason"
-        ],
+        "required": ["approvalId", "resultDigest", "effectiveFrom", "reason"],
         "properties": {
           "approvalId": {
             "type": "string",
@@ -14802,10 +16500,7 @@
             "type": "boolean"
           },
           "nextCursor": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           }
         }
       },
@@ -14842,17 +16537,34 @@
             "type": "boolean"
           },
           "nextCursor": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           }
         }
       },
       "ConfigurationHistoryItem": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["configurationId", "displayNumber", "parentVersionId", "status", "changeSummary", "reasonProjection", "makerId", "checkerId", "activatorId", "requestedEffectiveAt", "activatedAt", "supersededAt", "resultDigest", "gateCatalogueVersion", "approvalPolicyVersion", "correlationId", "lockVersion", "recordedAt", "changes"],
+        "required": [
+          "configurationId",
+          "displayNumber",
+          "parentVersionId",
+          "status",
+          "changeSummary",
+          "reasonProjection",
+          "makerId",
+          "checkerId",
+          "activatorId",
+          "requestedEffectiveAt",
+          "activatedAt",
+          "supersededAt",
+          "resultDigest",
+          "gateCatalogueVersion",
+          "approvalPolicyVersion",
+          "correlationId",
+          "lockVersion",
+          "recordedAt",
+          "changes"
+        ],
         "properties": {
           "configurationId": { "type": "string", "format": "uuid" },
           "displayNumber": { "type": "string" },
@@ -14872,17 +16584,32 @@
           "correlationId": { "type": "string" },
           "lockVersion": { "type": "integer", "format": "int64", "minimum": 0 },
           "recordedAt": { "type": "string", "format": "date-time" },
-          "changes": { "type": "array", "items": { "$ref": "#/components/schemas/ConfigurationHistoryChange" } }
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConfigurationHistoryChange"
+            }
+          }
         }
       },
       "ConfigurationHistoryChange": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["subjectType", "subjectId", "baselineRevision", "newRevision", "changeType"],
+        "required": [
+          "subjectType",
+          "subjectId",
+          "baselineRevision",
+          "newRevision",
+          "changeType"
+        ],
         "properties": {
           "subjectType": { "type": "string" },
           "subjectId": { "type": "string", "format": "uuid" },
-          "baselineRevision": { "type": "integer", "format": "int64", "minimum": 0 },
+          "baselineRevision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
           "newRevision": { "type": "integer", "format": "int64", "minimum": 1 },
           "changeType": { "type": "string" }
         }
@@ -14890,7 +16617,20 @@
       "AuditEvidenceItem": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["eventId", "occurredAt", "actorId", "operationKey", "eventName", "schemaVersion", "subjectType", "subjectId", "outcome", "risk", "correlationId", "redacted"],
+        "required": [
+          "eventId",
+          "occurredAt",
+          "actorId",
+          "operationKey",
+          "eventName",
+          "schemaVersion",
+          "subjectType",
+          "subjectId",
+          "outcome",
+          "risk",
+          "correlationId",
+          "redacted"
+        ],
         "properties": {
           "eventId": { "type": "string", "format": "uuid" },
           "occurredAt": { "type": "string", "format": "date-time" },
@@ -14901,7 +16641,10 @@
           "subjectType": { "type": "string" },
           "subjectId": { "type": "string", "format": "uuid" },
           "outcome": { "type": "string", "enum": ["success", "failure"] },
-          "risk": { "type": "string", "enum": ["standard", "high", "restricted"] },
+          "risk": {
+            "type": "string",
+            "enum": ["standard", "high", "restricted"]
+          },
           "correlationId": { "type": "string" },
           "redacted": { "type": "boolean" }
         }
@@ -14913,7 +16656,14 @@
           { "$ref": "#/components/schemas/AuditEvidenceItem" },
           {
             "type": "object",
-            "required": ["organizationId", "recordedAt", "purposeCode", "reasonProjection", "payload", "registryVersion"],
+            "required": [
+              "organizationId",
+              "recordedAt",
+              "purposeCode",
+              "reasonProjection",
+              "payload",
+              "registryVersion"
+            ],
             "properties": {
               "organizationId": { "type": "string", "format": "uuid" },
               "recordedAt": { "type": "string", "format": "date-time" },
@@ -14928,14 +16678,54 @@
       "EvidenceExportJob": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["exportId", "requesterId", "projection", "format", "purposeCode", "status", "canApprove", "canAccess", "approvalId", "approverId", "rowCount", "byteCount", "artifactDigest", "readyAt", "expiresAt", "failureCode", "lockVersion", "createdAt", "updatedAt"],
+        "required": [
+          "exportId",
+          "requesterId",
+          "projection",
+          "format",
+          "purposeCode",
+          "status",
+          "canApprove",
+          "canAccess",
+          "approvalId",
+          "approverId",
+          "rowCount",
+          "byteCount",
+          "artifactDigest",
+          "readyAt",
+          "expiresAt",
+          "failureCode",
+          "lockVersion",
+          "createdAt",
+          "updatedAt"
+        ],
         "properties": {
           "exportId": { "type": "string", "format": "uuid" },
           "requesterId": { "type": "string", "format": "uuid" },
-          "projection": { "type": "string", "enum": ["history-summary-v1", "history-detail-v1", "audit-summary-v1", "audit-detail-v1"] },
+          "projection": {
+            "type": "string",
+            "enum": [
+              "history-summary-v1",
+              "history-detail-v1",
+              "audit-summary-v1",
+              "audit-detail-v1"
+            ]
+          },
           "format": { "type": "string", "enum": ["csv", "jsonl"] },
           "purposeCode": { "type": "string" },
-          "status": { "type": "string", "enum": ["requested", "authorized", "denied", "running", "ready", "expired", "disposed", "failed"] },
+          "status": {
+            "type": "string",
+            "enum": [
+              "requested",
+              "authorized",
+              "denied",
+              "running",
+              "ready",
+              "expired",
+              "disposed",
+              "failed"
+            ]
+          },
           "canApprove": {
             "type": "boolean",
             "description": "True only for an eligible approver who is not this job's requester."
@@ -14947,7 +16737,11 @@
           "approvalId": { "type": ["string", "null"], "format": "uuid" },
           "approverId": { "type": ["string", "null"], "format": "uuid" },
           "rowCount": { "type": ["integer", "null"], "minimum": 0 },
-          "byteCount": { "type": ["integer", "null"], "format": "int64", "minimum": 0 },
+          "byteCount": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "minimum": 0
+          },
           "artifactDigest": { "type": ["string", "null"] },
           "readyAt": { "type": ["string", "null"], "format": "date-time" },
           "expiresAt": { "type": ["string", "null"], "format": "date-time" },
@@ -15017,10 +16811,7 @@
           },
           "format": {
             "type": "string",
-            "enum": [
-              "csv",
-              "jsonl"
-            ]
+            "enum": ["csv", "jsonl"]
           },
           "filters": {
             "type": "object",
@@ -15039,7 +16830,10 @@
               "eventName": { "type": "string" },
               "schemaVersion": { "type": "integer", "minimum": 1 },
               "outcome": { "type": "string", "enum": ["success", "failure"] },
-              "risk": { "type": "string", "enum": ["standard", "high", "restricted"] }
+              "risk": {
+                "type": "string",
+                "enum": ["standard", "high", "restricted"]
+              }
             }
           },
           "purposeCode": {
@@ -15062,10 +16856,7 @@
       "EvidenceExportDecisionRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "authorize",
-          "reason"
-        ],
+        "required": ["authorize", "reason"],
         "properties": {
           "authorize": {
             "type": "boolean"
@@ -15082,7 +16873,12 @@
         "properties": {
           "purposeCode": {
             "type": "string",
-            "enum": ["configuration_review", "regulatory_evidence", "security_investigation", "data_correction"]
+            "enum": [
+              "configuration_review",
+              "regulatory_evidence",
+              "security_investigation",
+              "data_correction"
+            ]
           },
           "reason": { "type": "string", "minLength": 10, "maxLength": 500 }
         }
@@ -15090,14 +16886,27 @@
       "EvidenceExportAccessResponse": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["exportId", "downloadUrl", "expiresAt", "artifactDigest", "contentType", "filename"],
+        "required": [
+          "exportId",
+          "downloadUrl",
+          "expiresAt",
+          "artifactDigest",
+          "contentType",
+          "filename"
+        ],
         "properties": {
           "exportId": { "type": "string", "format": "uuid" },
           "downloadUrl": { "type": "string", "format": "uri" },
           "expiresAt": { "type": "string", "format": "date-time" },
           "artifactDigest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-          "contentType": { "type": "string", "enum": ["text/csv", "application/x-ndjson"] },
-          "filename": { "type": "string", "pattern": "^careos-(history|audit)-[0-9a-f-]{36}\\.(csv|jsonl)$" }
+          "contentType": {
+            "type": "string",
+            "enum": ["text/csv", "application/x-ndjson"]
+          },
+          "filename": {
+            "type": "string",
+            "pattern": "^careos-(history|audit)-[0-9a-f-]{36}\\.(csv|jsonl)$"
+          }
         }
       },
       "OperatingHoursDirectory": {
@@ -15118,10 +16927,7 @@
           },
           "targetType": {
             "type": "string",
-            "enum": [
-              "facility",
-              "location"
-            ]
+            "enum": ["facility", "location"]
           },
           "targetId": {
             "type": "string",
@@ -15168,10 +16974,7 @@
             "format": "date-time"
           },
           "effectiveTo": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "status": {
@@ -15198,12 +17001,7 @@
       "OperatingHoursInterval": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "weekday",
-          "startMinute",
-          "endMinute",
-          "endsNextDay"
-        ],
+        "required": ["weekday", "startMinute", "endMinute", "endsNextDay"],
         "properties": {
           "weekday": {
             "type": "integer",
@@ -15228,11 +17026,7 @@
       "OperatingHoursExceptionInterval": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "startMinute",
-          "endMinute",
-          "endsNextDay"
-        ],
+        "required": ["startMinute", "endMinute", "endsNextDay"],
         "properties": {
           "startMinute": {
             "type": "integer",
@@ -15252,13 +17046,7 @@
       "OperatingHoursException": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "localDate",
-          "closed",
-          "label",
-          "reasonCode",
-          "intervals"
-        ],
+        "required": ["localDate", "closed", "label", "reasonCode", "intervals"],
         "properties": {
           "localDate": {
             "type": "string",
@@ -15268,16 +17056,10 @@
             "type": "boolean"
           },
           "label": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "reasonCode": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "intervals": {
             "type": "array",
@@ -15306,10 +17088,7 @@
             "format": "date-time"
           },
           "effectiveTo": {
-            "type": [
-              "string",
-              "null"
-            ],
+            "type": ["string", "null"],
             "format": "date-time"
           },
           "intervals": {

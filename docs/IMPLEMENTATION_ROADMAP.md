@@ -27,7 +27,7 @@ The directive does not fabricate unavailable COS source assets, jurisdiction-spe
 
 ## Current build status
 
-**Phase 0 mechanics and Modules 1-5 are complete at the repository-construction boundary; consolidated QA and target-environment production acceptance remain open.** M1 is implemented through V50, M2 through V68, M3 through V78, M4 through V82 and M5 through V89. The checked boundary contains 122 route states and 116 API operations; all 96 frontend unit tests and the focused five-viewport M5 gate pass. Module 6 Clinical Assessment is the next dependency. The M1 facility-scope candidate remains non-authorizing, and consolidated QA plus target provider/worker/deployment/monitoring/backup evidence remain deferred.
+**Phase 0 mechanics and Modules 1-12 are complete at the repository-construction boundary; consolidated QA and target-environment production acceptance remain open.** M1 is implemented through V50, M2 through V68, M3 through V78, M4 through V82, M5 through V89, M6 through V92, M7 through V95, M8 through V98, M9 through V101, M10 through V104, M11 through V107 and M12 through V110. The checked boundary contains 185 route states and 133 API operations; all 136 frontend unit tests and the focused five-viewport M12 gate pass. Module 13 Integrations and FHIR is the next dependency. The M1 facility-scope candidate remains non-authorizing, and consolidated QA plus protected COS source, target provider/worker/deployment/monitoring/backup evidence remain deferred.
 
 ### Phase 0A - build verification and reproducibility (completed 13 September 2026)
 
@@ -1162,3 +1162,178 @@ The approved package authorizes dependency-ordered repository implementation onl
 - [x] Pass all 96 frontend unit tests, generated drift, architecture, formatting, typecheck, lint and production build gates.
 - [x] Pass every P5 route and the P5-09 governed note-version flow across all five exact Playwright/Axe/overflow viewport projects.
 - [x] Record the implemented/fail-closed boundary in `MODULE_5_COMPLETION_REPORT.md`; preserve the full cross-module regression and production acceptance for consolidated QA.
+
+### Phase 6A - Module 6 assessment definition and protected-source boundary (completed 28 September 2026)
+
+- [x] Preserve the 27 existing COS names/order and document that exact protected copy, components and visual acceptance remain unavailable rather than fabricating them.
+- [x] Define patient/encounter/responsible-clinician binding, versioned response provenance, measurement, red-flag, review, signature, amendment and closeout policy.
+- [x] Keep `COS-24` AI synthesis unavailable pending the separately governed Module 8 boundary.
+
+### Phase 6B - assessment persistence, authorization and lifecycle (completed 28 September 2026)
+
+- [x] Add V90-V92 authorization, the twelve required forced-RLS assessment relations, composite tenant integrity and payload-minimized audit/outbox contracts.
+- [x] Enforce the 27-section lifecycle, eligible clinician authorship, append-only response versions, sourced measurements, visible red-flag progression and direct-SQL guards.
+- [x] Bind completeness/source/uncertainty review, recent-authenticated MFA signing and post-signature amendments to exact immutable revisions.
+
+### Phase 6C - API, client and all 27 COS routes (completed 28 September 2026)
+
+- [x] Publish OpenAPI 0.45.0 with exactly 118 operations, regenerate the checked TypeScript boundary and add exact runtime response validation.
+- [x] Replace all synthetic COS pages with governed server projections, a verified-patient/responsible-clinician banner, 27-step navigation and visible conflict-aware 700 ms autosave.
+- [x] Preserve explicit source-package-unavailable notices and avoid unapproved instruments, scores, thresholds, interpretation claims or AI output.
+
+### Phase 6D - construction checkpoint and QA handoff (completed 28 September 2026)
+
+- [x] Compile 415 production/42 test sources, apply V1-V92 and pass the focused 5-test assessment lifecycle/catalogue/registry gate.
+- [x] Pass all 102 frontend unit tests, generated drift, architecture, formatting, typecheck, lint and production build gates; pass all 22 API-contract cases.
+- [x] Pass every COS route, `COS-09` autosave and `COS-27` closeout across all five exact Playwright/Axe/overflow viewport projects (15/15).
+- [x] Record the implemented/fail-closed boundary in `MODULE_6_COMPLETION_REPORT.md`; preserve protected-source acceptance, full cross-module regression and production acceptance for consolidated QA.
+
+### Phase 7A - Module 7 document/result definition and provider boundary (completed 28 September 2026)
+
+- [x] Define all eleven P7 screens, twelve required entity families, document-version/result lifecycles, permissions/events and validation rules from the authoritative build specification.
+- [x] Bind uploads and reads through the existing quarantine, scanner, promotion and signed-access coordinators while preserving disabled-by-default provider behavior.
+- [x] Keep retention schedules, hold release/disposal, external laboratory/imaging feeds, result thresholds/SLAs, recipient authority and delivery providers fail closed pending accountable inputs.
+
+### Phase 7B - persistence, authorization and lifecycle (completed 28 September 2026)
+
+- [x] Add V93-V95 authorization, the twelve forced-RLS document/result relations, composite tenant integrity, payload-minimized events and direct lifecycle/provenance guards.
+- [x] Enforce bounded digest-checked private upload, immutable replacement versions, attributed classification, scan/promotion proof and exact clean-version result/access binding.
+- [x] Preserve source, unit, range, abnormal flag and method provenance; enforce attributed critical-result acknowledgement, escalation and resolution evidence.
+
+### Phase 7C - API, client and all 11 P7 routes (completed 28 September 2026)
+
+- [x] Publish OpenAPI 0.46.0 with exactly 123 operations, regenerate the checked TypeScript boundary and add exact runtime response validation.
+- [x] Replace P7-01 through P7-11 with governed server projections/actions and a bounded multipart uploader that computes the browser SHA-256.
+- [x] Return only short-lived same-origin access paths, retain access links in memory and represent export/share as immutable intent without a delivery claim.
+
+### Phase 7D - construction checkpoint and QA handoff (completed 28 September 2026)
+
+- [x] Compile 423 production/44 test sources, apply V1-V95 and pass the focused 5-test document/result lifecycle, catalogue and registry gate.
+- [x] Pass all 111 frontend unit tests, generated drift, architecture, formatting, typecheck, lint and production build gates; pass all 26 API-contract cases.
+- [x] Pass every P7 route across all five exact Playwright/Axe/overflow viewport projects (5/5).
+- [x] Record the implemented/fail-closed boundary in `MODULE_7_COMPLETION_REPORT.md`; preserve full cross-module regression, provider/policy activation and production acceptance for consolidated QA.
+
+### Phase 8A - Module 8 AI definition and activation boundary (completed 28 September 2026)
+
+- [x] Define all ten P8 screens, 17 governed relation families, AI session/output/safety lifecycles, permissions/events and validation rules from the authoritative build specification.
+- [x] Bind purpose/consent, minimum-necessary input manifests and exact model/prompt/evaluation/schema versions before any processing request.
+- [x] Keep the model-specific processing port unavailable by default and preserve provider, region, clinical-use, safety, retention and Python-service activation as accountable external decisions.
+
+### Phase 8B - persistence, authorization and lifecycle (completed 28 September 2026)
+
+- [x] Add V96-V98 authorization/events, 17 forced-RLS AI relations, composite tenant integrity, payload-minimized evidence and direct lifecycle/provenance guards.
+- [x] Preserve immutable job attempts, failures, outputs, versions, citations, safety/escalation evidence, clinician reviews, usage and retention metadata.
+- [x] Permit only explicit failed-attempt resubmission and require eligible clinician, exact revision, reason, recent MFA and resolved critical/emergency flags for acceptance.
+
+### Phase 8C - API, client and all 10 P8 routes (completed 28 September 2026)
+
+- [x] Publish OpenAPI 0.47.0 with exactly 125 operations, regenerate the checked TypeScript boundary and add exact runtime response validation.
+- [x] Replace P8-01 through P8-10 with governed server projections/actions, explicit patient/encounter/session context and visibly draft output states.
+- [x] Retain citation lineage across clinician edits and prohibit direct AI mutation of encounter, assessment, diagnosis, care-plan or document aggregates.
+
+### Phase 8D - construction checkpoint and QA handoff (completed 28 September 2026)
+
+- [x] Compile 433 production/46 test sources, apply V1-V98 and pass the focused 5-test AI lifecycle, catalogue and registry gate.
+- [x] Pass all 116 frontend unit tests, generated drift, architecture, formatting, typecheck, lint and production build gates; pass all 28 API-contract cases.
+- [x] Pass every P8 route across all five exact Playwright/Axe/overflow viewport projects (5/5).
+- [x] Record the implemented/fail-closed boundary in `MODULE_8_COMPLETION_REPORT.md`; preserve full cross-module regression, AI/provider/policy activation and production acceptance for consolidated QA.
+
+### Phase 9A - Module 9 care-plan definition and activation boundary (completed 28 September 2026)
+
+- [x] Define all twelve P9 screens, care-plan/version lifecycle, exact approval/amendment semantics and activation boundaries from the authoritative build specification.
+- [x] Require sourced priorities/goals, complete interventions, accountable owners/tasks, visible consent/preferences and an exact-version cross-modality safety review.
+- [x] Keep terminology, templates, modality/intervention evidence, interaction rules, consent wording, escalation thresholds, task delivery and patient communication as accountable external decisions.
+
+### Phase 9B - persistence, authorization and lifecycle (completed 28 September 2026)
+
+- [x] Add V99-V101 authorization/events, ten forced-RLS care-plan relations, composite tenant integrity, payload-minimized evidence and direct lifecycle/version guards.
+- [x] Extend the existing clinical-task aggregate with exact plan/version/assignment provenance instead of creating a competing task model.
+- [x] Freeze exact version digests at submission; require completeness, current consent, clear safety, eligible clinician and recent MFA for approval; create immutable successor amendments.
+
+### Phase 9C - API, client and all 12 P9 routes (completed 28 September 2026)
+
+- [x] Publish OpenAPI 0.48.0 with exactly 127 operations, regenerate the checked TypeScript boundary and add exact runtime response validation.
+- [x] Replace P9-01 through P9-12 with governed server projections/actions and explicit patient/encounter/plan context.
+- [x] Preserve strong revisions, scoped idempotency, separate approval/activation and patient-facing minimum-necessary summary behavior.
+
+### Phase 9D - construction checkpoint and QA handoff (completed 28 September 2026)
+
+- [x] Compile 441 production/48 test sources, apply V1-V101 and pass the focused 5-test care-plan lifecycle, catalogue and registry gate.
+- [x] Pass all 121 frontend unit tests, generated drift, architecture, formatting, typecheck, lint and production build gates; pass all 30 API-contract cases.
+- [x] Pass every P9 route across all five exact Playwright/Axe/overflow viewport projects (5/5).
+- [x] Record the implemented/fail-closed boundary in `MODULE_9_COMPLETION_REPORT.md`; preserve full cross-module regression, clinical-policy activation and production acceptance for consolidated QA.
+
+### Phase 10A - Module 10 follow-up/outcome definition boundary (completed 28 September 2026)
+
+- [x] Define all nine P10 screens, the follow-up lifecycle, exact active-care-plan binding, configuration digest and separate confirmation semantics.
+- [x] Require version-bound outcome definitions, baseline evidence, explicit threshold rules, schedules, owned escalation and attributable interpretation.
+- [x] Keep instruments, units/reference ranges, clinically meaningful change, thresholds, cadence, SLA, notification delivery and patient communication as accountable external decisions.
+
+### Phase 10B - persistence, authorization and lifecycle (completed 28 September 2026)
+
+- [x] Add V102-V104 authorization/events, seven forced-RLS follow-up/outcome relations, composite tenant integrity, payload-minimized evidence and direct lifecycle/digest guards.
+- [x] Extend the existing clinical-task aggregate with exact follow-up/measurement/rule/escalation provenance instead of creating a competing escalation-task model.
+- [x] Evaluate matching rules atomically with each measurement; preserve append-only evidence and distinct one-way acknowledgement/resolution transitions.
+
+### Phase 10C - API, client and all nine P10 routes (completed 28 September 2026)
+
+- [x] Publish OpenAPI 0.49.0 with exactly 129 operations, regenerate the checked TypeScript boundary and add exact runtime response validation.
+- [x] Replace P10-01 through P10-09 with governed server projections/actions and explicit patient/encounter/care-plan/follow-up context.
+- [x] Preserve strong revisions, scoped idempotency, exact-digest recent-MFA confirmation and completion only after escalation resolution.
+
+### Phase 10D - construction checkpoint and QA handoff (completed 28 September 2026)
+
+- [x] Compile 449 production/50 test sources, apply V1-V104 and pass the focused 5-test follow-up lifecycle, catalogue and registry gate.
+- [x] Pass all 126 frontend unit tests, generated drift, architecture, formatting, typecheck, lint and production build gates; pass all 32 API-contract cases.
+- [x] Pass every P10 route across all five exact Playwright/Axe/overflow viewport projects (5/5).
+- [x] Record the implemented/fail-closed boundary in `MODULE_10_COMPLETION_REPORT.md`; preserve full cross-module regression, clinical-policy activation and production acceptance for consolidated QA.
+
+### Phase 11A - Module 11 billing definition and activation boundary (completed 28 September 2026)
+
+- [x] Define all eleven P11 screens, fifteen required entity families, monetary lifecycle, provider boundary and clinical-independence rule from the authoritative build specification.
+- [x] Require integer minor units, exact currency/price snapshots, immutable financial evidence and explicit reason/authorization for refunds and adjustments.
+- [x] Keep price, tax, accounting, payment-provider, payer, export and patient-communication policy as accountable external decisions.
+
+### Phase 11B - persistence, authorization and lifecycle (completed 28 September 2026)
+
+- [x] Add V105-V107 authorization/events, fifteen forced-RLS billing relations, composite tenant integrity, payload-minimized evidence and direct lifecycle/digest/balance guards.
+- [x] Freeze activated catalogues/packages, finalized estimates and issued invoice lines; derive balances from append-only payments, refunds, adjustments and remittances.
+- [x] Reject overpayment, over-refund, over-remittance, cross-currency drift, direct evidence mutation, raw card fields, provider tokens and bearer links.
+
+### Phase 11C - API, client and all eleven P11 routes (completed 28 September 2026)
+
+- [x] Publish OpenAPI 0.50.0 with exactly 131 operations, regenerate the checked TypeScript boundary and add exact runtime response validation.
+- [x] Replace P11-01 through P11-11 with governed server projections/actions and explicit patient/invoice context.
+- [x] Preserve strong revisions, scoped idempotency, recent-auth/MFA high-risk controls and explicit fail-closed provider/export states.
+
+### Phase 11D - construction checkpoint and QA handoff (completed 28 September 2026)
+
+- [x] Compile 457 production/52 test sources, apply V1-V107 and pass the focused 5-test billing lifecycle, catalogue and registry gate.
+- [x] Pass all 131 frontend unit tests, generated drift, architecture, formatting, typecheck, lint and production build gates; pass all 34 API-contract cases.
+- [x] Pass every P11 route across all five exact Playwright/Axe/overflow viewport projects (5/5).
+- [x] Record the implemented/fail-closed boundary in `MODULE_11_COMPLETION_REPORT.md`; preserve full cross-module regression, finance/provider/policy activation and production acceptance for consolidated QA.
+
+### Phase 12A - Module 12 reporting definition and disclosure boundary (completed 28 September 2026)
+
+- [x] Define all ten P12 screens and seven fixed report families from the authoritative build specification.
+- [x] Limit reporting persistence and API projections to aggregate metrics; exclude row-level patient, workforce, clinical, payment, credential, prompt and document content.
+- [x] Bound run periods to 366 days and preserve report-definition, legal-basis, retention, suppression and accountable-owner decisions as target activation inputs.
+
+### Phase 12B - persistence, authorization and lifecycle (completed 28 September 2026)
+
+- [x] Add V108-V110 authorization/events, four forced-RLS reporting relations, operation-bound writes, immutable run/metric/export evidence and payload-minimized audit/outbox contracts.
+- [x] Freeze exact metric counts and deterministic digests atomically; enforce fixed per-family metric keys and exact completed-run export binding.
+- [x] Govern schedule create/pause/resume/cancel with strong revisions and reasons; require recent authentication and MFA for schedule/export browser operations.
+
+### Phase 12C - API, client and all ten P12 routes (completed 28 September 2026)
+
+- [x] Publish OpenAPI 0.51.0 with exactly 133 operations, regenerate the checked TypeScript boundary and add exact runtime response validation.
+- [x] Replace P12-01 through P12-10 with authorized aggregate projections and governed run, schedule and export actions.
+- [x] Neutralize CSV formula prefixes in Java and PostgreSQL and preserve a URL-free, one-hour-or-less private artifact boundary.
+
+### Phase 12D - construction checkpoint and QA handoff (completed 28 September 2026)
+
+- [x] Compile 466 production/55 test sources, apply V1-V110 and pass the focused 8-test reporting lifecycle, CSV, catalogue and registry gate.
+- [x] Pass all 136 frontend unit tests, generated drift, architecture, formatting, typecheck, lint and production build gates; pass all 36 API-contract cases.
+- [x] Pass every P12 route across all five exact Playwright/Axe/overflow viewport projects (5/5).
+- [x] Record the implemented/fail-closed boundary in `MODULE_12_COMPLETION_REPORT.md`; preserve full cross-module regression, report-policy/worker/storage activation and production acceptance for consolidated QA.

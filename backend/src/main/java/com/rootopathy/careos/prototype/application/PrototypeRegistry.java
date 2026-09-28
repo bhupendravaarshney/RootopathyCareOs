@@ -55,6 +55,42 @@ public class PrototypeRegistry {
         "AI-assisted synthesis", "Clinician review and approval", "Monitoring and follow-up", "Confirm and close"
     };
 
+    private static final String[] M7 = {
+        "Document dashboard", "Patient document list", "Upload document", "Classification and metadata",
+        "Scan status", "Document viewer", "Result inbox", "Result detail", "Acknowledge or escalate",
+        "Version history", "Export or share intent"
+    };
+
+    private static final String[] M8 = {
+        "AI session launcher", "Purpose and consent check", "Input selection", "Transcription and extraction",
+        "Draft summary", "Clinical suggestion panel", "Safety and uncertainty flags",
+        "Source and provenance viewer", "Clinician review and approval", "AI session history"
+    };
+
+    private static final String[] M9 = {
+        "Care plan dashboard", "Create coordinated plan", "Problems and priorities", "Goals",
+        "Interventions", "Modality coordination", "Owners and tasks", "Consent and preferences",
+        "Safety and interaction review", "Clinician approval", "Patient summary",
+        "Plan versions and amendments"
+    };
+
+    private static final String[] M10 = {
+        "Monitoring dashboard", "Rules", "Domains", "Measures", "Escalation",
+        "Follow-up schedule", "Interpretation", "Confirm plan", "Outcome timeline"
+    };
+
+    private static final String[] M11 = {
+        "Billing dashboard", "Price books", "Packages", "Estimate", "Invoice", "Payment",
+        "Payment link", "Refund or adjustment", "Claims", "Reconciliation",
+        "Financial audit or export"
+    };
+
+    private static final String[] M12 = {
+        "Reporting dashboard", "Operational reports", "Clinical safety reports", "Outcome reports",
+        "Workforce governance", "Access and security reports", "AI governance", "Financial reports",
+        "Scheduled exports", "Report audit and history"
+    };
+
     public List<PrototypeScreen> all() {
         var screens = new ArrayList<PrototypeScreen>();
         add(screens, "M1", "M1", M1, "Administration workspace");
@@ -63,6 +99,12 @@ public class PrototypeRegistry {
         add(screens, "P4", "M4", M4, "Scheduling workspace");
         add(screens, "P5", "M5", M5, "Encounter workspace");
         add(screens, "COS", "COS", COS, "Clinical workspace");
+        add(screens, "P7", "M7", M7, "Documents and results workspace");
+        add(screens, "P8", "M8", M8, "Governed AI assistance workspace");
+        add(screens, "P9", "M9", M9, "Coordinated care-planning workspace");
+        add(screens, "P10", "M10", M10, "Follow-up and outcomes workspace");
+        add(screens, "P11", "M11", M11, "Billing and payments workspace");
+        add(screens, "P12", "M12", M12, "Aggregate reporting workspace");
         return List.copyOf(screens);
     }
 

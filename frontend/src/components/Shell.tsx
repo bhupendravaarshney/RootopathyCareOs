@@ -22,6 +22,12 @@ const workspaceLabels: Record<ModuleKey, string> = {
   M4: 'Appointments',
   M5: 'Encounters',
   COS: 'Clinician workspace',
+  M7: 'Documents and results',
+  M8: 'Governed AI assistance',
+  M9: 'Coordinated care plans',
+  M10: 'Follow-up and outcomes',
+  M11: 'Billing and payments',
+  M12: 'Reporting',
 };
 
 const workspaces: Array<{ key: ModuleKey; href: string }> = [
@@ -31,6 +37,12 @@ const workspaces: Array<{ key: ModuleKey; href: string }> = [
   { key: 'M4', href: '#/P4-01' },
   { key: 'M5', href: '#/P5-01' },
   { key: 'COS', href: '#/COS-01' },
+  { key: 'M7', href: '#/P7-01' },
+  { key: 'M8', href: '#/P8-01' },
+  { key: 'M9', href: '#/P9-01' },
+  { key: 'M10', href: '#/P10-01' },
+  { key: 'M11', href: '#/P11-01' },
+  { key: 'M12', href: '#/P12-01' },
 ];
 
 export function Shell({

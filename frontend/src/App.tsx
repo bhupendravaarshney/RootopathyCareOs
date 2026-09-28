@@ -29,6 +29,16 @@ import { SchedulingScreenPage } from './features/scheduling/SchedulingScreens';
 import type { SchedulingClient } from './features/scheduling/scheduling-types';
 import { EncounterScreenPage } from './features/encounter/EncounterScreens';
 import type { EncounterClient } from './features/encounter/encounter-types';
+import { AssessmentScreenPage } from './features/assessment/AssessmentScreens';
+import type { AssessmentClient } from './features/assessment/assessment-types';
+import { DocumentScreenPage } from './features/document/DocumentScreens';
+import type { DocumentClient } from './features/document/document-types';
+import { AiScreenPage } from './features/ai/AiScreens';
+import type { AiClient } from './features/ai/ai-types';
+import type { CarePlanClient } from './features/careplan/care-plan-types';
+import type { FollowupClient } from './features/followup/followup-types';
+import type { BillingClient } from './features/billing/billing-types';
+import type { ReportingClient } from './features/reporting/reporting-types';
 import { WorkforceScreenPage } from './features/workforce/WorkforceScreens';
 import type { WorkforceClient } from './features/workforce/workforce-types';
 import { PrototypeScreenPage } from './pages/PrototypeScreenPage';
@@ -55,20 +65,41 @@ const identityRoutes = new Set(['M1-01', 'M1-02', 'M1-03', 'M1-04']);
 const registeredScreenIds = new Set(screens.map((screen) => screen.id));
 type ApplicationClient = SessionClient &
   AdministrationClient &
+  AiClient &
+  Partial<CarePlanClient> &
+  Partial<FollowupClient> &
+  Partial<BillingClient> &
+  Partial<ReportingClient> &
   WorkforceClient &
   PatientRegistryClient &
   SchedulingClient &
-  EncounterClient;
+  EncounterClient &
+  AssessmentClient &
+  DocumentClient;
 
 function RoutedApp({
   administrationClient,
+  aiClient,
+  assessmentClient,
+  billingClient,
+  reportingClient,
+  carePlanClient,
+  documentClient,
   encounterClient,
+  followupClient,
   patientClient,
   schedulingClient,
   workforceClient,
 }: {
   administrationClient: AdministrationClient;
+  aiClient: AiClient;
+  assessmentClient: AssessmentClient;
+  billingClient: BillingClient;
+  reportingClient: ReportingClient;
+  carePlanClient: CarePlanClient;
+  documentClient: DocumentClient;
   encounterClient: EncounterClient;
+  followupClient: FollowupClient;
   patientClient: PatientRegistryClient;
   schedulingClient: SchedulingClient;
   workforceClient: WorkforceClient;
@@ -346,6 +377,87 @@ function RoutedApp({
       />
     );
   }
+  if (screenId.startsWith('COS-')) {
+    return (
+      <AssessmentScreenPage
+        key={`${machine.selectedOrganization.id}:${screenId}`}
+        client={assessmentClient}
+        id={screenId}
+        organizationId={machine.selectedOrganization.id}
+        shell={shell}
+      />
+    );
+  }
+  if (screenId.startsWith('P7-')) {
+    return (
+      <DocumentScreenPage
+        key={`${machine.selectedOrganization.id}:${screenId}`}
+        client={documentClient}
+        id={screenId}
+        organizationId={machine.selectedOrganization.id}
+        shell={shell}
+      />
+    );
+  }
+  if (screenId.startsWith('P8-')) {
+    return (
+      <AiScreenPage
+        key={`${machine.selectedOrganization.id}:${screenId}`}
+        client={aiClient}
+        id={screenId}
+        organizationId={machine.selectedOrganization.id}
+        shell={shell}
+      />
+    );
+  }
+  if (screenId.startsWith('P9-')) {
+    return (
+      <AiScreenPage
+        key={`${machine.selectedOrganization.id}:${screenId}`}
+        client={carePlanClient}
+        id={screenId}
+        mode="care-plan"
+        organizationId={machine.selectedOrganization.id}
+        shell={shell}
+      />
+    );
+  }
+  if (screenId.startsWith('P10-')) {
+    return (
+      <AiScreenPage
+        key={`${machine.selectedOrganization.id}:${screenId}`}
+        client={followupClient}
+        id={screenId}
+        mode="followup"
+        organizationId={machine.selectedOrganization.id}
+        shell={shell}
+      />
+    );
+  }
+  if (screenId.startsWith('P11-')) {
+    return (
+      <AiScreenPage
+        key={`${machine.selectedOrganization.id}:${screenId}`}
+        client={billingClient}
+        id={screenId}
+        mode="billing"
+        organizationId={machine.selectedOrganization.id}
+        shell={shell}
+      />
+    );
+  }
+  if (screenId.startsWith('P12-')) {
+    return (
+      <AiScreenPage
+        key={`${machine.selectedOrganization.id}:${screenId}`}
+        client={reportingClient}
+        id={screenId}
+        mode="reporting"
+        organizationId={machine.selectedOrganization.id}
+        shell={shell}
+      />
+    );
+  }
   if (
     screenId === 'M1-05' ||
     screenId === 'M1-06' ||
@@ -382,11 +494,34 @@ function RoutedApp({
 
 export default function App({ client }: { client?: ApplicationClient }) {
   const resolvedClient = client ?? careOsApi;
+  const resolvedCarePlanClient: CarePlanClient =
+    resolvedClient.getCarePlanScreen && resolvedClient.performCarePlanAction
+      ? (resolvedClient as CarePlanClient)
+      : careOsApi;
+  const resolvedFollowupClient: FollowupClient =
+    resolvedClient.getFollowupScreen && resolvedClient.performFollowupAction
+      ? (resolvedClient as FollowupClient)
+      : careOsApi;
+  const resolvedBillingClient: BillingClient =
+    resolvedClient.getBillingScreen && resolvedClient.performBillingAction
+      ? (resolvedClient as BillingClient)
+      : careOsApi;
+  const resolvedReportingClient: ReportingClient =
+    resolvedClient.getReportingScreen && resolvedClient.performReportingAction
+      ? (resolvedClient as ReportingClient)
+      : careOsApi;
   return (
     <SessionProvider client={resolvedClient}>
       <RoutedApp
         administrationClient={resolvedClient}
+        aiClient={resolvedClient}
+        assessmentClient={resolvedClient}
+        billingClient={resolvedBillingClient}
+        reportingClient={resolvedReportingClient}
+        carePlanClient={resolvedCarePlanClient}
+        documentClient={resolvedClient}
         encounterClient={resolvedClient}
+        followupClient={resolvedFollowupClient}
         patientClient={resolvedClient}
         schedulingClient={resolvedClient}
         workforceClient={resolvedClient}

@@ -2,8 +2,14 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import type { ApiFailure, ApiResult } from './api/client';
 import type {
   AdministrationReadiness,
+  AiScreen,
+  AssessmentScreen,
+  BillingScreen,
+  CarePlanScreen,
+  DocumentScreen,
   FacilityDirectory,
   EncounterScreen,
+  FollowupScreen,
   OrganizationUnitDirectory,
   ServiceLocationDirectory,
   OrganizationAddress,
@@ -15,6 +21,7 @@ import type {
   OrganizationMembershipPage,
   OrganizationProfile,
   PatientRegistryScreen,
+  ReportingScreen,
   ReadinessGate,
   SchedulingScreen,
   SessionState,
@@ -23,8 +30,15 @@ import type {
 import App from './App';
 import { findScreen, screens } from './data/screens';
 import type { AdministrationClient } from './features/administration/administration-types';
+import type { AiClient } from './features/ai/ai-types';
+import type { AssessmentClient } from './features/assessment/assessment-types';
+import type { BillingClient } from './features/billing/billing-types';
+import type { CarePlanClient } from './features/careplan/care-plan-types';
+import type { DocumentClient } from './features/document/document-types';
 import type { EncounterClient } from './features/encounter/encounter-types';
+import type { FollowupClient } from './features/followup/followup-types';
 import type { PatientRegistryClient } from './features/patient/patient-types';
+import type { ReportingClient } from './features/reporting/reporting-types';
 import type { SchedulingClient } from './features/scheduling/scheduling-types';
 import type { SessionClient } from './features/session/session-types';
 import type { WorkforceClient } from './features/workforce/workforce-types';
@@ -450,10 +464,17 @@ const membershipPage: OrganizationMembershipPage = {
 };
 type ApplicationClient = SessionClient &
   AdministrationClient &
+  AiClient &
+  CarePlanClient &
+  FollowupClient &
+  Partial<BillingClient> &
+  Partial<ReportingClient> &
   WorkforceClient &
   PatientRegistryClient &
   SchedulingClient &
-  EncounterClient;
+  EncounterClient &
+  AssessmentClient &
+  DocumentClient;
 
 const patientRegistryProjection: PatientRegistryScreen = {
   actions: [],
@@ -643,6 +664,276 @@ const encounterProjection: EncounterScreen = {
   ],
   screenId: 'P5-09',
   title: 'Encounter notes',
+};
+
+const assessmentSessionId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+const assessmentProjection: AssessmentScreen = {
+  actions: [],
+  columns: [
+    { key: 'primary', label: 'Patient' },
+    { key: 'clinician', label: 'Responsible clinician' },
+    { key: 'completion', label: 'Completion' },
+  ],
+  generatedAt: '2026-09-28T09:00:00Z',
+  metrics: [],
+  nextCursor: null,
+  notices: [
+    {
+      detail: 'Protected visual source package is unavailable; this is a safe structural runtime.',
+      title: 'Source package unavailable',
+      tone: 'warning',
+    },
+  ],
+  organizationId: selectedOrganization.id,
+  pageSize: 25,
+  purpose: 'Capture versioned, sourced and attributed clinical assessment evidence.',
+  rows: [
+    {
+      allowedActionKeys: [],
+      assessmentSessionId,
+      encounterId,
+      etag: `"m6:COS-09:${assessmentSessionId}:3"`,
+      id: assessmentSessionId,
+      patientId: '33333333-3333-4333-8333-333333333333',
+      revision: 3,
+      status: 'in_progress',
+      values: {
+        clinician: 'Dr Asha Verma',
+        completion: '8/27',
+        patientAlerts: '0',
+        patientVerification: 'verified',
+        primary: 'Samira Patel',
+        responsiblePractitionerId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+        secondary: 'PT-•••1234',
+        sourcePackageStatus: 'unavailable',
+      },
+    },
+  ],
+  screenId: 'COS-09',
+  title: 'Clinical examination',
+};
+
+const documentId = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+const documentVersionId = '12121212-1212-4212-8212-121212121212';
+const documentProjection: DocumentScreen = {
+  actions: [],
+  columns: [
+    { key: 'primary', label: 'Document' },
+    { key: 'secondary', label: 'Patient' },
+    { key: 'context', label: 'Context' },
+  ],
+  generatedAt: '2026-09-28T10:00:00Z',
+  metrics: [],
+  nextCursor: null,
+  notices: [],
+  organizationId: selectedOrganization.id,
+  pageSize: 25,
+  purpose: 'Review document processing, results and acknowledgement safety.',
+  rows: [
+    {
+      allowedActionKeys: [],
+      documentId,
+      documentVersionId,
+      etag: `"m7:P7-01:${documentId}:2"`,
+      id: documentId,
+      patientId: '33333333-3333-4333-8333-333333333333',
+      revision: 2,
+      status: 'clean',
+      values: {
+        context: 'Clean promoted version',
+        primary: 'Laboratory report',
+        secondary: 'PT-•••1234',
+      },
+    },
+  ],
+  screenId: 'P7-01',
+  title: 'Document dashboard',
+};
+
+const aiSessionId = '14141414-1414-4414-8414-141414141414';
+const aiProjection: AiScreen = {
+  actions: [],
+  columns: [
+    { key: 'patient', label: 'Patient' },
+    { key: 'sessionType', label: 'Task' },
+    { key: 'purpose', label: 'Purpose' },
+  ],
+  generatedAt: '2026-09-28T11:00:00Z',
+  metrics: [{ key: 'sessions', label: 'AI sessions', tone: 'neutral', value: 1 }],
+  nextCursor: null,
+  notices: [
+    {
+      detail: 'No provider output changes a clinical source of truth without clinician review.',
+      title: 'AI output is always a draft',
+      tone: 'warning',
+    },
+  ],
+  organizationId: selectedOrganization.id,
+  pageSize: 25,
+  purpose: 'Review immutable AI session history.',
+  rows: [
+    {
+      allowedActionKeys: [],
+      encounterId,
+      etag: `"m8:P8-10:${aiSessionId}:4"`,
+      id: aiSessionId,
+      patientId: '33333333-3333-4333-8333-333333333333',
+      revision: 4,
+      status: 'accepted',
+      values: {
+        patient: '••••1234',
+        purpose: 'Clinical documentation',
+        sessionType: 'Summary',
+      },
+    },
+  ],
+  screenId: 'P8-10',
+  title: 'AI session history',
+};
+
+const carePlanId = '15151515-1515-4515-8515-151515151515';
+const carePlanVersionId = '16161616-1616-4616-8616-161616161616';
+const carePlanProjection: CarePlanScreen = {
+  actions: [],
+  columns: [
+    { key: 'planTitle', label: 'Plan' },
+    { key: 'patient', label: 'Patient' },
+    { key: 'reviewState', label: 'Review state' },
+  ],
+  generatedAt: '2026-09-28T12:00:00Z',
+  metrics: [{ key: 'draft', label: 'Draft plans', tone: 'warning', value: 1 }],
+  nextCursor: null,
+  notices: [],
+  organizationId: selectedOrganization.id,
+  pageSize: 25,
+  purpose: 'Review coordinated-plan readiness, ownership, safety and lifecycle state.',
+  rows: [
+    {
+      allowedActionKeys: [],
+      carePlanVersionId,
+      encounterId,
+      etag: `"m9:P9-01:${carePlanId}:5"`,
+      id: carePlanId,
+      patientId: '33333333-3333-4333-8333-333333333333',
+      revision: 5,
+      status: 'draft',
+      values: {
+        patient: 'PT-•••1234',
+        planTitle: 'Coordinated recovery plan',
+        reviewState: 'Ownership and safety review pending',
+      },
+    },
+  ],
+  screenId: 'P9-01',
+  title: 'Care plan dashboard',
+};
+
+const followupPlanId = '17171717-1717-4717-8717-171717171717';
+const escalationId = '18181818-1818-4818-8818-181818181818';
+const followupProjection: FollowupScreen = {
+  actions: [],
+  columns: [
+    { key: 'severity', label: 'Severity' },
+    { key: 'threshold', label: 'Threshold' },
+  ],
+  generatedAt: '2026-09-28T12:30:00Z',
+  metrics: [{ key: 'openEscalations', label: 'Open escalations', tone: 'warning', value: 1 }],
+  nextCursor: null,
+  notices: [],
+  organizationId: selectedOrganization.id,
+  pageSize: 25,
+  purpose: 'Acknowledge and resolve owned threshold breaches with explicit evidence.',
+  rows: [
+    {
+      allowedActionKeys: [],
+      clinicalTaskId: '19191918-1918-4918-8918-191919191918',
+      encounterId,
+      escalationEventId: escalationId,
+      etag: `"m10:P10-05:${escalationId}:0"`,
+      followupPlanId,
+      id: escalationId,
+      outcomeMeasurementId: '20202018-2020-4020-8020-202020202018',
+      patientId: '33333333-3333-4333-8333-333333333333',
+      revision: 0,
+      status: 'open',
+      values: {
+        severity: 'critical',
+        threshold: 'gt 10',
+      },
+    },
+  ],
+  screenId: 'P10-05',
+  title: 'Escalation',
+};
+
+const billingInvoiceId = '21212118-2121-4121-8121-212121212118';
+const billingProjection: BillingScreen = {
+  actions: [],
+  columns: [
+    { key: 'number', label: 'Invoice' },
+    { key: 'balanceMinor', label: 'Balance' },
+    { key: 'currency', label: 'Currency' },
+  ],
+  generatedAt: '2026-09-28T13:00:00Z',
+  metrics: [{ key: 'openInvoices', label: 'Open invoices', tone: 'warning', value: 1 }],
+  nextCursor: null,
+  notices: [],
+  organizationId: selectedOrganization.id,
+  pageSize: 25,
+  purpose: 'Record non-card manual settlement evidence.',
+  rows: [
+    {
+      allowedActionKeys: [],
+      etag: `"m11:P11-06:${billingInvoiceId}:2"`,
+      id: billingInvoiceId,
+      invoiceId: billingInvoiceId,
+      patientId: '33333333-3333-4333-8333-333333333333',
+      revision: 2,
+      status: 'partially_paid',
+      values: { balanceMinor: '18600', currency: 'INR', number: 'INV-2026-0001' },
+    },
+  ],
+  screenId: 'P11-06',
+  title: 'Payment',
+};
+
+const reportingRunId = '22222228-2228-4228-8228-222222222228';
+const reportingProjection: ReportingScreen = {
+  actions: [],
+  columns: [
+    { key: 'reportFamily', label: 'Report family' },
+    { key: 'metrics', label: 'Aggregate metrics' },
+  ],
+  generatedAt: '2026-09-28T14:00:00Z',
+  metrics: [{ key: 'completedRuns', label: 'Completed runs', tone: 'success', value: 1 }],
+  nextCursor: null,
+  notices: [
+    {
+      detail: 'Source clinical and identity records are excluded.',
+      title: 'Minimum necessary',
+      tone: 'info',
+    },
+  ],
+  organizationId: selectedOrganization.id,
+  pageSize: 25,
+  purpose: 'Review attributable aggregate reporting history.',
+  rows: [
+    {
+      allowedActionKeys: [],
+      etag: `"m12:P12-10:${reportingRunId}:1"`,
+      id: reportingRunId,
+      reportRunId: reportingRunId,
+      revision: 1,
+      status: 'completed',
+      values: {
+        artifact: 'report_run',
+        metrics: 'appointment_total=7',
+        reportFamily: 'operational',
+      },
+    },
+  ],
+  screenId: 'P12-10',
+  title: 'Report audit and history',
 };
 
 const workforceProjection: WorkforceScreen = {
@@ -978,6 +1269,51 @@ function sessionClient(overrides: Partial<ApplicationClient> = {}): ApplicationC
         rows: [],
         actions: [],
       }),
+    getAssessmentScreen: async (_organizationId, screenId) =>
+      success({
+        ...assessmentProjection,
+        screenId,
+        title: findScreen(screenId).title,
+        purpose: findScreen(screenId).purpose,
+        rows: [],
+        actions: [],
+      }),
+    getDocumentScreen: async (_organizationId, screenId) =>
+      success({
+        ...documentProjection,
+        screenId,
+        title: findScreen(screenId).title,
+        purpose: findScreen(screenId).purpose,
+        rows: [],
+        actions: [],
+      }),
+    getAiScreen: async (_organizationId, screenId) =>
+      success({
+        ...aiProjection,
+        screenId,
+        title: findScreen(screenId).title,
+        purpose: findScreen(screenId).purpose,
+        rows: [],
+        actions: [],
+      }),
+    getCarePlanScreen: async (_organizationId, screenId) =>
+      success({
+        ...carePlanProjection,
+        screenId,
+        title: findScreen(screenId).title,
+        purpose: findScreen(screenId).purpose,
+        rows: [],
+        actions: [],
+      }),
+    getFollowupScreen: async (_organizationId, screenId) =>
+      success({
+        ...followupProjection,
+        screenId,
+        title: findScreen(screenId).title,
+        purpose: findScreen(screenId).purpose,
+        rows: [],
+        actions: [],
+      }),
     issueInvitation: async () =>
       success(
         {
@@ -1021,6 +1357,64 @@ function sessionClient(overrides: Partial<ApplicationClient> = {}): ApplicationC
         purpose: findScreen(screenId).purpose,
         rows: [],
         actions: [],
+      }),
+    performAssessmentAction: async (_organizationId, screenId) =>
+      success({
+        ...assessmentProjection,
+        screenId,
+        title: findScreen(screenId).title,
+        purpose: findScreen(screenId).purpose,
+        rows: [],
+        actions: [],
+      }),
+    performDocumentAction: async (_organizationId, screenId) =>
+      success({
+        ...documentProjection,
+        screenId,
+        title: findScreen(screenId).title,
+        purpose: findScreen(screenId).purpose,
+        rows: [],
+        actions: [],
+      }),
+    performAiAction: async (_organizationId, screenId) =>
+      success({
+        ...aiProjection,
+        screenId,
+        title: findScreen(screenId).title,
+        purpose: findScreen(screenId).purpose,
+        rows: [],
+        actions: [],
+      }),
+    performCarePlanAction: async (_organizationId, screenId) =>
+      success({
+        ...carePlanProjection,
+        screenId,
+        title: findScreen(screenId).title,
+        purpose: findScreen(screenId).purpose,
+        rows: [],
+        actions: [],
+      }),
+    performFollowupAction: async (_organizationId, screenId) =>
+      success({
+        ...followupProjection,
+        screenId,
+        title: findScreen(screenId).title,
+        purpose: findScreen(screenId).purpose,
+        rows: [],
+        actions: [],
+      }),
+    uploadDocument: async () => success({ ...documentProjection, screenId: 'P7-03' }, 201),
+    createDocumentAccess: async (_organizationId, requestedDocumentId, body) =>
+      success({
+        accessIntentId: '13131313-1313-4313-8313-131313131313',
+        accessPath: `/api/v1/organizations/${selectedOrganization.id}/documents/${requestedDocumentId}/versions/${body.documentVersionId ?? documentVersionId}/accesses/13131313-1313-4313-8313-131313131313?purposeKey=${body.purposeKey}`,
+        byteCount: 128,
+        documentId: requestedDocumentId,
+        documentVersionId: body.documentVersionId ?? documentVersionId,
+        expiresAt: '2026-09-28T10:01:00Z',
+        mediaType: 'application/pdf',
+        purposeKey: body.purposeKey,
+        sha256: 'a'.repeat(64),
       }),
     previewPatientRegistryImpact: async (_organizationId, screenId, actionKey, body) =>
       success({
@@ -1233,9 +1627,9 @@ describe('CareOS frontend session boundary', () => {
     window.location.hash = '#/M1-05';
   });
 
-  it('registers all M1 through M5 and COS screens', () => {
-    expect(screens).toHaveLength(122);
-    expect(new Set(screens.map((item) => item.id)).size).toBe(122);
+  it('registers all M1 through M12 and COS screens', () => {
+    expect(screens).toHaveLength(185);
+    expect(new Set(screens.map((item) => item.id)).size).toBe(185);
     expect(findScreen('M1-01').purpose).toBe(
       'Authenticate securely and continue to the requested authorized workspace.',
     );
@@ -1247,6 +1641,12 @@ describe('CareOS frontend session boundary', () => {
     expect(findScreen('P3-15').title).toBe('Merge review');
     expect(findScreen('P4-11').title).toBe('Confirmation');
     expect(findScreen('P5-10').title).toBe('Review and sign');
+    expect(findScreen('P7-11').title).toBe('Export or share intent');
+    expect(findScreen('P8-10').title).toBe('AI session history');
+    expect(findScreen('P9-12').title).toBe('Plan versions and amendments');
+    expect(findScreen('P10-09').title).toBe('Outcome timeline');
+    expect(findScreen('P11-11').title).toBe('Financial audit or export');
+    expect(findScreen('P12-10').title).toBe('Report audit and history');
     expect(() => findScreen('M1-99')).toThrow('does not contain M1-99');
   });
 
@@ -1466,6 +1866,561 @@ describe('CareOS frontend session boundary', () => {
       }),
     ]);
     expect(performEncounterAction.mock.calls[0]?.[4]).toBe(`"m5:P5-09:${encounterNoteId}:4"`);
+  });
+
+  it('renders a COS route with patient context and debounced revision-bound autosave', async () => {
+    window.location.hash = `#/COS-09?assessmentSessionId=${assessmentSessionId}`;
+    const responseProjection: AssessmentScreen = {
+      ...assessmentProjection,
+      actions: [
+        {
+          fields: [
+            {
+              inputType: 'uuid',
+              key: 'authorPractitionerId',
+              label: 'Author clinician',
+              options: [],
+              required: true,
+            },
+            {
+              inputType: 'text',
+              key: 'responseKey',
+              label: 'Response key',
+              options: [],
+              required: true,
+            },
+            {
+              inputType: 'textarea',
+              key: 'content',
+              label: 'Clinical response',
+              options: [],
+              required: true,
+            },
+            {
+              inputType: 'text',
+              key: 'sourceKey',
+              label: 'Source',
+              options: [],
+              required: true,
+            },
+            {
+              inputType: 'text',
+              key: 'methodKey',
+              label: 'Method',
+              options: [],
+              required: true,
+            },
+            {
+              inputType: 'select',
+              key: 'interpretationStatus',
+              label: 'Interpretation status',
+              options: [{ label: 'Uninterpreted', value: 'uninterpreted' }],
+              required: true,
+            },
+          ],
+          href: null,
+          ifMatchRequired: true,
+          key: 'save-section-response',
+          label: 'Save response',
+          reasonRequired: false,
+          style: 'primary',
+          targetRequired: true,
+        },
+      ],
+      rows: assessmentProjection.rows.map((row) => ({
+        ...row,
+        allowedActionKeys: ['save-section-response'],
+      })),
+    };
+    const getAssessmentScreen = vi.fn<AssessmentClient['getAssessmentScreen']>(async () =>
+      success(responseProjection),
+    );
+    const performAssessmentAction = vi.fn<AssessmentClient['performAssessmentAction']>(async () =>
+      success(responseProjection),
+    );
+
+    render(<App client={sessionClient({ getAssessmentScreen, performAssessmentAction })} />);
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Clinical examination' }),
+    ).toBeVisible();
+    expect(getAssessmentScreen).toHaveBeenCalledWith(
+      selectedOrganization.id,
+      'COS-09',
+      expect.objectContaining({ assessmentSessionId, limit: 25 }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Select Samira Patel' }));
+    expect(screen.getByRole('region', { name: 'Verified patient context' })).toHaveTextContent(
+      'Dr Asha Verma',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save response' }));
+    const actionDialog = screen.getByRole('dialog');
+    fireEvent.change(within(actionDialog).getByRole('textbox', { name: 'Response key' }), {
+      target: { value: 'clinical.examination' },
+    });
+    fireEvent.change(within(actionDialog).getByRole('textbox', { name: 'Clinical response' }), {
+      target: { value: 'Mobility is improved; no new red-flag finding was observed.' },
+    });
+    fireEvent.change(within(actionDialog).getByRole('textbox', { name: 'Source' }), {
+      target: { value: 'direct_observation' },
+    });
+    fireEvent.change(within(actionDialog).getByRole('textbox', { name: 'Method' }), {
+      target: { value: 'structured_examination' },
+    });
+    expect(within(actionDialog).getByText('Autosave queued')).toBeVisible();
+
+    await waitFor(() => expect(performAssessmentAction).toHaveBeenCalledOnce(), { timeout: 2_000 });
+    expect(performAssessmentAction.mock.calls[0]?.slice(0, 4)).toEqual([
+      selectedOrganization.id,
+      'COS-09',
+      'save-section-response',
+      expect.objectContaining({
+        assessmentSessionId,
+        encounterId,
+        fields: expect.objectContaining({
+          authorPractitionerId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+          content: 'Mobility is improved; no new red-flag finding was observed.',
+          interpretationStatus: 'uninterpreted',
+          methodKey: 'structured_examination',
+          responseKey: 'clinical.examination',
+          sourceKey: 'direct_observation',
+        }),
+        targetId: assessmentSessionId,
+      }),
+    ]);
+    expect(performAssessmentAction.mock.calls[0]?.[4]).toBe(`"m6:COS-09:${assessmentSessionId}:3"`);
+  });
+
+  it('renders a P7 viewer and creates a purpose-bound clean-document access intent', async () => {
+    window.location.hash = `#/P7-06?documentId=${documentId}`;
+    const responseProjection: DocumentScreen = {
+      ...documentProjection,
+      actions: [
+        {
+          fields: [
+            {
+              inputType: 'select',
+              key: 'purposeKey',
+              label: 'Access purpose',
+              options: [
+                { label: 'Clinical care', value: 'clinical_care' },
+                { label: 'Result review', value: 'result_review' },
+              ],
+              required: true,
+            },
+          ],
+          href: null,
+          ifMatchRequired: false,
+          key: 'access-document',
+          label: 'Open clean document',
+          reasonRequired: true,
+          style: 'primary',
+          targetRequired: true,
+        },
+      ],
+      purpose: findScreen('P7-06').purpose,
+      rows: documentProjection.rows.map((row) => ({
+        ...row,
+        allowedActionKeys: ['access-document'],
+        etag: `"m7:P7-06:${row.id}:2"`,
+      })),
+      screenId: 'P7-06',
+      title: findScreen('P7-06').title,
+    };
+    const getDocumentScreen = vi.fn<DocumentClient['getDocumentScreen']>(async () =>
+      success(responseProjection),
+    );
+    const createDocumentAccess = vi.fn<DocumentClient['createDocumentAccess']>(
+      async (_organizationId, requestedDocumentId, body) =>
+        success({
+          accessIntentId: '13131313-1313-4313-8313-131313131313',
+          accessPath: `/api/v1/organizations/${selectedOrganization.id}/documents/${requestedDocumentId}/versions/${documentVersionId}/accesses/13131313-1313-4313-8313-131313131313?purposeKey=${body.purposeKey}`,
+          byteCount: 128,
+          documentId: requestedDocumentId,
+          documentVersionId,
+          expiresAt: '2026-09-28T10:01:00Z',
+          mediaType: 'application/pdf',
+          purposeKey: body.purposeKey,
+          sha256: 'a'.repeat(64),
+        }),
+    );
+
+    render(<App client={sessionClient({ createDocumentAccess, getDocumentScreen })} />);
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Document viewer' })).toBeVisible();
+    expect(getDocumentScreen).toHaveBeenCalledWith(
+      selectedOrganization.id,
+      'P7-06',
+      expect.objectContaining({ documentId, limit: 25 }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    fireEvent.click(screen.getByRole('radio', { name: 'Select Laboratory report' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open clean document' }));
+    const actionDialog = screen.getByRole('dialog');
+    fireEvent.change(within(actionDialog).getByRole('combobox', { name: 'Access purpose' }), {
+      target: { value: 'result_review' },
+    });
+    fireEvent.change(within(actionDialog).getByRole('textbox', { name: /^Reason/ }), {
+      target: { value: 'Review the clean synthetic diagnostic result evidence.' },
+    });
+    fireEvent.click(within(actionDialog).getByRole('button', { name: 'Open clean document' }));
+
+    await waitFor(() => expect(createDocumentAccess).toHaveBeenCalledOnce());
+    expect(createDocumentAccess.mock.calls[0]?.slice(0, 3)).toEqual([
+      selectedOrganization.id,
+      documentId,
+      {
+        documentVersionId,
+        purposeKey: 'result_review',
+        reason: 'Review the clean synthetic diagnostic result evidence.',
+      },
+    ]);
+    expect(await screen.findByRole('link', { name: /Open clean document/ })).toHaveAttribute(
+      'href',
+      expect.stringContaining('/accesses/'),
+    );
+  });
+
+  it('renders a P8 clinician review and submits an explicit revision-bound decision', async () => {
+    window.location.hash = `#/P8-09?aiSessionId=${aiSessionId}`;
+    const reviewerId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+    const responseProjection: AiScreen = {
+      ...aiProjection,
+      actions: [
+        {
+          fields: [
+            {
+              inputType: 'select',
+              key: 'decision',
+              label: 'Decision',
+              options: [
+                { label: 'Accept', value: 'accepted' },
+                { label: 'Reject', value: 'rejected' },
+              ],
+              required: true,
+            },
+            {
+              inputType: 'uuid',
+              key: 'reviewerPractitionerId',
+              label: 'Reviewing clinician',
+              options: [],
+              required: true,
+            },
+          ],
+          href: null,
+          ifMatchRequired: true,
+          key: 'decide-output',
+          label: 'Record clinician decision',
+          reasonRequired: true,
+          style: 'primary',
+          targetRequired: true,
+        },
+      ],
+      purpose: findScreen('P8-09').purpose,
+      rows: aiProjection.rows.map((row) => ({
+        ...row,
+        allowedActionKeys: ['decide-output'],
+        etag: `"m8:P8-09:${row.id}:4"`,
+        status: 'draft_ready',
+      })),
+      screenId: 'P8-09',
+      title: findScreen('P8-09').title,
+    };
+    const getAiScreen = vi.fn<AiClient['getAiScreen']>(async () => success(responseProjection));
+    const performAiAction = vi.fn<AiClient['performAiAction']>(async () =>
+      success(responseProjection),
+    );
+
+    render(<App client={sessionClient({ getAiScreen, performAiAction })} />);
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Clinician review and approval' }),
+    ).toBeVisible();
+    expect(getAiScreen).toHaveBeenCalledWith(
+      selectedOrganization.id,
+      'P8-09',
+      expect.objectContaining({ aiSessionId, limit: 25 }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Record clinician decision' }));
+    const actionDialog = screen.getByRole('dialog');
+    fireEvent.change(within(actionDialog).getByRole('textbox', { name: 'Reviewing clinician' }), {
+      target: { value: reviewerId },
+    });
+    fireEvent.change(within(actionDialog).getByRole('textbox', { name: 'Reason' }), {
+      target: { value: 'Clinician reviewed the latest draft and its cited source evidence.' },
+    });
+    fireEvent.click(within(actionDialog).getByRole('button', { name: 'Confirm action' }));
+
+    await waitFor(() => expect(performAiAction).toHaveBeenCalledOnce());
+    expect(performAiAction.mock.calls[0]?.slice(0, 5)).toEqual([
+      selectedOrganization.id,
+      'P8-09',
+      'decide-output',
+      {
+        fields: { decision: 'accepted', reviewerPractitionerId: reviewerId },
+        reason: 'Clinician reviewed the latest draft and its cited source evidence.',
+        targetId: aiSessionId,
+      },
+      `"m8:P8-09:${aiSessionId}:4"`,
+    ]);
+  });
+
+  it('renders a P9 plan review and submits an exact-version transition', async () => {
+    window.location.hash = `#/P9-10?carePlanId=${carePlanId}`;
+    const responseProjection: CarePlanScreen = {
+      ...carePlanProjection,
+      actions: [
+        {
+          fields: [],
+          href: null,
+          ifMatchRequired: true,
+          key: 'submit-plan',
+          label: 'Submit for review',
+          reasonRequired: true,
+          style: 'primary',
+          targetRequired: true,
+        },
+      ],
+      purpose: findScreen('P9-10').purpose,
+      rows: carePlanProjection.rows.map((row) => ({
+        ...row,
+        allowedActionKeys: ['submit-plan'],
+        etag: `"m9:P9-10:${row.id}:5"`,
+        status: 'draft',
+      })),
+      screenId: 'P9-10',
+      title: findScreen('P9-10').title,
+    };
+    const getCarePlanScreen = vi.fn<CarePlanClient['getCarePlanScreen']>(async () =>
+      success(responseProjection),
+    );
+    const performCarePlanAction = vi.fn<CarePlanClient['performCarePlanAction']>(async () =>
+      success(responseProjection),
+    );
+
+    render(<App client={sessionClient({ getCarePlanScreen, performCarePlanAction })} />);
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Clinician approval' }),
+    ).toBeVisible();
+    expect(getCarePlanScreen).toHaveBeenCalledWith(
+      selectedOrganization.id,
+      'P9-10',
+      expect.objectContaining({ carePlanId, limit: 25 }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Submit for review' }));
+    const actionDialog = screen.getByRole('dialog');
+    fireEvent.change(within(actionDialog).getByRole('textbox', { name: 'Reason' }), {
+      target: { value: 'Complete ownership, consent and safety evidence reviewed.' },
+    });
+    fireEvent.click(within(actionDialog).getByRole('button', { name: 'Confirm action' }));
+
+    await waitFor(() => expect(performCarePlanAction).toHaveBeenCalledOnce());
+    expect(performCarePlanAction.mock.calls[0]?.slice(0, 5)).toEqual([
+      selectedOrganization.id,
+      'P9-10',
+      'submit-plan',
+      {
+        fields: {},
+        reason: 'Complete ownership, consent and safety evidence reviewed.',
+        targetId: carePlanId,
+      },
+      `"m9:P9-10:${carePlanId}:5"`,
+    ]);
+  });
+
+  it('renders a P10 escalation and records an owner acknowledgement', async () => {
+    window.location.hash = `#/P10-05?followupPlanId=${followupPlanId}`;
+    const followupOwnerId = 'edededed-eded-4ded-8ded-edededededed';
+    const responseProjection: FollowupScreen = {
+      ...followupProjection,
+      actions: [
+        {
+          fields: [
+            {
+              help: null,
+              inputType: 'uuid',
+              key: 'practitionerId',
+              label: 'Acknowledging owner',
+              options: [],
+              required: true,
+            },
+          ],
+          href: null,
+          ifMatchRequired: true,
+          key: 'acknowledge-escalation',
+          label: 'Acknowledge escalation',
+          reasonRequired: true,
+          style: 'primary',
+          targetRequired: true,
+        },
+      ],
+      purpose: findScreen('P10-05').purpose,
+      rows: followupProjection.rows.map((row) => ({
+        ...row,
+        allowedActionKeys: ['acknowledge-escalation'],
+      })),
+    };
+    const getFollowupScreen = vi.fn<FollowupClient['getFollowupScreen']>(async () =>
+      success(responseProjection),
+    );
+    const performFollowupAction = vi.fn<FollowupClient['performFollowupAction']>(async () =>
+      success(responseProjection),
+    );
+
+    render(<App client={sessionClient({ getFollowupScreen, performFollowupAction })} />);
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Escalation' })).toBeVisible();
+    expect(getFollowupScreen).toHaveBeenCalledWith(
+      selectedOrganization.id,
+      'P10-05',
+      expect.objectContaining({ followupPlanId, limit: 25 }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Acknowledge escalation' }));
+    const actionDialog = screen.getByRole('dialog');
+    fireEvent.change(within(actionDialog).getByRole('textbox', { name: 'Acknowledging owner' }), {
+      target: { value: followupOwnerId },
+    });
+    fireEvent.change(within(actionDialog).getByRole('textbox', { name: 'Reason' }), {
+      target: { value: 'Acknowledge responsibility for the critical outcome review.' },
+    });
+    fireEvent.click(within(actionDialog).getByRole('button', { name: 'Confirm action' }));
+
+    await waitFor(() => expect(performFollowupAction).toHaveBeenCalledOnce());
+    expect(performFollowupAction.mock.calls[0]?.slice(0, 5)).toEqual([
+      selectedOrganization.id,
+      'P10-05',
+      'acknowledge-escalation',
+      {
+        fields: { practitionerId: followupOwnerId },
+        reason: 'Acknowledge responsibility for the critical outcome review.',
+        targetId: escalationId,
+      },
+      `"m10:P10-05:${escalationId}:0"`,
+    ]);
+  });
+
+  it('renders P11 payment evidence without collecting card data', async () => {
+    window.location.hash = `#/P11-06?invoiceId=${billingInvoiceId}`;
+    const responseProjection: BillingScreen = {
+      ...billingProjection,
+      actions: [
+        {
+          fields: [
+            {
+              help: null,
+              inputType: 'select',
+              key: 'source',
+              label: 'Source',
+              options: [{ label: 'Bank transfer', value: 'manual_bank' }],
+              required: true,
+            },
+            {
+              help: null,
+              inputType: 'text',
+              key: 'paymentReference',
+              label: 'Payment reference',
+              options: [],
+              required: true,
+            },
+            {
+              help: null,
+              inputType: 'number',
+              key: 'amountMinor',
+              label: 'Amount (minor units)',
+              options: [],
+              required: true,
+            },
+          ],
+          href: null,
+          ifMatchRequired: true,
+          key: 'record-payment',
+          label: 'Record payment',
+          reasonRequired: true,
+          style: 'primary',
+          targetRequired: true,
+        },
+      ],
+      rows: billingProjection.rows.map((row) => ({
+        ...row,
+        allowedActionKeys: ['record-payment'],
+      })),
+    };
+    const getBillingScreen = vi.fn<BillingClient['getBillingScreen']>(async () =>
+      success(responseProjection),
+    );
+    const performBillingAction = vi.fn<BillingClient['performBillingAction']>(async () =>
+      success(responseProjection),
+    );
+
+    render(<App client={sessionClient({ getBillingScreen, performBillingAction })} />);
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Payment' })).toBeVisible();
+    expect(screen.getByText('Financially governed')).toBeVisible();
+    expect(screen.queryByLabelText(/card/i)).not.toBeInTheDocument();
+    expect(getBillingScreen).toHaveBeenCalledWith(
+      selectedOrganization.id,
+      'P11-06',
+      expect.objectContaining({ invoiceId: billingInvoiceId, limit: 25 }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Record payment' }));
+    const actionDialog = screen.getByRole('dialog');
+    fireEvent.change(within(actionDialog).getByLabelText('Payment reference'), {
+      target: { value: 'BANK-SETTLEMENT-0001' },
+    });
+    fireEvent.change(within(actionDialog).getByLabelText('Amount (minor units)'), {
+      target: { value: '5000' },
+    });
+    fireEvent.change(within(actionDialog).getByRole('textbox', { name: 'Reason' }), {
+      target: { value: 'Record verified bank settlement evidence for this invoice.' },
+    });
+    fireEvent.click(within(actionDialog).getByRole('button', { name: 'Confirm action' }));
+
+    await waitFor(() => expect(performBillingAction).toHaveBeenCalledOnce());
+    expect(performBillingAction.mock.calls[0]?.slice(0, 5)).toEqual([
+      selectedOrganization.id,
+      'P11-06',
+      'record-payment',
+      {
+        fields: {
+          amountMinor: '5000',
+          paymentReference: 'BANK-SETTLEMENT-0001',
+          source: 'manual_bank',
+        },
+        reason: 'Record verified bank settlement evidence for this invoice.',
+        targetId: billingInvoiceId,
+      },
+      `"m11:P11-06:${billingInvoiceId}:2"`,
+    ]);
+  });
+
+  it('renders P12 aggregate reporting without source-record context', async () => {
+    window.location.hash = '#/P12-10';
+    const getReportingScreen = vi.fn<ReportingClient['getReportingScreen']>(async () =>
+      success(reportingProjection),
+    );
+    const performReportingAction = vi.fn<ReportingClient['performReportingAction']>();
+
+    render(<App client={sessionClient({ getReportingScreen, performReportingAction })} />);
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Report audit and history' }),
+    ).toBeVisible();
+    expect(screen.getByText('Aggregate only')).toBeVisible();
+    expect(screen.getByText('appointment_total=7')).toBeVisible();
+    expect(screen.queryByText(/patient name/i)).not.toBeInTheDocument();
+    expect(getReportingScreen).toHaveBeenCalledWith(
+      selectedOrganization.id,
+      'P12-10',
+      expect.objectContaining({ limit: 25 }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
   });
 
   it('focuses identity and workspace headings and provides hash-safe skip navigation', async () => {
@@ -2287,21 +3242,20 @@ describe('CareOS frontend session boundary', () => {
     expect(screen.queryByText('operations@example.org')).not.toBeInTheDocument();
   });
 
-  it('keeps synthetic clinical actions and terminal pagination non-activatable', async () => {
+  it('keeps an empty live assessment projection and terminal pagination non-activatable', async () => {
     window.location.hash = '#/COS-27';
     render(<App client={sessionClient()} />);
 
     expect(
       await screen.findByRole('heading', { level: 1, name: findScreen('COS-27').title }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Synthetic patient')).toBeInTheDocument();
-    expect(screen.getByLabelText('Clinical note')).toHaveAttribute('readonly');
-    expect(screen.getByRole('button', { name: /Save draft.*unavailable/ })).toBeDisabled();
+    expect(screen.getByText('Source package unavailable')).toBeInTheDocument();
+    expect(screen.getByText('No authorized records found')).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /Confirm and continue.*unavailable/ }),
-    ).toBeDisabled();
+      screen.getByText('No governed actions are available for this account and selection.'),
+    ).toBeInTheDocument();
 
-    const pagination = screen.getByRole('navigation', { name: 'Prototype pagination' });
+    const pagination = screen.getByRole('navigation', { name: 'Assessment screen pagination' });
     expect(within(pagination).queryByRole('link', { name: /COS-27/ })).not.toBeInTheDocument();
     expect(within(pagination).getByText('COS-27')).toHaveAttribute('aria-disabled', 'true');
   });

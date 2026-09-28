@@ -28,10 +28,46 @@ P3, P4 and P5 use runtime-validated server projections and expose only server-au
 
 ## Clinical workspace
 
-`COS-01` through `COS-27` are routed as a continuous clinician-in-the-loop journey. The included clinical screens are new synthetic placeholders based on the build blueprint. They must be reconciled screen-by-screen with the protected original COS source assets before any production implementation or visual freeze.
+`COS-01` through `COS-27` are routed as a continuous clinician-in-the-loop journey backed by runtime-validated server projections and governed actions. The workflow requires verified patient and responsible-clinician context, preserves 27-step progress, versions sourced responses, captures measurements and red-flag handling, and enforces review, MFA-backed signature and amendment boundaries. The protected original COS source assets are still absent, so the current implementation is not source-verified visual acceptance and must be reconciled screen-by-screen before a production visual freeze.
+
+## Documents and results workspace
+
+`P7-01` Document dashboard; `P7-02` Patient document list; `P7-03` Upload document; `P7-04` Classification and metadata; `P7-05` Scan status; `P7-06` Document viewer; `P7-07` Result inbox; `P7-08` Result detail; `P7-09` Acknowledge or escalate; `P7-10` Version history; `P7-11` Export or share intent.
+
+P7 routes use runtime-validated server projections and governed mutations for bounded digest-checked upload, immutable versions, attributed classification, scan/promotion evidence, clean-document access, diagnostic provenance, result review/escalation and immutable access intents. Production providers and policy catalogues remain explicit unavailable activation dependencies.
+
+## AI assistance and governance workspace
+
+`P8-01` AI session launcher; `P8-02` Purpose and consent check; `P8-03` Input selection; `P8-04` Transcription and extraction; `P8-05` Draft summary; `P8-06` Clinical suggestion panel; `P8-07` Safety and uncertainty flags; `P8-08` Source and provenance viewer; `P8-09` Clinician review and approval; `P8-10` AI session history.
+
+P8 routes use runtime-validated server projections and governed mutations for bounded purpose/consent evidence, immutable minimum-necessary input manifests, exact model/prompt/evaluation/job versions, draft-only outputs, citations, visible uncertainty/safety evidence, append-only clinician edits and explicit recent-MFA accept/reject decisions. The processing adapter is unavailable by default, and AI output cannot directly change an owning clinical record.
+
+## Care planning workspace
+
+`P9-01` Care plan dashboard; `P9-02` Create coordinated plan; `P9-03` Problems and priorities; `P9-04` Goals; `P9-05` Interventions; `P9-06` Modality coordination; `P9-07` Owners and tasks; `P9-08` Consent and preferences; `P9-09` Safety and interaction review; `P9-10` Clinician approval; `P9-11` Patient summary; `P9-12` Plan versions and amendments.
+
+P9 routes use runtime-validated server projections and governed mutations for immutable plan versions, sourced priorities and goals, complete interventions, accountable owners/tasks, visible consent/preferences, exact-version safety review, separate approval/activation and successor amendments. Clinical catalogues, interaction policy, consent wording, escalation thresholds, task delivery and patient communication remain explicit activation dependencies.
+
+## Follow-up and outcomes workspace
+
+`P10-01` Monitoring dashboard; `P10-02` Rules; `P10-03` Domains; `P10-04` Measures; `P10-05` Escalation; `P10-06` Follow-up schedule; `P10-07` Interpretation; `P10-08` Confirm plan; `P10-09` Outcome timeline.
+
+P10 routes use runtime-validated server projections and governed mutations for exact-care-plan monitoring, version-bound outcome definitions and rules, append-only measurements, follow-up scheduling, atomic threshold evaluation, owned clinical-task escalation, distinct acknowledgement/resolution, attributed interpretation and exact-digest recent-MFA confirmation. Outcome catalogues, instruments, ranges, thresholds, cadence, notification delivery and patient communication remain explicit activation dependencies.
+
+## Billing and payments workspace
+
+`P11-01` Billing dashboard; `P11-02` Price books; `P11-03` Packages; `P11-04` Estimate; `P11-05` Invoice; `P11-06` Payment; `P11-07` Payment link; `P11-08` Refund or adjustment; `P11-09` Claims; `P11-10` Reconciliation; `P11-11` Financial audit or export.
+
+P11 routes use runtime-validated server projections and governed mutations for versioned pricing and packages, exact patient estimates, immutable invoice lines, card-data-free payment intents, append-only settlement/refund/adjustment evidence, claims and remittances, explicit reconciliation and purpose-bound export requests. Financial status never changes clinical completion. Provider credentials/callback verification, tax and accounting policy, payer formats, export workers and artifact delivery remain fail-closed activation dependencies.
+
+## Reporting workspace
+
+`P12-01` Reporting dashboard; `P12-02` Operational reports; `P12-03` Clinical safety reports; `P12-04` Outcome reports; `P12-05` Workforce governance; `P12-06` Access and security reports; `P12-07` AI governance; `P12-08` Financial reports; `P12-09` Scheduled exports; `P12-10` Report audit and history.
+
+P12 routes use runtime-validated server projections and governed mutations for seven fixed aggregate report families, bounded immutable snapshots, versioned schedule definitions, exact-run expiring export requests and attributable audit/history. Row-level source content is excluded and CSV formula prefixes are neutralized. Approved report definitions, legal bases, suppression/retention policy, scheduler/worker identity, private artifact storage/access and delivery remain fail-closed activation dependencies.
 
 ## Prototype limitation
 
-Login, session-expiry convergence, password recovery, governed invitations/account linking, MFA challenge/mandatory enrollment/recovery-code self-service, maker-checker administrative reset, recent authentication, organization selection/switching, logout, all M1/M2/P3/P4/P5 live routes and their checked actions use foundation APIs. The retained COS routes remain synthetic and must not receive real clinical data. The Spring Boot registry API independently verifies the 122-screen contract.
+Login, session-expiry convergence, password recovery, governed invitations/account linking, MFA challenge/mandatory enrollment/recovery-code self-service, maker-checker administrative reset, recent authentication, organization selection/switching, logout, and all M1/M2/P3/P4/P5/COS/P7/P8/P9/P10/P11/P12 live routes and their checked actions use foundation APIs. COS clinical data remains subject to deployment authorization, approved instruments/policy catalogues and source-package reconciliation; document/result activation remains subject to accepted storage/scanner/access/retention, laboratory/imaging and critical-result policies; AI activation remains subject to approved provider/model/prompt/evaluation, consent, safety, retention and clinical-use controls; care-plan/follow-up/billing/reporting activation remains subject to approved terminology, policy, provider, payment, payer, tax, accounting, report-definition, scheduler, storage, export-worker and delivery inputs. Unavailable dependencies fail closed instead of producing synthetic success. The Spring Boot registry API independently verifies the 185-screen contract.
 
 The approved Module 1 inputs, per-screen implementation gap, architecture, and delivery slices are recorded in `MODULE_1_IMPLEMENTATION_PLAN.md`. Generic M1 templates are not implementations of the approved mockups and must be replaced screen-by-screen through the defined slices.

@@ -36,6 +36,12 @@ public class PrototypeController {
                         "Patient registry",
                         "Scheduling",
                         "Encounters",
-                        "Clinical"));
+                        "Clinical",
+                        "Documents and results",
+                        "Governed AI assistance",
+                        "Coordinated care planning",
+                        "Follow-up and outcomes",
+                        "Billing and payments",
+                        "Reporting"));
     }
 }
