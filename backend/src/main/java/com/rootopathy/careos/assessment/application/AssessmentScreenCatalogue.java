@@ -199,13 +199,13 @@ final class AssessmentScreenCatalogue {
 
     private static String purpose(int sequence) {
         return switch (sequence) {
-            case 1 -> "Verify patient, encounter and responsible-clinician context before starting the protected COS sequence.";
+            case 1 -> "Verify patient, encounter and responsible-clinician context before starting the protected clinical assessment sequence.";
             case 10 -> "Record sourced red-flag assessment evidence with visible acknowledgement and resolution state.";
             case 24 -> "Preserve the protected AI-assisted synthesis step; runtime synthesis remains unavailable until Module 8 governance exists.";
             case 25 -> "Review completeness, sources and uncertainty, then bind an immutable eligible-clinician signature or amendment.";
             case 26 -> "Record purpose-bound outcome measures without producing a composite cure score.";
             case 27 -> "Confirm the signed assessment, resolved safety state and explicit lifecycle closeout.";
-            default -> "Capture versioned, sourced and attributed clinical assessment evidence for this protected COS step.";
+            default -> "Capture versioned, sourced and attributed clinical assessment evidence for this protected clinical assessment step.";
         };
     }
 

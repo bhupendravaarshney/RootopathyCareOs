@@ -107,13 +107,14 @@ public final class WorkforceService {
         Objects.requireNonNull(command, "command");
         var spec = WorkforceScreenCatalogue.screen(command.screenId());
         var query = pagedQuery(command);
+        var reason = optionalReason(command.reason());
         return authorization.execute(
                 authorization(
                         command.organizationId(),
                         command.actorId(),
                         command.correlationId(),
                         spec.readOperation(),
-                        null,
+                        reason,
                         command.recentAuthenticationAt(),
                         command.mfaAuthenticatedAt()),
                 context -> project(context, spec, query));
@@ -909,6 +910,7 @@ public final class WorkforceService {
             String status,
             Integer limit,
             String cursor,
+            String reason,
             Instant recentAuthenticationAt,
             Instant mfaAuthenticatedAt) {}
 

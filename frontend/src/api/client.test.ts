@@ -1794,13 +1794,18 @@ describe('CareOsApiClient', () => {
       fetch: fetcher,
     });
 
-    const result = await client.getWorkforceScreen(workforceOrganizationId, 'M2-24', {
-      memberId: workforceMemberId,
-      q: '  care team  ',
-      status: 'active',
-      limit: 25,
-      cursor: 'cursor_1',
-    });
+    const result = await client.getWorkforceScreen(
+      workforceOrganizationId,
+      'M2-24',
+      {
+        memberId: workforceMemberId,
+        q: '  care team  ',
+        status: 'active',
+        limit: 25,
+        cursor: 'cursor_1',
+      },
+      { authorizationReason: 'Reviewing an approved workforce administration case' },
+    );
 
     expect(result).toMatchObject({ ok: true, status: 200 });
     const [url, init] = fetcher.mock.calls[0]!;
@@ -1814,6 +1819,9 @@ describe('CareOsApiClient', () => {
     expect(init?.method).toBe('GET');
     expect(init?.credentials).toBe('include');
     expect(new Headers(init?.headers).get('X-Correlation-Id')).toBe('request-1');
+    expect(new Headers(init?.headers).get('X-Authorization-Reason')).toBe(
+      'Reviewing an approved workforce administration case',
+    );
   });
 
   it('binds a workforce impact preview to the selected row revision and strong ETag', async () => {

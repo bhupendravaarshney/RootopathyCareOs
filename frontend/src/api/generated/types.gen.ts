@@ -8465,6 +8465,12 @@ export type CancelOperatingHoursBatchResponse =
 
 export type GetWorkforceScreenData = {
   body?: never;
+  headers?: {
+    /**
+     * User-stated purpose for a purpose-bound workforce read.
+     */
+    'X-Authorization-Reason'?: string;
+  };
   path: {
     /**
      * Organization boundary for every protected business-resource route.

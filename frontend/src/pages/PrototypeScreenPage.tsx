@@ -408,7 +408,7 @@ export function PrototypeScreenPage({ id, shell }: { id: string; shell: ShellSes
     <Shell currentId={screen.id} {...shell}>
       <div className="page-head">
         <div>
-          <span className="eyebrow">{screen.id}</span>
+          <span className="eyebrow">{screen.group}</span>
           <h1>{screen.title}</h1>
           <p>{screen.purpose}</p>
         </div>
@@ -421,11 +421,11 @@ export function PrototypeScreenPage({ id, shell }: { id: string; shell: ShellSes
       <nav className="page-pagination" aria-label="Prototype pagination">
         {index === 0 ? (
           <span className="pagination-link pagination-disabled" aria-disabled="true">
-            <ArrowLeft /> {previous.id}
+            <ArrowLeft /> Previous
           </span>
         ) : (
           <a className="pagination-link" href={`#/${previous.id}`}>
-            <ArrowLeft /> {previous.id}
+            <ArrowLeft /> {previous.title}
           </a>
         )}
         <span className="pagination-status">
@@ -436,11 +436,11 @@ export function PrototypeScreenPage({ id, shell }: { id: string; shell: ShellSes
             className="pagination-link pagination-next pagination-disabled"
             aria-disabled="true"
           >
-            {next.id} <ArrowRight />
+            Next <ArrowRight />
           </span>
         ) : (
           <a className="pagination-link pagination-next" href={`#/${next.id}`}>
-            {next.id} <ArrowRight />
+            {next.title} <ArrowRight />
           </a>
         )}
       </nav>

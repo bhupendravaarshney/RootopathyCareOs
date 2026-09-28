@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Profile("local")
 public class LocalIdentityBootstrap implements ApplicationRunner {
     private static final Logger LOGGER = LoggerFactory.getLogger(LocalIdentityBootstrap.class);
+    private static final String LOCAL_ADMINISTRATOR_NAME = "CareOS Demo Administrator";
     private static final UUID LOCAL_ORGANIZATION_ID =
             UUID.fromString("01900000-0000-7000-8000-000000000001");
 
@@ -53,6 +54,10 @@ public class LocalIdentityBootstrap implements ApplicationRunner {
                     userId,
                     passwordHasher.hash(password));
         }
+        jdbcTemplate.update(
+                "update users set display_name = ? where id = ? and display_name = 'Local Organization Owner'",
+                LOCAL_ADMINISTRATOR_NAME,
+                userId);
         bindLocalBootstrapContext(userId);
         jdbcTemplate.update(
                 """
@@ -84,10 +89,11 @@ public class LocalIdentityBootstrap implements ApplicationRunner {
         jdbcTemplate.update(
                 """
                 INSERT INTO users (id, email, display_name, status)
-                VALUES (?, ?, 'Local Organization Owner', 'active')
+                VALUES (?, ?, ?, 'active')
                 """,
                 userId,
-                email);
+                email,
+                LOCAL_ADMINISTRATOR_NAME);
         return userId;
     }
 }

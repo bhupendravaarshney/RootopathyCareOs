@@ -7649,6 +7649,16 @@
               "maxLength": 2048,
               "pattern": "^[A-Za-z0-9_-]+$"
             }
+          },
+          {
+            "name": "X-Authorization-Reason",
+            "in": "header",
+            "description": "User-stated purpose for a purpose-bound workforce read.",
+            "schema": {
+              "type": "string",
+              "minLength": 10,
+              "maxLength": 500
+            }
           }
         ],
         "security": [

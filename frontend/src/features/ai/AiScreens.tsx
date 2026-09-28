@@ -29,6 +29,8 @@ import type {
   WorkforceField,
 } from '../../api/generated';
 import { Shell, type ShellSessionProps } from '../../components/Shell';
+import { LocalDemoData } from '../../components/LocalDemoData';
+import { isLocalDemoOrganization } from '../../data/local-demo';
 import { findScreen } from '../../data/screens';
 import type { AiClient } from './ai-types';
 import type { CareOsApiClient } from '../../api/client';
@@ -632,7 +634,7 @@ export function AiScreenPage({
     <Shell currentId={id} {...shell}>
       <div className="page-head workforce-page-head">
         <div>
-          <span className="eyebrow">{id}</span>
+          <span className="eyebrow">{registered.group}</span>
           <h1>{projection?.title ?? registered.title}</h1>
           <p>{projection?.purpose ?? registered.purpose}</p>
         </div>
@@ -828,7 +830,9 @@ export function AiScreenPage({
                 <RefreshCw aria-hidden="true" size={18} />
               </button>
             </div>
-            {projection.rows.length === 0 ? (
+            {projection.rows.length === 0 && isLocalDemoOrganization(organizationId) ? (
+              <LocalDemoData screenId={id} />
+            ) : projection.rows.length === 0 ? (
               <div className="workforce-empty">
                 <Search aria-hidden="true" size={25} />
                 <h3>No authorized {profile.nounPlural} found</h3>

@@ -46,7 +46,7 @@ public class JdbcConfigurationActivationStore implements ConfigurationActivation
       },c.organizationId());
     var pending=jdbc.query("""
       SELECT subject_type,subject_id,lock_version,change_type,label,status FROM (
-        SELECT 'facility' subject_type,id subject_id,lock_version,'activated' change_type,display_name label,status FROM facilities WHERE organization_id=? AND status='under_review'
+        SELECT 'facility' subject_type,id subject_id,lock_version,'activated' change_type,name label,status FROM facilities WHERE organization_id=? AND status='under_review'
         UNION ALL SELECT 'organization_unit',id,lock_version,'activated',name,status FROM organization_units WHERE organization_id=? AND status='draft'
         UNION ALL SELECT 'service_location',id,lock_version,'activated',name,status FROM service_locations WHERE organization_id=? AND status='draft'
         UNION ALL SELECT 'operating_hours_batch',id,lock_version,'activated',target_type||':'||target_id,status FROM operating_hours_batches WHERE organization_id=? AND status='scheduled'

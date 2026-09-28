@@ -732,6 +732,7 @@ export type ApiFailure = {
 export type ApiResult<T> = ApiSuccess<T> | ApiFailure;
 
 export type ApiRequestOptions = {
+  authorizationReason?: string;
   signal?: AbortSignal;
 };
 
@@ -746,6 +747,7 @@ export type CareOsApiClientOptions = {
 };
 
 type RequestDescriptor = {
+  authorizationReason?: string;
   body?: unknown;
   idempotencyKey?: string;
   ifMatch?: string;
@@ -1413,6 +1415,19 @@ function requireWorkforceScreenId(value: string): string {
   return value;
 }
 
+function requireAuthorizationReason(value: string): string {
+  const normalized = value.trim().normalize('NFC');
+  const length = Array.from(normalized).length;
+  const hasControlCharacter = Array.from(normalized).some((character) => {
+    const code = character.codePointAt(0) ?? 0;
+    return code <= 31 || code === 127;
+  });
+  if (length < 10 || length > 500 || hasControlCharacter) {
+    throw new Error('Authorization reason must contain 10 to 500 safe characters.');
+  }
+  return normalized;
+}
+
 function requireWorkforceActionKey(value: string): string {
   if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(value)) {
     throw new Error('actionKey has an invalid format.');
@@ -1711,6 +1726,9 @@ export class CareOsApiClient {
     }
     if (descriptor.ifMatch !== undefined) {
       headers.set('If-Match', descriptor.ifMatch);
+    }
+    if (descriptor.authorizationReason !== undefined) {
+      headers.set('X-Authorization-Reason', descriptor.authorizationReason);
     }
 
     try {
@@ -4741,6 +4759,9 @@ export class CareOsApiClient {
     const organization = requireUuid(organizationId, 'organizationId');
     const screen = requireWorkforceScreenId(screenId);
     return this.#request<GetWorkforceScreenResponse>({
+      ...(options.authorizationReason === undefined
+        ? {}
+        : { authorizationReason: requireAuthorizationReason(options.authorizationReason) }),
       method: 'GET',
       path: `/v1/organizations/${organization}/workforce/screens/${screen}${workforceScreenQuery(query)}`,
       responseBody: 'json',

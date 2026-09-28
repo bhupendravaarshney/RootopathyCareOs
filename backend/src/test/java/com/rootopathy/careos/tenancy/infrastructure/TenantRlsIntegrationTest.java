@@ -761,6 +761,27 @@ class TenantRlsIntegrationTest {
         var referenceAuthorization = new PostgresTenantAuthorizationOperations(
                 jdbcTemplate, transactionManager, clock, true);
         assertThat(referenceAuthorization.execute(request, () -> true)).isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT careos_m2_user_has_resource_scope(?,?,?)",
+                        Boolean.class,
+                        REFERENCE_ORGANIZATION,
+                        REFERENCE_OWNER,
+                        "workforce.dashboard.read"))
+                .isFalse();
+        var workforceRequest = new TenantAuthorizationRequest(
+                REFERENCE_ORGANIZATION,
+                new AuthenticatedActorContext(
+                        REFERENCE_OWNER, "reference-policy-test", "reference-workforce-42"),
+                new OperationKey("workforce.dashboard.read"));
+        assertThat(referenceAuthorization.execute(
+                        workforceRequest,
+                        () -> jdbcTemplate.queryForObject(
+                                "SELECT careos_m2_user_has_resource_scope(?,?,?)",
+                                Boolean.class,
+                                REFERENCE_ORGANIZATION,
+                                REFERENCE_OWNER,
+                                "workforce.dashboard.read")))
+                .isTrue();
         assertThatThrownBy(() -> jdbcTemplate.update(
                         "UPDATE authorization_operations SET status = 'active' WHERE status = 'reference'"))
                 .hasRootCauseInstanceOf(PSQLException.class);

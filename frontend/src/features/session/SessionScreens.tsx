@@ -78,7 +78,7 @@ export function LoginScreen({ busy, issue, onLogin }: LoginScreenProps) {
   return (
     <IdentityFrame>
       <section className="auth-panel panel" aria-labelledby="login-heading">
-        <span className="eyebrow">M1-01</span>
+        <span className="eyebrow">Secure access</span>
         <IdentityMark>
           <ShieldCheck aria-hidden="true" />
         </IdentityMark>
@@ -155,7 +155,7 @@ export function MfaChallengeScreen({
   return (
     <IdentityFrame>
       <section className="auth-panel panel" aria-labelledby="mfa-heading">
-        <span className="eyebrow">M1-03</span>
+        <span className="eyebrow">Identity verification</span>
         <IdentityMark>
           <LockKeyhole aria-hidden="true" />
         </IdentityMark>
@@ -229,7 +229,7 @@ export function OrganizationSelectionScreen({
         className="auth-panel organization-panel panel"
         aria-labelledby="organization-heading"
       >
-        <span className="eyebrow">M1-04</span>
+        <span className="eyebrow">Organization access</span>
         <IdentityMark>
           <Building2 aria-hidden="true" />
         </IdentityMark>

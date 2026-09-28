@@ -1718,6 +1718,37 @@ describe('CareOS frontend session boundary', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Request offboarding' })).toBeVisible();
   });
 
+  it('requires and forwards an explicit purpose before loading restricted workforce records', async () => {
+    window.location.hash = '#/M2-04';
+    const getWorkforceScreen = vi.fn<WorkforceClient['getWorkforceScreen']>(async () =>
+      success({
+        ...workforceProjection,
+        purpose: findScreen('M2-04').purpose,
+        screenId: 'M2-04',
+        title: findScreen('M2-04').title,
+      }),
+    );
+
+    render(<App client={sessionClient({ getWorkforceScreen })} />);
+
+    expect(
+      await screen.findByRole('heading', {
+        name: 'State your purpose before viewing restricted records',
+      }),
+    ).toBeVisible();
+    expect(getWorkforceScreen).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText('Access reason'), {
+      target: { value: 'Reviewing possible duplicates during approved onboarding' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to protected view' }));
+
+    await waitFor(() => expect(getWorkforceScreen).toHaveBeenCalledOnce());
+    expect(getWorkforceScreen.mock.calls[0]?.[3]).toMatchObject({
+      authorizationReason: 'Reviewing possible duplicates during approved onboarding',
+    });
+  });
+
   it('renders a P3 route and submits a revision-bound patient action', async () => {
     window.location.hash = '#/P3-05';
     const getPatientRegistryScreen = vi.fn<PatientRegistryClient['getPatientRegistryScreen']>(
@@ -3320,8 +3351,8 @@ describe('CareOS frontend session boundary', () => {
     ).toBeInTheDocument();
 
     const pagination = screen.getByRole('navigation', { name: 'Assessment screen pagination' });
-    expect(within(pagination).queryByRole('link', { name: /COS-27/ })).not.toBeInTheDocument();
-    expect(within(pagination).getByText('COS-27')).toHaveAttribute('aria-disabled', 'true');
+    expect(within(pagination).queryByRole('link', { name: 'Next' })).not.toBeInTheDocument();
+    expect(within(pagination).getByText('Next')).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('fails closed after authentication when a hash route is not registered', async () => {

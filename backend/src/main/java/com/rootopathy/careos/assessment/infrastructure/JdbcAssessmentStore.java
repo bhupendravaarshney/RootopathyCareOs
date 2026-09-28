@@ -321,7 +321,7 @@ public class JdbcAssessmentStore implements AssessmentStore {
         var notices = new ArrayList<AssessmentScreen.Notice>();
         notices.add(notice(
                 "warning",
-                "Protected COS source package unavailable",
+                "Protected clinical source package unavailable",
                 "The 27-step order and current route titles are preserved, but visual/source acceptance and local clinical policy remain fail closed."));
         notices.add(notice(
                 "info",

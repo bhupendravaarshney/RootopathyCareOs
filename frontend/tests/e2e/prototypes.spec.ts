@@ -1169,9 +1169,15 @@ for (const { module, count, start } of routeGroups) {
 
     for (const id of ids) {
       await page.goto(`/#/${id}`);
-      await expect(page.getByText(id).first()).toBeVisible();
       await expect(page.locator('main h1')).toBeVisible();
+      await expect(page.getByText(id, { exact: true })).toHaveCount(0);
       if (module === 'M2') {
+        if (id === 'M2-04' || id === 'M2-05') {
+          await page
+            .getByLabel('Access reason')
+            .fill('Approved workforce administration review for automated browser testing.');
+          await page.getByRole('button', { name: 'Continue to protected view' }).click();
+        }
         await expect(page.getByText(`Server projection ${id}`, { exact: true })).toBeVisible();
         await expect(page.getByText('Server governed', { exact: true })).toBeVisible();
       }
@@ -1693,7 +1699,7 @@ test('live activation and assessment closeout expose honest action boundaries', 
   ).toBeVisible();
   const pagination = page.getByRole('navigation', { name: 'Assessment screen pagination' });
   await expect(pagination.getByRole('link', { name: /COS-27/ })).toHaveCount(0);
-  await expect(pagination.getByText('COS-27')).toHaveAttribute('aria-disabled', 'true');
+  await expect(pagination.getByText('Next')).toHaveAttribute('aria-disabled', 'true');
   await expectNoDocumentHorizontalOverflow(page, 'honest assessment activation boundary');
   await expectNoSeriousViolations(page, 'honest assessment activation boundary');
 });
@@ -2685,7 +2691,7 @@ test('administration readiness uses the exact approved catalogue and distinct da
   await expect(page.getByRole('heading', { name: 'Setup checklist' })).toBeVisible();
   await expect(page.locator('.check-list > div')).toHaveCount(15);
   await expect(
-    page.getByText('This live server projection feeds the persisted M1-21 validation', {
+    page.getByText('This live server projection feeds configuration validation', {
       exact: false,
     }),
   ).toBeVisible();
@@ -2878,7 +2884,7 @@ test('workspace navigation and mobile menu are usable', async ({ page, isMobile 
     await expect(page.getByRole('button', { name: 'Open navigation' })).toBeHidden();
     await expect(page.locator('.sidebar')).toBeVisible();
   }
-  await page.getByRole('link', { name: 'M2', exact: true }).click();
+  await page.getByRole('link', { name: 'Workforce', exact: true }).click();
   await expect(page).toHaveURL(/M2-01/);
   await expect(page.locator('main h1')).toHaveText('Workforce dashboard');
   await expect(page.locator('main h1')).toBeFocused();

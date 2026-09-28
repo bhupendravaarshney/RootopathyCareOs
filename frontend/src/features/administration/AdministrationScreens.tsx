@@ -1,4 +1,12 @@
-import { AlertTriangle, Check, CircleAlert, Minus, RefreshCw, ShieldCheck } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowUpRight,
+  Check,
+  CircleAlert,
+  Minus,
+  RefreshCw,
+  ShieldCheck,
+} from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import type { ApiFailure } from '../../api/client';
 import type {
@@ -47,6 +55,7 @@ import type {
 } from '../../api/generated';
 import { Shell, type ShellSessionProps } from '../../components/Shell';
 import { findScreen } from '../../data/screens';
+import { workspaces } from '../../data/workspaces';
 import type { AdministrationClient } from './administration-types';
 
 type AdministrationScreenProps = {
@@ -872,7 +881,7 @@ function PageHeading({ id }: { id: AdministrationScreenProps['id'] }) {
   return (
     <div className="page-head">
       <div>
-        <span className="eyebrow">{screen.id}</span>
+        <span className="eyebrow">{screen.group}</span>
         <h1>{screen.title}</h1>
         <p>{screen.purpose}</p>
       </div>
@@ -896,6 +905,22 @@ function FailurePanel({ issue, onRetry }: { issue: string; onRetry(): void }) {
       <button className="secondary-button" onClick={onRetry}>
         <RefreshCw size={17} aria-hidden="true" /> Retry
       </button>
+    </section>
+  );
+}
+
+function HighAssuranceAccessPanel() {
+  return (
+    <section className="panel administration-state-panel" role="alert">
+      <ShieldCheck aria-hidden="true" size={28} />
+      <h2>Identity verification required</h2>
+      <p>
+        Audit evidence is protected by recent authentication and multi-factor authentication. Verify
+        your identity, then return to this screen.
+      </p>
+      <a className="primary-button button-link" href="#/M1-03">
+        Verify identity or set up MFA
+      </a>
     </section>
   );
 }
@@ -954,6 +979,34 @@ function ReadinessList({ gates }: { gates: ReadinessGate[] }) {
   );
 }
 
+function AdministratorWorkspaceDirectory() {
+  return (
+    <section className="panel administrator-workspaces" aria-labelledby="workspace-directory-title">
+      <div className="panel-heading">
+        <div>
+          <h2 id="workspace-directory-title">Administrator workspace</h2>
+          <p>
+            Review every CareOS area from one place. Server permissions continue to govern records
+            and actions inside each workspace.
+          </p>
+        </div>
+        <span className="badge info">{workspaces.length} workspaces</span>
+      </div>
+      <div className="administrator-workspace-grid">
+        {workspaces.map((workspace) => (
+          <a href={workspace.href} key={workspace.key}>
+            <span>
+              <strong>{workspace.label}</strong>
+              <small>{workspace.description}</small>
+            </span>
+            <ArrowUpRight aria-hidden="true" size={18} />
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function ReadinessContent({
   id,
   readiness,
@@ -983,7 +1036,7 @@ function ReadinessContent({
           </span>
         </div>
         <div className="readiness-boundary" role="note">
-          This live server projection feeds the persisted M1-21 validation, evidence review, and
+          This live server projection feeds configuration validation, evidence review, and the
           activation workflow.
         </div>
         <ReadinessList gates={readiness.gates} />
@@ -1031,6 +1084,7 @@ function ReadinessContent({
         </div>
         <ReadinessList gates={priorityGates} />
       </section>
+      <AdministratorWorkspaceDirectory />
     </>
   );
 }
@@ -5095,7 +5149,7 @@ function LocationScreen({ client, organizationId }: AdministrationScreenProps) {
                 currentAddresses.length === 0 && (
                   <div className="readiness-boundary" role="status">
                     No current address is available for a physical location. Add or activate an
-                    address in M1-09, or create a virtual location.
+                    address in Addresses and contacts, or create a virtual location.
                   </div>
                 )}
               <section className="content-panel">
@@ -6540,7 +6594,9 @@ function FacilityScreen({ client, id, organizationId }: AdministrationScreenProp
                     {id === 'M1-13' && state.data.canManageLifecycle && f.status !== 'closed' && (
                       <div className="form-actions">
                         {f.status === 'under_review' && (
-                          <span className="status-badge">Activate through M1-21 approval</span>
+                          <span className="status-badge">
+                            Activate through configuration approval
+                          </span>
                         )}
                         {f.status === 'active' && (
                           <button
@@ -8212,7 +8268,7 @@ function IdentifierSchemeScreen({ client, organizationId }: AdministrationScreen
                 <h2>Identifier schemes</h2>
                 <p>
                   Immutable, scoped sequence versions. Activation is completed only through
-                  independent M1-21 approval.
+                  independent configuration approval.
                 </p>
               </div>
               <span className="status-badge">{schemes.length} schemes</span>
@@ -8823,6 +8879,7 @@ function EvidenceScreen({
       exports: EvidenceExportDirectory;
     }>
   >({ phase: 'loading' });
+  const [highAssuranceRequired, setHighAssuranceRequired] = useState(false);
   const [filters, setFilters] = useState({
     from: new Date(applicationStartedAt - 30 * 86400000).toISOString().slice(0, 16),
     to: new Date().toISOString().slice(0, 16),
@@ -8892,6 +8949,7 @@ function EvidenceScreen({
     ]).then(([projection, exports]) => {
       if (controller.signal.aborted) return;
       if (!projection.ok) {
+        setHighAssuranceRequired(projection.status === 428);
         setState({
           phase: 'failure',
           issue: failureMessage(projection),
@@ -8899,9 +8957,11 @@ function EvidenceScreen({
         return;
       }
       if (!exports.ok) {
+        setHighAssuranceRequired(exports.status === 428);
         setState({ phase: 'failure', issue: failureMessage(exports) });
         return;
       }
+      setHighAssuranceRequired(false);
       setState({ phase: 'ready', data: { page: projection.data, exports: exports.data } });
     });
     return () => controller.abort();
@@ -9085,7 +9145,11 @@ function EvidenceScreen({
       {state.phase === 'loading' ? (
         <LoadingPanel />
       ) : state.phase === 'failure' ? (
-        <FailurePanel issue={state.issue} onRetry={() => setAttempt((value) => value + 1)} />
+        highAssuranceRequired ? (
+          <HighAssuranceAccessPanel />
+        ) : (
+          <FailurePanel issue={state.issue} onRetry={() => setAttempt((value) => value + 1)} />
+        )
       ) : (
         <>
           {issue && <div className="inline-alert error-alert">{issue}</div>}

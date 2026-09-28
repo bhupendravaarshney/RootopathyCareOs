@@ -21,6 +21,8 @@ import type {
   WorkforceOption,
 } from '../../api/generated';
 import { Shell, type ShellSessionProps } from '../../components/Shell';
+import { LocalDemoData } from '../../components/LocalDemoData';
+import { isLocalDemoOrganization } from '../../data/local-demo';
 import { findScreen } from '../../data/screens';
 import type { PatientRegistryClient } from './patient-types';
 
@@ -682,7 +684,7 @@ export function PatientRegistryScreenPage({
     <Shell currentId={id} {...shell}>
       <div className="page-head workforce-page-head">
         <div>
-          <span className="eyebrow">{id}</span>
+          <span className="eyebrow">{registered.group}</span>
           <h1>{projection?.title ?? registered.title}</h1>
           <p>{projection?.purpose ?? registered.purpose}</p>
         </div>
@@ -844,7 +846,9 @@ export function PatientRegistryScreenPage({
               </div>
             </div>
 
-            {projection.rows.length === 0 ? (
+            {projection.rows.length === 0 && isLocalDemoOrganization(organizationId) ? (
+              <LocalDemoData screenId={id} />
+            ) : projection.rows.length === 0 ? (
               <div className="workforce-empty">
                 <Search aria-hidden="true" size={25} />
                 <h3>No authorized records found</h3>
@@ -985,24 +989,24 @@ export function PatientRegistryScreenPage({
       <nav aria-label="Patient registry screen pagination" className="page-pagination">
         {previousId ? (
           <a className="pagination-link" href={`#/${previousId}`}>
-            <ArrowLeft /> {previousId}
+            <ArrowLeft /> {findScreen(previousId).title}
           </a>
         ) : (
           <span aria-disabled="true" className="pagination-link pagination-disabled">
-            <ArrowLeft /> P3-01
+            <ArrowLeft /> Previous
           </span>
         )}
         <span className="pagination-status">{moduleNumber} of 16</span>
         {nextId ? (
           <a className="pagination-link pagination-next" href={`#/${nextId}`}>
-            {nextId} <ArrowRight />
+            {findScreen(nextId).title} <ArrowRight />
           </a>
         ) : (
           <span
             aria-disabled="true"
             className="pagination-link pagination-next pagination-disabled"
           >
-            P3-16 <ArrowRight />
+            Next <ArrowRight />
           </span>
         )}
       </nav>

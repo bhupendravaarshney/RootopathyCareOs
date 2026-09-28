@@ -17,6 +17,7 @@
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:live:audit": "node scripts/live-product-audit.mjs",
     "lint": "eslint . --max-warnings 0",
     "format:check": "prettier --check ."
   },

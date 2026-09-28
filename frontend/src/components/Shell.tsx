@@ -1,6 +1,9 @@
 import { LogOut, Menu, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { screens, type ModuleKey } from '../data/screens';
+import { screens } from '../data/screens';
+import { workspaceLabel, workspaces } from '../data/workspaces';
+import { isLocalDemoOrganization } from '../data/local-demo';
+import { LocalDemoBanner } from './LocalDemoData';
 
 export type ShellSessionProps = {
   actorDisplayName: string;
@@ -14,38 +17,6 @@ export type ShellSessionProps = {
 };
 
 type ShellProps = ShellSessionProps & { currentId?: string; children: ReactNode };
-
-const workspaceLabels: Record<ModuleKey, string> = {
-  M1: 'Administration',
-  M2: 'Workforce',
-  M3: 'Patients',
-  M4: 'Appointments',
-  M5: 'Encounters',
-  COS: 'Clinician workspace',
-  M7: 'Documents and results',
-  M8: 'Governed AI assistance',
-  M9: 'Coordinated care plans',
-  M10: 'Follow-up and outcomes',
-  M11: 'Billing and payments',
-  M12: 'Reporting',
-  M13: 'Integrations and FHIR',
-};
-
-const workspaces: Array<{ key: ModuleKey; href: string }> = [
-  { key: 'M1', href: '#/M1-01' },
-  { key: 'M2', href: '#/M2-01' },
-  { key: 'M3', href: '#/P3-01' },
-  { key: 'M4', href: '#/P4-01' },
-  { key: 'M5', href: '#/P5-01' },
-  { key: 'COS', href: '#/COS-01' },
-  { key: 'M7', href: '#/P7-01' },
-  { key: 'M8', href: '#/P8-01' },
-  { key: 'M9', href: '#/P9-01' },
-  { key: 'M10', href: '#/P10-01' },
-  { key: 'M11', href: '#/P11-01' },
-  { key: 'M12', href: '#/P12-01' },
-  { key: 'M13', href: '#/P13-01' },
-];
 
 export function Shell({
   actorDisplayName,
@@ -111,7 +82,7 @@ export function Shell({
         </button>
         <a className="brand" href="#/M1-05" aria-label="ROOTOPATHY CareOS home">
           <strong>ROOTOPATHY</strong>
-          <span>CareOS · {workspaceLabels[currentModule]}</span>
+          <span>CareOS · {workspaceLabel(currentModule)}</span>
         </a>
         <div className="topbar-actions">
           <label className="organization-switch">
@@ -143,7 +114,7 @@ export function Shell({
       </header>
       <aside
         className={`sidebar ${open ? 'is-open' : ''}`}
-        aria-label={`${workspaceLabels[currentModule]} navigation`}
+        aria-label={`${workspaceLabel(currentModule)} navigation`}
       >
         <div className="sidebar-mobile-head">
           <span>Navigation</span>
@@ -170,8 +141,9 @@ export function Shell({
               key={workspace.key}
               className={currentModule === workspace.key ? 'active' : ''}
               href={workspace.href}
+              title={workspace.description}
             >
-              {workspace.key}
+              {workspace.label}
             </a>
           ))}
         </div>
@@ -213,7 +185,6 @@ export function Shell({
                     className={screen.id === current?.id ? 'active' : ''}
                     onClick={() => setOpen(false)}
                   >
-                    <span>{screen.id}</span>
                     {screen.title}
                   </a>
                 ))}
@@ -229,6 +200,7 @@ export function Shell({
         />
       )}
       <main className="content" id="main-content" ref={main} tabIndex={-1}>
+        {isLocalDemoOrganization(selectedOrganizationId) && <LocalDemoBanner />}
         {sessionNotice}
         {children}
       </main>

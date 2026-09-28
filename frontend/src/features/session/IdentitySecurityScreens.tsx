@@ -313,7 +313,7 @@ export function InvitationAcceptanceScreen({
   return (
     <IdentityFrame>
       <section className="auth-panel panel" aria-labelledby="invitation-acceptance-heading">
-        <span className="eyebrow">M1-02</span>
+        <span className="eyebrow">Secure invitation</span>
         <IdentityMark>
           <UserPlus aria-hidden="true" />
         </IdentityMark>
@@ -530,7 +530,7 @@ export function InvitationAdministrationScreen({
         className="auth-panel security-workflow-panel panel"
         aria-labelledby="invitation-administration-heading"
       >
-        <span className="eyebrow">M1-02</span>
+        <span className="eyebrow">Access administration</span>
         <IdentityMark>
           <UserPlus aria-hidden="true" />
         </IdentityMark>
@@ -734,7 +734,7 @@ export function MfaAdministrationScreen({
         className="auth-panel security-workflow-panel panel"
         aria-labelledby="mfa-administration-heading"
       >
-        <span className="eyebrow">M1-03</span>
+        <span className="eyebrow">Identity security</span>
         <IdentityMark>
           <ShieldCheck aria-hidden="true" />
         </IdentityMark>
@@ -815,7 +815,7 @@ export function MfaEnrollmentRequiredScreen({
         className="auth-panel security-workflow-panel panel"
         aria-labelledby="mfa-enrollment-required-heading"
       >
-        <span className="eyebrow">M1-03 / Required</span>
+        <span className="eyebrow">Identity security required</span>
         <IdentityMark>
           <ShieldCheck aria-hidden="true" />
         </IdentityMark>

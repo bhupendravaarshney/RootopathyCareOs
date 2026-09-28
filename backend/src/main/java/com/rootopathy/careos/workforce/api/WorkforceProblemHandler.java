@@ -11,9 +11,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+@Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice(assignableTypes = {WorkforceController.class, WorkforceExportController.class})
 public final class WorkforceProblemHandler {
     @ExceptionHandler(WorkforceException.class)

@@ -30,6 +30,8 @@ import type {
   WorkforceScreen,
 } from '../../api/generated';
 import { Shell, type ShellSessionProps } from '../../components/Shell';
+import { LocalDemoData } from '../../components/LocalDemoData';
+import { isLocalDemoOrganization } from '../../data/local-demo';
 import { findScreen } from '../../data/screens';
 import type { WorkforceClient } from './workforce-types';
 
@@ -46,6 +48,7 @@ type ActionSubmission = {
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const maximumDocumentBytes = 20 * 1024 * 1024;
+const purposeBoundReadScreens = new Set(['M2-04', 'M2-05']);
 const impactActions = new Set([
   'request-person-merge',
   'suspend-registration',
@@ -559,8 +562,9 @@ export function WorkforceScreenPage({
   shell: ShellSessionProps;
 }) {
   const registered = findScreen(id);
+  const requiresReadPurpose = purposeBoundReadScreens.has(id);
   const [projection, setProjection] = useState<WorkforceScreen | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!requiresReadPurpose);
   const [loadIssue, setLoadIssue] = useState<UiIssue | null>(null);
   const [mutationIssue, setMutationIssue] = useState<UiIssue | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -578,6 +582,9 @@ export function WorkforceScreenPage({
   const [filters, setFilters] = useState<ScreenFilters>({ limit: 25 });
   const [cursorStack, setCursorStack] = useState<string[]>([]);
   const [refresh, setRefresh] = useState(0);
+  const [readReason, setReadReason] = useState('');
+  const [readReasonDraft, setReadReasonDraft] = useState('');
+  const [readReasonIssue, setReadReasonIssue] = useState<string | null>(null);
   const lastAttempt = useRef<{ fingerprint: string; key: string } | null>(null);
 
   useEffect(() => {
@@ -601,6 +608,9 @@ export function WorkforceScreenPage({
   }, [credentialDocumentAccess]);
 
   useEffect(() => {
+    if (requiresReadPurpose && !readReason) {
+      return;
+    }
     const controller = new AbortController();
     const activeCursor = cursorStack.at(-1);
     const load = async () => {
@@ -618,7 +628,10 @@ export function WorkforceScreenPage({
           status: filters.status,
           ...(activeCursor ? { cursor: activeCursor } : {}),
         },
-        { signal: controller.signal },
+        {
+          ...(readReason ? { authorizationReason: readReason } : {}),
+          signal: controller.signal,
+        },
       );
       if (controller.signal.aborted) return;
       if (!result.ok) {
@@ -642,7 +655,7 @@ export function WorkforceScreenPage({
       if (!controller.signal.aborted) setLoading(false);
     });
     return () => controller.abort();
-  }, [client, cursorStack, filters, id, organizationId, refresh]);
+  }, [client, cursorStack, filters, id, organizationId, readReason, refresh, requiresReadPurpose]);
 
   const selected = projection?.rows.find((row) => row.id === selectedId);
   const availableActions =
@@ -894,7 +907,7 @@ export function WorkforceScreenPage({
     <Shell currentId={id} {...shell}>
       <div className="page-head workforce-page-head">
         <div>
-          <span className="eyebrow">{id}</span>
+          <span className="eyebrow">{registered.group}</span>
           <h1>{projection?.title ?? registered.title}</h1>
           <p>{projection?.purpose ?? registered.purpose}</p>
         </div>
@@ -1022,6 +1035,60 @@ export function WorkforceScreenPage({
         </section>
       )}
 
+      {requiresReadPurpose && !readReason && (
+        <section className="panel workforce-state workforce-purpose-panel">
+          <ShieldCheck aria-hidden="true" size={28} />
+          <h2>State your purpose before viewing restricted records</h2>
+          <p id="workforce-read-purpose-guidance">
+            CareOS records this reason in the authorization context. Enter a specific operational
+            purpose; do not include patient or staff details here.
+          </p>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              const normalized = readReasonDraft.trim().normalize('NFC');
+              if (
+                Array.from(normalized).length < 10 ||
+                Array.from(normalized).some((character) => {
+                  const code = character.codePointAt(0) ?? 0;
+                  return code <= 31 || code === 127;
+                })
+              ) {
+                setReadReasonIssue('Enter at least 10 safe characters describing this access.');
+                return;
+              }
+              setReadReasonIssue(null);
+              setReadReason(normalized);
+            }}
+          >
+            <label htmlFor="workforce-read-purpose">
+              Access reason
+              <textarea
+                aria-describedby="workforce-read-purpose-guidance"
+                id="workforce-read-purpose"
+                maxLength={500}
+                minLength={10}
+                onChange={(event) => {
+                  setReadReasonDraft(event.target.value);
+                  setReadReasonIssue(null);
+                }}
+                placeholder="For example: reviewing a possible duplicate during approved onboarding"
+                required
+                value={readReasonDraft}
+              />
+            </label>
+            {readReasonIssue && (
+              <p className="workforce-inline-issue" role="alert">
+                {readReasonIssue}
+              </p>
+            )}
+            <button className="primary-button" type="submit">
+              Continue to protected view
+            </button>
+          </form>
+        </section>
+      )}
+
       {loading && (
         <section aria-live="polite" className="panel workforce-state">
           <LoaderCircle className="spin" aria-hidden="true" size={24} />
@@ -1033,12 +1100,24 @@ export function WorkforceScreenPage({
       {!loading && loadIssue && (
         <section className="panel workforce-state" role="alert">
           <AlertCircle aria-hidden="true" size={28} />
-          <h2>{loadIssue.status === 403 ? 'This screen is not authorized' : loadIssue.title}</h2>
+          <h2>
+            {loadIssue.status === 403
+              ? 'This screen is not authorized'
+              : loadIssue.status === 428
+                ? 'Identity verification required'
+                : loadIssue.title}
+          </h2>
           <p>{loadIssue.detail}</p>
           {loadIssue.correlationId && <small>Reference: {loadIssue.correlationId}</small>}
-          <button className="secondary-button" onClick={() => setRefresh((value) => value + 1)}>
-            <RefreshCw aria-hidden="true" size={17} /> Retry
-          </button>
+          {loadIssue.status === 428 ? (
+            <a className="primary-button button-link" href="#/M1-03">
+              Verify identity or set up MFA
+            </a>
+          ) : (
+            <button className="secondary-button" onClick={() => setRefresh((value) => value + 1)}>
+              <RefreshCw aria-hidden="true" size={17} /> Retry
+            </button>
+          )}
         </section>
       )}
 
@@ -1140,7 +1219,9 @@ export function WorkforceScreenPage({
               </button>
             </div>
 
-            {projection.rows.length === 0 ? (
+            {projection.rows.length === 0 && isLocalDemoOrganization(organizationId) ? (
+              <LocalDemoData screenId={id} />
+            ) : projection.rows.length === 0 ? (
               <div className="workforce-empty">
                 <Search aria-hidden="true" size={25} />
                 <h3>No authorized records found</h3>
@@ -1271,24 +1352,24 @@ export function WorkforceScreenPage({
       <nav aria-label="Workforce screen pagination" className="page-pagination">
         {previousId ? (
           <a className="pagination-link" href={`#/${previousId}`}>
-            <ArrowLeft /> {previousId}
+            <ArrowLeft /> {findScreen(previousId).title}
           </a>
         ) : (
           <span aria-disabled="true" className="pagination-link pagination-disabled">
-            <ArrowLeft /> M2-01
+            <ArrowLeft /> Previous
           </span>
         )}
         <span className="pagination-status">{moduleNumber} of 29</span>
         {nextId ? (
           <a className="pagination-link pagination-next" href={`#/${nextId}`}>
-            {nextId} <ArrowRight />
+            {findScreen(nextId).title} <ArrowRight />
           </a>
         ) : (
           <span
             aria-disabled="true"
             className="pagination-link pagination-next pagination-disabled"
           >
-            M2-29 <ArrowRight />
+            Next <ArrowRight />
           </span>
         )}
       </nav>

@@ -66,6 +66,9 @@ public class WorkforceController {
             @RequestParam(required = false) @Size(max = 120) String status,
             @RequestParam(required = false) @Min(1) @Max(100) Integer limit,
             @RequestParam(required = false) @Size(max = 2048) String cursor,
+            @RequestHeader(value = "X-Authorization-Reason", required = false)
+                    @Size(min = 10, max = 500)
+                    String reason,
             Authentication authentication,
             HttpServletRequest request) {
         var actor = actor(authentication);
@@ -80,6 +83,7 @@ public class WorkforceController {
                 status,
                 limit,
                 cursor,
+                reason,
                 assurance(session, AuthenticationSessionState.RECENT_AUTHENTICATION_AT),
                 assurance(session, AuthenticationSessionState.MFA_AUTHENTICATED_AT)));
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);

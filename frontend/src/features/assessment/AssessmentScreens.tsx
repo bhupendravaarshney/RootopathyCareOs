@@ -19,6 +19,8 @@ import type {
   WorkforceField,
 } from '../../api/generated';
 import { Shell, type ShellSessionProps } from '../../components/Shell';
+import { LocalDemoData } from '../../components/LocalDemoData';
+import { isLocalDemoOrganization } from '../../data/local-demo';
 import { findScreen } from '../../data/screens';
 import type { AssessmentClient } from './assessment-types';
 
@@ -623,7 +625,7 @@ export function AssessmentScreenPage({
     <Shell currentId={id} {...shell}>
       <div className="page-head workforce-page-head">
         <div>
-          <span className="eyebrow">{id}</span>
+          <span className="eyebrow">{registered.group}</span>
           <h1>{projection?.title ?? registered.title}</h1>
           <p>{projection?.purpose ?? registered.purpose}</p>
         </div>
@@ -848,7 +850,9 @@ export function AssessmentScreenPage({
               </button>
             </div>
 
-            {projection.rows.length === 0 ? (
+            {projection.rows.length === 0 && isLocalDemoOrganization(organizationId) ? (
+              <LocalDemoData screenId={id} />
+            ) : projection.rows.length === 0 ? (
               <div className="workforce-empty">
                 <Search aria-hidden="true" size={25} />
                 <h3>No authorized records found</h3>
@@ -985,24 +989,24 @@ export function AssessmentScreenPage({
       <nav aria-label="Assessment screen pagination" className="page-pagination">
         {previousId ? (
           <a className="pagination-link" href={contextHref(`#/${previousId}`, context)}>
-            <ArrowLeft /> {previousId}
+            <ArrowLeft /> {findScreen(previousId).title}
           </a>
         ) : (
           <span aria-disabled="true" className="pagination-link pagination-disabled">
-            <ArrowLeft /> COS-01
+            <ArrowLeft /> Previous
           </span>
         )}
         <span className="pagination-status">{moduleNumber} of 27</span>
         {nextId ? (
           <a className="pagination-link pagination-next" href={contextHref(`#/${nextId}`, context)}>
-            {nextId} <ArrowRight />
+            {findScreen(nextId).title} <ArrowRight />
           </a>
         ) : (
           <span
             aria-disabled="true"
             className="pagination-link pagination-next pagination-disabled"
           >
-            COS-27 <ArrowRight />
+            Next <ArrowRight />
           </span>
         )}
       </nav>
