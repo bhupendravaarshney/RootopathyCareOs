@@ -91,6 +91,12 @@ public class PrototypeRegistry {
         "Scheduled exports", "Report audit and history"
     };
 
+    private static final String[] M13 = {
+        "Integration dashboard", "FHIR endpoints", "Terminology mappings", "WhatsApp messaging",
+        "Payment configuration", "Calendar integration", "Lab/imaging interfaces", "Webhook management",
+        "Mobile/API clients", "Integration audit and replay"
+    };
+
     public List<PrototypeScreen> all() {
         var screens = new ArrayList<PrototypeScreen>();
         add(screens, "M1", "M1", M1, "Administration workspace");
@@ -105,6 +111,7 @@ public class PrototypeRegistry {
         add(screens, "P10", "M10", M10, "Follow-up and outcomes workspace");
         add(screens, "P11", "M11", M11, "Billing and payments workspace");
         add(screens, "P12", "M12", M12, "Aggregate reporting workspace");
+        add(screens, "P13", "M13", M13, "Integrations and FHIR workspace");
         return List.copyOf(screens);
     }
 

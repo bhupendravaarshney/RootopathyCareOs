@@ -28,6 +28,7 @@ const workspaceLabels: Record<ModuleKey, string> = {
   M10: 'Follow-up and outcomes',
   M11: 'Billing and payments',
   M12: 'Reporting',
+  M13: 'Integrations and FHIR',
 };
 
 const workspaces: Array<{ key: ModuleKey; href: string }> = [
@@ -43,6 +44,7 @@ const workspaces: Array<{ key: ModuleKey; href: string }> = [
   { key: 'M10', href: '#/P10-01' },
   { key: 'M11', href: '#/P11-01' },
   { key: 'M12', href: '#/P12-01' },
+  { key: 'M13', href: '#/P13-01' },
 ];
 
 export function Shell({

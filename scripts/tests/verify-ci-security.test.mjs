@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -9,6 +10,7 @@ import {
   validateFoundationDataScopeTexts,
   validateNginxText,
   validateProductionConfigText,
+  validateProjectVerificationTexts,
   validateResponsiveBrowserTexts,
   validateWorkflowText,
 } from "../verify-ci-security.mjs";
@@ -430,4 +432,23 @@ test("requires every responsive browser project and its overflow assertions", ()
     suite: suite.replace("document.body.scrollWidth;", ""),
   }).join("\n");
   assert.match(weakenedSuite, /body-width overflow assertion/);
+});
+
+test("keeps both local whole-project QA runners aligned with the complete gate", () => {
+  const shell = readFileSync(
+    new URL("../verify-project.sh", import.meta.url),
+    "utf8",
+  );
+  const powershell = readFileSync(
+    new URL("../verify-project.ps1", import.meta.url),
+    "utf8",
+  );
+
+  assert.deepEqual(validateProjectVerificationTexts({ shell, powershell }), []);
+
+  const weakened = validateProjectVerificationTexts({
+    shell: shell.replace(/^npm run test:e2e\s*$/m, ""),
+    powershell,
+  }).join("\n");
+  assert.match(weakened, /missing full-project QA gate full browser matrix/);
 });

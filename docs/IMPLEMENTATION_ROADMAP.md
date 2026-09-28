@@ -27,7 +27,7 @@ The directive does not fabricate unavailable COS source assets, jurisdiction-spe
 
 ## Current build status
 
-**Phase 0 mechanics and Modules 1-12 are complete at the repository-construction boundary; consolidated QA and target-environment production acceptance remain open.** M1 is implemented through V50, M2 through V68, M3 through V78, M4 through V82, M5 through V89, M6 through V92, M7 through V95, M8 through V98, M9 through V101, M10 through V104, M11 through V107 and M12 through V110. The checked boundary contains 185 route states and 133 API operations; all 136 frontend unit tests and the focused five-viewport M12 gate pass. Module 13 Integrations and FHIR is the next dependency. The M1 facility-scope candidate remains non-authorizing, and consolidated QA plus protected COS source, target provider/worker/deployment/monitoring/backup evidence remain deferred.
+**Phase 0 mechanics and Modules 1-13 are complete at the repository-construction boundary, and consolidated repository QA passes; target-environment production acceptance remains open.** M1 is implemented through V50, M2 through V68, M3 through V78, M4 through V82, M5 through V89, M6 through V92, M7 through V95, M8 through V98, M9 through V101, M10 through V104, M11 through V107, M12 through V110 and M13 through V113. The checked boundary contains 195 route states and 135 API operations; all 274 backend tests, 141 frontend unit tests, 185 browser cases and 131 repository/API/security contract cases pass. Fresh image builds/scans and an isolated six-service Compose smoke deployment pass. The M1 facility-scope candidate remains non-authorizing, while protected COS source, target policy/provider/profile/worker/deployment/monitoring/backup evidence and production approval remain separate.
 
 ### Phase 0A - build verification and reproducibility (completed 13 September 2026)
 
@@ -1337,3 +1337,35 @@ The approved package authorizes dependency-ordered repository implementation onl
 - [x] Pass all 136 frontend unit tests, generated drift, architecture, formatting, typecheck, lint and production build gates; pass all 36 API-contract cases.
 - [x] Pass every P12 route across all five exact Playwright/Axe/overflow viewport projects (5/5).
 - [x] Record the implemented/fail-closed boundary in `MODULE_12_COMPLETION_REPORT.md`; preserve full cross-module regression, report-policy/worker/storage activation and production acceptance for consolidated QA.
+
+### Phase 13A - integration/FHIR definition and activation boundary (completed 28 September 2026)
+
+- [x] Define all ten P13 screens, fixed provider families, secret-free contracts, exact FHIR mapping/profile provenance and the no-generic-server boundary.
+- [x] Require verified inbound signature/timestamp/nonce/idempotency evidence, exact transactional-outbox delivery lineage and separately authorized successor replay.
+- [x] Keep partner endpoints/contracts, implementation guides, terminology packages, credentials/keys, transport workers and production replay authority as accountable external inputs.
+
+### Phase 13B - persistence, authorization and lifecycle (completed 28 September 2026)
+
+- [x] Add V111-V113 authorization/events, eight forced-RLS integration relations, composite tenant integrity, payload-minimized evidence and direct lifecycle/profile/replay guards.
+- [x] Make mapping activation, connection validation/suspension/retirement, delivery attempts, replay decisions, FHIR exchanges and API-client revocation exact, attributable and immutable where required.
+- [x] Reject raw credentials, tokens, authorization headers, webhook bodies and FHIR resource bodies from browser/server contracts and persisted evidence.
+
+### Phase 13C - API, client and all ten P13 routes (completed 28 September 2026)
+
+- [x] Publish OpenAPI 0.52.0 with exactly 135 operations, regenerate the checked TypeScript boundary and add exact runtime response validation.
+- [x] Replace P13-01 through P13-10 with authorized server projections and governed actions for integrations, mappings, clients, delivery and replay evidence.
+- [x] Preserve scoped idempotency, strong revisions, recent-auth/MFA high-risk controls and explicit unavailable transport/profile states.
+
+### Phase 13D - construction checkpoint (completed 28 September 2026)
+
+- [x] Compile 474 production/57 test sources, apply V1-V113 and pass the focused 6-test integration catalogue, registry and lifecycle gate.
+- [x] Pass all 141 frontend unit tests, generated drift, architecture, formatting, typecheck, lint and production build gates; pass all 38 API-contract cases.
+- [x] Pass every P13 route across all five exact Playwright/Axe/overflow viewport projects (5/5).
+- [x] Record the implemented/fail-closed boundary in `MODULE_13_COMPLETION_REPORT.md`.
+
+### Consolidated repository QA (completed 28 September 2026)
+
+- [x] Run a clean Maven verification: 274/274 tests in 57 suites, all 11 architecture rules, V1-V113 and bootable JAR packaging pass.
+- [x] Run the complete frontend static/unit/build gate and all 185/185 browser cases across 1440/1024/768/390/320.
+- [x] Run the exact 195-screen registry and all 131 repository/API/security contract cases, including local whole-project runner parity.
+- [x] Record the result and the separate production activation boundary in `CONSOLIDATED_QA_REPORT.md`.

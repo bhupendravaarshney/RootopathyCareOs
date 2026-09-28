@@ -10,7 +10,7 @@
 - Vitest API-client/component/registry tests
 - Vite production build
 - npm dependency audit
-- Static 185-screen register contract: M1 23, M2 29, M3 16, M4 15, M5 12, COS 27, P7 11, P8 10, P9 12, P10 9, P11 11 and P12 10
+- Static 195-screen register contract: M1 23, M2 29, M3 16, M4 15, M5 12, COS 27, P7 11, P8 10, P9 12, P10 9, P11 11, P12 10 and P13 10
 - Git secret/path checks
 
 ## Verified during Phase 0 start (13 September 2026)
@@ -1150,4 +1150,43 @@ This checkpoint records completed aggregate-reporting repository construction an
 | Frontend static/unit/build | PASS | Formatting, strict typecheck, lint, the 63-source/13-feature/179-import boundary plus four negative fixtures, all 136 unit tests and the production build pass. |
 | M12 browser/accessibility/responsive | PASS | Every P12 route passes in 5/5 Playwright cases across 1440/1024/768/390/320, including Axe and overflow checks. |
 
-See `MODULE_12_COMPLETION_REPORT.md`. Full cross-module regression, protected COS source review, image/deployment/security reruns, production reporting-policy/worker/storage activation and release acceptance remain later QA/activation work. Module 13 Integrations and FHIR is the next repository dependency.
+See `MODULE_12_COMPLETION_REPORT.md`. At that checkpoint, full cross-module regression and Module 13 remained later work; both are now complete in the sections below. Protected COS source review, image/deployment/security reruns, production reporting-policy/worker/storage activation and release acceptance remain separate.
+
+## Verified during Phase 13A-M13E Module 13 repository construction (28 September 2026)
+
+This checkpoint records completed integrations/FHIR repository construction and module-focused verification. It does not claim production partner contracts, endpoints, credentials/keys, FHIR profiles/terminology, transport workers, target deployment or release acceptance.
+
+- V111-V113 release Module 13 permissions/operations/events, eight forced-RLS integration relations, secret-free metadata, immutable mapping and delivery evidence, payload-minimized events and exact lifecycle/profile/replay guards.
+- P13-01 through P13-10 use live checked projections/actions for integration readiness, FHIR endpoints, terminology mappings, WhatsApp, payments, calendars, laboratory/imaging, webhooks, mobile/API clients and audit/replay.
+- The complete path proves connection and mapping lifecycles, verified inbound replay evidence, exact outbox delivery/attempt lineage, dead-letter authorization and successor replay, profile-pinned FHIR exchange provenance and disabled secret-free API clients.
+- Provider transports, generic FHIR service, credentials, implementation guides, workers and production replay remain fail closed and cannot fabricate external success or source-record authority.
+
+| M13 construction gate | Result | Local evidence |
+| --- | --- | --- |
+| Backend integration gate | PASS | Java 25/Maven 3.9.11 compiles 474 production and 57 test sources, validates/applies V1-V113 to disposable PostgreSQL 18, and passes the focused 6/6 catalogue, registry and lifecycle tests. |
+| API contract | PASS | OpenAPI 0.52.0 verifies exactly 135 operations; generated-client drift and all 38 positive/negative API tests pass. |
+| Frontend static/unit/build | PASS | Formatting, strict typecheck, lint, the 66-source/14-feature/187-import boundary plus four negative fixtures, all 141 unit tests and the production build pass. |
+| M13 browser/accessibility/responsive | PASS | Every P13 route passes in 5/5 Playwright cases across 1440/1024/768/390/320, including Axe and overflow checks. |
+
+See `MODULE_13_COMPLETION_REPORT.md`. Production partner/profile/credential/worker activation and target-environment acceptance remain separate.
+
+## Verified during consolidated repository QA (28 September 2026)
+
+| Consolidated gate | Result | Local evidence |
+| --- | --- | --- |
+| Backend clean verification | PASS | 274/274 tests pass in 57 suites with zero failures, errors or skips; all 11 architecture rules pass, V1-V113 applies and the bootable JAR is packaged. |
+| Frontend static/unit/build | PASS | API drift, architecture, formatting, strict typecheck, ESLint, 141/141 tests and production build pass. |
+| Browser/accessibility/responsive | PASS | The complete five-project run passes 185/185 Playwright/Axe/overflow cases. |
+| Contracts and registries | PASS | OpenAPI contains exactly 135 operations; all 131 repository/API/security cases pass and the registry contains exactly 195 screens. |
+
+See `CONSOLIDATED_QA_REPORT.md`. This closes the deferred repository-wide regression, not target-environment deployment, provider/policy activation or production acceptance.
+
+## Post-completion QA audit (28 September 2026)
+
+- The full gate was repeated with Node 24.16, Java 25, Docker and Trivy 0.74. Backend 274/274, frontend 141/141, browser 185/185 and repository/API/security 131/131 remain green.
+- Both digest-pinned final images rebuild and report zero fixed HIGH/CRITICAL or secret findings; the source graphs report zero fixed HIGH/CRITICAL findings and both Dockerfiles report zero misconfigurations.
+- An isolated six-service Compose deployment reaches backend liveness/readiness, frontend HTTP 200 and the exact 195-screen registry, then tears down cleanly.
+- One QA-tooling defect was fixed: the stale shell whole-project runner could omit mandatory gates. Complete shell and PowerShell runners now have contract-enforced parity. No new application defect was reproduced.
+- Vite reports an approximately 765 KB JavaScript chunk as a non-blocking performance warning. Route-level splitting remains future production optimization, not a failed QA gate.
+
+Local repository QA is complete. Hosted release enforcement, retained exact-artifact SBOM/provenance, target policies/providers/profiles/workers, managed infrastructure, monitoring/backup, performance/load/penetration exercises and accountable production approvals remain outside this repository-only pass.

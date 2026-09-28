@@ -4,6 +4,7 @@ import type {
   AcceptInvitationResponses,
   AiActionRequest,
   BillingActionRequest,
+  IntegrationActionRequest,
   ReportingActionRequest,
   ActivateOrganizationUnitData,
   ActivateOrganizationUnitResponse,
@@ -113,6 +114,8 @@ import type {
   GetAiScreenResponse,
   GetBillingScreenData,
   GetBillingScreenResponse,
+  GetIntegrationScreenData,
+  GetIntegrationScreenResponse,
   GetReportingScreenData,
   GetReportingScreenResponse,
   GetAuthenticationSessionData,
@@ -210,6 +213,7 @@ import type {
   PerformAiActionResponse,
   PerformAssessmentActionResponse,
   PerformBillingActionResponse,
+  PerformIntegrationActionResponse,
   PerformReportingActionResponse,
   PerformCarePlanActionResponse,
   PerformDocumentActionResponse,
@@ -295,6 +299,10 @@ import { carePlanScreenValidator } from './care-plan-contracts';
 import { documentAccessResponseValidator, documentScreenValidator } from './document-contracts';
 import { encounterScreenValidator } from './encounter-contracts';
 import { followupScreenValidator } from './followup-contracts';
+import {
+  assertPayloadFreeIntegrationFields,
+  integrationScreenValidator,
+} from './integration-contracts';
 import {
   auditEvidenceDetailValidator,
   auditEvidencePageValidator,
@@ -802,6 +810,7 @@ type CarePlanScreenQuery = NonNullable<GetCarePlanScreenData['query']>;
 type FollowupScreenQuery = NonNullable<GetFollowupScreenData['query']>;
 type BillingScreenQuery = NonNullable<GetBillingScreenData['query']>;
 type ReportingScreenQuery = NonNullable<GetReportingScreenData['query']>;
+type IntegrationScreenQuery = NonNullable<GetIntegrationScreenData['query']>;
 
 function requirePatientRegistryScreenId(value: string): string {
   if (!/^P3-(0[1-9]|1[0-6])$/.test(value)) {
@@ -1341,6 +1350,55 @@ function reportingScreenQuery(query: ReportingScreenQuery): string {
   if (query.cursor !== undefined) {
     if (!/^[A-Za-z0-9_-]{1,2048}$/.test(query.cursor)) {
       throw new Error('Reporting page cursor has an invalid format.');
+    }
+    parameters.set('cursor', query.cursor);
+  }
+  const serialized = parameters.toString();
+  return serialized ? `?${serialized}` : '';
+}
+
+function requireIntegrationScreenId(value: string): string {
+  if (!/^P13-(0[1-9]|10)$/.test(value)) {
+    throw new Error('screenId must identify a Module 13 screen from P13-01 through P13-10.');
+  }
+  return value;
+}
+
+function requireIntegrationActionKey(value: string): string {
+  if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(value)) {
+    throw new Error('actionKey has an invalid format.');
+  }
+  return value;
+}
+
+function integrationScreenQuery(query: IntegrationScreenQuery): string {
+  const parameters = new URLSearchParams();
+  if (query.connectionId !== undefined) {
+    parameters.set('connectionId', requireUuid(query.connectionId, 'connectionId'));
+  }
+  if (query.q !== undefined) {
+    if (typeof query.q !== 'string' || Array.from(query.q).length > 100) {
+      throw new Error('Integration search must contain at most 100 characters.');
+    }
+    const normalized = query.q.trim().normalize('NFC');
+    if (normalized) parameters.set('q', normalized);
+  }
+  if (query.status !== undefined) {
+    const normalized = query.status.trim().normalize('NFC');
+    if (normalized && Array.from(normalized).length > 80) {
+      throw new Error('Integration status must contain at most 80 characters.');
+    }
+    if (normalized) parameters.set('status', normalized);
+  }
+  if (query.limit !== undefined) {
+    if (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > 100) {
+      throw new Error('Integration page limit must be an integer from 1 to 100.');
+    }
+    parameters.set('limit', String(query.limit));
+  }
+  if (query.cursor !== undefined) {
+    if (!/^[A-Za-z0-9_-]{1,2048}$/.test(query.cursor)) {
+      throw new Error('Integration page cursor has an invalid format.');
     }
     parameters.set('cursor', query.cursor);
   }
@@ -4500,6 +4558,57 @@ export class CareOsApiClient {
       signal: options.signal,
       successStatuses: [200, 201],
       validateResponse: reportingScreenValidator(organization, screen),
+    });
+  }
+
+  getIntegrationScreen(
+    organizationId: string,
+    screenId: string,
+    query: IntegrationScreenQuery = {},
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requireIntegrationScreenId(screenId);
+    return this.#request<GetIntegrationScreenResponse>({
+      method: 'GET',
+      path: `/v1/organizations/${organization}/integrations/screens/${screen}${integrationScreenQuery(query)}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200],
+      validateResponse: integrationScreenValidator(organization, screen),
+    });
+  }
+
+  performIntegrationAction(
+    organizationId: string,
+    screenId: string,
+    actionKey: string,
+    body: IntegrationActionRequest,
+    ifMatch: string | undefined,
+    idempotencyKey: string,
+    options: ApiRequestOptions = {},
+  ) {
+    const organization = requireUuid(organizationId, 'organizationId');
+    const screen = requireIntegrationScreenId(screenId);
+    const action = requireIntegrationActionKey(actionKey);
+    const reason = body.reason.trim().normalize('NFC');
+    if (Array.from(reason).length < 10 || Array.from(reason).length > 500) {
+      throw new Error('Integration action reason must contain 10 to 500 characters.');
+    }
+    if (Object.keys(body.fields).length > 32) {
+      throw new Error('Integration action fields must contain at most 32 values.');
+    }
+    assertPayloadFreeIntegrationFields(body.fields);
+    return this.#mutation<PerformIntegrationActionResponse>({
+      body: { ...body, reason },
+      idempotencyKey: requireIdempotencyKey(idempotencyKey),
+      ...(ifMatch === undefined ? {} : { ifMatch: requireStrongEtag(ifMatch) }),
+      method: 'POST',
+      path: `/v1/organizations/${organization}/integrations/screens/${screen}/actions/${action}`,
+      responseBody: 'json',
+      signal: options.signal,
+      successStatuses: [200, 201],
+      validateResponse: integrationScreenValidator(organization, screen),
     });
   }
 

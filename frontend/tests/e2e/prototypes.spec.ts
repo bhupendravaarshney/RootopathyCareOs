@@ -918,6 +918,46 @@ function reportingScreen(screenId: string) {
   };
 }
 
+function integrationScreen(screenId: string) {
+  const rowId = `39393939-3939-4939-8939-${screenId.slice(4).padStart(12, '0')}`;
+  return {
+    actions: [],
+    columns: [
+      { key: 'artifact', label: 'Artifact' },
+      { key: 'outcome', label: 'Outcome' },
+    ],
+    generatedAt: '2026-09-28T15:00:00Z',
+    metrics: [{ key: 'authorized', label: 'Authorized records', tone: 'info', value: 1 }],
+    nextCursor: null,
+    notices: [
+      {
+        detail: 'Only governed references and digests are projected.',
+        title: 'Data boundary',
+        tone: 'info',
+      },
+    ],
+    organizationId: organization.id,
+    pageSize: 25,
+    purpose: 'Render the current secret-free and payload-free integration projection.',
+    rows: [
+      {
+        allowedActionKeys: [],
+        connectionId: rowId,
+        etag: `"m13:${screenId}:${rowId}:1"`,
+        id: rowId,
+        revision: 1,
+        status: 'validated',
+        values: {
+          artifact: `Server projection ${screenId}`,
+          outcome: 'signature_verified',
+        },
+      },
+    ],
+    screenId,
+    title: screenId === 'P13-01' ? 'Integration dashboard' : `Server-governed ${screenId}`,
+  };
+}
+
 const routeGroups = [
   { count: 23, module: 'M1', start: 5 },
   { count: 29, module: 'M2', start: 1 },
@@ -930,6 +970,7 @@ const routeGroups = [
   { count: 9, module: 'P10', start: 1 },
   { count: 11, module: 'P11', start: 1 },
   { count: 10, module: 'P12', start: 1 },
+  { count: 10, module: 'P13', start: 1 },
 ];
 const routeSweepTimeout = 120_000;
 
@@ -1071,6 +1112,10 @@ async function mockAuthenticatedSession(page: Page) {
     const screenId = new URL(route.request().url()).pathname.split('/').at(-1) ?? '';
     return jsonResponse(route, reportingScreen(screenId));
   });
+  await page.route(`**/api/v1/organizations/${organization.id}/integrations/screens/*`, (route) => {
+    const screenId = new URL(route.request().url()).pathname.split('/').at(-1) ?? '';
+    return jsonResponse(route, integrationScreen(screenId));
+  });
 }
 
 async function expectNoSeriousViolations(page: Page, label: string) {
@@ -1165,6 +1210,10 @@ for (const { module, count, start } of routeGroups) {
       if (module === 'P12') {
         await expect(page.getByText(`Server projection ${id}`, { exact: true })).toBeVisible();
         await expect(page.getByText('Aggregate only', { exact: true })).toBeVisible();
+      }
+      if (module === 'P13') {
+        await expect(page.getByText(`Server projection ${id}`, { exact: true })).toBeVisible();
+        await expect(page.getByText('Payload free', { exact: true })).toBeVisible();
       }
       await expectNoDocumentHorizontalOverflow(page, id);
       await expectNoSeriousViolations(page, id);

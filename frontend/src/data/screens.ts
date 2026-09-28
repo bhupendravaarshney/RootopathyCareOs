@@ -1,5 +1,5 @@
 export type ModuleKey =
-  'M1' | 'M2' | 'M3' | 'M4' | 'M5' | 'COS' | 'M7' | 'M8' | 'M9' | 'M10' | 'M11' | 'M12';
+  'M1' | 'M2' | 'M3' | 'M4' | 'M5' | 'COS' | 'M7' | 'M8' | 'M9' | 'M10' | 'M11' | 'M12' | 'M13';
 
 export type Screen = {
   id: string;
@@ -666,6 +666,59 @@ const m12: Array<[string, string, string]> = [
   ],
 ];
 
+const m13: Array<[string, string, string]> = [
+  [
+    'Integration dashboard',
+    'Review secret-free connection readiness, validation failures, dead letters and replay decisions.',
+    'Overview',
+  ],
+  [
+    'FHIR endpoints',
+    'Govern purpose-specific FHIR endpoints with exact active profiles and no generic server.',
+    'FHIR',
+  ],
+  [
+    'Terminology mappings',
+    'Create and activate immutable FHIR, terminology and partner mapping versions.',
+    'FHIR',
+  ],
+  [
+    'WhatsApp messaging',
+    'Govern WhatsApp contract metadata without templates, destinations, tokens or message content.',
+    'Connections',
+  ],
+  [
+    'Payment configuration',
+    'Govern payment-provider contract metadata without card data, tokens or callback secrets.',
+    'Connections',
+  ],
+  [
+    'Calendar integration',
+    'Govern calendar contract metadata without calendar content, OAuth tokens or participant data.',
+    'Connections',
+  ],
+  [
+    'Lab/imaging interfaces',
+    'Govern laboratory and imaging contracts with exact mappings and payload-free provenance.',
+    'Connections',
+  ],
+  [
+    'Webhook management',
+    'Govern signed inbound webhook definitions and review digest-only replay and idempotency evidence.',
+    'Delivery safety',
+  ],
+  [
+    'Mobile/API clients',
+    'Register disabled-by-default mobile and API-client metadata without secrets or bearer tokens.',
+    'API access',
+  ],
+  [
+    'Integration audit and replay',
+    'Review payload-free delivery evidence and authorize one safe successor replay.',
+    'Delivery safety',
+  ],
+];
+
 const build = (module: ModuleKey, source: Array<[string, string, string]>): Screen[] =>
   source.map(([title, purpose, group], index) => ({
     id: `${module}-${String(index + 1).padStart(2, '0')}`,
@@ -695,6 +748,7 @@ export const screens: Screen[] = [
   ...build('M10', m10).map((screen) => ({ ...screen, id: screen.id.replace(/^M10-/, 'P10-') })),
   ...build('M11', m11).map((screen) => ({ ...screen, id: screen.id.replace(/^M11-/, 'P11-') })),
   ...build('M12', m12).map((screen) => ({ ...screen, id: screen.id.replace(/^M12-/, 'P12-') })),
+  ...build('M13', m13).map((screen) => ({ ...screen, id: screen.id.replace(/^M13-/, 'P13-') })),
 ];
 
 export const findScreen = (id: string): Screen => {

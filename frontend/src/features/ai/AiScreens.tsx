@@ -21,6 +21,8 @@ import type {
   CarePlanScreen,
   FollowupRow,
   FollowupScreen,
+  IntegrationRow,
+  IntegrationScreen,
   ReportingRow,
   ReportingScreen,
   WorkforceAction,
@@ -50,16 +52,21 @@ type ReportingProjectionClient = Pick<
   CareOsApiClient,
   'getReportingScreen' | 'performReportingAction'
 >;
+type IntegrationProjectionClient = Pick<
+  CareOsApiClient,
+  'getIntegrationScreen' | 'performIntegrationAction'
+>;
 type ProjectionClient =
   | AiClient
   | CarePlanProjectionClient
   | FollowupProjectionClient
   | BillingProjectionClient
-  | ReportingProjectionClient;
-type ProjectionRow = AiRow | CarePlanRow | FollowupRow | BillingRow | ReportingRow;
+  | ReportingProjectionClient
+  | IntegrationProjectionClient;
+type ProjectionRow = AiRow | CarePlanRow | FollowupRow | BillingRow | ReportingRow | IntegrationRow;
 type ProjectionScreen =
-  AiScreen | CarePlanScreen | FollowupScreen | BillingScreen | ReportingScreen;
-type ProjectionMode = 'ai' | 'care-plan' | 'followup' | 'billing' | 'reporting';
+  AiScreen | CarePlanScreen | FollowupScreen | BillingScreen | ReportingScreen | IntegrationScreen;
+type ProjectionMode = 'ai' | 'care-plan' | 'followup' | 'billing' | 'reporting' | 'integration';
 
 const profiles = {
   ai: {
@@ -157,6 +164,25 @@ const profiles = {
     recordParameter: 'reportRunId',
     total: 10,
   },
+  integration: {
+    actionEyebrow: 'Governed integration action',
+    actionGuidance:
+      'Connections use exact versions and signature evidence; dead letters remain terminal and replay creates a separately authorized successor.',
+    badgeLabel: 'Payload free',
+    contextGuidance:
+      'Carry only the exact connection identifier required for this integration workflow.',
+    contextTitle: 'Integration context',
+    emptyGuidance: 'Adjust the filters or create an authorized secret-free configuration.',
+    errorTitle: 'Integration workspace unavailable',
+    evidenceLabel: 'Integration',
+    idempotencyNamespace: 'm13',
+    loadingLabel: 'authorized secret-free integration evidence',
+    nounPlural: 'integration records',
+    nounSingular: 'integration record',
+    prefix: 'P13',
+    recordParameter: 'connectionId',
+    total: 10,
+  },
 } as const;
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -190,11 +216,13 @@ function contextForRow(
 ): WorkflowContext {
   return {
     recordId:
-      mode === 'reporting'
-        ? ('reportRunId' in row && row.reportRunId) || null
-        : mode === 'billing'
-          ? ('invoiceId' in row && row.invoiceId) || null
-          : ('followupPlanId' in row && row.followupPlanId) || row.id,
+      mode === 'integration'
+        ? ('connectionId' in row && row.connectionId) || row.id
+        : mode === 'reporting'
+          ? ('reportRunId' in row && row.reportRunId) || null
+          : mode === 'billing'
+            ? ('invoiceId' in row && row.invoiceId) || null
+            : ('followupPlanId' in row && row.followupPlanId) || row.id,
     encounterId: ('encounterId' in row && row.encounterId) || current.encounterId,
     patientId: ('patientId' in row && row.patientId) || current.patientId,
   };
@@ -358,60 +386,72 @@ export function AiScreenPage({
           ...(context.encounterId ? { encounterId: context.encounterId } : {}),
         };
         const result =
-          mode === 'reporting'
-            ? await (client as ReportingProjectionClient).getReportingScreen(
+          mode === 'integration'
+            ? await (client as IntegrationProjectionClient).getIntegrationScreen(
                 organizationId,
                 id,
                 {
                   limit: filters.limit,
                   q: filters.q,
                   status: filters.status,
-                  ...(context.recordId ? { reportRunId: context.recordId } : {}),
+                  ...(context.recordId ? { connectionId: context.recordId } : {}),
                 },
                 { signal: controller.signal },
               )
-            : mode === 'billing'
-              ? await (client as BillingProjectionClient).getBillingScreen(
+            : mode === 'reporting'
+              ? await (client as ReportingProjectionClient).getReportingScreen(
                   organizationId,
                   id,
                   {
                     limit: filters.limit,
                     q: filters.q,
                     status: filters.status,
-                    ...(context.patientId ? { patientId: context.patientId } : {}),
-                    ...(context.recordId ? { invoiceId: context.recordId } : {}),
+                    ...(context.recordId ? { reportRunId: context.recordId } : {}),
                   },
                   { signal: controller.signal },
                 )
-              : mode === 'care-plan'
-                ? await (client as CarePlanProjectionClient).getCarePlanScreen(
+              : mode === 'billing'
+                ? await (client as BillingProjectionClient).getBillingScreen(
                     organizationId,
                     id,
                     {
-                      ...commonQuery,
-                      ...(context.recordId ? { carePlanId: context.recordId } : {}),
+                      limit: filters.limit,
+                      q: filters.q,
+                      status: filters.status,
+                      ...(context.patientId ? { patientId: context.patientId } : {}),
+                      ...(context.recordId ? { invoiceId: context.recordId } : {}),
                     },
                     { signal: controller.signal },
                   )
-                : mode === 'followup'
-                  ? await (client as FollowupProjectionClient).getFollowupScreen(
+                : mode === 'care-plan'
+                  ? await (client as CarePlanProjectionClient).getCarePlanScreen(
                       organizationId,
                       id,
                       {
                         ...commonQuery,
-                        ...(context.recordId ? { followupPlanId: context.recordId } : {}),
+                        ...(context.recordId ? { carePlanId: context.recordId } : {}),
                       },
                       { signal: controller.signal },
                     )
-                  : await (client as AiClient).getAiScreen(
-                      organizationId,
-                      id,
-                      {
-                        ...commonQuery,
-                        ...(context.recordId ? { aiSessionId: context.recordId } : {}),
-                      },
-                      { signal: controller.signal },
-                    );
+                  : mode === 'followup'
+                    ? await (client as FollowupProjectionClient).getFollowupScreen(
+                        organizationId,
+                        id,
+                        {
+                          ...commonQuery,
+                          ...(context.recordId ? { followupPlanId: context.recordId } : {}),
+                        },
+                        { signal: controller.signal },
+                      )
+                    : await (client as AiClient).getAiScreen(
+                        organizationId,
+                        id,
+                        {
+                          ...commonQuery,
+                          ...(context.recordId ? { aiSessionId: context.recordId } : {}),
+                        },
+                        { signal: controller.signal },
+                      );
         if (controller.signal.aborted) return;
         if (!result.ok) {
           setProjection(null);
@@ -502,8 +542,8 @@ export function AiScreenPage({
       lastAttempt.current = { fingerprint, key };
       setSubmitting(true);
       const result =
-        mode === 'reporting'
-          ? await (client as ReportingProjectionClient).performReportingAction(
+        mode === 'integration'
+          ? await (client as IntegrationProjectionClient).performIntegrationAction(
               organizationId,
               id,
               activeAction.key,
@@ -511,8 +551,8 @@ export function AiScreenPage({
               activeAction.ifMatchRequired ? selected?.etag : undefined,
               key,
             )
-          : mode === 'billing'
-            ? await (client as BillingProjectionClient).performBillingAction(
+          : mode === 'reporting'
+            ? await (client as ReportingProjectionClient).performReportingAction(
                 organizationId,
                 id,
                 activeAction.key,
@@ -520,8 +560,8 @@ export function AiScreenPage({
                 activeAction.ifMatchRequired ? selected?.etag : undefined,
                 key,
               )
-            : mode === 'care-plan'
-              ? await (client as CarePlanProjectionClient).performCarePlanAction(
+            : mode === 'billing'
+              ? await (client as BillingProjectionClient).performBillingAction(
                   organizationId,
                   id,
                   activeAction.key,
@@ -529,8 +569,8 @@ export function AiScreenPage({
                   activeAction.ifMatchRequired ? selected?.etag : undefined,
                   key,
                 )
-              : mode === 'followup'
-                ? await (client as FollowupProjectionClient).performFollowupAction(
+              : mode === 'care-plan'
+                ? await (client as CarePlanProjectionClient).performCarePlanAction(
                     organizationId,
                     id,
                     activeAction.key,
@@ -538,14 +578,23 @@ export function AiScreenPage({
                     activeAction.ifMatchRequired ? selected?.etag : undefined,
                     key,
                   )
-                : await (client as AiClient).performAiAction(
-                    organizationId,
-                    id,
-                    activeAction.key,
-                    body,
-                    activeAction.ifMatchRequired ? selected?.etag : undefined,
-                    key,
-                  );
+                : mode === 'followup'
+                  ? await (client as FollowupProjectionClient).performFollowupAction(
+                      organizationId,
+                      id,
+                      activeAction.key,
+                      body,
+                      activeAction.ifMatchRequired ? selected?.etag : undefined,
+                      key,
+                    )
+                  : await (client as AiClient).performAiAction(
+                      organizationId,
+                      id,
+                      activeAction.key,
+                      body,
+                      activeAction.ifMatchRequired ? selected?.etag : undefined,
+                      key,
+                    );
       if (!result.ok) {
         setMutationIssue(issueFromFailure(result));
         return;

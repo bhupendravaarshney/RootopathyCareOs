@@ -54,7 +54,7 @@ test("rejects prototype catalogue count or module drift", () => {
 
   assert.throws(
     () => verifyApiContract(contract),
-    /exact 185-screen M1 through M12 registry/,
+    /exact 195-screen M1 through M13 registry/,
   );
 });
 
@@ -407,6 +407,30 @@ test("rejects source-record identifiers in Module 12 reporting rows", () => {
   assert.throws(
     () => verifyApiContract(contract),
     /aggregate-only identifiers/,
+  );
+});
+
+test("rejects Module 13 screen-range drift", () => {
+  const contract = changed((candidate) => {
+    candidate.components.schemas.IntegrationScreen.properties.screenId.pattern =
+      "^P13-[0-9]{2}$";
+  });
+
+  assert.throws(
+    () => verifyApiContract(contract),
+    /exact bounded P13-01 through P13-10 projection/,
+  );
+});
+
+test("rejects secret or payload fields in Module 13 integration actions", () => {
+  const contract = changed((candidate) => {
+    delete candidate.components.schemas.IntegrationActionRequest.properties
+      .fields.propertyNames;
+  });
+
+  assert.throws(
+    () => verifyApiContract(contract),
+    /reject secret and payload field names/,
   );
 });
 

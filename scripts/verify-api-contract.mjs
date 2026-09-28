@@ -560,6 +560,16 @@ export const expectedOperations = [
     "performReportingAction",
   ],
   [
+    "get",
+    "/api/v1/organizations/{organizationId}/integrations/screens/{screenId}",
+    "getIntegrationScreen",
+  ],
+  [
+    "post",
+    "/api/v1/organizations/{organizationId}/integrations/screens/{screenId}/actions/{actionKey}",
+    "performIntegrationAction",
+  ],
+  [
     "post",
     "/api/v1/organizations/{organizationId}/documents",
     "uploadDocument",
@@ -710,6 +720,8 @@ const sessionProtectedOperations = new Set([
   "performBillingAction",
   "getReportingScreen",
   "performReportingAction",
+  "getIntegrationScreen",
+  "performIntegrationAction",
   "accessWorkforceEvidence",
   "accessWorkforceExport",
   "downloadWorkforceExport",
@@ -761,6 +773,7 @@ const idempotentOperations = new Set([
   "performFollowupAction",
   "performBillingAction",
   "performReportingAction",
+  "performIntegrationAction",
   "accessWorkforceEvidence",
   "accessWorkforceExport",
   "accessWorkforceCredentialDocument",
@@ -895,7 +908,7 @@ export function verifyApiContract(contract) {
   const systemSummary = contract.components?.schemas?.SystemSummary;
   assert(
     prototypeScreen?.properties?.id?.pattern ===
-      "^(M1|M2|P3|P4|P5|COS|P7|P8|P9|P10|P11|P12)-[0-9]{2}$" &&
+      "^(M1|M2|P3|P4|P5|COS|P7|P8|P9|P10|P11|P12|P13)-[0-9]{2}$" &&
       JSON.stringify(prototypeScreen?.properties?.module?.enum) ===
         JSON.stringify([
           "M1",
@@ -910,9 +923,10 @@ export function verifyApiContract(contract) {
           "M10",
           "M11",
           "M12",
+          "M13",
         ]) &&
-      systemSummary?.properties?.screenCount?.const === 185,
-    "Prototype catalogue must expose the exact 185-screen M1 through M12 registry",
+      systemSummary?.properties?.screenCount?.const === 195,
+    "Prototype catalogue must expose the exact 195-screen M1 through M13 registry",
   );
 
   assert(
@@ -2454,6 +2468,118 @@ export function verifyApiContract(contract) {
       reportingAction?.responses?.["503"]?.$ref ===
         "#/components/responses/ServiceUnavailable",
     "Reporting mutations must use the checked action contract and fail-closed revision responses",
+  );
+  const integrationRead =
+    contract.paths?.[
+      "/api/v1/organizations/{organizationId}/integrations/screens/{screenId}"
+    ]?.get;
+  const integrationAction =
+    contract.paths?.[
+      "/api/v1/organizations/{organizationId}/integrations/screens/{screenId}/actions/{actionKey}"
+    ]?.post;
+  const integrationScreen = contract.components?.schemas?.IntegrationScreen;
+  const integrationRow = contract.components?.schemas?.IntegrationRow;
+  const integrationRequest =
+    contract.components?.schemas?.IntegrationActionRequest;
+  const integrationReadParameters = (integrationRead?.parameters ?? []).map(
+    resolved,
+  );
+  const forbiddenIntegrationFields = [
+    "secret",
+    "password",
+    "token",
+    "authorization",
+    "apiKey",
+    "privateKey",
+    "bearer",
+    "body",
+    "payload",
+    "resourceBody",
+  ];
+  const integrationFieldPattern =
+    integrationRequest?.properties?.fields?.propertyNames?.not?.pattern;
+  assert(
+    integrationScreen?.additionalProperties === false &&
+      integrationScreen?.properties?.screenId?.pattern ===
+        "^P13-(0[1-9]|10)$" &&
+      integrationScreen?.properties?.rows?.items?.$ref ===
+        "#/components/schemas/IntegrationRow" &&
+      integrationScreen?.properties?.pageSize?.maximum === 100 &&
+      integrationScreen?.required?.length === 12,
+    "IntegrationScreen must expose the exact bounded P13-01 through P13-10 projection",
+  );
+  assert(
+    integrationRow?.additionalProperties === false &&
+      [
+        "id",
+        "connectionId",
+        "mappingVersionId",
+        "outboundDeliveryId",
+        "replayRequestId",
+        "apiClientId",
+        "fhirExchangeId",
+      ].every(
+        (field) => integrationRow?.properties?.[field]?.format === "uuid",
+      ) &&
+      integrationRow?.properties?.revision?.minimum === 0 &&
+      integrationRow?.properties?.etag?.pattern?.startsWith('^\\"m13:P13-') &&
+      integrationRow?.properties?.allowedActionKeys?.uniqueItems === true &&
+      integrationRow?.properties?.values?.additionalProperties?.type ===
+        "string" &&
+      integrationRow?.properties?.payload === undefined &&
+      integrationRow?.properties?.resourceBody === undefined &&
+      integrationRow?.properties?.secret === undefined,
+    "IntegrationRow must bind strong M13 revisions and secret- and payload-free identifiers",
+  );
+  assert(
+    integrationRequest?.additionalProperties === false &&
+      JSON.stringify(integrationRequest?.required) ===
+        JSON.stringify(["reason", "fields"]) &&
+      integrationRequest?.properties?.targetId?.format === "uuid" &&
+      integrationRequest?.properties?.reason?.minLength === 10 &&
+      integrationRequest?.properties?.reason?.maxLength === 500 &&
+      integrationRequest?.properties?.fields?.maxProperties === 32 &&
+      integrationRequest?.properties?.fields?.additionalProperties
+        ?.maxLength === 20000 &&
+      typeof integrationFieldPattern === "string" &&
+      forbiddenIntegrationFields.every((field) =>
+        new RegExp(integrationFieldPattern).test(field),
+      ),
+    "IntegrationActionRequest must reject secret and payload field names while keeping parameters bounded",
+  );
+  assert(
+    integrationReadParameters.some(
+      (parameter) =>
+        parameter?.name === "connectionId" &&
+        parameter?.in === "query" &&
+        parameter?.schema?.format === "uuid",
+    ) &&
+      integrationReadParameters.some(
+        (parameter) =>
+          parameter?.name === "limit" && parameter?.schema?.maximum === 100,
+      ) &&
+      integrationRead?.responses?.["200"]?.content?.["application/json"]?.schema
+        ?.$ref === "#/components/schemas/IntegrationScreen" &&
+      integrationRead?.responses?.["503"]?.$ref ===
+        "#/components/responses/ServiceUnavailable",
+    "Integration reads must bind optional exact-connection context and bounded pagination",
+  );
+  assert(
+    integrationAction?.requestBody?.content?.["application/json"]?.schema
+      ?.$ref === "#/components/schemas/IntegrationActionRequest" &&
+      integrationAction?.responses?.["200"]?.content?.["application/json"]
+        ?.schema?.$ref === "#/components/schemas/IntegrationScreen" &&
+      integrationAction?.responses?.["201"]?.content?.["application/json"]
+        ?.schema?.$ref === "#/components/schemas/IntegrationScreen" &&
+      integrationAction?.responses?.["409"]?.$ref ===
+        "#/components/responses/Conflict" &&
+      integrationAction?.responses?.["412"]?.$ref ===
+        "#/components/responses/PreconditionFailed" &&
+      integrationAction?.responses?.["428"]?.$ref ===
+        "#/components/responses/PreconditionRequired" &&
+      integrationAction?.responses?.["503"]?.$ref ===
+        "#/components/responses/ServiceUnavailable",
+    "Integration mutations must use the checked action contract and fail-closed revision responses",
   );
   for (const response of [
     contract.paths?.["/api/v1/auth/session"]?.get?.responses?.["200"],

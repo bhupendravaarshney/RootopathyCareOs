@@ -10,6 +10,7 @@ import type {
   FacilityDirectory,
   EncounterScreen,
   FollowupScreen,
+  IntegrationScreen,
   OrganizationUnitDirectory,
   ServiceLocationDirectory,
   OrganizationAddress,
@@ -37,6 +38,7 @@ import type { CarePlanClient } from './features/careplan/care-plan-types';
 import type { DocumentClient } from './features/document/document-types';
 import type { EncounterClient } from './features/encounter/encounter-types';
 import type { FollowupClient } from './features/followup/followup-types';
+import type { IntegrationClient } from './features/integration/integration-types';
 import type { PatientRegistryClient } from './features/patient/patient-types';
 import type { ReportingClient } from './features/reporting/reporting-types';
 import type { SchedulingClient } from './features/scheduling/scheduling-types';
@@ -469,6 +471,7 @@ type ApplicationClient = SessionClient &
   FollowupClient &
   Partial<BillingClient> &
   Partial<ReportingClient> &
+  Partial<IntegrationClient> &
   WorkforceClient &
   PatientRegistryClient &
   SchedulingClient &
@@ -934,6 +937,42 @@ const reportingProjection: ReportingScreen = {
   ],
   screenId: 'P12-10',
   title: 'Report audit and history',
+};
+
+const integrationConnectionId = '23232329-2329-4329-8329-232323232329';
+const integrationProjection: IntegrationScreen = {
+  actions: [],
+  columns: [
+    { key: 'artifact', label: 'Artifact' },
+    { key: 'outcome', label: 'Outcome' },
+  ],
+  generatedAt: '2026-09-28T15:00:00Z',
+  metrics: [{ key: 'deadLetters', label: 'Dead letters', tone: 'warning', value: 1 }],
+  nextCursor: null,
+  notices: [
+    {
+      detail:
+        'Original deliveries remain terminal; replay creates a separately authorized successor.',
+      title: 'Safe replay',
+      tone: 'info',
+    },
+  ],
+  organizationId: selectedOrganization.id,
+  pageSize: 25,
+  purpose: 'Review payload-free delivery and replay evidence.',
+  rows: [
+    {
+      allowedActionKeys: [],
+      connectionId: integrationConnectionId,
+      etag: `"m13:P13-10:${integrationConnectionId}:1"`,
+      id: integrationConnectionId,
+      revision: 1,
+      status: 'dead_letter',
+      values: { artifact: 'outbound_delivery', outcome: 'retry_exhausted' },
+    },
+  ],
+  screenId: 'P13-10',
+  title: 'Integration audit and replay',
 };
 
 const workforceProjection: WorkforceScreen = {
@@ -1627,9 +1666,9 @@ describe('CareOS frontend session boundary', () => {
     window.location.hash = '#/M1-05';
   });
 
-  it('registers all M1 through M12 and COS screens', () => {
-    expect(screens).toHaveLength(185);
-    expect(new Set(screens.map((item) => item.id)).size).toBe(185);
+  it('registers all M1 through M13 and COS screens', () => {
+    expect(screens).toHaveLength(195);
+    expect(new Set(screens.map((item) => item.id)).size).toBe(195);
     expect(findScreen('M1-01').purpose).toBe(
       'Authenticate securely and continue to the requested authorized workspace.',
     );
@@ -1647,6 +1686,8 @@ describe('CareOS frontend session boundary', () => {
     expect(findScreen('P10-09').title).toBe('Outcome timeline');
     expect(findScreen('P11-11').title).toBe('Financial audit or export');
     expect(findScreen('P12-10').title).toBe('Report audit and history');
+    expect(findScreen('P13-07').title).toBe('Lab/imaging interfaces');
+    expect(findScreen('P13-10').title).toBe('Integration audit and replay');
     expect(() => findScreen('M1-99')).toThrow('does not contain M1-99');
   });
 
@@ -2418,6 +2459,29 @@ describe('CareOS frontend session boundary', () => {
     expect(getReportingScreen).toHaveBeenCalledWith(
       selectedOrganization.id,
       'P12-10',
+      expect.objectContaining({ limit: 25 }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
+  it('renders P13 integration evidence without secrets or payloads', async () => {
+    window.location.hash = '#/P13-10';
+    const getIntegrationScreen = vi.fn<IntegrationClient['getIntegrationScreen']>(async () =>
+      success(integrationProjection),
+    );
+    const performIntegrationAction = vi.fn<IntegrationClient['performIntegrationAction']>();
+
+    render(<App client={sessionClient({ getIntegrationScreen, performIntegrationAction })} />);
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Integration audit and replay' }),
+    ).toBeVisible();
+    expect(screen.getByText('Payload free')).toBeVisible();
+    expect(screen.getByText('retry_exhausted')).toBeVisible();
+    expect(screen.queryByText(/webhook body/i)).not.toBeInTheDocument();
+    expect(getIntegrationScreen).toHaveBeenCalledWith(
+      selectedOrganization.id,
+      'P13-10',
       expect.objectContaining({ limit: 25 }),
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );

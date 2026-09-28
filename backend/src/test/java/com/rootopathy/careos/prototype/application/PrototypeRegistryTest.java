@@ -9,7 +9,7 @@ class PrototypeRegistryTest {
     @Test
     void exposesAllApprovedPrototypeSlots() {
         var screens = new PrototypeRegistry().all();
-        assertThat(screens).hasSize(185);
+        assertThat(screens).hasSize(195);
         assertThat(screens).extracting(PrototypeScreen::id)
                 .contains(
                         "M1-01", "M1-23",
@@ -23,7 +23,8 @@ class PrototypeRegistryTest {
                         "P9-01", "P9-12",
                         "P10-01", "P10-09",
                         "P11-01", "P11-11",
-                        "P12-01", "P12-10");
+                        "P12-01", "P12-10",
+                        "P13-01", "P13-10");
         assertThat(screens.stream()
                         .filter(screen -> screen.id().startsWith("P3-"))
                         .map(PrototypeScreen::module))
@@ -60,5 +61,9 @@ class PrototypeRegistryTest {
                         .filter(screen -> screen.id().startsWith("P12-"))
                         .map(PrototypeScreen::module))
                 .containsOnly("M12");
+        assertThat(screens.stream()
+                        .filter(screen -> screen.id().startsWith("P13-"))
+                        .map(PrototypeScreen::module))
+                .containsOnly("M13");
     }
 }

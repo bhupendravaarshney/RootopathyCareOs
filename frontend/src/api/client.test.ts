@@ -506,6 +506,47 @@ function reportingScreenFixture() {
   };
 }
 
+const integrationOrganizationId = '51515151-5151-4151-8151-515151515151';
+const integrationConnectionId = '52525252-5252-4252-8252-525252525252';
+
+function integrationScreenFixture() {
+  return {
+    actions: [
+      {
+        fields: [],
+        href: null,
+        ifMatchRequired: true,
+        key: 'validate-connection',
+        label: 'Validate configuration',
+        reasonRequired: true,
+        style: 'primary',
+        targetRequired: true,
+      },
+    ],
+    columns: [{ key: 'providerKind', label: 'Provider kind' }],
+    generatedAt: '2026-09-28T15:00:00Z',
+    metrics: [{ key: 'configuredConnections', label: 'Configured', tone: 'info', value: 1 }],
+    nextCursor: null,
+    notices: [],
+    organizationId: integrationOrganizationId,
+    pageSize: 25,
+    purpose: 'Review secret-free integration configuration.',
+    rows: [
+      {
+        allowedActionKeys: ['validate-connection'],
+        connectionId: integrationConnectionId,
+        etag: `"m13:P13-02:${integrationConnectionId}:0"`,
+        id: integrationConnectionId,
+        revision: 0,
+        status: 'draft',
+        values: { providerKind: 'fhir', profilePackage: 'careos.base' },
+      },
+    ],
+    screenId: 'P13-02',
+    title: 'FHIR endpoints',
+  };
+}
+
 function validCsrfResponse() {
   return jsonResponse({
     headerName: 'X-XSRF-TOKEN',
@@ -2504,6 +2545,81 @@ describe('CareOsApiClient', () => {
     expect(headers.get('If-Match')).toBe(etag);
     expect(headers.get('Idempotency-Key')).toBe('m12:export:test-request-0001');
     expect(JSON.parse(String(init?.body))).toEqual(body);
+  });
+
+  it('sends bounded Module 13 exact-connection context and validates payload-free evidence', async () => {
+    const fetcher = mockFetch(jsonResponse(integrationScreenFixture()));
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+
+    const result = await client.getIntegrationScreen(integrationOrganizationId, 'P13-02', {
+      connectionId: integrationConnectionId,
+      limit: 25,
+      q: '  fhir  ',
+      status: 'draft',
+    });
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    const [url, init] = fetcher.mock.calls[0]!;
+    expect(url).toBe(
+      `/api/v1/organizations/${integrationOrganizationId}/integrations/screens/P13-02` +
+        `?connectionId=${integrationConnectionId}&q=fhir&status=draft&limit=25`,
+    );
+    expect(init?.method).toBe('GET');
+    expect(init?.credentials).toBe('include');
+  });
+
+  it('submits revision-bound Module 13 actions and blocks raw payload fields', async () => {
+    const fetcher = mockFetch(validCsrfResponse(), jsonResponse(integrationScreenFixture()));
+    const client = createCareOsApiClient({
+      baseUrl: '/api',
+      correlationIdFactory: correlationIdFactory(),
+      fetch: fetcher,
+    });
+    const body = {
+      fields: {},
+      reason: 'Validate this exact version-pinned FHIR connection.',
+      targetId: integrationConnectionId,
+    };
+    const etag = `"m13:P13-02:${integrationConnectionId}:0"`;
+
+    const result = await client.performIntegrationAction(
+      integrationOrganizationId,
+      'P13-02',
+      'validate-connection',
+      body,
+      etag,
+      'm13:connection:test-request-0001',
+    );
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    const [url, init] = fetcher.mock.calls[1]!;
+    const headers = new Headers(init?.headers);
+    expect(url).toBe(
+      `/api/v1/organizations/${integrationOrganizationId}/integrations/screens/P13-02/actions/validate-connection`,
+    );
+    expect(init?.method).toBe('POST');
+    expect(headers.get('If-Match')).toBe(etag);
+    expect(headers.get('Idempotency-Key')).toBe('m13:connection:test-request-0001');
+    expect(JSON.parse(String(init?.body))).toEqual(body);
+
+    expect(() =>
+      client.performIntegrationAction(
+        integrationOrganizationId,
+        'P13-08',
+        'create-connection',
+        {
+          fields: { webhookBody: '{"patient":"raw"}' },
+          reason: 'This prohibited payload must never leave the browser.',
+        },
+        undefined,
+        'm13:payload:test-request-0001',
+      ),
+    ).toThrow('must not contain secrets, tokens, or raw payloads');
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
   it('uploads Module 7 files as CSRF-protected multipart data without forcing a content type', async () => {

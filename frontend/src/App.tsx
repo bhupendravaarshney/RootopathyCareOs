@@ -39,6 +39,7 @@ import type { CarePlanClient } from './features/careplan/care-plan-types';
 import type { FollowupClient } from './features/followup/followup-types';
 import type { BillingClient } from './features/billing/billing-types';
 import type { ReportingClient } from './features/reporting/reporting-types';
+import type { IntegrationClient } from './features/integration/integration-types';
 import { WorkforceScreenPage } from './features/workforce/WorkforceScreens';
 import type { WorkforceClient } from './features/workforce/workforce-types';
 import { PrototypeScreenPage } from './pages/PrototypeScreenPage';
@@ -70,6 +71,7 @@ type ApplicationClient = SessionClient &
   Partial<FollowupClient> &
   Partial<BillingClient> &
   Partial<ReportingClient> &
+  Partial<IntegrationClient> &
   WorkforceClient &
   PatientRegistryClient &
   SchedulingClient &
@@ -83,6 +85,7 @@ function RoutedApp({
   assessmentClient,
   billingClient,
   reportingClient,
+  integrationClient,
   carePlanClient,
   documentClient,
   encounterClient,
@@ -96,6 +99,7 @@ function RoutedApp({
   assessmentClient: AssessmentClient;
   billingClient: BillingClient;
   reportingClient: ReportingClient;
+  integrationClient: IntegrationClient;
   carePlanClient: CarePlanClient;
   documentClient: DocumentClient;
   encounterClient: EncounterClient;
@@ -458,6 +462,18 @@ function RoutedApp({
       />
     );
   }
+  if (screenId.startsWith('P13-')) {
+    return (
+      <AiScreenPage
+        key={`${machine.selectedOrganization.id}:${screenId}`}
+        client={integrationClient}
+        id={screenId}
+        mode="integration"
+        organizationId={machine.selectedOrganization.id}
+        shell={shell}
+      />
+    );
+  }
   if (
     screenId === 'M1-05' ||
     screenId === 'M1-06' ||
@@ -510,6 +526,10 @@ export default function App({ client }: { client?: ApplicationClient }) {
     resolvedClient.getReportingScreen && resolvedClient.performReportingAction
       ? (resolvedClient as ReportingClient)
       : careOsApi;
+  const resolvedIntegrationClient: IntegrationClient =
+    resolvedClient.getIntegrationScreen && resolvedClient.performIntegrationAction
+      ? (resolvedClient as IntegrationClient)
+      : careOsApi;
   return (
     <SessionProvider client={resolvedClient}>
       <RoutedApp
@@ -518,6 +538,7 @@ export default function App({ client }: { client?: ApplicationClient }) {
         assessmentClient={resolvedClient}
         billingClient={resolvedBillingClient}
         reportingClient={resolvedReportingClient}
+        integrationClient={resolvedIntegrationClient}
         carePlanClient={resolvedCarePlanClient}
         documentClient={resolvedClient}
         encounterClient={resolvedClient}

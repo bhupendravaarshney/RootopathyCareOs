@@ -53,6 +53,10 @@ const required = [
     { length: 10 },
     (_, index) => `P12-${String(index + 1).padStart(2, "0")}`,
   ),
+  ...Array.from(
+    { length: 10 },
+    (_, index) => `P13-${String(index + 1).padStart(2, "0")}`,
+  ),
 ];
 
 const dynamicContracts = [
@@ -67,6 +71,7 @@ const dynamicContracts = [
   "screen.id.replace(/^M10-/, 'P10-')",
   "screen.id.replace(/^M11-/, 'P11-')",
   "screen.id.replace(/^M12-/, 'P12-')",
+  "screen.id.replace(/^M13-/, 'P13-')",
 ];
 if (!dynamicContracts.every((contract) => source.includes(contract))) {
   throw new Error("Screen ID generation contract is missing");
@@ -83,7 +88,8 @@ if (
   !source.includes("const m9:") ||
   !source.includes("const m10:") ||
   !source.includes("const m11:") ||
-  !source.includes("const m12:")
+  !source.includes("const m12:") ||
+  !source.includes("const m13:")
 ) {
   throw new Error("One or more screen registries are missing");
 }
@@ -104,6 +110,7 @@ console.log(
         P10: 9,
         P11: 11,
         P12: 10,
+        P13: 10,
       },
       status: "PASS",
     },

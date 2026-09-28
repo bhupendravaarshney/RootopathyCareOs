@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "ROOTOPATHY CareOS Foundation API",
-    "version": "0.51.0",
-    "description": "Checked contract for the Module 1 foundation through Module 12 aggregate reporting API surface."
+    "version": "0.52.0",
+    "description": "Checked contract for the Module 1 foundation through Module 13 secret-free integration and FHIR-governance API surface."
   },
   "servers": [
     {
@@ -10072,6 +10072,162 @@
         }
       }
     },
+    "/api/v1/organizations/{organizationId}/integrations/screens/{screenId}": {
+      "get": {
+        "operationId": "getIntegrationScreen",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          {
+            "name": "screenId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "pattern": "^P13-(0[1-9]|10)$" }
+          },
+          {
+            "name": "connectionId",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": { "type": "string", "maxLength": 100 }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": { "type": "string", "maxLength": 80 }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            }
+          }
+        ],
+        "security": [{ "sessionCookie": [] }],
+        "responses": {
+          "200": {
+            "description": "Authorized secret-free Module 13 integration and FHIR-governance projection",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/IntegrationScreen" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/organizations/{organizationId}/integrations/screens/{screenId}/actions/{actionKey}": {
+      "post": {
+        "operationId": "performIntegrationAction",
+        "parameters": [
+          { "$ref": "#/components/parameters/OrganizationId" },
+          {
+            "name": "screenId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "pattern": "^P13-(0[1-9]|10)$" }
+          },
+          {
+            "name": "actionKey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+            }
+          },
+          { "$ref": "#/components/parameters/BrowserOrigin" },
+          { "$ref": "#/components/parameters/OptionalIfMatch" },
+          { "$ref": "#/components/parameters/IdempotencyKey" }
+        ],
+        "security": [
+          { "sessionCookie": [], "csrfCookie": [], "csrfHeader": [] }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntegrationActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful governed integration lifecycle action",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/IntegrationScreen" }
+              }
+            }
+          },
+          "201": {
+            "description": "Successful connection, mapping, client or replay-authorization creation",
+            "headers": {
+              "X-Correlation-Id": {
+                "$ref": "#/components/headers/CorrelationId"
+              },
+              "X-CareOS-Session-Expires-In": {
+                "$ref": "#/components/headers/SessionExpiresIn"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/IntegrationScreen" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "412": { "$ref": "#/components/responses/PreconditionFailed" },
+          "428": { "$ref": "#/components/responses/PreconditionRequired" },
+          "503": { "$ref": "#/components/responses/ServiceUnavailable" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
     "/api/v1/organizations/{organizationId}/documents": {
       "post": {
         "operationId": "uploadDocument",
@@ -11869,6 +12025,115 @@
           }
         }
       },
+      "IntegrationScreen": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "organizationId",
+          "screenId",
+          "title",
+          "purpose",
+          "generatedAt",
+          "metrics",
+          "columns",
+          "rows",
+          "actions",
+          "notices",
+          "nextCursor",
+          "pageSize"
+        ],
+        "properties": {
+          "organizationId": { "type": "string", "format": "uuid" },
+          "screenId": { "type": "string", "pattern": "^P13-(0[1-9]|10)$" },
+          "title": { "type": "string" },
+          "purpose": { "type": "string" },
+          "generatedAt": { "type": "string", "format": "date-time" },
+          "metrics": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceMetric" }
+          },
+          "columns": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceColumn" }
+          },
+          "rows": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/IntegrationRow" }
+          },
+          "actions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceAction" }
+          },
+          "notices": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkforceNotice" }
+          },
+          "nextCursor": {
+            "type": ["string", "null"],
+            "maxLength": 2048,
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "pageSize": { "type": "integer", "minimum": 1, "maximum": 100 }
+        }
+      },
+      "IntegrationRow": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "revision",
+          "etag",
+          "values",
+          "allowedActionKeys"
+        ],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "connectionId": { "type": ["string", "null"], "format": "uuid" },
+          "mappingVersionId": { "type": ["string", "null"], "format": "uuid" },
+          "outboundDeliveryId": { "type": ["string", "null"], "format": "uuid" },
+          "replayRequestId": { "type": ["string", "null"], "format": "uuid" },
+          "apiClientId": { "type": ["string", "null"], "format": "uuid" },
+          "fhirExchangeId": { "type": ["string", "null"], "format": "uuid" },
+          "status": { "type": "string" },
+          "revision": { "type": "integer", "format": "int64", "minimum": 0 },
+          "etag": {
+            "type": "string",
+            "pattern": "^\\\"m13:P13-[0-9]{2}:[0-9a-fA-F-]{36}:[0-9]+\\\"$"
+          },
+          "values": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "allowedActionKeys": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+            }
+          }
+        }
+      },
+      "IntegrationActionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason", "fields"],
+        "properties": {
+          "targetId": { "type": ["string", "null"], "format": "uuid" },
+          "reason": { "type": "string", "minLength": 10, "maxLength": 500 },
+          "fields": {
+            "type": "object",
+            "maxProperties": 32,
+            "propertyNames": {
+              "not": {
+                "pattern": "(secret|Secret|password|Password|token|Token|authorization|Authorization|apiKey|api_key|privateKey|PrivateKey|bearer|Bearer|body|Body|payload|Payload|resourceBody|ResourceBody)"
+              }
+            },
+            "additionalProperties": { "type": "string", "maxLength": 20000 }
+          }
+        }
+      },
       "DocumentUploadMetadata": {
         "type": "object",
         "additionalProperties": false,
@@ -12626,7 +12891,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^(M1|M2|P3|P4|P5|COS|P7|P8|P9|P10|P11|P12)-[0-9]{2}$"
+            "pattern": "^(M1|M2|P3|P4|P5|COS|P7|P8|P9|P10|P11|P12|P13)-[0-9]{2}$"
           },
           "module": {
             "type": "string",
@@ -12642,7 +12907,8 @@
               "M9",
               "M10",
               "M11",
-              "M12"
+              "M12",
+              "M13"
             ]
           },
           "title": {
@@ -12682,7 +12948,7 @@
           },
           "screenCount": {
             "type": "integer",
-            "const": 185
+            "const": 195
           },
           "modules": {
             "type": "array",

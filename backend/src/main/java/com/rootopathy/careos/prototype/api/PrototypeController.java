@@ -42,6 +42,7 @@ public class PrototypeController {
                         "Coordinated care planning",
                         "Follow-up and outcomes",
                         "Billing and payments",
-                        "Reporting"));
+                        "Reporting",
+                        "Integrations and FHIR"));
     }
 }

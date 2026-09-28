@@ -129,7 +129,7 @@ class PostgresDocumentEvidenceIntegrationTest {
                     "TRUNCATE credential_scan_attempts, credential_legal_holds, credential_documents, "
                             + "document_retention_evidence, document_access_grant_evidence, "
                             + "document_promotion_evidence, document_scan_attestations, "
-                            + "document_quarantine_evidence");
+                            + "document_quarantine_evidence CASCADE");
             statement.executeUpdate("""
                     INSERT INTO users (id, email, display_name, status)
                     VALUES ('01900000-0000-7000-8000-000000000201',

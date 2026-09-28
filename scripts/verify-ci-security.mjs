@@ -623,6 +623,74 @@ function javaFiles(directory) {
   return files;
 }
 
+export function validateProjectVerificationTexts({ shell, powershell }) {
+  const errors = [];
+  const scripts = [
+    ["scripts/verify-project.sh", shell],
+    ["scripts/verify-project.ps1", powershell],
+  ];
+  const requiredMarkers = [
+    ["Node 24.15 runtime floor", "24.15.0"],
+    ["scanner-overlay Compose validation", "compose.scanner.yaml"],
+    ["prototype registry", "verify-prototype-register.mjs"],
+    ["API verifier", "verify-api-contract.mjs"],
+    ["API negative tests", "verify-api-contract.test.mjs"],
+    ["Module 1 approved inputs", "verify-module-1-inputs.mjs"],
+    ["Module 1 review drafts", "verify-module-1-review-drafts.mjs"],
+    ["Module 1 candidate inputs", "verify-module-1-candidate-inputs.mjs"],
+    [
+      "Module 1 facility-scope candidate",
+      "verify-module-1-facility-scope-candidate.mjs",
+    ],
+    ["Module 2 candidate inputs", "verify-module-2-candidate-inputs.mjs"],
+    ["Module 2 approved inputs", "verify-module-2-inputs.mjs"],
+    ["Module 3 candidate inputs", "verify-module-3-candidate-inputs.mjs"],
+    ["Module 3 approved inputs", "verify-module-3-inputs.mjs"],
+    ["CI security verifier", "verify-ci-security.mjs"],
+    ["CI security negative tests", "verify-ci-security.test.mjs"],
+    ["npm vulnerability audit", "--audit-level=high"],
+    ["generated API drift", "api:check"],
+    ["frontend architecture", "architecture:check"],
+    ["strict typecheck", "typecheck"],
+    ["frontend lint", "lint"],
+    ["frontend formatting", "format:check"],
+    ["frontend production build", "build"],
+    ["full browser matrix", "test:e2e"],
+  ];
+
+  for (const [name, text] of scripts) {
+    for (const [label, marker] of requiredMarkers) {
+      if (!text.includes(marker)) {
+        errors.push(`${name}: missing full-project QA gate ${label}`);
+      }
+    }
+    if ((text.match(/--require-approved/g) ?? []).length < 3) {
+      errors.push(
+        `${name}: all three approved module inputs must use --require-approved`,
+      );
+    }
+  }
+
+  if (!/^npm test\s*$/m.test(shell)) {
+    errors.push("scripts/verify-project.sh: missing frontend unit-test gate");
+  }
+  if (!/^sh mvnw -B -ntp clean verify\s*$/m.test(shell)) {
+    errors.push("scripts/verify-project.sh: backend gate must be clean verify");
+  }
+  if (!/"npm\.cmd"\s+@\("test"\)/.test(powershell)) {
+    errors.push("scripts/verify-project.ps1: missing frontend unit-test gate");
+  }
+  if (
+    !/"\.\\mvnw\.cmd"\s+@\("-B", "-ntp", "clean", "verify"\)/.test(powershell)
+  ) {
+    errors.push(
+      "scripts/verify-project.ps1: backend gate must be clean verify",
+    );
+  }
+
+  return errors;
+}
+
 export function validateRepository(rootDirectory) {
   const root = resolve(rootDirectory);
   const errors = [];
@@ -748,6 +816,12 @@ export function validateRepository(rootDirectory) {
         "frontend/tests/e2e/prototypes.spec.ts",
         errors,
       ),
+    }),
+  );
+  errors.push(
+    ...validateProjectVerificationTexts({
+      shell: requiredFile(root, "scripts/verify-project.sh", errors),
+      powershell: requiredFile(root, "scripts/verify-project.ps1", errors),
     }),
   );
 
