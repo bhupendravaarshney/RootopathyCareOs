@@ -2,7 +2,7 @@
 
 ## Repository stabilization evidence (29 September 2026)
 
-This is a working-tree status, not a hosted release approval. Commit `97ea69d9e2fd43d2fd887f7ad5410ba6e103ff60` is the current `main`/`origin/main` stabilization attempt. Both hosted workflows failed for that commit, and the tree now has uncommitted corrective changes through Flyway V115 that have not yet been exercised by GitHub Actions as an exact final commit.
+This is a working-tree status, not a hosted release approval. Commit `bb4ad13715f59a4dbde26fcb92907671b8b57215` is the current `main`/`origin/main` stabilization attempt. Hosted security passed and every independent hosted quality lane except frontend passed for that commit. The tree now has an uncommitted focus-revalidation correction through Flyway V115 that has not yet been exercised by GitHub Actions as an exact final commit.
 
 | Gate | Current state |
 | --- | --- |
@@ -14,7 +14,9 @@ This is a working-tree status, not a hosted release approval. Commit `97ea69d9e2
 | Local security reproduction | PASS — exact Trivy 0.74.0 filesystem plus rebuilt backend/frontend image scans report zero fixed HIGH/CRITICAL findings after patch-level Jackson fixes; the repository security contract passes. |
 | Hosted quality for `97ea69d9…` | FAIL — frontend, backend, contracts, and product-smoke passed; compatibility rejected a non-reproducible fixture digest and browser found the administration header badge at 780px in the 768px project. |
 | Hosted security for `97ea69d9…` | FAIL — both CodeQL languages passed; source and backend-image Trivy found CVE-2026-68497 in Jackson 2.21.5/3.1.5, and the later frontend-image scan was skipped. |
-| Hosted quality/security for the corrective tree | NOT RUN — no final corrective commit exists. |
+| Hosted quality for `bb4ad137…` | FAIL — backend, compatibility, contracts, browser, and product-smoke passed; frontend alone failed on a focus-revalidation effect-order race. |
+| Hosted security for `bb4ad137…` | PASS — CodeQL, source scan, and backend/frontend image scans passed. |
+| Hosted quality/security for the follow-up tree | NOT RUN — no final follow-up commit exists. |
 | Repository release gate | **FAIL** until both hosted workflows pass for the same final commit. |
 | Production acceptance | **NOT GRANTED**. |
 

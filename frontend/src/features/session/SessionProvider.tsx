@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { careOsApi, type ApiFailure, type SessionLifecycleEvent } from '../../api/client';
 import type {
   InvitationAcceptance,
@@ -220,7 +228,8 @@ export function SessionProvider({ children, client = careOsApi }: SessionProvide
   const pendingActionRef = useRef(pendingAction);
   const resumeRevalidationInFlight = useRef(false);
 
-  useEffect(() => {
+  // Resume events can arrive as soon as committed UI is focusable; synchronize before paint.
+  useLayoutEffect(() => {
     machineRef.current = machine;
     pendingActionRef.current = pendingAction;
   }, [machine, pendingAction]);

@@ -13,7 +13,7 @@ Baseline hosted state:
 
 ## 2. Final commit
 
-`97ea69d9e2fd43d2fd887f7ad5410ba6e103ff60` is the first stabilization attempt and currently matches `main`/`origin/main`, but it is not an accepted final commit because its hosted quality and security workflows failed. The follow-up result is an uncommitted corrective tree based on `97ea69d9…`. No corrective commit or push was authorized, so there is no final SHA or hosted result for these exact bytes.
+`97ea69d9e2fd43d2fd887f7ad5410ba6e103ff60` was the first stabilization attempt. `bb4ad13715f59a4dbde26fcb92907671b8b57215` is the second attempt and currently matches `main`/`origin/main`; hosted security and every independent quality lane except frontend passed, but it is not an accepted final commit because the aggregate quality gate failed. The follow-up result is an uncommitted tree based on `bb4ad137…`. No follow-up commit or push was authorized, so there is no final SHA or hosted result for these exact bytes.
 
 ## 3–5. Problems, root causes, and fixes
 
@@ -24,6 +24,7 @@ Baseline hosted state:
 | Browser evidence was hidden | `browser.needs = frontend`. | Made frontend, browser, backend-core, compatibility, contracts and product-smoke independent; added an `always()` aggregate that requires every lane. |
 | 768px readiness overflow | The first local fix correctly collapsed readiness rows but the downloaded hosted trace showed the remaining offender was the administration page-header badge. Its `fit-content`/nowrap width extended from x=526 to x=780 while the shell deliberately remained in tablet mode at 768px. | Added an administration-specific page-head class and 761–900px stacked layout with bounded children and safe badge wrapping. The global 760px mobile-shell breakpoint is unchanged; the 768 project retains Axe and document/body overflow assertions. |
 | Hosted source/image security failed | Spring Boot 4.1.1 managed Jackson 3.1.5 and the MinIO dependency path used Jackson 2.21.5; Trivy 0.74.0 reported fixed HIGH CVE-2026-68497 for both. | Added patch-only BOM floors 3.1.6 and 2.21.6. Maven resolves both fixed versions; exact Trivy filesystem and rebuilt backend/frontend image scans now report zero fixed HIGH/CRITICAL findings without an ignore rule. |
+| Focus resume revalidation was racy | The resume event handler read authentication and pending-action refs synchronized in a passive effect. Hosted scheduling allowed the authenticated shell to become queryable before that effect ran, so focus still observed the prior `loading` phase and returned without contacting the server. | Synchronize both event-handler refs in `useLayoutEffect`, closing the post-commit/pre-passive-effect window. The test now awaits the second server session request, requires the anonymous sign-in boundary, and proves the authenticated dashboard was removed. |
 | V114 GUC could be mistaken for authority | Any connected PostgreSQL role can attempt to set a custom GUC. | V115 requires direct `session_user` membership in a deployment-owned non-login capability role with `ADMIN`, `INHERIT` and `SET` all false. Local/test bootstrap opts in explicitly; production config still rejects the reference policy. |
 | Authorization reason could leak | The useful purpose header entered the servlet request before generic telemetry and logging boundaries. | Added an earliest-order capture/normalize/bounds filter, hid the raw header from downstream access/enumeration, retained only the governed normalized value, and added log/trace/metric/proxy/browser leak tests. |
 | Live audit was advisory | It was only a manual command. | Added a required isolated Compose `product-smoke` job with readiness/frontend checks, authenticated audit artifacts/traces/screenshots and unconditional teardown. |
@@ -37,7 +38,7 @@ Baseline hosted state:
 - QA tooling: `scripts/build-s3-test-fixture.mjs`, `scripts/generate-qa-evidence.mjs`, both whole-project runners, CI-security verifier, and their tests.
 - Authorization/security: V115, PostgreSQL bootstrap/test roles, `PostgresTenantAuthorizationOperations`, `AuthorizationReasonFilter`, `WorkforceController`, CORS configuration, and security/API/tenant attack tests.
 - Test lifecycle: `application-test.yml` and the 16 Spring integration classes marked for post-class context closure.
-- Frontend/browser/audit: `App.test.tsx`, `AdministrationScreens.tsx`, `styles.css`, `prototypes.spec.ts`, and `live-product-audit.mjs`.
+- Frontend/browser/audit: `App.test.tsx`, `SessionProvider.tsx`, `AdministrationScreens.tsx`, `styles.css`, `prototypes.spec.ts`, and `live-product-audit.mjs`.
 - Evidence/docs: `README.md`, `IMPLEMENTATION_GAPS.md`, `docs/BUILD_STATUS.md`, `docs/CONSOLIDATED_QA_REPORT.md`, `docs/IMPLEMENTATION_ROADMAP.md`, `docs/PLATFORM_CAPABILITIES.md`, this report, and `docs/LOCAL_REFERENCE_AUTHORIZATION_THREAT_MODEL.md`.
 
 ## 7. Migration impact
@@ -62,6 +63,7 @@ The detailed authorization boundary and residual trust are documented in `LOCAL_
 - Explicit 768px administration page-header and readiness-row layout assertions while retaining Axe and both overflow checks.
 - S3 fixture digest/preflight tests and expanded CI-security mutation coverage.
 - Existing hosted browser evidence was downloaded and reproduced as two assertions for the same 768px page-header offender; both focused cases now pass after the component-specific fix.
+- Session resume regression now waits for the second server revalidation call and verifies both the anonymous sign-in boundary and removal of the authenticated dashboard; the complete 144-test frontend suite passed six consecutive runs after the fix.
 - QA-evidence count/parsing and release-state negative tests.
 - Live audit commit/origin/status output plus trace and failure evidence.
 
@@ -86,8 +88,10 @@ Local-only image scan identifiers are backend `sha256:54a883f705f8c67b4da58afb99
 - Baseline security: **PASS**.
 - `97ea69d9…` quality run `36553327188`: **FAIL** — frontend, backend, contracts, and product-smoke passed; compatibility failed on fixture digest drift and browser failed twice on the same 768px overflow.
 - `97ea69d9…` security run `36553327089`: **FAIL** — both CodeQL jobs passed; source and backend-image Trivy failed on the two Jackson CVE-2026-68497 findings; frontend-image scan was not reached.
-- Corrective-tree quality: **NOT RUN**.
-- Corrective-tree security: **NOT RUN**.
+- `bb4ad137…` quality run `36561861499`: **FAIL** — backend, compatibility, contracts, browser, and product-smoke passed; frontend alone failed on the session focus-revalidation race.
+- `bb4ad137…` security run `36561861463`: **PASS** — both CodeQL languages, source scan, and backend/frontend image scans passed.
+- Follow-up-tree quality: **NOT RUN**.
+- Follow-up-tree security: **NOT RUN**.
 
 The corrected fixture, focused 768px cases, local security contracts, exact Trivy source scan, and rebuilt backend/frontend image scans pass, but they are not substitutes for GitHub-hosted CodeQL, Trivy, image/SBOM or quality evidence on a final SHA.
 
@@ -104,6 +108,6 @@ No Module 14, unrelated screen, speculative AI feature, production credential, p
 
 ## 17. Gate decision
 
-**Repository release gate: FAIL.** The current `main` attempt failed hosted quality and security. Local executable evidence for the corrective tree passes, but its exact bytes are uncommitted and have no hosted quality/security evidence.
+**Repository release gate: FAIL.** The current `main` attempt passed hosted security but failed hosted quality. Local executable evidence for the follow-up tree passes, but its exact bytes are uncommitted and have no hosted quality/security evidence.
 
 **Production acceptance: NOT GRANTED unless separately evidenced.**

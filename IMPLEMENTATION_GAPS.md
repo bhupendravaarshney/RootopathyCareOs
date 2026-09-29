@@ -1,7 +1,7 @@
 # CareOS implementation gap ledger
 
 **Audit date:** 13 September 2026; implementation evidence updated 29 September 2026
-**Overall status:** **Phase 0 mechanics plus Modules 1-13 remain complete at the repository-construction boundary, now through Flyway V115. The corrective working tree is locally green at 279 backend, 144 frontend, 185 browser and 140 repository contract tests, with 195 screens and 135 operations. It is not a released baseline: hosted quality and security both failed for stabilization attempt `97ea69d9e2fd43d2fd887f7ad5410ba6e103ff60`, the corrective tree has no final commit or hosted run, and the repository release gate therefore remains FAIL. The protected COS source package, M1 facility-scope extension, target-environment controls, policy/provider/profile/worker activation and production acceptance remain open.**
+**Overall status:** **Phase 0 mechanics plus Modules 1-13 remain complete at the repository-construction boundary, now through Flyway V115. The follow-up working tree is locally green at 279 backend, 144 frontend, 185 browser and 140 repository contract tests, with 195 screens and 135 operations. It is not a released baseline: hosted security passed for stabilization attempt `bb4ad13715f59a4dbde26fcb92907671b8b57215`, but hosted quality failed on a frontend focus-revalidation race; the follow-up tree has no final commit or hosted run, and the repository release gate therefore remains FAIL. The protected COS source package, M1 facility-scope extension, target-environment controls, policy/provider/profile/worker activation and production acceptance remain open.**
 
 This ledger reconciles the repository with the authoritative 46-page _CareOS Complete Build Specification_, the repository architecture/roadmap documents, and the checked-in implementation. It is intentionally evidence-based: a clickable route, a database table, or a dependency is not counted as a completed production capability unless the behavior is persisted, authorized, tenant-safe, audited, and covered by the required tests.
 
@@ -862,7 +862,7 @@ Mark an item complete only when its approved route/screen, permission, handler/s
 
 ## Verification snapshot
 
-Run against the 29 September corrective working tree based on `97ea69d9e2fd43d2fd887f7ad5410ba6e103ff60`:
+Run against the 29 September follow-up working tree based on `bb4ad13715f59a4dbde26fcb92907671b8b57215`:
 
 | Check | Result | Notes |
 | --- | --- | --- |
@@ -875,7 +875,9 @@ Run against the 29 September corrective working tree based on `97ea69d9e2fd43d2f
 | Hosted quality for `97ea69d9…` | FAIL | Frontend, backend, contracts, and product-smoke passed. Compatibility exposed non-reproducible fixture layer timestamps; independent browser evidence exposed the 780px administration header badge at the 768px boundary. |
 | Hosted security for `97ea69d9…` | FAIL | Both CodeQL languages passed; source and backend-image Trivy failed on fixed HIGH CVE-2026-68497 in Jackson 2.21.5/3.1.5, so the later frontend-image scan was skipped. |
 | Local security correction | PASS | Jackson is held at fixed patch floors 2.21.6/3.1.6; exact Trivy 0.74.0 filesystem plus rebuilt backend/frontend image scans report zero fixed HIGH/CRITICAL findings. |
-| Hosted quality/security for the corrective tree | NOT RUN | There is no final corrective commit. Current hosted CodeQL, Trivy, image, SBOM and provenance evidence therefore remain open. |
+| Hosted quality for `bb4ad137…` | FAIL | Backend, compatibility, contracts, browser, and product-smoke passed. Frontend failed only because a focus event could occur after the authenticated shell committed but before its passive session-state ref synchronization. |
+| Hosted security for `bb4ad137…` | PASS | Both CodeQL languages, source scan, and backend/frontend image scans passed. Dependency review was correctly inapplicable to the push event. |
+| Hosted quality/security for the follow-up tree | NOT RUN | There is no final follow-up commit. The focus boundary is locally corrected, but hosted quality and security evidence for its exact bytes remains open. |
 
 ---
 

@@ -4,13 +4,13 @@
 
 **Baseline commit:** `be6cfa8e4f947a2e42ed1cba29d29ad1f65f4dc5`
 
-**Attempted stabilization commit:** `97ea69d9e2fd43d2fd887f7ad5410ba6e103ff60` (`main`/`origin/main`)
+**Attempted stabilization commit:** `bb4ad13715f59a4dbde26fcb92907671b8b57215` (`main`/`origin/main`)
 
 **Evidence subject:** uncommitted corrective working tree based on the attempted stabilization commit
 
 **Schema/API boundary:** Flyway V115, OpenAPI 3.1.0, 195 screens, 135 operations
 
-**Repository release gate: FAIL** — the hosted quality and security workflows failed for `97ea69d9…`; the corrective tree is locally verified but has no final commit or hosted evidence for its exact bytes.
+**Repository release gate: FAIL** — hosted security and five of six independent quality lanes passed for `bb4ad137…`, but frontend failed on a session focus-revalidation race; the follow-up tree is locally verified but has no final commit or hosted evidence for its exact bytes.
 
 **Production acceptance: NOT GRANTED.**
 
@@ -39,7 +39,8 @@ The local Node executable was 24.13.0, below the repository's declared 24.15.0 f
 | --- | --- | --- |
 | Baseline `be6cfa8…` | FAIL | Frontend M1-14 async race; backend could not fetch the removed Quay MinIO digest; contracts passed; browser was skipped because it depended on frontend. |
 | Attempt `97ea69d9…` | FAIL | Independent frontend, backend-core, contracts, and authenticated product-smoke passed. Compatibility failed before Maven because the first source-built fixture produced `sha256:d007…` on the hosted runner instead of expected `sha256:bb6f…`. Browser ran independently and reported two assertions for the same M1-05 header badge extending to 780px at the 768px viewport. |
-| Corrective working tree | NOT RUN | No final corrective commit or hosted run exists. The fixture now pins BuildKit/frontend inputs and rewrites layer timestamps; the administration header has a component-specific tablet layout. |
+| Attempt `bb4ad137…` | FAIL | Backend-core, compatibility, contracts, browser, and authenticated product-smoke passed. Frontend alone failed when focus arrived after the authenticated shell rendered but before the passive `machineRef` synchronization, so the resume handler still observed `loading` and skipped revalidation. |
+| Follow-up working tree | NOT RUN | No final follow-up commit or hosted run exists. Session and pending-action refs now synchronize during the layout phase; the test awaits the second server session call and proves the authenticated workspace is removed. |
 
 A frontend failure can no longer suppress browser evidence. The compatibility lane builds and digest-verifies the repository-owned S3 fixture before Maven starts, so fixture failure is early and explicit. The quality artifact is named `qa-evidence-<commit>` and the live audit artifact is named `authenticated-product-audit-<commit>`.
 
@@ -49,7 +50,8 @@ A frontend failure can no longer suppress browser evidence. The compatibility la
 | --- | --- | --- |
 | Baseline `be6cfa8…` | PASS | The existing hosted `CareOS security` workflow passed for the baseline commit. |
 | Attempt `97ea69d9…` | FAIL | Java and JavaScript CodeQL passed. Trivy source and backend-image scans each reported the two fixed HIGH findings for CVE-2026-68497 in Jackson 2.21.5 and 3.1.5; the later frontend-image scan was skipped after the backend-image failure. |
-| Corrective working tree | NOT RUN | Local CI-security contracts and exact Trivy filesystem plus rebuilt backend/frontend image scans pass with Jackson 2.21.6 and 3.1.6. Hosted CodeQL, image scans, and CycloneDX evidence remain required for the final corrective commit. |
+| Attempt `bb4ad137…` | PASS | Java and JavaScript CodeQL, source scan, and backend/frontend image scans passed. Dependency review was inapplicable to the push event. |
+| Follow-up working tree | NOT RUN | The change is confined to session state synchronization and its frontend test, but hosted security must still run for the final follow-up commit. |
 
 No hosted security result from the baseline is carried forward to changed bytes.
 

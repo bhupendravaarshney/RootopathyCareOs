@@ -3809,8 +3809,11 @@ describe('CareOS frontend session boundary', () => {
 
     fireEvent.focus(window);
 
+    await waitFor(() => expect(getAuthenticationSession).toHaveBeenCalledTimes(2));
     expect(await screen.findByRole('heading', { name: 'Sign in to CareOS' })).toBeInTheDocument();
-    expect(getAuthenticationSession).toHaveBeenCalledTimes(2);
+    expect(
+      screen.queryByRole('heading', { name: 'Administration dashboard' }),
+    ).not.toBeInTheDocument();
   });
 
   it('invalidates local workspace state only after logout succeeds', async () => {
