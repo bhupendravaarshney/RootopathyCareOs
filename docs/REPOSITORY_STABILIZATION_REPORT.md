@@ -13,7 +13,7 @@ Baseline hosted state:
 
 ## 2. Final commit
 
-`97ea69d9e2fd43d2fd887f7ad5410ba6e103ff60` was the first stabilization attempt. `bb4ad13715f59a4dbde26fcb92907671b8b57215` is the second attempt and currently matches `main`/`origin/main`; hosted security and every independent quality lane except frontend passed, but it is not an accepted final commit because the aggregate quality gate failed. The follow-up result is an uncommitted tree based on `bb4ad137…`. No follow-up commit or push was authorized, so there is no final SHA or hosted result for these exact bytes.
+`97ea69d9e2fd43d2fd887f7ad5410ba6e103ff60` was the first stabilization attempt. `bb4ad13715f59a4dbde26fcb92907671b8b57215` was the second hosted attempt; hosted security and every independent quality lane except frontend passed, but the aggregate quality gate failed. Local candidate `56f2fa643482bc8cd46a8e4864306d0c65d555f1` contains the verified focus-revalidation correction. It was created externally during final verification and was local `main` while `origin/main` remained `bb4ad137…`; no hosted result exists for its exact bytes. Subsequent dirty-tree changes update evidence wording only.
 
 ## 3–5. Problems, root causes, and fixes
 
@@ -80,7 +80,7 @@ The detailed authorization boundary and residual trust are documented in `LOCAL_
 | Flyway | V1–V115 from empty PostgreSQL 18 |
 | Authenticated live audit | PASS: login, selection, 193 protected routes, 4 expected 428 boundaries, 0 unexpected API/console failures |
 
-Local-only image scan identifiers are backend `sha256:54a883f705f8c67b4da58afb99b9181d97e467b05122f1ab15dd0728220d2530` and frontend `sha256:59be1264f0a8131e7f6ca19662da78be682a3e513b6bd9c7c8dff21ab3dafaf0`. Local CycloneDX 1.7 evidence hashes are backend `sha256:d9eef109ab0270da735c4830da2f35bfc56987d74fd169646dcb1102b162a713` and frontend `sha256:a3bee639ee2618ccc237424221e65450fff0f565e21c3558c982379eb4c23790`. These identifiers are recorded as local, dirty-tree evidence in `build/qa-evidence.json`; they are not hosted release evidence.
+Local-only image scan identifiers for the follow-up tree are backend `sha256:fd7afe353520a1b8da2c21d9eadb69abdf959a58fec3a3f2ef843e60ca4a3448` and frontend `sha256:e8df206c0dc14bb751be3c78011a05be691931c2c56161cfb9cb3d6b38b1a38d`. Local CycloneDX 1.7 evidence hashes are backend `sha256:0fd93525fdeba0437262cfb58503149939dc7e8db853069caf039982ea9c966d` and frontend `sha256:0e793dc9daeacd2987ccaa7310bb41441ff2a906c0403c21578c151cc2cde28e`. These identifiers are recorded as local, dirty-tree evidence in `build/qa-evidence.json`; they are not hosted release evidence.
 
 ## 15. Hosted CI status
 
@@ -90,14 +90,14 @@ Local-only image scan identifiers are backend `sha256:54a883f705f8c67b4da58afb99
 - `97ea69d9…` security run `36553327089`: **FAIL** — both CodeQL jobs passed; source and backend-image Trivy failed on the two Jackson CVE-2026-68497 findings; frontend-image scan was not reached.
 - `bb4ad137…` quality run `36561861499`: **FAIL** — backend, compatibility, contracts, browser, and product-smoke passed; frontend alone failed on the session focus-revalidation race.
 - `bb4ad137…` security run `36561861463`: **PASS** — both CodeQL languages, source scan, and backend/frontend image scans passed.
-- Follow-up-tree quality: **NOT RUN**.
-- Follow-up-tree security: **NOT RUN**.
+- Local candidate `56f2fa64…` quality: **NOT RUN** — it was not present at `origin/main` when inspected.
+- Local candidate `56f2fa64…` security: **NOT RUN** — exact local Trivy source and rebuilt-image scans pass, but no hosted run exists.
 
 The corrected fixture, focused 768px cases, local security contracts, exact Trivy source scan, and rebuilt backend/frontend image scans pass, but they are not substitutes for GitHub-hosted CodeQL, Trivy, image/SBOM or quality evidence on a final SHA.
 
 ## 16. Remaining external/non-code blockers
 
-- Commit/push and successful required hosted quality/security checks for the exact commit.
+- Publish the local candidate (including final evidence wording) and obtain successful required hosted quality/security checks for its exact commit.
 - Retained image scan, SBOM and provenance identifiers for that commit.
 - Protected COS source reconciliation and M1 facility-scope approval.
 - Target providers/profiles/credentials, workers/schedulers and managed infrastructure.
@@ -108,6 +108,6 @@ No Module 14, unrelated screen, speculative AI feature, production credential, p
 
 ## 17. Gate decision
 
-**Repository release gate: FAIL.** The current `main` attempt passed hosted security but failed hosted quality. Local executable evidence for the follow-up tree passes, but its exact bytes are uncommitted and have no hosted quality/security evidence.
+**Repository release gate: FAIL.** The last hosted commit passed security but failed quality. Local candidate `56f2fa64…` passes executable verification, but it was not at `origin/main` when inspected and has no hosted quality/security evidence.
 
 **Production acceptance: NOT GRANTED unless separately evidenced.**

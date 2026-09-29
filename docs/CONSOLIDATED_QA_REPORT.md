@@ -4,13 +4,15 @@
 
 **Baseline commit:** `be6cfa8e4f947a2e42ed1cba29d29ad1f65f4dc5`
 
-**Attempted stabilization commit:** `bb4ad13715f59a4dbde26fcb92907671b8b57215` (`main`/`origin/main`)
+**Last hosted stabilization commit:** `bb4ad13715f59a4dbde26fcb92907671b8b57215` (`origin/main` when inspected)
 
-**Evidence subject:** uncommitted corrective working tree based on the attempted stabilization commit
+**Local candidate commit:** `56f2fa643482bc8cd46a8e4864306d0c65d555f1` (`main`; not yet present at `origin/main` when inspected)
+
+**Evidence subject:** the executable code in the local candidate; later dirty-tree changes update evidence wording only
 
 **Schema/API boundary:** Flyway V115, OpenAPI 3.1.0, 195 screens, 135 operations
 
-**Repository release gate: FAIL** — hosted security and five of six independent quality lanes passed for `bb4ad137…`, but frontend failed on a session focus-revalidation race; the follow-up tree is locally verified but has no final commit or hosted evidence for its exact bytes.
+**Repository release gate: FAIL** — hosted security and five of six independent quality lanes passed for `bb4ad137…`, but frontend failed on a session focus-revalidation race. The correction in local candidate `56f2fa64…` is locally verified but has no hosted evidence for its exact bytes.
 
 **Production acceptance: NOT GRANTED.**
 
@@ -22,7 +24,7 @@ The local evidence is authoritative for the tested working tree, but it is not c
 | --- | --- | --- |
 | Backend clean verification | PASS | 279/279 tests, zero failures/errors/skips; 257 core tests plus 22 required compatibility tests. PostgreSQL 18 applies V1-V115 from empty state, architecture rules pass, and the JAR packages. |
 | PostgreSQL authorization and RLS | PASS | Tenant/RLS attacks, active production-role behavior, missing/false local reference flag denial, capability-less GUC manipulation denial, cross-tenant denial, unknown-permission denial, and production reference-policy rejection pass. |
-| Object storage and scanner compatibility | PASS | 15 S3/Object Lock tests and 7 ClamAV tests pass without skips. The corrected reproducible S3 fixture preflight pins its builder/frontend, rewrites layer timestamps, and emits a portable Docker V2 manifest; it is rejected unless its manifest is exactly `sha256:9b225075e9847bde86fa19f8274353ae7c5c4018af813ebb5bb9ce12d329b744`. Hosted verification of this follow-up correction remains required. |
+| Object storage and scanner compatibility | PASS | 15 S3/Object Lock tests and 7 ClamAV tests pass without skips. The corrected reproducible S3 fixture preflight pins its builder/frontend, rewrites layer timestamps, and emits a portable Docker V2 manifest; it is rejected unless its manifest is exactly `sha256:9b225075e9847bde86fa19f8274353ae7c5c4018af813ebb5bb9ce12d329b744`. The independent compatibility lane passed for `bb4ad137…`. |
 | Frontend static/unit/build | PASS | `npm ci`, generated API drift, architecture, strict typecheck, lint, formatting, 144/144 Vitest tests, and the production build pass. |
 | Browser/accessibility/responsive | PASS | 185/185 Playwright cases pass at 1440, 1024, 768, 390, and 320 pixels with Axe plus document/body overflow assertions. The M1-05 administration header and readiness rows remain contained at exactly 768 pixels. |
 | Repository/API/security contracts | PASS | 140/140 contract and negative tests pass; the registry remains exactly 195 screens and OpenAPI remains exactly 135 operations. Both Compose models validate. |
@@ -40,7 +42,7 @@ The local Node executable was 24.13.0, below the repository's declared 24.15.0 f
 | Baseline `be6cfa8…` | FAIL | Frontend M1-14 async race; backend could not fetch the removed Quay MinIO digest; contracts passed; browser was skipped because it depended on frontend. |
 | Attempt `97ea69d9…` | FAIL | Independent frontend, backend-core, contracts, and authenticated product-smoke passed. Compatibility failed before Maven because the first source-built fixture produced `sha256:d007…` on the hosted runner instead of expected `sha256:bb6f…`. Browser ran independently and reported two assertions for the same M1-05 header badge extending to 780px at the 768px viewport. |
 | Attempt `bb4ad137…` | FAIL | Backend-core, compatibility, contracts, browser, and authenticated product-smoke passed. Frontend alone failed when focus arrived after the authenticated shell rendered but before the passive `machineRef` synchronization, so the resume handler still observed `loading` and skipped revalidation. |
-| Follow-up working tree | NOT RUN | No final follow-up commit or hosted run exists. Session and pending-action refs now synchronize during the layout phase; the test awaits the second server session call and proves the authenticated workspace is removed. |
+| Local candidate `56f2fa64…` | NOT RUN | No hosted run exists. Session and pending-action refs now synchronize during the layout phase; the test awaits the second server session call and proves the authenticated workspace is removed. |
 
 A frontend failure can no longer suppress browser evidence. The compatibility lane builds and digest-verifies the repository-owned S3 fixture before Maven starts, so fixture failure is early and explicit. The quality artifact is named `qa-evidence-<commit>` and the live audit artifact is named `authenticated-product-audit-<commit>`.
 
@@ -51,7 +53,7 @@ A frontend failure can no longer suppress browser evidence. The compatibility la
 | Baseline `be6cfa8…` | PASS | The existing hosted `CareOS security` workflow passed for the baseline commit. |
 | Attempt `97ea69d9…` | FAIL | Java and JavaScript CodeQL passed. Trivy source and backend-image scans each reported the two fixed HIGH findings for CVE-2026-68497 in Jackson 2.21.5 and 3.1.5; the later frontend-image scan was skipped after the backend-image failure. |
 | Attempt `bb4ad137…` | PASS | Java and JavaScript CodeQL, source scan, and backend/frontend image scans passed. Dependency review was inapplicable to the push event. |
-| Follow-up working tree | NOT RUN | The change is confined to session state synchronization and its frontend test, but hosted security must still run for the final follow-up commit. |
+| Local candidate `56f2fa64…` | NOT RUN | Exact local Trivy source and rebuilt backend/frontend image scans pass, but hosted security must still run for the candidate commit. |
 
 No hosted security result from the baseline is carried forward to changed bytes.
 
