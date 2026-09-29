@@ -879,7 +879,7 @@ function failureMessage(failure: ApiFailure): string {
 function PageHeading({ id }: { id: AdministrationScreenProps['id'] }) {
   const screen = findScreen(id);
   return (
-    <div className="page-head">
+    <div className="page-head administration-page-head">
       <div>
         <span className="eyebrow">{screen.group}</span>
         <h1>{screen.title}</h1>

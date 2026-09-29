@@ -551,7 +551,11 @@ export function validateS3FixtureTexts({
   const errors = [];
   const fixtureImage = "careos-s3-test-fixture:minio-release-2025-09-07";
   const fixtureDigest =
-    "sha256:bb6f358423eec8c666f70d24dbab12a0b9467b5071f2bb30ee64767d3dce82d1";
+    "sha256:9b225075e9847bde86fa19f8274353ae7c5c4018af813ebb5bb9ce12d329b744";
+  const buildkitImage =
+    "moby/buildkit@sha256:040d34121c27906c4ff9ac152a30d52bf2c5d328d3bb748916bb3d2743c02528";
+  const dockerfileFrontend =
+    "docker/dockerfile:1.20.0@sha256:26147acbda4f14c5add9946e2fd2ed543fc402884fd75146bd342a7f6271dc1d";
   const sourceEpoch = "1757261589";
   const release = "RELEASE.2025-09-07T16-13-09Z";
   const commit = "07c3a429bfed433e49018cb0f78a52145d4bedeb";
@@ -559,6 +563,13 @@ export function validateS3FixtureTexts({
     "c9598dcce3440977e79f787f2ba0e7e4d92c8d556bd51e7cef3785bafd6635f3";
 
   const dockerfileRequirements = [
+    [
+      new RegExp(
+        `^# syntax=${dockerfileFrontend.replaceAll(".", "\\.")}\\s*$`,
+        "m",
+      ),
+      "the immutable Dockerfile frontend",
+    ],
     [
       new RegExp(`ARG MINIO_RELEASE=${release.replaceAll(".", "\\.")}`),
       "the immutable upstream release",
@@ -635,17 +646,27 @@ export function validateS3FixtureTexts({
   for (const [required, description] of [
     [fixtureImage, "the isolated local image tag"],
     [fixtureDigest, "the expected immutable manifest digest"],
+    [buildkitImage, "the immutable BuildKit engine"],
     [sourceEpoch, "the fixed source epoch"],
     ['FIXTURE_PLATFORM = "linux/amd64"', "the fixed build platform"],
+    ['"docker-container"', "the isolated BuildKit driver"],
+    [
+      '"type=docker,oci-mediatypes=false,rewrite-timestamp=true"',
+      "a portable Docker V2 manifest with normalized layer timestamps",
+    ],
+    ['BUILDX_GIT_INFO: "0"', "disabled environment-specific VCS metadata"],
+    ['BUILDX_METADATA_PROVENANCE: "disabled"', "disabled metadata provenance"],
+    ['BUILDX_NO_DEFAULT_ATTESTATIONS: "1"', "disabled default attestations"],
     ['"--provenance=false"', "disabled non-reproducible provenance"],
     ['"buildx"', "the BuildKit digest-producing build"],
     ['"--metadata-file"', "manifest digest metadata"],
-    ['"run", "--rm", FIXTURE_IMAGE, "--version"', "a fixture startup preflight"],
+    [
+      '"run", "--rm", FIXTURE_IMAGE, "--version"',
+      "a fixture startup preflight",
+    ],
   ]) {
     if (!fixtureBuilder.includes(required)) {
-      errors.push(
-        `scripts/build-s3-test-fixture.mjs: missing ${description}`,
-      );
+      errors.push(`scripts/build-s3-test-fixture.mjs: missing ${description}`);
     }
   }
 
@@ -658,10 +679,7 @@ export function validateS3FixtureTexts({
     errors.push(
       "quality.yml: S3 compatibility fixture preflight is incomplete",
     );
-  } else if (
-    compatibilityIndex < 0 ||
-    buildIndex > compatibilityIndex
-  ) {
+  } else if (compatibilityIndex < 0 || buildIndex > compatibilityIndex) {
     errors.push(
       "quality.yml: S3 fixture build/start preflight must run before Maven verification",
     );

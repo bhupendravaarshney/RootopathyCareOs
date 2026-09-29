@@ -2,7 +2,7 @@
 
 ## Repository stabilization evidence (29 September 2026)
 
-This is a working-tree status, not a hosted release approval. The tree is based on commit `be6cfa8e4f947a2e42ed1cba29d29ad1f65f4dc5`, has uncommitted remediation changes through Flyway V115, and has not yet been exercised by GitHub Actions as an exact final commit.
+This is a working-tree status, not a hosted release approval. Commit `97ea69d9e2fd43d2fd887f7ad5410ba6e103ff60` is the current `main`/`origin/main` stabilization attempt. Both hosted workflows failed for that commit, and the tree now has uncommitted corrective changes through Flyway V115 that have not yet been exercised by GitHub Actions as an exact final commit.
 
 | Gate | Current state |
 | --- | --- |
@@ -11,13 +11,14 @@ This is a working-tree status, not a hosted release approval. The tree is based 
 | Local browser | PASS — 185/185 across 1440/1024/768/390/320 with Axe and document/body overflow checks. |
 | Local contracts | PASS — 140/140 repository/API/input/security negative and positive tests; 195 screens and 135 API operations. |
 | Local authenticated product audit | PASS — login, organization selection, 193 protected routes, zero unexpected API/console failures, and four intentional 428 boundaries. |
-| Hosted quality for the baseline commit | FAIL — frontend race and unavailable Quay MinIO fixture; browser skipped by the old dependency. |
-| Hosted security for the baseline commit | PASS. |
-| Hosted quality/security for the stabilization tree | NOT RUN — no final commit exists. |
+| Local security reproduction | PASS — exact Trivy 0.74.0 filesystem plus rebuilt backend/frontend image scans report zero fixed HIGH/CRITICAL findings after patch-level Jackson fixes; the repository security contract passes. |
+| Hosted quality for `97ea69d9…` | FAIL — frontend, backend, contracts, and product-smoke passed; compatibility rejected a non-reproducible fixture digest and browser found the administration header badge at 780px in the 768px project. |
+| Hosted security for `97ea69d9…` | FAIL — both CodeQL languages passed; source and backend-image Trivy found CVE-2026-68497 in Jackson 2.21.5/3.1.5, and the later frontend-image scan was skipped. |
+| Hosted quality/security for the corrective tree | NOT RUN — no final corrective commit exists. |
 | Repository release gate | **FAIL** until both hosted workflows pass for the same final commit. |
 | Production acceptance | **NOT GRANTED**. |
 
-The remediation makes browser evidence independent, adds a required product-smoke lane, separates required core and compatibility diagnostics, replaces the removed Quay fixture with a repository-owned source build locked to manifest `sha256:bb6f358423eec8c666f70d24dbab12a0b9467b5071f2bb30ee64767d3dce82d1`, hardens local reference authority with a deployment-owned PostgreSQL capability, and prevents raw `X-Authorization-Reason` values from reaching logs or telemetry. `build/qa-evidence.json` records dirty/clean source state so local evidence cannot be mistaken for commit-bound hosted evidence.
+The remediation makes browser evidence independent, adds a required product-smoke lane, separates required core and compatibility diagnostics, replaces the removed Quay fixture with a repository-owned source build locked to Docker V2 manifest `sha256:9b225075e9847bde86fa19f8274353ae7c5c4018af813ebb5bb9ce12d329b744`, hardens local reference authority with a deployment-owned PostgreSQL capability, and prevents raw `X-Authorization-Reason` values from reaching logs or telemetry. The hosted runner exposed that `SOURCE_DATE_EPOCH` alone did not normalize layer file timestamps; the fixture now also pins BuildKit and the Dockerfile frontend, uses the image exporter's timestamp rewrite, and emits a single manifest portable across Docker image-store implementations. `build/qa-evidence.json` records dirty/clean source state so local evidence cannot be mistaken for commit-bound hosted evidence.
 
 ## Verified in the delivery environment
 

@@ -470,7 +470,8 @@ updates:
 });
 
 test("locks the repository-owned S3 fixture and fail-fast CI preflight", () => {
-  const dockerfile = `FROM golang:1.24-alpine@sha256:${"a".repeat(64)} AS build
+  const dockerfile = `# syntax=docker/dockerfile:1.20.0@sha256:26147acbda4f14c5add9946e2fd2ed543fc402884fd75146bd342a7f6271dc1d
+FROM golang:1.24-alpine@sha256:${"a".repeat(64)} AS build
 ARG MINIO_RELEASE=RELEASE.2025-09-07T16-13-09Z
 ARG MINIO_COMMIT=07c3a429bfed433e49018cb0f78a52145d4bedeb
 ARG MINIO_SOURCE_SHA256=c9598dcce3440977e79f787f2ba0e7e4d92c8d556bd51e7cef3785bafd6635f3
@@ -489,14 +490,20 @@ USER 65532:65532
 export const FIXTURE_IMAGE = "careos-s3-test-fixture:minio-release-2025-09-07";
 export const FIXTURE_PLATFORM = "linux/amd64";
 export const FIXTURE_SOURCE_EPOCH = "1757261589";
-export const FIXTURE_MANIFEST_DIGEST = "sha256:bb6f358423eec8c666f70d24dbab12a0b9467b5071f2bb30ee64767d3dce82d1";
-const args = ["buildx", "build", "--provenance=false", "--metadata-file"];
+export const FIXTURE_BUILDKIT_IMAGE = "moby/buildkit@sha256:040d34121c27906c4ff9ac152a30d52bf2c5d328d3bb748916bb3d2743c02528";
+export const FIXTURE_MANIFEST_DIGEST = "sha256:9b225075e9847bde86fa19f8274353ae7c5c4018af813ebb5bb9ce12d329b744";
+const environment = {
+  BUILDX_GIT_INFO: "0",
+  BUILDX_METADATA_PROVENANCE: "disabled",
+  BUILDX_NO_DEFAULT_ATTESTATIONS: "1",
+};
+const args = ["buildx", "create", "docker-container", "build", "--provenance=false", "type=docker,oci-mediatypes=false,rewrite-timestamp=true", "--metadata-file"];
 const preflight = ["run", "--rm", FIXTURE_IMAGE, "--version"];
 `;
   const integrationTest = `
     @Tag("compatibility")
     "careos-s3-test-fixture:minio-release-2025-09-07";
-    "sha256:bb6f358423eec8c666f70d24dbab12a0b9467b5071f2bb30ee64767d3dce82d1";
+    "sha256:9b225075e9847bde86fa19f8274353ae7c5c4018af813ebb5bb9ce12d329b744";
     "../build/s3-fixture-metadata.json";
     container.withImagePullPolicy(ignored -> false);
   `;

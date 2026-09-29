@@ -1877,6 +1877,17 @@ select:disabled {
 }
 
 @media (min-width: 761px) and (max-width: 900px) {
+  .administration-page-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .administration-page-head > * {
+    max-width: 100%;
+  }
+  .administration-page-head > .badge {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
   .readiness-panel .panel-heading,
   .administrator-workspaces .panel-heading {
     flex-direction: column;

@@ -80,7 +80,7 @@ class S3PrivateDocumentStorageIntegrationTest {
     private static final String FIXTURE_IMAGE =
             "careos-s3-test-fixture:minio-release-2025-09-07";
     private static final String FIXTURE_MANIFEST_DIGEST =
-            "sha256:bb6f358423eec8c666f70d24dbab12a0b9467b5071f2bb30ee64767d3dce82d1";
+            "sha256:9b225075e9847bde86fa19f8274353ae7c5c4018af813ebb5bb9ce12d329b744";
 
     /** Synthetic, isolated compatibility target; never a production storage recommendation. */
     @Container

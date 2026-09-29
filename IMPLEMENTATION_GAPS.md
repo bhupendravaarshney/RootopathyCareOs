@@ -1,7 +1,7 @@
 # CareOS implementation gap ledger
 
 **Audit date:** 13 September 2026; implementation evidence updated 29 September 2026
-**Overall status:** **Phase 0 mechanics plus Modules 1-13 remain complete at the repository-construction boundary, now through Flyway V115. The stabilization working tree is locally green at 279 backend, 144 frontend, 185 browser and 140 repository contract tests, with 195 screens and 135 operations. It is not a released baseline: hosted quality failed for commit `be6cfa8e4f947a2e42ed1cba29d29ad1f65f4dc5`, the changed tree has no final commit or hosted run, and the repository release gate therefore remains FAIL. The protected COS source package, M1 facility-scope extension, target-environment controls, policy/provider/profile/worker activation and production acceptance remain open.**
+**Overall status:** **Phase 0 mechanics plus Modules 1-13 remain complete at the repository-construction boundary, now through Flyway V115. The corrective working tree is locally green at 279 backend, 144 frontend, 185 browser and 140 repository contract tests, with 195 screens and 135 operations. It is not a released baseline: hosted quality and security both failed for stabilization attempt `97ea69d9e2fd43d2fd887f7ad5410ba6e103ff60`, the corrective tree has no final commit or hosted run, and the repository release gate therefore remains FAIL. The protected COS source package, M1 facility-scope extension, target-environment controls, policy/provider/profile/worker activation and production acceptance remain open.**
 
 This ledger reconciles the repository with the authoritative 46-page _CareOS Complete Build Specification_, the repository architecture/roadmap documents, and the checked-in implementation. It is intentionally evidence-based: a clickable route, a database table, or a dependency is not counted as a completed production capability unless the behavior is persisted, authorized, tenant-safe, audited, and covered by the required tests.
 
@@ -862,19 +862,20 @@ Mark an item complete only when its approved route/screen, permission, handler/s
 
 ## Verification snapshot
 
-Run against the 29 September stabilization working tree:
+Run against the 29 September corrective working tree based on `97ea69d9e2fd43d2fd887f7ad5410ba6e103ff60`:
 
 | Check | Result | Notes |
 | --- | --- | --- |
 | Maven clean verification on Java 25 with Docker | PASS | V1-V115 applies to empty PostgreSQL 18; 279/279 tests pass with zero failure/error/skip, including 257 core and 22 required compatibility tests. |
-| S3 fixture preflight | PASS | The repository-owned source build starts and matches manifest `sha256:bb6f358423eec8c666f70d24dbab12a0b9467b5071f2bb30ee64767d3dce82d1`; the 15 S3/Object Lock cases pass. |
+| S3 fixture preflight | PASS | A cold build with the digest-pinned BuildKit engine and Dockerfile frontend rewrites layer timestamps, starts, and matches portable Docker V2 manifest `sha256:9b225075e9847bde86fa19f8274353ae7c5c4018af813ebb5bb9ce12d329b744`; the 15 S3/Object Lock cases pass. |
 | Frontend install/static/unit/build | PASS | `npm ci`, generated API drift, architecture, formatting, strict typecheck, lint, 144/144 tests and Vite build pass. The local Node 24.13 executable is below the declared 24.15 floor, which hosted CI will satisfy from `.nvmrc`. |
 | Browser/accessibility/responsive | PASS | 185/185 Playwright cases pass across 1440, 1024, 768, 390 and 320, including Axe and document/body overflow checks. |
 | Compose and live product | PASS | Both Compose models validate; an isolated stack reaches liveness/readiness/frontend HTTP and the authenticated audit covers all 195 experiences with no unexpected API/console failure before clean teardown. |
 | API, registry, input and security contracts | PASS | OpenAPI 3.1.0 contains 135 operations, the registry contains 195 screens, and 140/140 positive/negative repository tests pass. |
-| Hosted quality for the baseline commit | FAIL | The M1-14 race and unavailable Quay fixture failed; the old job graph skipped browser evidence. |
-| Hosted security for the baseline commit | PASS | This evidence applies only to the unchanged baseline commit. |
-| Hosted quality/security for the stabilization tree | NOT RUN | There is no final commit. Current CodeQL, Trivy, image, SBOM and provenance evidence therefore remain open. |
+| Hosted quality for `97ea69d9…` | FAIL | Frontend, backend, contracts, and product-smoke passed. Compatibility exposed non-reproducible fixture layer timestamps; independent browser evidence exposed the 780px administration header badge at the 768px boundary. |
+| Hosted security for `97ea69d9…` | FAIL | Both CodeQL languages passed; source and backend-image Trivy failed on fixed HIGH CVE-2026-68497 in Jackson 2.21.5/3.1.5, so the later frontend-image scan was skipped. |
+| Local security correction | PASS | Jackson is held at fixed patch floors 2.21.6/3.1.6; exact Trivy 0.74.0 filesystem plus rebuilt backend/frontend image scans report zero fixed HIGH/CRITICAL findings. |
+| Hosted quality/security for the corrective tree | NOT RUN | There is no final corrective commit. Current hosted CodeQL, Trivy, image, SBOM and provenance evidence therefore remain open. |
 
 ---
 

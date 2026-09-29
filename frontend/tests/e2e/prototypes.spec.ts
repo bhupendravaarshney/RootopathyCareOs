@@ -2688,6 +2688,12 @@ test('administration readiness uses the exact approved catalogue and distinct da
       .locator('.readiness-panel .check-list > div')
       .first()
       .evaluate((row) => ({
+        administrationBadgeWhiteSpace: getComputedStyle(
+          document.querySelector('.administration-page-head > .badge') as HTMLElement,
+        ).whiteSpace,
+        administrationHeadingDirection: getComputedStyle(
+          document.querySelector('.administration-page-head') as HTMLElement,
+        ).flexDirection,
         badgeWhiteSpace: getComputedStyle(row.querySelector('.badge') as HTMLElement).whiteSpace,
         columns: getComputedStyle(row).gridTemplateColumns.split(' ').length,
         workspaceHeadingDirection: getComputedStyle(
@@ -2695,6 +2701,8 @@ test('administration readiness uses the exact approved catalogue and distinct da
         ).flexDirection,
       }));
     expect(tabletLayout).toEqual({
+      administrationBadgeWhiteSpace: 'normal',
+      administrationHeadingDirection: 'column',
       badgeWhiteSpace: 'normal',
       columns: 2,
       workspaceHeadingDirection: 'column',
