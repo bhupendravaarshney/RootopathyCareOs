@@ -1022,7 +1022,7 @@ function ReadinessContent({
 
   if (id === 'M1-06') {
     return (
-      <section className="panel">
+      <section className="panel readiness-panel">
         <div className="panel-heading">
           <div>
             <h2>Setup readiness</h2>
@@ -1072,7 +1072,7 @@ function ReadinessContent({
           <small>Server evaluated</small>
         </article>
       </div>
-      <section className="panel">
+      <section className="panel readiness-panel">
         <div className="panel-heading">
           <div>
             <h2>Priority exceptions</h2>

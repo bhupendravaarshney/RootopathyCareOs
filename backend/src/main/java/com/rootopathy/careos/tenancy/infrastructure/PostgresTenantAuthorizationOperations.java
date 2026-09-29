@@ -53,9 +53,12 @@ public final class PostgresTenantAuthorizationOperations implements TenantAuthor
         Objects.requireNonNull(authorizedWork, "authorizedWork");
         return transactionTemplate.execute(status -> {
             bindRequest(request);
+            var referenceAuthorityAvailable = referencePolicyEnabled
+                    && Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                            "SELECT careos_reference_authorization_enabled()", Boolean.class));
             var nowInstant = clock.instant();
             var now = Timestamp.from(nowInstant);
-            var operation = loadOperationPolicy(request);
+            var operation = loadOperationPolicy(request, referenceAuthorityAvailable);
             var activeMemberships = jdbcTemplate.queryForList(
                     """
                     SELECT memberships.id
@@ -124,8 +127,8 @@ public final class PostgresTenantAuthorizationOperations implements TenantAuthor
                     now,
                     operation.permissionKey().value(),
                     operation.registryVersion(),
-                    referencePolicyEnabled,
-                    referencePolicyEnabled));
+                    referenceAuthorityAvailable,
+                    referenceAuthorityAvailable));
             if (!permissionGranted) {
                 throw denied(operation);
             }
@@ -140,7 +143,8 @@ public final class PostgresTenantAuthorizationOperations implements TenantAuthor
         });
     }
 
-    private OperationPolicy loadOperationPolicy(TenantAuthorizationRequest request) {
+    private OperationPolicy loadOperationPolicy(
+            TenantAuthorizationRequest request, boolean referenceAuthorityAvailable) {
         var policies = jdbcTemplate.query(
                 """
                 SELECT operations.permission_key,
@@ -177,7 +181,7 @@ public final class PostgresTenantAuthorizationOperations implements TenantAuthor
                         result.getBoolean("maker_checker_required"),
                         result.getString("registry_version")),
                 request.requiredOperation().value(),
-                referencePolicyEnabled);
+                referenceAuthorityAvailable);
         if (policies.size() != 1) {
             throw new TenantAuthorizationException(
                     PERMISSION_DENIED,

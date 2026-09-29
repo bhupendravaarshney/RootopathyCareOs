@@ -7,4 +7,15 @@ CREATE ROLE careos_app
     NOINHERIT
     NOBYPASSRLS;
 
+CREATE ROLE careos_local_reference_authority
+    NOLOGIN
+    NOSUPERUSER
+    NOCREATEDB
+    NOCREATEROLE
+    NOINHERIT
+    NOBYPASSRLS;
+
+GRANT careos_local_reference_authority TO careos_app
+    WITH ADMIN FALSE, INHERIT FALSE, SET FALSE;
+
 GRANT CONNECT ON DATABASE careos_test TO careos_app;

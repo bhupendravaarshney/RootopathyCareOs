@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.util.Map;
@@ -22,6 +23,10 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.server.observation.OpenTelemetryServerRequestObservationConvention;
+import org.springframework.http.server.observation.ServerRequestObservationContext;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -38,7 +43,10 @@ class ApiContractTest {
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(new ContractController())
                 .setControllerAdvice(new ApiProblemHandler())
-                .addFilters(new CorrelationIdFilter(), new RequestTelemetryFilter())
+                .addFilters(
+                        new CorrelationIdFilter(),
+                        new AuthorizationReasonFilter(),
+                        new RequestTelemetryFilter())
                 .build();
     }
 
@@ -95,6 +103,9 @@ class ApiContractTest {
         try {
             mockMvc.perform(get("/contract/patients/{patientId}", "patient-secret-42")
                             .queryParam("token", "query-secret-42")
+                            .header(
+                                    AuthorizationReasonFilter.HEADER_NAME,
+                                    "Sensitive patient access purpose sentinel 42")
                             .header(CorrelationIdFilter.HEADER_NAME, "telemetry-42"))
                     .andExpect(status().isOk());
 
@@ -112,12 +123,80 @@ class ApiContractTest {
                     .containsEntry("httpStatus", 200)
                     .containsEntry("outcome", "completed")
                     .containsKey("durationMs");
-            assertThat(fields.toString()).doesNotContain("patient-secret-42", "query-secret-42");
+            assertThat(fields.toString())
+                    .doesNotContain(
+                            "patient-secret-42",
+                            "query-secret-42",
+                            "Sensitive patient access purpose sentinel 42");
             assertThat(MDC.get(CorrelationIdFilter.MDC_KEY)).isEqualTo("outer-operation-7");
         } finally {
             MDC.remove(CorrelationIdFilter.MDC_KEY);
             logger.detachAppender(appender);
             appender.stop();
+        }
+    }
+
+    @Test
+    void capturesOnlyANormalizedReasonAndHidesTheHeaderFromDownstreamComponents()
+            throws Exception {
+        mockMvc.perform(get("/contract/reason")
+                        .header(
+                                AuthorizationReasonFilter.HEADER_NAME,
+                                "  Credentialing review for Cafe\u0301 record 42  "))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reason").value("Credentialing review for Café record 42"))
+                .andExpect(jsonPath("$.headerVisible").value(false));
+
+        mockMvc.perform(get("/contract/reason")
+                        .header(AuthorizationReasonFilter.HEADER_NAME, "short"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail")
+                        .value("Authorization reason must contain 10 to 500 safe characters."));
+    }
+
+    @Test
+    void doesNotEmitAuthorizationReasonIntoApplicationLogsOrHttpTelemetry() throws Exception {
+        var sentinel = "Patient Alice Example diagnosis review sentinel 987";
+        var telemetryLogger = (Logger) LoggerFactory.getLogger(RequestTelemetryFilter.class);
+        var problemLogger = (Logger) LoggerFactory.getLogger(ApiProblemHandler.class);
+        var telemetryAppender = new ListAppender<ILoggingEvent>();
+        var problemAppender = new ListAppender<ILoggingEvent>();
+        telemetryAppender.start();
+        problemAppender.start();
+        telemetryLogger.addAppender(telemetryAppender);
+        problemLogger.addAppender(problemAppender);
+        try {
+            mockMvc.perform(get("/contract/unexpected")
+                            .header(AuthorizationReasonFilter.HEADER_NAME, sentinel)
+                            .header(CorrelationIdFilter.HEADER_NAME, "reason-leak-test-42"))
+                    .andExpect(status().isInternalServerError())
+                    .andExpect(content().string(org.hamcrest.Matchers.not(
+                            org.hamcrest.Matchers.containsString(sentinel))));
+
+            var emitted = java.util.stream.Stream.concat(
+                            telemetryAppender.list.stream(), problemAppender.list.stream())
+                    .map(event -> event.getFormattedMessage()
+                            + event.getMDCPropertyMap()
+                            + event.getKeyValuePairs()
+                            + java.util.Arrays.toString(event.getArgumentArray()))
+                    .collect(Collectors.joining("\n"));
+            assertThat(emitted).doesNotContain(sentinel, AuthorizationReasonFilter.HEADER_NAME);
+
+            var servletRequest = new MockHttpServletRequest("GET", "/contract/unexpected");
+            servletRequest.addHeader(AuthorizationReasonFilter.HEADER_NAME, sentinel);
+            var observationContext = new ServerRequestObservationContext(
+                    servletRequest, new MockHttpServletResponse());
+            observationContext.setPathPattern("/contract/unexpected");
+            var convention = new OpenTelemetryServerRequestObservationConvention();
+            var telemetry = convention.getContextualName(observationContext)
+                    + convention.getLowCardinalityKeyValues(observationContext)
+                    + convention.getHighCardinalityKeyValues(observationContext);
+            assertThat(telemetry).doesNotContain(sentinel, AuthorizationReasonFilter.HEADER_NAME);
+        } finally {
+            telemetryLogger.detachAppender(telemetryAppender);
+            problemLogger.detachAppender(problemAppender);
+            telemetryAppender.stop();
+            problemAppender.stop();
         }
     }
 
@@ -146,6 +225,22 @@ class ApiContractTest {
         @GetMapping("/patients/{patientId}")
         Map<String, String> patient(@PathVariable String patientId) {
             return Map.of("id", patientId);
+        }
+
+        @GetMapping("/reason")
+        Map<String, Object> reason(HttpServletRequest request) {
+            return Map.of(
+                    "reason", AuthorizationReasonFilter.from(request),
+                    "headerVisible",
+                    request.getHeader(AuthorizationReasonFilter.HEADER_NAME) != null);
+        }
+
+        @GetMapping("/unexpected")
+        void unexpected(HttpServletRequest request) {
+            if (AuthorizationReasonFilter.from(request) == null) {
+                throw new IllegalStateException("Synthetic reason was unavailable");
+            }
+            throw new IllegalStateException("Synthetic downstream failure");
         }
     }
 

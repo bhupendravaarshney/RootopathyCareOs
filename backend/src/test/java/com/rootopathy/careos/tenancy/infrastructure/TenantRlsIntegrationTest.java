@@ -55,6 +55,7 @@ import org.junit.jupiter.api.Test;
 import org.postgresql.util.PSQLException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -69,6 +70,7 @@ import org.testcontainers.utility.DockerImageName;
 @SpringBootTest
 @ActiveProfiles("test")
 @Testcontainers
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class TenantRlsIntegrationTest {
     private static final String MIGRATOR_USER = "careos_migrator";
     private static final String MIGRATOR_PASSWORD = "careos-migrator-test-only";
@@ -794,6 +796,129 @@ class TenantRlsIntegrationTest {
                         "UPDATE authorization_registry_releases SET status = 'retired'"))
                 .isInstanceOf(SQLException.class)
                 .hasMessageContaining("migration-owned and immutable");
+    }
+
+    @Test
+    void deniesLocalBootstrapWorkforceAccessWhenTheReferenceFlagIsMissingOrFalse()
+            throws SQLException {
+        seedReferenceOwner();
+        assignReferenceOwnerRole("local_bootstrap");
+
+        assertThat(resourceScopeAsRuntime(
+                        REFERENCE_ORGANIZATION,
+                        REFERENCE_OWNER,
+                        "workforce.dashboard.read",
+                        null))
+                .isFalse();
+        assertThat(resourceScopeAsRuntime(
+                        REFERENCE_ORGANIZATION,
+                        REFERENCE_OWNER,
+                        "workforce.dashboard.read",
+                        "false"))
+                .isFalse();
+        assertThat(resourceScopeAsRuntime(
+                        REFERENCE_ORGANIZATION,
+                        REFERENCE_OWNER,
+                        "workforce.dashboard.read",
+                        "true"))
+                .isTrue();
+    }
+
+    @Test
+    void keepsActivePolicyAndReferencePolicyTenantAndPermissionBoundariesDistinct()
+            throws SQLException {
+        seedReferenceOwner();
+        assignReferenceOwnerRole("local_bootstrap");
+
+        assertThat(resourceScopeAsRuntime(
+                        ORG_TWO, REFERENCE_OWNER, "workforce.dashboard.read", "true"))
+                .isFalse();
+        assertThat(resourceScopeAsRuntime(
+                        REFERENCE_ORGANIZATION,
+                        REFERENCE_OWNER,
+                        "workforce.not-approved",
+                        "true"))
+                .isFalse();
+        assertThat(activePolicyResourceScopeAsRuntime(
+                        REFERENCE_ORGANIZATION,
+                        REFERENCE_OWNER,
+                        "workforce.dashboard.read",
+                        "true"))
+                .isFalse();
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT status FROM authorization_roles WHERE role_key='local_bootstrap'",
+                        String.class))
+                .isEqualTo("reference");
+
+        assignReferenceOwnerRole("organization_owner");
+        assertThat(activePolicyResourceScopeAsRuntime(
+                        REFERENCE_ORGANIZATION,
+                        REFERENCE_OWNER,
+                        "workforce.dashboard.read",
+                        null))
+                .isTrue();
+        assertThat(resourceScopeAsRuntime(
+                        REFERENCE_ORGANIZATION,
+                        REFERENCE_OWNER,
+                        "workforce.dashboard.read",
+                        "false"))
+                .isTrue();
+    }
+
+    @Test
+    void runtimeRoleCannotManufactureReferenceAuthorityBySettingTheCustomGuc()
+            throws SQLException {
+        seedReferenceOwner();
+        assignReferenceOwnerRole("local_bootstrap");
+        executeAsMigrator("REVOKE careos_local_reference_authority FROM careos_app");
+        try {
+            assertThat(referenceCapabilityAsRuntime("true")).isFalse();
+            assertThat(resourceScopeAsRuntime(
+                            REFERENCE_ORGANIZATION,
+                            REFERENCE_OWNER,
+                            "workforce.dashboard.read",
+                            "true"))
+                    .isFalse();
+            assertThatThrownBy(() -> executeAsRuntime("SET ROLE careos_local_reference_authority"))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("permission denied to set role");
+            assertThatThrownBy(() -> executeAsRuntime(
+                            "GRANT careos_local_reference_authority TO careos_app"))
+                    .isInstanceOf(SQLException.class)
+                    .hasMessageContaining("permission denied to grant role");
+
+            var referenceAuthorization = new PostgresTenantAuthorizationOperations(
+                    jdbcTemplate, transactionManager, clock, true);
+            var workforceRequest = new TenantAuthorizationRequest(
+                    REFERENCE_ORGANIZATION,
+                    new AuthenticatedActorContext(
+                            REFERENCE_OWNER, "reference-policy-attack", "reference-guc-attack-42"),
+                    new OperationKey("workforce.dashboard.read"));
+            assertThatThrownBy(() -> referenceAuthorization.execute(workforceRequest, () -> true))
+                    .isInstanceOf(TenantAuthorizationException.class)
+                    .extracting(exception -> ((TenantAuthorizationException) exception).reason())
+                    .isEqualTo(TenantAuthorizationException.Reason.MEMBERSHIP_NOT_FOUND);
+        } finally {
+            executeAsMigrator(
+                    "GRANT careos_local_reference_authority TO careos_app "
+                            + "WITH ADMIN FALSE, INHERIT FALSE, SET FALSE");
+        }
+
+        assertThat(jdbcTemplate.queryForMap(
+                        """
+                        SELECT membership.admin_option, membership.inherit_option,
+                               membership.set_option
+                        FROM pg_catalog.pg_auth_members membership
+                        JOIN pg_catalog.pg_roles capability
+                          ON capability.oid=membership.roleid
+                        JOIN pg_catalog.pg_roles runtime_role
+                          ON runtime_role.oid=membership.member
+                        WHERE capability.rolname='careos_local_reference_authority'
+                          AND runtime_role.rolname='careos_app'
+                        """))
+                .containsEntry("admin_option", false)
+                .containsEntry("inherit_option", false)
+                .containsEntry("set_option", false);
     }
 
     @Test
@@ -2255,6 +2380,104 @@ class TenantRlsIntegrationTest {
                 DELETE FROM organization_memberships
                 WHERE id = '01900000-0000-7000-8000-000000000304'
                 """);
+    }
+
+    private void assignReferenceOwnerRole(String roleKey) throws SQLException {
+        if (!roleKey.equals("local_bootstrap") && !roleKey.equals("organization_owner")) {
+            throw new IllegalArgumentException("Unsupported reference-owner test role");
+        }
+        executeAsMigrator("""
+                UPDATE organization_memberships
+                SET role_key = '%s'
+                WHERE organization_id = '01900000-0000-7000-8000-000000000003'
+                  AND user_id = '01900000-0000-7000-8000-000000000203'
+                """.formatted(roleKey));
+    }
+
+    private boolean resourceScopeAsRuntime(
+            UUID organizationId, UUID actorId, String permissionKey, String referenceFlag)
+            throws SQLException {
+        return booleanFunctionAsRuntime(
+                "SELECT careos_m2_user_has_resource_scope(?,?,?)",
+                organizationId,
+                actorId,
+                permissionKey,
+                referenceFlag);
+    }
+
+    private boolean activePolicyResourceScopeAsRuntime(
+            UUID organizationId, UUID actorId, String permissionKey, String referenceFlag)
+            throws SQLException {
+        return booleanFunctionAsRuntime(
+                "SELECT careos_m2_user_has_resource_scope_active_policy(?,?,?)",
+                organizationId,
+                actorId,
+                permissionKey,
+                referenceFlag);
+    }
+
+    private boolean booleanFunctionAsRuntime(
+            String sql,
+            UUID organizationId,
+            UUID actorId,
+            String permissionKey,
+            String referenceFlag)
+            throws SQLException {
+        try (var connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), APP_USER, APP_PASSWORD)) {
+            connection.setAutoCommit(false);
+            try (var setting = connection.prepareStatement("SELECT set_config(?, ?, true)")) {
+                setTransactionSetting(
+                        setting, "app.current_organization_id", organizationId.toString());
+                setTransactionSetting(setting, "app.current_actor_id", actorId.toString());
+                setTransactionSetting(setting, "app.current_actor_kind", "user");
+                if (referenceFlag != null) {
+                    setTransactionSetting(
+                            setting,
+                            "app.reference_authorization_policy_enabled",
+                            referenceFlag);
+                }
+            }
+            try (var query = connection.prepareStatement(sql)) {
+                query.setObject(1, organizationId);
+                query.setObject(2, actorId);
+                query.setString(3, permissionKey);
+                try (var result = query.executeQuery()) {
+                    result.next();
+                    return result.getBoolean(1);
+                }
+            } finally {
+                connection.rollback();
+            }
+        }
+    }
+
+    private boolean referenceCapabilityAsRuntime(String referenceFlag) throws SQLException {
+        try (var connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), APP_USER, APP_PASSWORD)) {
+            connection.setAutoCommit(false);
+            try (var setting = connection.prepareStatement(
+                    "SELECT set_config('app.reference_authorization_policy_enabled', ?, true)")) {
+                setting.setString(1, referenceFlag);
+                setting.executeQuery();
+            }
+            try (var query = connection.prepareStatement(
+                    "SELECT careos_reference_authorization_enabled()");
+                    var result = query.executeQuery()) {
+                result.next();
+                return result.getBoolean(1);
+            } finally {
+                connection.rollback();
+            }
+        }
+    }
+
+    private void executeAsRuntime(String sql) throws SQLException {
+        try (var connection = DriverManager.getConnection(
+                        POSTGRES.getJdbcUrl(), APP_USER, APP_PASSWORD);
+                var statement = connection.createStatement()) {
+            statement.execute(sql);
+        }
     }
 
     private void seedServiceIdentity() throws SQLException {

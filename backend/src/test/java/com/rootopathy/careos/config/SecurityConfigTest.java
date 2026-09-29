@@ -22,7 +22,12 @@ class SecurityConfigTest {
 
         assertThat(configuration).isNotNull();
         assertThat(configuration.getAllowedHeaders())
-                .contains("If-Match", "Idempotency-Key", "X-Correlation-Id", "X-XSRF-TOKEN")
+                .contains(
+                        "If-Match",
+                        "Idempotency-Key",
+                        "X-Authorization-Reason",
+                        "X-Correlation-Id",
+                        "X-XSRF-TOKEN")
                 .doesNotContain("X-Organization-Id");
         assertThat(configuration.getExposedHeaders())
                 .containsExactly(

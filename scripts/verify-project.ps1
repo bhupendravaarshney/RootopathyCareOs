@@ -24,10 +24,13 @@ try {
 
     Invoke-CareOsCommand "docker" @("compose", "--env-file", ".env.example", "-f", "compose.yaml", "config", "--quiet")
     Invoke-CareOsCommand "docker" @("compose", "--env-file", ".env.example", "-f", "compose.yaml", "-f", "compose.scanner.yaml", "config", "--quiet")
+    Invoke-CareOsCommand "node" @("scripts/build-s3-test-fixture.mjs")
 
     Invoke-CareOsCommand "node" @("scripts/verify-prototype-register.mjs")
     Invoke-CareOsCommand "node" @("scripts/verify-api-contract.mjs")
     Invoke-CareOsCommand "node" @("--test", "scripts/tests/verify-api-contract.test.mjs")
+    Invoke-CareOsCommand "node" @("--test", "scripts/tests/generate-qa-evidence.test.mjs")
+    Invoke-CareOsCommand "node" @("--test", "scripts/tests/build-s3-test-fixture.test.mjs")
     Invoke-CareOsCommand "node" @("scripts/verify-module-1-inputs.mjs", "--require-approved")
     Invoke-CareOsCommand "node" @("--test", "scripts/tests/verify-module-1-inputs.test.mjs")
     Invoke-CareOsCommand "node" @("scripts/verify-module-1-review-drafts.mjs")

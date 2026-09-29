@@ -7,10 +7,13 @@ node -e 'const [major, minor] = process.versions.node.split(".").map(Number); if
 
 docker compose --env-file "$root_dir/.env.example" -f "$root_dir/compose.yaml" config --quiet
 docker compose --env-file "$root_dir/.env.example" -f "$root_dir/compose.yaml" -f "$root_dir/compose.scanner.yaml" config --quiet
+node "$root_dir/scripts/build-s3-test-fixture.mjs"
 
 node "$root_dir/scripts/verify-prototype-register.mjs"
 node "$root_dir/scripts/verify-api-contract.mjs"
 node --test "$root_dir/scripts/tests/verify-api-contract.test.mjs"
+node --test "$root_dir/scripts/tests/generate-qa-evidence.test.mjs"
+node --test "$root_dir/scripts/tests/build-s3-test-fixture.test.mjs"
 node "$root_dir/scripts/verify-module-1-inputs.mjs" --require-approved
 node --test "$root_dir/scripts/tests/verify-module-1-inputs.test.mjs"
 node "$root_dir/scripts/verify-module-1-review-drafts.mjs"

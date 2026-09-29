@@ -36,6 +36,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
@@ -51,6 +52,7 @@ import org.testcontainers.utility.DockerImageName;
 @SpringBootTest(classes = {com.rootopathy.careos.CareOsApplication.class, DocumentLifecycleIntegrationTest.TestProviders.class})
 @ActiveProfiles("test")
 @Testcontainers
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class DocumentLifecycleIntegrationTest {
     private static final String MIGRATOR_USER = "careos_migrator";
     private static final String MIGRATOR_PASSWORD = "careos-migrator-test-only";

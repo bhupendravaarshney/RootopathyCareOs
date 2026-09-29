@@ -114,7 +114,7 @@ This slice completes the safe activation boundary only. It does not implement or
 - [x] Derive object keys exclusively from the authorized organization, document, and version UUIDs; never accept a filename or storage key from a request.
 - [x] Enforce a configured upload ceiling, exact stream length, lowercase SHA-256 verification, conditional creation, mismatch cleanup, byte-verified idempotent retries, and conflict rejection.
 - [x] Keep scanning, promotion, signed access, and retention unavailable; successful quarantine storage is not clean-document evidence.
-- [x] Replace the inaccessible mutable Docker Hub image with a pinned multi-architecture Quay digest for synthetic local compatibility and isolated Testcontainers checks.
+- [x] Replace the unavailable external server image with a repository-owned, checksum/source-pinned and manifest-digest-verified synthetic fixture for local/CI compatibility and isolated Testcontainers checks.
 
 Local evidence: a clean Java 25 build compiled 115 production sources and 7 test sources, passed all 47 backend tests against disposable PostgreSQL 18, Redis 8, and the pinned object store, and packaged the bootable JAR. Six storage scenarios verify private anonymous access, exact content/digest enforcement and cleanup, upload ceilings, tenant key separation, retry/conflict behavior, public-policy rejection, HTTPS configuration, and Spring capability replacement. API coverage remains 15 operations, the 79-screen registry and Compose contract pass, and an enabled image smoke reached health `UP`, Flyway v6, exactly one available capability (`private-document-quarantine`), eight unavailable capabilities, no Actuator storage-configuration disclosure, empty production event registries, and non-root user `careos`.
 

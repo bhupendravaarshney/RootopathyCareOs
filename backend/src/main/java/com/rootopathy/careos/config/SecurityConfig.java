@@ -177,6 +177,7 @@ public class SecurityConfig {
         configuration.setAllowedHeaders(List.of(
                 "Content-Type",
                 "X-Correlation-Id",
+                "X-Authorization-Reason",
                 "X-CSRF-TOKEN",
                 "X-XSRF-TOKEN",
                 "If-Match",

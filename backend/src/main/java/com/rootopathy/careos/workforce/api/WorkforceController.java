@@ -3,6 +3,7 @@ package com.rootopathy.careos.workforce.api;
 import com.rootopathy.careos.governance.domain.IdempotencyOutcome;
 import com.rootopathy.careos.identity.api.AuthenticationSessionState;
 import com.rootopathy.careos.shared.api.ApiProblemException;
+import com.rootopathy.careos.shared.api.AuthorizationReasonFilter;
 import com.rootopathy.careos.shared.api.CorrelationIdFilter;
 import com.rootopathy.careos.shared.domain.AuthenticatedActor;
 import com.rootopathy.careos.workforce.application.WorkforceException;
@@ -66,9 +67,6 @@ public class WorkforceController {
             @RequestParam(required = false) @Size(max = 120) String status,
             @RequestParam(required = false) @Min(1) @Max(100) Integer limit,
             @RequestParam(required = false) @Size(max = 2048) String cursor,
-            @RequestHeader(value = "X-Authorization-Reason", required = false)
-                    @Size(min = 10, max = 500)
-                    String reason,
             Authentication authentication,
             HttpServletRequest request) {
         var actor = actor(authentication);
@@ -83,7 +81,7 @@ public class WorkforceController {
                 status,
                 limit,
                 cursor,
-                reason,
+                AuthorizationReasonFilter.from(request),
                 assurance(session, AuthenticationSessionState.RECENT_AUTHENTICATION_AT),
                 assurance(session, AuthenticationSessionState.MFA_AUTHENTICATED_AT)));
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(response);

@@ -1876,6 +1876,32 @@ select:disabled {
   }
 }
 
+@media (min-width: 761px) and (max-width: 900px) {
+  .readiness-panel .panel-heading,
+  .administrator-workspaces .panel-heading {
+    flex-direction: column;
+  }
+  .readiness-panel .panel-heading > *,
+  .administrator-workspaces .panel-heading > * {
+    max-width: 100%;
+  }
+  .readiness-panel .panel-heading .badge,
+  .administrator-workspaces .panel-heading .badge {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .readiness-panel .check-list > div {
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+  .readiness-panel .check-list a.badge {
+    grid-column: 2;
+    justify-self: start;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
 @media (max-width: 760px) {
   .app-shell {
     display: block;

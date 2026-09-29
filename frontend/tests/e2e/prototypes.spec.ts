@@ -2683,6 +2683,23 @@ test('administration readiness uses the exact approved catalogue and distinct da
   await expect(page.getByText('10 blockers · 1 warnings')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Priority exceptions' })).toBeVisible();
   await expect(page.locator('.check-list > div')).toHaveCount(5);
+  if (page.viewportSize()?.width === 768) {
+    const tabletLayout = await page
+      .locator('.readiness-panel .check-list > div')
+      .first()
+      .evaluate((row) => ({
+        badgeWhiteSpace: getComputedStyle(row.querySelector('.badge') as HTMLElement).whiteSpace,
+        columns: getComputedStyle(row).gridTemplateColumns.split(' ').length,
+        workspaceHeadingDirection: getComputedStyle(
+          document.querySelector('.administrator-workspaces .panel-heading') as HTMLElement,
+        ).flexDirection,
+      }));
+    expect(tabletLayout).toEqual({
+      badgeWhiteSpace: 'normal',
+      columns: 2,
+      workspaceHeadingDirection: 'column',
+    });
+  }
   await expectNoDocumentHorizontalOverflow(page, 'M1-05 readiness dashboard');
   await expectNoSeriousViolations(page, 'M1-05 readiness dashboard');
 

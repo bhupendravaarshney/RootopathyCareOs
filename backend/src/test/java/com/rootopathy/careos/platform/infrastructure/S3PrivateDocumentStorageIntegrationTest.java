@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rootopathy.careos.platform.application.DocumentStorageException;
 import com.rootopathy.careos.platform.application.DocumentAccessOperations;
 import com.rootopathy.careos.platform.application.DocumentEvidenceOperations;
@@ -47,6 +48,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
@@ -55,16 +57,18 @@ import java.util.Set;
 import java.util.HexFormat;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
+import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 @Testcontainers
+@Tag("compatibility")
 class S3PrivateDocumentStorageIntegrationTest {
     private static final String ACCESS_KEY = "careos-integration";
     private static final String SECRET_KEY = "careos-integration-secret-never-production";
@@ -73,17 +77,42 @@ class S3PrivateDocumentStorageIntegrationTest {
     private static final UUID ORGANIZATION_TWO =
             UUID.fromString("10000000-0000-0000-0000-000000000002");
     private static final UUID ACTOR_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
+    private static final String FIXTURE_IMAGE =
+            "careos-s3-test-fixture:minio-release-2025-09-07";
+    private static final String FIXTURE_MANIFEST_DIGEST =
+            "sha256:bb6f358423eec8c666f70d24dbab12a0b9467b5071f2bb30ee64767d3dce82d1";
 
     /** Synthetic, isolated compatibility target; never a production storage recommendation. */
     @Container
-    private static final GenericContainer<?> MINIO = new GenericContainer<>(
-                    DockerImageName.parse(
-                            "quay.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e"))
+    private static final GenericContainer<?> MINIO =
+            new GenericContainer<>(verifiedFixtureImage())
+            .withImagePullPolicy(ignored -> false)
             .withEnv("MINIO_ROOT_USER", ACCESS_KEY)
             .withEnv("MINIO_ROOT_PASSWORD", SECRET_KEY)
             .withCommand("server", "/data", "--console-address", ":9001")
             .withExposedPorts(9000)
             .waitingFor(Wait.forHttp("/minio/health/ready").forPort(9000).forStatusCode(200));
+
+    private static DockerImageName verifiedFixtureImage() {
+        var metadataPath = Path.of(System.getProperty(
+                "careos.s3.fixture-metadata", "../build/s3-fixture-metadata.json"));
+        try {
+            var digest = new ObjectMapper()
+                    .readTree(metadataPath.toFile())
+                    .path("containerimage.digest")
+                    .asText();
+            if (!FIXTURE_MANIFEST_DIGEST.equals(digest)) {
+                throw new IllegalStateException("CareOS S3 fixture digest mismatch: expected "
+                        + FIXTURE_MANIFEST_DIGEST + ", received " + digest);
+            }
+        } catch (IOException exception) {
+            throw new IllegalStateException(
+                    "CareOS S3 fixture preflight evidence is unavailable at " + metadataPath
+                            + "; run node scripts/build-s3-test-fixture.mjs before compatibility tests",
+                    exception);
+        }
+        return DockerImageName.parse(FIXTURE_IMAGE);
+    }
 
     @Test
     void storesOnlyVerifiedContentUnderATenantDerivedPrivateKey() throws Exception {

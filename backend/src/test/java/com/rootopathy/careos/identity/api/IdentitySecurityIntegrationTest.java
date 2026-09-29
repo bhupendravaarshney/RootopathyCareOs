@@ -33,6 +33,7 @@ import org.postgresql.util.PSQLException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
@@ -60,6 +61,7 @@ import tools.jackson.databind.ObjectMapper;
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Testcontainers
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @Import(IdentitySecurityIntegrationTest.NotificationTestConfiguration.class)
 class IdentitySecurityIntegrationTest {
     private static final String MIGRATOR_USER = "careos_migrator";
@@ -3223,6 +3225,9 @@ class IdentitySecurityIntegrationTest {
 
     @Test
     void exposesMinimalDependencyAwareProbesAndKeepsMetricsBehindAuthentication() throws Exception {
+        var sensitiveReason = "Patient Alice Example metrics leak sentinel 654";
+        mockMvc.perform(get("/livez").header("X-Authorization-Reason", sensitiveReason))
+                .andExpect(status().isOk());
         for (var path : new String[] {
             "/livez", "/readyz", "/actuator/health/liveness", "/actuator/health/readiness"
         }) {
@@ -3241,7 +3246,10 @@ class IdentitySecurityIntegrationTest {
                                 .authorities(new SimpleGrantedAuthority(AUTHENTICATED))))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("application=\"careos-backend\"")))
-                .andExpect(content().string(containsString("jvm_")));
+                .andExpect(content().string(containsString("jvm_")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(containsString(sensitiveReason))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        containsString("X-Authorization-Reason"))));
 
         REDIS.getDockerClient().pauseContainerCmd(REDIS.getContainerId()).exec();
         try {

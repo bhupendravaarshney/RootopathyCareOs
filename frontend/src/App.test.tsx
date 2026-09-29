@@ -2802,7 +2802,7 @@ describe('CareOS frontend session boundary', () => {
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Departments and units' }),
     ).toBeInTheDocument();
-    expect(screen.getAllByText('Clinical Services')).toHaveLength(2);
+    expect(await screen.findAllByText('Clinical Services')).toHaveLength(2);
     expect(screen.getByText('— Cardiology')).toBeInTheDocument();
     expect(screen.getByText('Depth 2 · revision 2')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Add hierarchy draft' })).toBeInTheDocument();

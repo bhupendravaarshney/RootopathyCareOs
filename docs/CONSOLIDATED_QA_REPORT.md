@@ -1,75 +1,68 @@
-# CareOS consolidated repository QA report
+# CareOS consolidated QA report
 
-**Run date:** 28 September 2026
+**Evidence date:** 29 September 2026
 
-**Repository scope:** Phase 0 and Modules 1-13 through Flyway V114
+**Baseline commit:** `be6cfa8e4f947a2e42ed1cba29d29ad1f65f4dc5`
 
-**Result:** PASS
+**Evidence subject:** uncommitted stabilization working tree based on the baseline commit
 
-**Target-environment/production acceptance:** not granted
+**Schema/API boundary:** Flyway V115, OpenAPI 3.1.0, 195 screens, 135 operations
 
-## Results
+**Repository release gate: FAIL** — all applicable local quality gates pass, but the stabilization tree has no final commit and neither hosted workflow has run against its exact bytes.
 
-| Gate | Result | Evidence |
+**Production acceptance: NOT GRANTED.**
+
+## Local consolidated QA
+
+The local evidence is authoritative for the tested working tree, but it is not commit-bound hosted evidence. `build/qa-evidence.json` records the baseline SHA together with `source.workingTree: DIRTY`, `source.commitBound: false`, and `repositoryReleaseGate: NOT_EVALUATED`.
+
+| Gate | Result | Executable evidence |
 | --- | --- | --- |
-| Backend clean verification | PASS | Java 25/Maven 3.9.11 compiled 474 production and 57 test source files, validated/applied V1-V114 to disposable PostgreSQL 18, passed 274 tests in 57 suites with zero failures, errors or skips, enforced all 11 architecture rules and packaged the bootable JAR. |
-| Frontend contract/static/unit/build | PASS | Generated-client drift, formatting, strict TypeScript, ESLint, 70-source/14-feature/209-import architecture checks, four negative dependency fixtures, 144 tests in 15 files and the Vite production build all pass. |
-| Browser/accessibility/responsive | PASS | The complete Playwright run passes 185/185 cases across the exact 1440/1024/768/390/320 projects, including Axe and overflow assertions. |
-| API contract | PASS | OpenAPI 3.1 version 0.52.0 contains exactly 135 registered operations and all 38 positive/negative contract cases pass. |
-| Screen registry | PASS | The independent verifier and backend registry agree on exactly 195 screens: M1 23, M2 29, M3 16, M4 15, M5 12, COS 27, P7 11, P8 10, P9 12, P10 9, P11 11, P12 10 and P13 10. |
-| Repository/input/security contracts | PASS | All 131 API, approved-input, retained-candidate and CI-security contract cases pass, including the whole-project runner parity check. |
-| Live product audit | PASS | A real authenticated browser visited 193 protected business routes plus login and organization selection. It found zero unexpected API failures, zero unexpected console errors, zero exposed internal screen-code routes and zero module routes without useful content. |
-| Compose and deployment smoke | PASS | Both Compose models validate. The rebuilt six-service local stack upgraded through V114, remains healthy, serves frontend HTTP 200 and exposes the exact 195-screen registry. The clean backend suite separately applies V1-V114 from an empty PostgreSQL 18 schema. |
-| Application images and source/image scans | PASS | Both digest-pinned non-root application images rebuild. Trivy 0.74 reports zero fixed HIGH/CRITICAL Maven/npm, Debian 13.6 backend OS/JAR or Alpine 3.24.1 frontend findings, zero Dockerfile misconfigurations and no source/image secret finding. |
+| Backend clean verification | PASS | 279/279 tests, zero failures/errors/skips; 257 core tests plus 22 required compatibility tests. PostgreSQL 18 applies V1-V115 from empty state, architecture rules pass, and the JAR packages. |
+| PostgreSQL authorization and RLS | PASS | Tenant/RLS attacks, active production-role behavior, missing/false local reference flag denial, capability-less GUC manipulation denial, cross-tenant denial, unknown-permission denial, and production reference-policy rejection pass. |
+| Object storage and scanner compatibility | PASS | 15 S3/Object Lock tests and 7 ClamAV tests pass without skips. The S3 fixture build is rejected unless its manifest is exactly `sha256:bb6f358423eec8c666f70d24dbab12a0b9467b5071f2bb30ee64767d3dce82d1`. |
+| Frontend static/unit/build | PASS | `npm ci`, generated API drift, architecture, strict typecheck, lint, formatting, 144/144 Vitest tests, and the production build pass. |
+| Browser/accessibility/responsive | PASS | 185/185 Playwright cases pass at 1440, 1024, 768, 390, and 320 pixels with Axe plus document/body overflow assertions. The M1-05 readiness row remains contained at exactly 768 pixels. |
+| Repository/API/security contracts | PASS | 140/140 contract and negative tests pass; the registry remains exactly 195 screens and OpenAPI remains exactly 135 operations. Both Compose models validate. |
+| Authenticated live product audit | PASS | Login, organization selection, and all 193 protected business routes pass. The audit records zero unexpected API failures, console errors, exposed internal screen codes, or contentless routes; four HTTP 428 responses remain expected high-assurance boundaries. |
+| Authorization-reason privacy | PASS | Tests prove a sentinel reason is absent from application/exception logs, request telemetry, OpenTelemetry attributes, Prometheus output, generic responses, Nginx access-log format, and frontend analytics/logging paths. |
+| Test shutdown signal | PASS | The final backend run contains no PostgreSQL connection-refused, Lettuce `ConnectionWatchdog`, or Spring Session cleanup retry noise after dependencies are torn down. |
 
-## Live product-readiness remediation
+The local Node executable was 24.13.0, below the repository's declared 24.15.0 floor, although every individually required frontend command passed. Hosted jobs use `frontend/.nvmrc`; that hosted result is still required.
 
-The repository gates were green before this pass, but the running local product was not useful enough for hands-on QA. A first authenticated route sweep found widespread internal M1/M2/P-style labels, 31 pages presenting alerts or load failures, 143 content-empty pages, only one route with a real data row and no single administrator view spanning the product. It also reproduced an M1 activation-query HTTP 500, broad Module 2 HTTP 500 responses and two purpose-bound Module 2 reads that could only return HTTP 400.
+## Hosted GitHub quality
 
-The remediated live stack now reports:
+| Revision | State | Evidence |
+| --- | --- | --- |
+| Baseline `be6cfa8…` | FAIL | Frontend M1-14 async race; backend could not fetch the removed Quay MinIO digest; contracts passed; browser was skipped because it depended on frontend. |
+| Stabilization working tree | NOT RUN | No final commit or hosted run exists. The refactored workflow has independent frontend, browser, backend-core, compatibility, contracts, and authenticated product-smoke jobs plus an `always()` aggregate gate. |
 
-| Live check | Result |
-| --- | --- |
-| Authenticated experiences covered | 195: login, organization selection and 193 protected business routes |
-| Unexpected API failures | 0 |
-| Unexpected browser-console errors | 0 |
-| Routes exposing internal M1/M2/P/COS labels anywhere in visible page text | 0 |
-| Module routes without live rows, a clearly labeled demo preview or an explicit access-purpose prompt | 0 |
-| Routes with local read-only demo previews | 168 |
-| Routes with live server rows | 2 |
-| Purpose-bound workforce routes | 2, both gated and successfully loaded with an explicit audited QA reason |
-| Administrator coverage | One administrator overview with links to all 13 workspaces |
+A frontend failure can no longer suppress browser evidence. The compatibility lane builds and digest-verifies the repository-owned S3 fixture before Maven starts, so fixture failure is early and explicit. The quality artifact is named `qa-evidence-<commit>` and the live audit artifact is named `authenticated-product-audit-<commit>`.
 
-The remediation includes these product changes:
+## Hosted GitHub security
 
-- Repaired the M1 activation query to use the actual facility name column.
-- Added a V114 local-bootstrap bridge for Module 2's database resource checks. It works only when the existing transaction-scoped reference-policy flag is explicitly enabled; the same calls remain denied when that flag is false.
-- Ensured Module 2 domain failures use their specific problem handler instead of becoming generic HTTP 500 responses.
-- Added an optional checked `X-Authorization-Reason` contract and a mandatory purpose prompt for the two purpose-bound workforce reads.
-- Replaced visible implementation codes with meaningful workspace names, page titles and Previous/Next controls.
-- Added a clearly identified `CareOS Demo Administrator` and a 13-workspace command centre.
-- Added module-relevant local demo records for empty Module 2-13 projections. They are UI-only, read-only, limited to the fixed local demo organization, never written or submitted to an API, and explicitly excluded from clinical or operational use.
-- Added guided identity-verification calls to action for high-assurance pages instead of presenting an unexplained failure.
+| Revision | State | Evidence |
+| --- | --- | --- |
+| Baseline `be6cfa8…` | PASS | The existing hosted `CareOS security` workflow passed for the baseline commit. |
+| Stabilization working tree | NOT RUN | Local CI-security contracts pass, but CodeQL, Trivy, image scans, and CycloneDX evidence have not run against a final stabilization commit. |
 
-Four HTTP 428 responses remain intentional: two audit/export requests on Audit log and one request each on Credential review detail and Workforce audit log. They preserve recent-authentication/MFA enforcement and now render a guided verification state. They are not counted as unexpected failures.
+No hosted security result from the baseline is carried forward to changed bytes.
 
-The live audit is repeatable while the Compose stack is running:
+## Target-environment acceptance
 
-```powershell
-cd frontend
-npm run test:live:audit
-```
+**NOT EVALUATED.** No evidence in this pass covers managed production PostgreSQL/Redis/storage, deployment identities, secret management, TLS/edge controls, provider credentials, backups/restores, monitoring/on-call, load testing, penetration testing, or target tenant-isolation smoke tests.
 
-Its detailed JSON and four visual captures are written to `frontend/test-results/live-product-audit/`.
+## Production acceptance
 
-One cross-module test-fixture cleanup issue was exposed by the full run: the document-evidence integration test truncated a parent table without including Module 8's later foreign-key child. The disposable-test cleanup now uses PostgreSQL `CASCADE`; the affected 12-test suite and the subsequent clean 274-test backend verification both pass. Production code and migration history were not weakened or rewritten.
+**NOT GRANTED.** Protected COS reconciliation, facility-scoped authorization approval, dedicated clinical/care-plan/follow-up UX, production workers, real notification/payment/calendar/lab/FHIR providers, accountable clinical/privacy/legal/finance/operations approval, and the target-environment controls above remain open and fail closed where applicable.
 
-A post-completion audit exposed one QA-tooling false-green risk: the original shell whole-project runner omitted several enforced gates. The shell runner now includes approved-input enforcement, negative contract/security suites, generated-client drift, frontend architecture, the complete browser matrix and clean Maven verification. A matching PowerShell runner was added, and the CI-security suite now rejects parity regressions between both runners. No additional application defect was reproduced during this audit.
+## Test classification
 
-The only non-blocking build observation is Vite's approximately 775 KB JavaScript chunk warning. It does not affect correctness, accessibility or the passing production build, but route-level code splitting remains a sensible performance optimization before production rollout. The runners also fail early outside the required Node 24.15-or-newer Node 24 line.
+- Core required gate: architecture, domain behavior, PostgreSQL tenancy/RLS, authorization, governance, identity, migrations, API contracts, frontend unit/build, and browser accessibility/responsiveness.
+- Compatibility/infrastructure required gate: S3-compatible provider mechanics, Object Lock, ClamAV, and provider-specific behavior.
 
-## Meaning of PASS
+Both classes are required for release. Classification changes diagnosis only; it does not permit a skip on `main`.
 
-This result closes the deferred repository-wide regression and the local live-product remediation for the completed 13-module source tree. It verifies the checked local code, migrations, contracts, generated client, architecture boundaries, unit/integration behavior, registered routes, browser accessibility, responsive containment and authenticated local runtime behavior.
+## Evidence interpretation
 
-It is not production acceptance. Protected COS source reconciliation, the separately unapproved M1 facility-scope extension, real secrets/keys and service identities, partner/provider/profile/policy activation, hosted CI and registry enforcement, retained exact-artifact SBOM/provenance evidence, target infrastructure, backup/restore, monitoring/on-call, performance/load/penetration exercises and accountable clinical/privacy/legal/finance/operations approvals remain explicit external acceptance work.
+Local quality is green. Repository release remains failed until the exact final commit passes both hosted quality and hosted security and retains its commit-bound artifacts. Production acceptance remains a separate accountable decision and cannot be inferred from repository test success.

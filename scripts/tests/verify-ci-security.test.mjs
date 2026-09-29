@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+  validateAuthorizationReasonProtectionTexts,
   validateBaseConfigText,
   validateComposeText,
   validateDependabotText,
@@ -11,11 +12,16 @@ import {
   validateNginxText,
   validateProductionConfigText,
   validateProjectVerificationTexts,
+  validateQualityTopologyText,
+  validateReferenceAuthorityBoundaryTexts,
   validateResponsiveBrowserTexts,
+  validateS3FixtureTexts,
   validateWorkflowText,
 } from "../verify-ci-security.mjs";
 
 const SHA = "a".repeat(40);
+const repositorySource = (path) =>
+  readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
 
 test("accepts a least-privilege workflow with an immutable action", () => {
   const workflow = `name: test
@@ -121,6 +127,70 @@ jobs:
   );
 });
 
+test("keeps browser and product evidence independent and aggregates every lane", () => {
+  const workflow = `jobs:
+  frontend:
+    timeout-minutes: 5
+  browser:
+    timeout-minutes: 5
+  backend:
+    timeout-minutes: 5
+  compatibility:
+    timeout-minutes: 5
+  contracts:
+    timeout-minutes: 5
+  product-smoke:
+    timeout-minutes: 5
+    steps:
+      - run: docker compose build --pull
+      - run: docker compose up --detach --wait
+      - run: curl http://localhost:8080/livez && curl http://localhost:8080/readyz && curl http://localhost:4173/
+      - run: npm run test:live:audit
+      - if: always()
+        uses: actions/upload-artifact@immutable
+      - if: always()
+        run: docker compose down --volumes --remove-orphans
+  quality-gate:
+    if: always()
+    needs: [frontend, browser, backend, compatibility, contracts, product-smoke]
+    timeout-minutes: 5
+    steps:
+      - run: node scripts/generate-qa-evidence.mjs --output build/qa-evidence.json
+      - uses: actions/upload-artifact@immutable
+        with:
+          name: qa-evidence-\${{ github.sha }}
+          path: build/qa-evidence.json
+      - env:
+          FRONTEND: \${{ needs.frontend.result }}
+          BROWSER: \${{ needs.browser.result }}
+          BACKEND: \${{ needs.backend.result }}
+          COMPATIBILITY: \${{ needs.compatibility.result }}
+          CONTRACTS: \${{ needs.contracts.result }}
+          PRODUCT_SMOKE: \${{ needs.product-smoke.result }}
+        run: exit 1
+`;
+  assert.deepEqual(validateQualityTopologyText(workflow), []);
+
+  assert.match(
+    validateQualityTopologyText(
+      workflow.replace(
+        "  browser:\n    timeout-minutes: 5",
+        "  browser:\n    needs: frontend\n    timeout-minutes: 5",
+      ),
+    ).join("\n"),
+    /browser must run independently/,
+  );
+  assert.match(
+    validateQualityTopologyText(
+      workflow.replace(
+        "needs: [frontend, browser, backend, compatibility, contracts, product-smoke]",
+        "needs: [frontend, backend, compatibility, contracts, product-smoke]",
+      ),
+    ).join("\n"),
+    /quality-gate must require browser/,
+  );
+});
+
 test("rejects mutable action references", () => {
   const workflow = `name: test
 on: push
@@ -205,6 +275,16 @@ USER root:app
   assert.match(
     validateDockerfileText("root-reset.Dockerfile", rootReset).join("\n"),
     /non-root/,
+  );
+  assert.deepEqual(
+    validateDockerfileText(
+      "scratch.Dockerfile",
+      `FROM example/build:1@sha256:${"e".repeat(64)} AS build
+FROM scratch
+USER 65532:65532
+`,
+    ),
+    [],
   );
 });
 
@@ -385,8 +465,162 @@ updates:
     directory: "/frontend"
 `;
   const errors = validateDependabotText(incomplete);
-  assert.equal(errors.length, 5);
+  assert.equal(errors.length, 6);
   assert.ok(errors.some((error) => error.includes("github-actions")));
+});
+
+test("locks the repository-owned S3 fixture and fail-fast CI preflight", () => {
+  const dockerfile = `FROM golang:1.24-alpine@sha256:${"a".repeat(64)} AS build
+ARG MINIO_RELEASE=RELEASE.2025-09-07T16-13-09Z
+ARG MINIO_COMMIT=07c3a429bfed433e49018cb0f78a52145d4bedeb
+ARG MINIO_SOURCE_SHA256=c9598dcce3440977e79f787f2ba0e7e4d92c8d556bd51e7cef3785bafd6635f3
+ADD --checksum=sha256:c9598dcce3440977e79f787f2ba0e7e4d92c8d556bd51e7cef3785bafd6635f3 https://example.invalid/source.tar.gz /tmp/source.tar.gz
+FROM scratch
+USER 65532:65532
+`;
+  const compose = `services:
+  minio:
+    build:
+      context: ./test-fixtures/s3
+      args:
+        SOURCE_DATE_EPOCH: "1757261589"
+`;
+  const fixtureBuilder = `
+export const FIXTURE_IMAGE = "careos-s3-test-fixture:minio-release-2025-09-07";
+export const FIXTURE_PLATFORM = "linux/amd64";
+export const FIXTURE_SOURCE_EPOCH = "1757261589";
+export const FIXTURE_MANIFEST_DIGEST = "sha256:bb6f358423eec8c666f70d24dbab12a0b9467b5071f2bb30ee64767d3dce82d1";
+const args = ["buildx", "build", "--provenance=false", "--metadata-file"];
+const preflight = ["run", "--rm", FIXTURE_IMAGE, "--version"];
+`;
+  const integrationTest = `
+    @Tag("compatibility")
+    "careos-s3-test-fixture:minio-release-2025-09-07";
+    "sha256:bb6f358423eec8c666f70d24dbab12a0b9467b5071f2bb30ee64767d3dce82d1";
+    "../build/s3-fixture-metadata.json";
+    container.withImagePullPolicy(ignored -> false);
+  `;
+  const clamAvTest = '@Tag("compatibility")';
+  const quality = `
+sh mvnw -B -ntp clean verify -DexcludedGroups=compatibility
+node scripts/build-s3-test-fixture.mjs
+sh mvnw -B -ntp test -Dgroups=compatibility
+`;
+  const fixture = {
+    clamAvTest,
+    compose,
+    dockerfile,
+    fixtureBuilder,
+    integrationTest,
+    quality,
+  };
+  assert.deepEqual(validateS3FixtureTexts(fixture), []);
+
+  assert.match(
+    validateS3FixtureTexts({
+      ...fixture,
+      integrationTest: integrationTest.replace(
+        ".withImagePullPolicy(ignored -> false)",
+        "",
+      ),
+    }).join("\n"),
+    /local-only/,
+  );
+  assert.match(
+    validateS3FixtureTexts({
+      ...fixture,
+      fixtureBuilder: fixtureBuilder.replace("--metadata-file", "--iidfile"),
+    }).join("\n"),
+    /manifest digest metadata/,
+  );
+  assert.match(
+    validateS3FixtureTexts({
+      ...fixture,
+      quality: quality.replace("node scripts/build-s3-test-fixture.mjs\n", ""),
+    }).join("\n"),
+    /preflight is incomplete/,
+  );
+  assert.match(
+    validateS3FixtureTexts({
+      ...fixture,
+      compose: "services:\n  minio:\n    image: quay.io/minio/minio:latest\n",
+    }).join("\n"),
+    /legacy external MinIO image.*repository-owned/s,
+  );
+});
+
+test("locks local reference authority behind a deployment-owned capability", () => {
+  const sources = {
+    bootstrap: repositorySource(
+      "deploy/postgres/init/001-create-runtime-role.sh",
+    ),
+    compose: repositorySource("compose.yaml"),
+    migration: repositorySource(
+      "backend/src/main/resources/db/migration/V115__local_reference_authority_capability.sql",
+    ),
+    operations: repositorySource(
+      "backend/src/main/java/com/rootopathy/careos/tenancy/infrastructure/PostgresTenantAuthorizationOperations.java",
+    ),
+    productionGuard: repositorySource(
+      "backend/src/main/java/com/rootopathy/careos/config/ProductionConfigurationGuard.java",
+    ),
+    productionTest: repositorySource(
+      "backend/src/test/java/com/rootopathy/careos/config/SecurityConfigTest.java",
+    ),
+    tenantTest: repositorySource(
+      "backend/src/test/java/com/rootopathy/careos/tenancy/infrastructure/TenantRlsIntegrationTest.java",
+    ),
+    testInit: repositorySource("backend/src/test/resources/db/test-init.sql"),
+  };
+  assert.deepEqual(validateReferenceAuthorityBoundaryTexts(sources), []);
+
+  assert.match(
+    validateReferenceAuthorityBoundaryTexts({
+      ...sources,
+      migration: sources.migration.replace(
+        "runtime_role.rolname=session_user",
+        "runtime_role.rolname=current_user",
+      ),
+    }).join("\n"),
+    /session-user binding/,
+  );
+});
+
+test("locks authorization reasons out of logs, telemetry, and proxy evidence", () => {
+  const sources = {
+    apiTest: repositorySource(
+      "backend/src/test/java/com/rootopathy/careos/shared/api/ApiContractTest.java",
+    ),
+    controller: repositorySource(
+      "backend/src/main/java/com/rootopathy/careos/workforce/api/WorkforceController.java",
+    ),
+    filter: repositorySource(
+      "backend/src/main/java/com/rootopathy/careos/shared/api/AuthorizationReasonFilter.java",
+    ),
+    identityTest: repositorySource(
+      "backend/src/test/java/com/rootopathy/careos/identity/api/IdentitySecurityIntegrationTest.java",
+    ),
+    nginx: repositorySource("frontend/nginx-main.conf"),
+    telemetry: repositorySource(
+      "backend/src/main/java/com/rootopathy/careos/shared/api/RequestTelemetryFilter.java",
+    ),
+  };
+  assert.deepEqual(validateAuthorizationReasonProtectionTexts(sources), []);
+
+  assert.match(
+    validateAuthorizationReasonProtectionTexts({
+      ...sources,
+      nginx: `${sources.nginx}\nlog_format unsafe '$http_x_authorization_reason';`,
+    }).join("\n"),
+    /must not be logged/,
+  );
+  assert.match(
+    validateAuthorizationReasonProtectionTexts({
+      ...sources,
+      telemetry: `${sources.telemetry}\nrequest.getHeader("X-Authorization-Reason");`,
+    }).join("\n"),
+    /must not become log or metric fields/,
+  );
 });
 
 test("does not confuse the Dependabot root directory with a nested directory", () => {

@@ -16,6 +16,12 @@ spring:
       port: 6379
       repositories:
         enabled: false
+  session:
+    # Redis TTL/keyspace behaviour remains active. No current integration case
+    # needs Spring Session's minute scheduler, so do not race container teardown.
+    data:
+      redis:
+        cleanup-cron: "-"
   mail:
     host: localhost
     port: 1025

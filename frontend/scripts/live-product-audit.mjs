@@ -1,11 +1,31 @@
 import { chromium } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 
 const baseUrl = process.env.CAREOS_LIVE_BASE_URL ?? 'http://localhost:4173';
 const email = process.env.CAREOS_LIVE_ADMIN_EMAIL ?? 'owner@rootopathy.test';
 const password = process.env.CAREOS_LIVE_ADMIN_PASSWORD ?? 'CareOS-Local-Only-Change-Me';
 const outputDirectory = path.resolve('test-results/live-product-audit');
+const evidenceOrigin = process.env.GITHUB_ACTIONS === 'true' ? 'hosted-ci' : 'local';
+const repositoryRoot = path.resolve('..');
+const commit =
+  process.env.GITHUB_SHA ??
+  process.env.CAREOS_AUDIT_COMMIT ??
+  execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  }).trim();
+const workingTreeDirty =
+  execFileSync('git', ['status', '--porcelain', '--untracked-files=normal'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+  }).trim().length > 0;
+const source = {
+  commit,
+  workingTree: workingTreeDirty ? 'DIRTY' : 'CLEAN',
+  commitBound: evidenceOrigin === 'hosted-ci' && !workingTreeDirty,
+};
 
 const routeRanges = [
   ['M2', 29],
@@ -35,7 +55,9 @@ const internalCode = /\b(?:M\d+|P\d+|COS)(?:-\d{2})?\b/g;
 
 await mkdir(outputDirectory, { recursive: true });
 const browser = await chromium.launch({ headless: true });
-const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
+const page = await context.newPage();
 const apiFailures = [];
 const consoleErrors = [];
 let activeRoute = 'authentication';
@@ -153,9 +175,20 @@ try {
       result.liveRows === 0 &&
       !result.purposePrompt,
   );
+  const auditPassed =
+    authenticationChecks.demoBannerVisible &&
+    authenticationChecks.workspaceLinks === 13 &&
+    unexpectedApiFailures.length === 0 &&
+    unexpectedConsoleErrors.length === 0 &&
+    exposedCodeRoutes.length === 0 &&
+    moduleRoutesWithoutContent.length === 0;
   const report = {
     baseUrl,
+    commit,
+    evidenceOrigin,
+    source,
     generatedAt: new Date().toISOString(),
+    status: auditPassed ? 'PASS' : 'FAIL',
     authenticationChecks,
     routesVisited: routeResults.length,
     routesWithLiveRows: routeResults.filter((result) => result.liveRows > 0).length,
@@ -194,16 +227,35 @@ try {
       2,
     )}\n`,
   );
-  if (
-    !authenticationChecks.demoBannerVisible ||
-    authenticationChecks.workspaceLinks !== 13 ||
-    unexpectedApiFailures.length > 0 ||
-    unexpectedConsoleErrors.length > 0 ||
-    exposedCodeRoutes.length > 0 ||
-    moduleRoutesWithoutContent.length > 0
-  ) {
+  if (!auditPassed) {
     process.exitCode = 1;
   }
+} catch (error) {
+  await page
+    .screenshot({ fullPage: true, path: path.join(outputDirectory, 'failure.png') })
+    .catch(() => undefined);
+  const failureReport = {
+    baseUrl,
+    commit,
+    evidenceOrigin,
+    source,
+    generatedAt: new Date().toISOString(),
+    status: 'FAIL',
+    failedAtRoute: activeRoute,
+    error: {
+      name: error instanceof Error ? error.name : 'UnknownError',
+      message: error instanceof Error ? error.message : String(error),
+    },
+  };
+  await writeFile(
+    path.join(outputDirectory, 'report.json'),
+    `${JSON.stringify(failureReport, null, 2)}\n`,
+  );
+  throw error;
 } finally {
+  await context.tracing
+    .stop({ path: path.join(outputDirectory, 'trace.zip') })
+    .catch(() => undefined);
+  await context.close();
   await browser.close();
 }

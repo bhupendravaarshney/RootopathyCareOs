@@ -157,7 +157,10 @@ export function validateDockerfileText(name, text) {
       continue;
     }
     fromIndexes.push(index);
-    if (!IMAGE_DIGEST.test(`${lines[index]} `)) {
+    const isScratchStage = /^FROM\s+scratch(?:\s+AS\s+\S+)?\s*$/i.test(
+      lines[index].trim(),
+    );
+    if (!isScratchStage && !IMAGE_DIGEST.test(`${lines[index]} `)) {
       errors.push(
         `${name}:${index + 1}: every base image must be pinned by sha256 digest`,
       );
@@ -511,6 +514,7 @@ export function validateDependabotText(text) {
     ["maven", "/backend"],
     ["docker", "/backend"],
     ["docker", "/frontend"],
+    ["docker", "/test-fixtures/s3"],
     ["docker", "/"],
     ["github-actions", "/"],
   ];
@@ -532,6 +536,410 @@ export function validateDependabotText(text) {
         `dependabot.yml: missing ${ecosystem} updates for ${directory}`,
       );
     }
+  }
+  return errors;
+}
+
+export function validateS3FixtureTexts({
+  clamAvTest,
+  compose,
+  dockerfile,
+  fixtureBuilder,
+  integrationTest,
+  quality,
+}) {
+  const errors = [];
+  const fixtureImage = "careos-s3-test-fixture:minio-release-2025-09-07";
+  const fixtureDigest =
+    "sha256:bb6f358423eec8c666f70d24dbab12a0b9467b5071f2bb30ee64767d3dce82d1";
+  const sourceEpoch = "1757261589";
+  const release = "RELEASE.2025-09-07T16-13-09Z";
+  const commit = "07c3a429bfed433e49018cb0f78a52145d4bedeb";
+  const sourceSha =
+    "c9598dcce3440977e79f787f2ba0e7e4d92c8d556bd51e7cef3785bafd6635f3";
+
+  const dockerfileRequirements = [
+    [
+      new RegExp(`ARG MINIO_RELEASE=${release.replaceAll(".", "\\.")}`),
+      "the immutable upstream release",
+    ],
+    [new RegExp(`ARG MINIO_COMMIT=${commit}`), "the verified source commit"],
+    [
+      new RegExp(`ARG MINIO_SOURCE_SHA256=${sourceSha}`),
+      "the verified source archive checksum",
+    ],
+    [
+      new RegExp(`ADD --checksum=sha256:${sourceSha}`),
+      "a checksum-enforced source fetch",
+    ],
+    [/^FROM scratch\s*$/m, "a minimal scratch runtime"],
+    [/^USER 65532:65532\s*$/m, "a numeric non-root runtime identity"],
+  ];
+  for (const [pattern, description] of dockerfileRequirements) {
+    if (!pattern.test(dockerfile)) {
+      errors.push(`test-fixtures/s3/Dockerfile: missing ${description}`);
+    }
+  }
+
+  for (const [text, name] of [
+    [compose, "compose.yaml"],
+    [integrationTest, "S3PrivateDocumentStorageIntegrationTest.java"],
+    [quality, "quality.yml"],
+  ]) {
+    if (/quay\.io\/minio\/minio/i.test(text)) {
+      errors.push(`${name}: legacy external MinIO image is forbidden`);
+    }
+  }
+
+  if (
+    !/^  minio:\s*\r?\n(?:^ {4,}[^\r\n]*(?:\r?\n|$))*?^    build:\s*\r?\n(?:^ {6,}[^\r\n]*(?:\r?\n|$))*?^      context:\s*\.\/test-fixtures\/s3\s*$/m.test(
+      compose,
+    )
+  ) {
+    errors.push(
+      "compose.yaml: minio must build the repository-owned S3 compatibility fixture",
+    );
+  }
+  if (!compose.includes(`SOURCE_DATE_EPOCH: "${sourceEpoch}"`)) {
+    errors.push("compose.yaml: S3 fixture source epoch is not fixed");
+  }
+  if (!integrationTest.includes(fixtureImage)) {
+    errors.push(
+      "S3PrivateDocumentStorageIntegrationTest.java: fixture image tag is missing",
+    );
+  }
+  if (
+    !integrationTest.includes(fixtureDigest) ||
+    !integrationTest.includes("s3-fixture-metadata.json")
+  ) {
+    errors.push(
+      "S3PrivateDocumentStorageIntegrationTest.java: verified fixture digest evidence is missing",
+    );
+  }
+  if (!/\.withImagePullPolicy\(ignored -> false\)/.test(integrationTest)) {
+    errors.push(
+      "S3PrivateDocumentStorageIntegrationTest.java: fixture must be local-only after preflight",
+    );
+  }
+  if (!/@Tag\("compatibility"\)/.test(integrationTest)) {
+    errors.push(
+      "S3PrivateDocumentStorageIntegrationTest.java: compatibility classification is missing",
+    );
+  }
+  if (!/@Tag\("compatibility"\)/.test(clamAvTest ?? "")) {
+    errors.push(
+      "ClamAvMalwareScannerIntegrationTest.java: compatibility classification is missing",
+    );
+  }
+
+  for (const [required, description] of [
+    [fixtureImage, "the isolated local image tag"],
+    [fixtureDigest, "the expected immutable manifest digest"],
+    [sourceEpoch, "the fixed source epoch"],
+    ['FIXTURE_PLATFORM = "linux/amd64"', "the fixed build platform"],
+    ['"--provenance=false"', "disabled non-reproducible provenance"],
+    ['"buildx"', "the BuildKit digest-producing build"],
+    ['"--metadata-file"', "manifest digest metadata"],
+    ['"run", "--rm", FIXTURE_IMAGE, "--version"', "a fixture startup preflight"],
+  ]) {
+    if (!fixtureBuilder.includes(required)) {
+      errors.push(
+        `scripts/build-s3-test-fixture.mjs: missing ${description}`,
+      );
+    }
+  }
+
+  const buildCommand = "node scripts/build-s3-test-fixture.mjs";
+  const buildIndex = quality.indexOf(buildCommand);
+  const compatibilityIndex = quality.indexOf(
+    "sh mvnw -B -ntp test -Dgroups=compatibility",
+  );
+  if (buildIndex < 0) {
+    errors.push(
+      "quality.yml: S3 compatibility fixture preflight is incomplete",
+    );
+  } else if (
+    compatibilityIndex < 0 ||
+    buildIndex > compatibilityIndex
+  ) {
+    errors.push(
+      "quality.yml: S3 fixture build/start preflight must run before Maven verification",
+    );
+  }
+  if (
+    !quality.includes(
+      "sh mvnw -B -ntp clean verify -DexcludedGroups=compatibility",
+    )
+  ) {
+    errors.push("quality.yml: core backend classification is missing");
+  }
+
+  return errors;
+}
+
+export function validateQualityTopologyText(text) {
+  const errors = [];
+  const jobsOffset = text.search(/^jobs:\s*$/m);
+  const jobsText = jobsOffset >= 0 ? text.slice(jobsOffset) : "";
+  const jobMatches = [...jobsText.matchAll(/^  ([a-zA-Z0-9_-]+):\s*$/gm)];
+  const jobBlock = (name) => {
+    const index = jobMatches.findIndex((match) => match[1] === name);
+    if (index < 0) return "";
+    return jobsText.slice(
+      jobMatches[index].index,
+      jobMatches[index + 1]?.index ?? jobsText.length,
+    );
+  };
+
+  const requiredLanes = [
+    "frontend",
+    "browser",
+    "backend",
+    "compatibility",
+    "contracts",
+    "product-smoke",
+  ];
+  for (const name of requiredLanes) {
+    if (!jobBlock(name)) {
+      errors.push(`quality.yml: required independent job ${name} is missing`);
+    }
+  }
+  const browser = jobBlock("browser");
+  if (/^    needs:/m.test(browser)) {
+    errors.push(
+      "quality.yml: browser must run independently of frontend and other quality lanes",
+    );
+  }
+  const productSmoke = jobBlock("product-smoke");
+  if (/^    needs:/m.test(productSmoke)) {
+    errors.push(
+      "quality.yml: product-smoke must run independently of other quality lanes",
+    );
+  }
+  for (const [marker, description] of [
+    ["docker compose build --pull", "an isolated Compose build"],
+    ["docker compose up --detach --wait", "an isolated Compose start"],
+    ["http://localhost:8080/livez", "the backend liveness probe"],
+    ["http://localhost:8080/readyz", "the backend readiness probe"],
+    ["http://localhost:4173/", "the frontend HTTP probe"],
+    ["npm run test:live:audit", "the authenticated live audit"],
+    ["actions/upload-artifact@", "commit-bound audit artifacts"],
+    ["docker compose down --volumes --remove-orphans", "volume teardown"],
+  ]) {
+    if (!productSmoke.includes(marker)) {
+      errors.push(`quality.yml: product-smoke must retain ${description}`);
+    }
+  }
+  if (
+    (productSmoke.match(/^\s*(?:-\s*)?if:\s*always\(\)\s*$/gm) ?? []).length < 2
+  ) {
+    errors.push(
+      "quality.yml: product-smoke artifact upload and teardown must run always",
+    );
+  }
+
+  const gate = jobBlock("quality-gate");
+  if (!gate) {
+    errors.push("quality.yml: final quality-gate job is missing");
+    return errors;
+  }
+  if (!/^    if:\s*always\(\)\s*$/m.test(gate)) {
+    errors.push("quality.yml: quality-gate must evaluate after failed lanes");
+  }
+  const needs = gate.match(/^    needs:\s*\[([^\]]+)\]\s*$/m)?.[1] ?? "";
+  const neededJobs = new Set(
+    needs
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean),
+  );
+  for (const name of requiredLanes) {
+    if (!neededJobs.has(name)) {
+      errors.push(`quality.yml: quality-gate must require ${name}`);
+    }
+    if (!gate.includes(`needs.${name}.result`)) {
+      errors.push(`quality.yml: quality-gate must inspect the ${name} result`);
+    }
+  }
+  if (!/\bexit 1\b/.test(gate)) {
+    errors.push(
+      "quality.yml: quality-gate must fail when a required lane fails",
+    );
+  }
+  for (const marker of [
+    "node scripts/generate-qa-evidence.mjs --output build/qa-evidence.json",
+    "qa-evidence-${{ github.sha }}",
+    "build/qa-evidence.json",
+  ]) {
+    if (!gate.includes(marker)) {
+      errors.push(`quality.yml: quality-gate must retain ${marker}`);
+    }
+  }
+  return errors;
+}
+
+export function validateReferenceAuthorityBoundaryTexts({
+  bootstrap,
+  compose,
+  migration,
+  operations,
+  productionGuard,
+  productionTest,
+  tenantTest,
+  testInit,
+}) {
+  const errors = [];
+  const required = [
+    [
+      migration,
+      /current_setting\('app\.reference_authorization_policy_enabled', true\)/,
+      "V115: reference request context",
+    ],
+    [
+      migration,
+      /capability\.rolname='careos_local_reference_authority'/,
+      "V115: deployment-owned capability role",
+    ],
+    [
+      migration,
+      /runtime_role\.rolname=session_user/,
+      "V115: session-user binding",
+    ],
+    [migration, /NOT capability\.rolcanlogin/, "V115: non-login capability"],
+    [migration, /NOT capability\.rolbypassrls/, "V115: RLS bypass denial"],
+    [migration, /NOT membership\.admin_option/, "V115: admin-option denial"],
+    [
+      migration,
+      /NOT membership\.inherit_option/,
+      "V115: inherited-authority denial",
+    ],
+    [migration, /NOT membership\.set_option/, "V115: SET ROLE denial"],
+    [
+      bootstrap,
+      /CAREOS_DB_LOCAL_REFERENCE_AUTHORITY:-false/,
+      "database bootstrap: fail-closed default",
+    ],
+    [
+      bootstrap,
+      /WITH ADMIN FALSE, INHERIT FALSE, SET FALSE/,
+      "database bootstrap: non-escalating membership",
+    ],
+    [
+      compose,
+      /CAREOS_DB_LOCAL_REFERENCE_AUTHORITY:\s*"true"/,
+      "Compose: explicit local capability activation",
+    ],
+    [
+      testInit,
+      /GRANT careos_local_reference_authority TO careos_app\s+WITH ADMIN FALSE, INHERIT FALSE, SET FALSE;/,
+      "test bootstrap: non-escalating capability",
+    ],
+    [
+      operations,
+      /SELECT careos_reference_authorization_enabled\(\)/,
+      "runtime authorization: database capability check",
+    ],
+    [
+      productionGuard,
+      /provisional reference authorization policy must be disabled/,
+      "production guard: reference-policy rejection",
+    ],
+    [
+      productionTest,
+      /rejectsTheProvisionalAuthorizationPolicyInProduction/,
+      "production guard test",
+    ],
+  ];
+  for (const [text, pattern, description] of required) {
+    if (!pattern.test(text)) {
+      errors.push(`${description} is missing`);
+    }
+  }
+
+  for (const [method, description] of [
+    [
+      "deniesLocalBootstrapWorkforceAccessWhenTheReferenceFlagIsMissingOrFalse",
+      "missing/false reference flag attack test",
+    ],
+    [
+      "keepsActivePolicyAndReferencePolicyTenantAndPermissionBoundariesDistinct",
+      "tenant, permission, and production-role separation test",
+    ],
+    [
+      "runtimeRoleCannotManufactureReferenceAuthorityBySettingTheCustomGuc",
+      "runtime GUC escalation attack test",
+    ],
+  ]) {
+    if (!tenantTest.includes(method)) {
+      errors.push(`TenantRlsIntegrationTest.java: ${description} is missing`);
+    }
+  }
+  return errors;
+}
+
+export function validateAuthorizationReasonProtectionTexts({
+  apiTest,
+  controller,
+  filter,
+  identityTest,
+  nginx,
+  telemetry,
+}) {
+  const errors = [];
+  const required = [
+    [
+      filter,
+      /@Order\(Ordered\.HIGHEST_PRECEDENCE \+ 1\)/,
+      "early capture order",
+    ],
+    [
+      filter,
+      /Normalizer\.normalize\(rawReason\.strip\(\), Normalizer\.Form\.NFC\)/,
+      "NFC normalization",
+    ],
+    [filter, /length >= 10\s*&& length <= 500/s, "bounded reason length"],
+    [
+      filter,
+      /noneMatch\(Character::isISOControl\)/,
+      "control-character rejection",
+    ],
+    [filter, /class SensitiveHeaderHidingRequest/, "downstream header removal"],
+    [filter, /return "\[REDACTED\]";/, "safe captured-value rendering"],
+    [
+      controller,
+      /AuthorizationReasonFilter\.from\(request\)/,
+      "governed controller access",
+    ],
+    [
+      apiTest,
+      /doesNotEmitAuthorizationReasonIntoApplicationLogsOrHttpTelemetry/,
+      "application log and trace leak test",
+    ],
+    [
+      identityTest,
+      /Patient Alice Example metrics leak sentinel 654/,
+      "Prometheus leak sentinel test",
+    ],
+  ];
+  for (const [text, pattern, description] of required) {
+    if (!pattern.test(text)) {
+      errors.push(`authorization reason protection: ${description} is missing`);
+    }
+  }
+  if (/getHeader\s*\(/.test(telemetry)) {
+    errors.push(
+      "RequestTelemetryFilter.java: request headers must not become log or metric fields",
+    );
+  }
+  if (/\$http_x_authorization_reason|\$request_body/i.test(nginx)) {
+    errors.push(
+      "frontend/nginx-main.conf: authorization reasons or request bodies must not be logged",
+    );
+  }
+  if (/@RequestHeader\([^\n]*X-Authorization-Reason/i.test(controller)) {
+    errors.push(
+      "WorkforceController.java: raw authorization reason header bypasses the redaction filter",
+    );
   }
   return errors;
 }
@@ -635,6 +1043,7 @@ export function validateProjectVerificationTexts({ shell, powershell }) {
     ["prototype registry", "verify-prototype-register.mjs"],
     ["API verifier", "verify-api-contract.mjs"],
     ["API negative tests", "verify-api-contract.test.mjs"],
+    ["QA evidence tests", "generate-qa-evidence.test.mjs"],
     ["Module 1 approved inputs", "verify-module-1-inputs.mjs"],
     ["Module 1 review drafts", "verify-module-1-review-drafts.mjs"],
     ["Module 1 candidate inputs", "verify-module-1-candidate-inputs.mjs"],
@@ -713,6 +1122,7 @@ export function validateRepository(rootDirectory) {
 
   const quality = requiredFile(root, ".github/workflows/quality.yml", errors);
   const security = requiredFile(root, ".github/workflows/security.yml", errors);
+  errors.push(...validateQualityTopologyText(quality));
   const securityRequirements = [
     "actions/dependency-review-action@",
     "github/codeql-action/init@",
@@ -729,6 +1139,7 @@ export function validateRepository(rootDirectory) {
     "image-ref: careos-frontend:ci",
     "actions/upload-artifact@",
     "language: [java-kotlin, javascript-typescript]",
+    "name: careos-image-sboms-${{ github.sha }}",
   ];
   for (const requirement of securityRequirements) {
     if (!security.includes(requirement)) {
@@ -739,6 +1150,8 @@ export function validateRepository(rootDirectory) {
     "npm run api:check",
     "npm run architecture:check",
     "node --test scripts/tests/verify-api-contract.test.mjs",
+    "node --test scripts/tests/generate-qa-evidence.test.mjs",
+    "node --test scripts/tests/build-s3-test-fixture.test.mjs",
     "node scripts/verify-ci-security.mjs",
     "node --test scripts/tests/verify-ci-security.test.mjs",
   ]) {
@@ -747,7 +1160,11 @@ export function validateRepository(rootDirectory) {
     }
   }
 
-  for (const dockerfile of ["backend/Dockerfile", "frontend/Dockerfile"]) {
+  for (const dockerfile of [
+    "backend/Dockerfile",
+    "frontend/Dockerfile",
+    "test-fixtures/s3/Dockerfile",
+  ]) {
     errors.push(
       ...validateDockerfileText(
         dockerfile,
@@ -803,6 +1220,98 @@ export function validateRepository(rootDirectory) {
       ...validateComposeText(compose, requiredFile(root, compose, errors)),
     );
   }
+  errors.push(
+    ...validateS3FixtureTexts({
+      clamAvTest: requiredFile(
+        root,
+        "backend/src/test/java/com/rootopathy/careos/platform/infrastructure/ClamAvMalwareScannerIntegrationTest.java",
+        errors,
+      ),
+      compose: requiredFile(root, "compose.yaml", errors),
+      dockerfile: requiredFile(root, "test-fixtures/s3/Dockerfile", errors),
+      fixtureBuilder: requiredFile(
+        root,
+        "scripts/build-s3-test-fixture.mjs",
+        errors,
+      ),
+      integrationTest: requiredFile(
+        root,
+        "backend/src/test/java/com/rootopathy/careos/platform/infrastructure/S3PrivateDocumentStorageIntegrationTest.java",
+        errors,
+      ),
+      quality,
+    }),
+  );
+  errors.push(
+    ...validateReferenceAuthorityBoundaryTexts({
+      bootstrap: requiredFile(
+        root,
+        "deploy/postgres/init/001-create-runtime-role.sh",
+        errors,
+      ),
+      compose: requiredFile(root, "compose.yaml", errors),
+      migration: requiredFile(
+        root,
+        "backend/src/main/resources/db/migration/V115__local_reference_authority_capability.sql",
+        errors,
+      ),
+      operations: requiredFile(
+        root,
+        "backend/src/main/java/com/rootopathy/careos/tenancy/infrastructure/PostgresTenantAuthorizationOperations.java",
+        errors,
+      ),
+      productionGuard: requiredFile(
+        root,
+        "backend/src/main/java/com/rootopathy/careos/config/ProductionConfigurationGuard.java",
+        errors,
+      ),
+      productionTest: requiredFile(
+        root,
+        "backend/src/test/java/com/rootopathy/careos/config/SecurityConfigTest.java",
+        errors,
+      ),
+      tenantTest: requiredFile(
+        root,
+        "backend/src/test/java/com/rootopathy/careos/tenancy/infrastructure/TenantRlsIntegrationTest.java",
+        errors,
+      ),
+      testInit: requiredFile(
+        root,
+        "backend/src/test/resources/db/test-init.sql",
+        errors,
+      ),
+    }),
+  );
+  errors.push(
+    ...validateAuthorizationReasonProtectionTexts({
+      apiTest: requiredFile(
+        root,
+        "backend/src/test/java/com/rootopathy/careos/shared/api/ApiContractTest.java",
+        errors,
+      ),
+      controller: requiredFile(
+        root,
+        "backend/src/main/java/com/rootopathy/careos/workforce/api/WorkforceController.java",
+        errors,
+      ),
+      filter: requiredFile(
+        root,
+        "backend/src/main/java/com/rootopathy/careos/shared/api/AuthorizationReasonFilter.java",
+        errors,
+      ),
+      identityTest: requiredFile(
+        root,
+        "backend/src/test/java/com/rootopathy/careos/identity/api/IdentitySecurityIntegrationTest.java",
+        errors,
+      ),
+      nginx: requiredFile(root, "frontend/nginx-main.conf", errors),
+      telemetry: requiredFile(
+        root,
+        "backend/src/main/java/com/rootopathy/careos/shared/api/RequestTelemetryFilter.java",
+        errors,
+      ),
+    }),
+  );
   errors.push(
     ...validateDependabotText(
       requiredFile(root, ".github/dependabot.yml", errors),

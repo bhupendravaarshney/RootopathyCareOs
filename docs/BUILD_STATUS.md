@@ -1,5 +1,24 @@
 # Build status
 
+## Repository stabilization evidence (29 September 2026)
+
+This is a working-tree status, not a hosted release approval. The tree is based on commit `be6cfa8e4f947a2e42ed1cba29d29ad1f65f4dc5`, has uncommitted remediation changes through Flyway V115, and has not yet been exercised by GitHub Actions as an exact final commit.
+
+| Gate | Current state |
+| --- | --- |
+| Local backend | PASS — 279/279, including 257 core and 22 required S3/Object Lock/ClamAV compatibility tests; zero failures, errors, or skips. |
+| Local frontend | PASS — generated-client, architecture, typecheck, lint, format, 144/144 unit tests, and production build. |
+| Local browser | PASS — 185/185 across 1440/1024/768/390/320 with Axe and document/body overflow checks. |
+| Local contracts | PASS — 140/140 repository/API/input/security negative and positive tests; 195 screens and 135 API operations. |
+| Local authenticated product audit | PASS — login, organization selection, 193 protected routes, zero unexpected API/console failures, and four intentional 428 boundaries. |
+| Hosted quality for the baseline commit | FAIL — frontend race and unavailable Quay MinIO fixture; browser skipped by the old dependency. |
+| Hosted security for the baseline commit | PASS. |
+| Hosted quality/security for the stabilization tree | NOT RUN — no final commit exists. |
+| Repository release gate | **FAIL** until both hosted workflows pass for the same final commit. |
+| Production acceptance | **NOT GRANTED**. |
+
+The remediation makes browser evidence independent, adds a required product-smoke lane, separates required core and compatibility diagnostics, replaces the removed Quay fixture with a repository-owned source build locked to manifest `sha256:bb6f358423eec8c666f70d24dbab12a0b9467b5071f2bb30ee64767d3dce82d1`, hardens local reference authority with a deployment-owned PostgreSQL capability, and prevents raw `X-Authorization-Reason` values from reaching logs or telemetry. `build/qa-evidence.json` records dirty/clean source state so local evidence cannot be mistaken for commit-bound hosted evidence.
+
 ## Verified in the delivery environment
 
 - Frontend dependency installation
@@ -90,7 +109,7 @@
 - Opt-in S3-compatible private quarantine with fail-fast HTTPS/credential/bucket-policy configuration
 - Tenant-derived opaque object keys, conditional creation, configurable upload ceiling, exact byte count and SHA-256 verification, mismatch cleanup, and byte-verified retry/conflict handling
 - Six isolated object-storage scenarios covering anonymous denial, short/long/digest mismatch cleanup, oversize non-consumption, tenant separation, replay, conflict, public bucket-policy rejection, HTTPS validation, and Spring adapter replacement
-- Pinned multi-architecture Quay object-store digest for synthetic local Compose/Testcontainers compatibility; production provider approval remains open
+- Historical verification used a pinned Quay object-store digest. That remote artifact later became unavailable and is superseded by the repository-owned, digest-verified S3 compatibility fixture documented above; production provider approval remains open.
 - 47 backend tests passing in a clean Java 25 build against disposable PostgreSQL 18, Redis 8, and object-storage containers
 - Bootable backend JAR packaged from 115 production sources and 7 test sources; checked API (15 operations), prototype (79 routes), and Compose contracts pass
 - Enabled backend image reached health `UP`, applied Flyway v6, reported only private quarantine available with eight capabilities unavailable, exposed no storage configuration in Actuator info, retained empty production event registries, and ran as non-root user `careos`

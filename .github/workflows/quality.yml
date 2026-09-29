@@ -15,6 +15,8 @@ jobs:
   frontend:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    outputs:
+      tests: ${{ steps.frontend-count.outputs.tests }}
     defaults:
       run:
         working-directory: frontend
@@ -34,12 +36,19 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm test
+      - name: Record frontend test count
+        id: frontend-count
+        run: |
+          mkdir -p ../build
+          npx vitest list --json=../build/frontend-tests.json
+          node ../scripts/generate-qa-evidence.mjs --count-vitest ../build/frontend-tests.json >> "$GITHUB_OUTPUT"
       - run: npm run build
 
   browser:
-    needs: frontend
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    outputs:
+      tests: ${{ steps.browser-count.outputs.tests }}
     defaults:
       run:
         working-directory: frontend
@@ -55,6 +64,12 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      - name: Record browser test count
+        id: browser-count
+        run: |
+          mkdir -p ../build
+          npx playwright test --list --reporter=json > ../build/browser-tests.json
+          node ../scripts/generate-qa-evidence.mjs --count-playwright ../build/browser-tests.json >> "$GITHUB_OUTPUT"
       - name: Upload browser failure evidence
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -69,18 +84,52 @@ jobs:
   backend:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    outputs:
+      tests: ${{ steps.backend-count.outputs.tests }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: frontend/.nvmrc
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version: 25
           cache: maven
-      - name: Test
+      - name: Core application verification
         working-directory: backend
-        run: sh mvnw -B -ntp clean verify
+        run: sh mvnw -B -ntp clean verify -DexcludedGroups=compatibility
+      - name: Record core backend test count
+        id: backend-count
+        run: node scripts/generate-qa-evidence.mjs --count-surefire backend/target/surefire-reports >> "$GITHUB_OUTPUT"
+
+  compatibility:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      tests: ${{ steps.compatibility-count.outputs.tests }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: frontend/.nvmrc
+      - name: Build and digest-verify immutable S3 compatibility fixture
+        run: node scripts/build-s3-test-fixture.mjs
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: maven
+      - name: S3, Object Lock, and ClamAV compatibility verification
+        working-directory: backend
+        run: sh mvnw -B -ntp test -Dgroups=compatibility
+      - name: Record compatibility test count
+        id: compatibility-count
+        run: node scripts/generate-qa-evidence.mjs --count-surefire backend/target/surefire-reports >> "$GITHUB_OUTPUT"
 
   contracts:
     runs-on: ubuntu-24.04
@@ -95,6 +144,8 @@ jobs:
       - run: node scripts/verify-prototype-register.mjs
       - run: node scripts/verify-api-contract.mjs
       - run: node --test scripts/tests/verify-api-contract.test.mjs
+      - run: node --test scripts/tests/generate-qa-evidence.test.mjs
+      - run: node --test scripts/tests/build-s3-test-fixture.test.mjs
       - run: node scripts/verify-module-1-inputs.mjs --require-approved
       - run: node --test scripts/tests/verify-module-1-inputs.test.mjs
       - run: node scripts/verify-module-1-review-drafts.mjs
@@ -113,3 +164,103 @@ jobs:
       - run: node --test scripts/tests/verify-module-3-inputs.test.mjs
       - run: node scripts/verify-ci-security.mjs
       - run: node --test scripts/tests/verify-ci-security.test.mjs
+
+  product-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      COMPOSE_PROJECT_NAME: careos-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install live-audit dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Install audit browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Build isolated product stack
+        run: docker compose build --pull
+      - name: Start isolated product stack
+        run: docker compose up --detach --wait --wait-timeout 600
+      - name: Verify product endpoints
+        run: |
+          curl --fail --show-error --silent --retry 30 --retry-all-errors --retry-delay 2 http://localhost:8080/livez >/dev/null
+          curl --fail --show-error --silent --retry 30 --retry-all-errors --retry-delay 2 http://localhost:8080/readyz >/dev/null
+          curl --fail --show-error --silent --retry 30 --retry-all-errors --retry-delay 2 http://localhost:4173/ >/dev/null
+      - name: Run authenticated live product audit
+        working-directory: frontend
+        run: npm run test:live:audit
+      - name: Capture product stack logs
+        if: failure()
+        run: docker compose logs --no-color > product-smoke-compose.log
+      - name: Upload authenticated product-audit evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: authenticated-product-audit-${{ github.sha }}
+          path: |
+            frontend/test-results/live-product-audit
+            product-smoke-compose.log
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Tear down isolated product stack
+        if: always()
+        run: docker compose down --volumes --remove-orphans
+
+  quality-gate:
+    if: always()
+    needs: [frontend, browser, backend, compatibility, contracts, product-smoke]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: frontend/.nvmrc
+      - name: Generate commit-bound QA evidence
+        env:
+          BACKEND_CORE_TESTS: ${{ needs.backend.outputs.tests }}
+          BACKEND_RESULT: ${{ needs.backend.result }}
+          BROWSER_RESULT: ${{ needs.browser.result }}
+          BROWSER_TESTS: ${{ needs.browser.outputs.tests }}
+          COMPATIBILITY_RESULT: ${{ needs.compatibility.result }}
+          COMPATIBILITY_TESTS: ${{ needs.compatibility.outputs.tests }}
+          CONTRACTS_RESULT: ${{ needs.contracts.result }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
+          FRONTEND_TESTS: ${{ needs.frontend.outputs.tests }}
+          PRODUCT_SMOKE_ARTIFACT: authenticated-product-audit-${{ github.sha }}
+          PRODUCT_SMOKE_RESULT: ${{ needs.product-smoke.result }}
+          QA_EVIDENCE_ORIGIN: hosted-ci
+        run: node scripts/generate-qa-evidence.mjs --output build/qa-evidence.json
+      - name: Upload commit-bound QA evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qa-evidence-${{ github.sha }}
+          path: build/qa-evidence.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Require every quality lane
+        env:
+          BACKEND_RESULT: ${{ needs.backend.result }}
+          BROWSER_RESULT: ${{ needs.browser.result }}
+          COMPATIBILITY_RESULT: ${{ needs.compatibility.result }}
+          CONTRACTS_RESULT: ${{ needs.contracts.result }}
+          FRONTEND_RESULT: ${{ needs.frontend.result }}
+          PRODUCT_SMOKE_RESULT: ${{ needs.product-smoke.result }}
+        run: |
+          for result in "$FRONTEND_RESULT" "$BROWSER_RESULT" "$BACKEND_RESULT" "$COMPATIBILITY_RESULT" "$CONTRACTS_RESULT" "$PRODUCT_SMOKE_RESULT"; do
+            if [ "$result" != "success" ]; then
+              echo "A required quality lane did not pass: $result" >&2
+              exit 1
+            fi
+          done
