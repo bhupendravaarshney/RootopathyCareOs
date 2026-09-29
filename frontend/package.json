@@ -18,6 +18,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:live:audit": "node scripts/live-product-audit.mjs",
+    "test:uat:smoke": "node scripts/uat-smoke.mjs",
     "lint": "eslint . --max-warnings 0",
     "format:check": "prettier --check ."
   },

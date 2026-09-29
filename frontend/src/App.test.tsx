@@ -2572,6 +2572,13 @@ describe('CareOS frontend session boundary', () => {
     expect(screen.getByRole('button', { name: 'Promote to owner' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Governed access change' })).toBeVisible();
     expect(screen.getByText(/Facility-scoped grants remain unavailable/)).toBeVisible();
+    const roleFilter = screen.getByLabelText('Role');
+    expect(
+      within(roleFilter).getByRole('option', { name: 'Platform super administrator' }),
+    ).toHaveValue('platform_super_administrator');
+    expect(
+      within(roleFilter).getByRole('option', { name: 'Integration administrator' }),
+    ).toHaveValue('integration_administrator');
     expect(listOrganizationMemberships).toHaveBeenCalledWith(
       selectedOrganization.id,
       { limit: 25 },
@@ -2637,7 +2644,7 @@ describe('CareOS frontend session boundary', () => {
             membershipId,
             status: 'pending' as const,
             targetUserId: '88888888-8888-4888-8888-888888888888',
-            toRoleKey: 'organization_viewer',
+            toRoleKey: 'platform_super_administrator',
           },
           201,
         ),
@@ -2645,6 +2652,9 @@ describe('CareOS frontend session boundary', () => {
     render(<App client={sessionClient({ requestOrganizationMembershipChange })} />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Change role' }));
+    fireEvent.change(screen.getByLabelText('New role'), {
+      target: { value: 'platform_super_administrator' },
+    });
     fireEvent.change(screen.getByLabelText('Reason'), {
       target: { value: 'Approved least-privilege role adjustment' },
     });
@@ -2657,7 +2667,7 @@ describe('CareOS frontend session boundary', () => {
       {
         changeType: 'role_change',
         reason: 'Approved least-privilege role adjustment',
-        toRoleKey: 'organization_viewer',
+        toRoleKey: 'platform_super_administrator',
       },
       '"organization-membership:77777777-7777-4777-8777-777777777777:0"',
       expect.stringMatching(/^membership-request_role_change:/),
@@ -3846,7 +3856,7 @@ describe('CareOS frontend session boundary', () => {
         {
           expiresAt: '2026-09-16T12:00:00Z',
           invitationId: '77777777-7777-4777-8777-777777777777',
-          roleKey: 'organization_viewer',
+          roleKey: 'billing_administrator',
           status: 'pending',
         },
         201,
@@ -3856,7 +3866,7 @@ describe('CareOS frontend session boundary', () => {
       success({
         expiresAt: '2026-09-16T12:00:00Z',
         invitationId: '77777777-7777-4777-8777-777777777777',
-        roleKey: 'organization_viewer',
+        roleKey: 'billing_administrator',
         status: 'revoked',
       }),
     );
@@ -3869,6 +3879,9 @@ describe('CareOS frontend session boundary', () => {
     fireEvent.change(screen.getByLabelText('Display name'), {
       target: { value: 'New User' },
     });
+    fireEvent.change(screen.getByLabelText('Role'), {
+      target: { value: 'billing_administrator' },
+    });
     fireEvent.change(screen.getByLabelText('Access reason'), {
       target: { value: 'Approved onboarding request CARE-42' },
     });
@@ -3880,7 +3893,7 @@ describe('CareOS frontend session boundary', () => {
       displayName: 'New User',
       email: 'new.user@example.test',
       reason: 'Approved onboarding request CARE-42',
-      roleKey: 'organization_viewer',
+      roleKey: 'billing_administrator',
     });
     expect(issueInvitation.mock.calls[0]?.[2]).toMatch(/^invite:[0-9a-f-]{36}$/);
     expect(await screen.findByText(/one-time link was sent/)).toBeVisible();

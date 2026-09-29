@@ -25,6 +25,8 @@ The base configuration now requires explicit database, Redis, SMTP, browser-orig
 | Browser identity | `CAREOS_ALLOWED_ORIGINS`, `CAREOS_BASE_URL`, `CAREOS_SECURITY_MAIL_FROM`, `CAREOS_TOKEN_PEPPER`, `CAREOS_MFA_ENCRYPTION_KEY` | Origins and the application base URL must be canonical HTTPS origins; the base URL must be on the allow-list. |
 | Approved Module 1 identity administration | Optional `CAREOS_INVITATIONS_ENABLED`, `CAREOS_MFA_ADMINISTRATION_ENABLED`, `CAREOS_MEMBERSHIP_ADMINISTRATION_ENABLED`; registry/digest overrides only for an explicitly replaced approved release | All three mutation capabilities default to disabled. Enabling any requires active registry `m1-candidate-1` and package digest `19aff5ce30516b7ee2101c093a8429d8a74394995ca90d486790bcc18a392946`; mismatches abort startup. Membership administration covers V22 non-owner changes and V23 owner transfer. V24 mandatory-role MFA is an always-on approved login/session/database invariant, not an optional mutation capability. |
 
+V117 makes `platform_super_administrator` available to a production-capable build, but does not auto-assign it. A production membership requires the normal enabled M1 membership-administration capability, an existing member, an eligible owner/platform maker, a distinct eligible checker, current MFA/re-authentication and exact execution evidence. The role remains organization-scoped and cannot activate the local reference bridge, acquire machine permissions, bypass RLS/provider readiness or mutate the authorization registry.
+
 The startup guard also rejects:
 
 - a mixed `production,local` or `production,test` profile;

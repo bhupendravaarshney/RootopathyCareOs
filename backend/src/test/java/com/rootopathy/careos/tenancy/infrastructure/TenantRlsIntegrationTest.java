@@ -725,6 +725,7 @@ class TenantRlsIntegrationTest {
                         "export_approver",
                         "organization_administrator",
                         "organization_owner",
+                        "platform_super_administrator",
                         "security_administrator");
         assertThat(jdbcTemplate.queryForList(
                         """
@@ -747,7 +748,7 @@ class TenantRlsIntegrationTest {
                 .isEqualTo(13);
         assertThat(jdbcTemplate.queryForObject(
                         "SELECT count(*) FROM authorization_role_delegations", Integer.class))
-                .isEqualTo(29);
+                .isEqualTo(67);
         executeAsMigrator("""
                 UPDATE organization_memberships
                 SET role_key = 'local_bootstrap'
@@ -825,6 +826,87 @@ class TenantRlsIntegrationTest {
     }
 
     @Test
+    void projectsLocalBootstrapActionsOnlyWithCapabilityAndExactTransactionContext()
+            throws SQLException {
+        seedReferenceOwner();
+        assignReferenceOwnerRole("local_bootstrap");
+
+        assertThat(projectedPermissionsAsRuntime(
+                        REFERENCE_ORGANIZATION,
+                        REFERENCE_OWNER,
+                        REFERENCE_ORGANIZATION,
+                        REFERENCE_OWNER,
+                        null))
+                .isEmpty();
+        assertThat(projectedPermissionsAsRuntime(
+                        REFERENCE_ORGANIZATION,
+                        REFERENCE_OWNER,
+                        REFERENCE_ORGANIZATION,
+                        REFERENCE_OWNER,
+                        "false"))
+                .isEmpty();
+        assertThat(projectedPermissionsAsRuntime(
+                        REFERENCE_ORGANIZATION,
+                        REFERENCE_OWNER,
+                        REFERENCE_ORGANIZATION,
+                        REFERENCE_OWNER,
+                        "true"))
+                .contains(
+                        "workforce.member.create",
+                        "patient.registration.start",
+                        "appointment.request.manage",
+                        "encounter.open",
+                        "care-plan.create",
+                        "integration.connection.create");
+        assertThat(projectedPermissionsAsRuntime(
+                        REFERENCE_ORGANIZATION,
+                        REFERENCE_OWNER,
+                        ORG_TWO,
+                        REFERENCE_OWNER,
+                        "true"))
+                .isEmpty();
+        assertThat(projectedPermissionsAsRuntime(
+                        REFERENCE_ORGANIZATION,
+                        REFERENCE_OWNER,
+                        REFERENCE_ORGANIZATION,
+                        ACTOR,
+                        "true"))
+                .isEmpty();
+    }
+
+    @Test
+    void keepsActiveActionProjectionUnchangedAndCapabilityRemovalFailClosed()
+            throws SQLException {
+        seedReferenceOwner();
+        assignReferenceOwnerRole("organization_owner");
+
+        assertThat(projectedPermissionsAsRuntime(
+                        REFERENCE_ORGANIZATION,
+                        REFERENCE_OWNER,
+                        REFERENCE_ORGANIZATION,
+                        REFERENCE_OWNER,
+                        null))
+                .contains("workforce.member.create", "patient.registration.start")
+                .doesNotContain("workforce.not-approved");
+
+        assignReferenceOwnerRole("local_bootstrap");
+        executeAsMigrator("REVOKE careos_local_reference_authority FROM careos_app");
+        try {
+            assertThat(projectedPermissionsAsRuntime(
+                            REFERENCE_ORGANIZATION,
+                            REFERENCE_OWNER,
+                            REFERENCE_ORGANIZATION,
+                            REFERENCE_OWNER,
+                            "true"))
+                    .isEmpty();
+        } finally {
+            executeAsMigrator(
+                    "GRANT careos_local_reference_authority TO careos_app "
+                            + "WITH ADMIN FALSE, INHERIT FALSE, SET FALSE");
+        }
+    }
+
+    @Test
     void keepsActivePolicyAndReferencePolicyTenantAndPermissionBoundariesDistinct()
             throws SQLException {
         seedReferenceOwner();
@@ -863,6 +945,188 @@ class TenantRlsIntegrationTest {
                         "workforce.dashboard.read",
                         "false"))
                 .isTrue();
+    }
+
+    @Test
+    void composesPlatformSuperAdministratorFromHumanAuthorityWithoutServiceAuthority()
+            throws SQLException {
+        seedReferenceOwner();
+        executeAsMigrator("""
+                INSERT INTO organization_memberships
+                    (id, organization_id, user_id, role_key, status, effective_from)
+                VALUES
+                    ('01900000-0000-7000-8000-000000000304',
+                     '01900000-0000-7000-8000-000000000003',
+                     '01900000-0000-7000-8000-000000000204',
+                     'organization_owner', 'active', now())
+                """);
+        assignReferenceOwnerRole("platform_super_administrator");
+
+        assertThat(jdbcTemplate.queryForMap(
+                        """
+                        SELECT status, registry_version, interactive,
+                               invitation_assignable, final_owner, mfa_required
+                        FROM authorization_roles
+                        WHERE role_key='platform_super_administrator'
+                        """))
+                .containsEntry("status", "active")
+                .containsEntry("registry_version", "platform-access-v1")
+                .containsEntry("interactive", true)
+                .containsEntry("invitation_assignable", false)
+                .containsEntry("final_owner", false)
+                .containsEntry("mfa_required", true);
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT careos_user_requires_mfa(?)",
+                        Boolean.class,
+                        REFERENCE_OWNER))
+                .isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+                        """
+                        SELECT count(*)
+                        FROM authorization_role_permissions
+                        WHERE role_key='platform_super_administrator'
+                        """,
+                        Integer.class))
+                .isEqualTo(277);
+        assertThat(jdbcTemplate.queryForList(
+                        """
+                        SELECT permission_key
+                        FROM authorization_role_permissions
+                        WHERE role_key='platform_super_administrator'
+                          AND permission_key IN (
+                              'billing.payment.provider.record',
+                              'evidence.export.retention',
+                              'evidence.export.worker',
+                              'identity.invitation.accept',
+                              'integration.delivery.attempt',
+                              'integration.delivery.create',
+                              'integration.delivery.replay',
+                              'integration.fhir.exchange.record',
+                              'integration.webhook.receive',
+                              'reporting.export.complete')
+                        ORDER BY permission_key
+                        """,
+                        String.class))
+                .isEmpty();
+        assertThat(jdbcTemplate.queryForObject(
+                        """
+                        SELECT count(*)
+                        FROM authorization_role_delegations
+                        WHERE delegator_role_key='platform_super_administrator'
+                        """,
+                        Integer.class))
+                .isEqualTo(22);
+        assertThat(jdbcTemplate.queryForObject(
+                        """
+                        SELECT count(*)
+                        FROM authorization_role_delegations
+                        WHERE delegator_role_key='local_bootstrap'
+                        """,
+                        Integer.class))
+                .isEqualTo(22);
+        assertThat(jdbcTemplate.queryForMap(
+                        """
+                        SELECT approval_record_id, approval_package_sha256,
+                               authorization_artifact_sha256,
+                               approval_evidence_sha256, module_key, status
+                        FROM authorization_registry_releases
+                        WHERE registry_version='platform-access-v1'
+                        """))
+                .containsEntry(
+                        "approval_record_id", "PLATFORM-ACCESS-DIRECTION-20260929-01")
+                .containsEntry(
+                        "approval_package_sha256",
+                        "dd8e15a5c5ce16addf7e6a0e709766a93837308777008998a2a40d7347f95ed2")
+                .containsEntry(
+                        "authorization_artifact_sha256",
+                        "a6e4b41f86b762bf71ec032c6894779c4f99f74e50196e7f334f259c5e7d80f5")
+                .containsEntry(
+                        "approval_evidence_sha256",
+                        "5aebdff872fb6c4d551744068b116825d04d6d1e535f009c58f2a592bb3beacf")
+                .containsEntry("module_key", "PLATFORM_ACCESS")
+                .containsEntry("status", "active");
+        assertThat(jdbcTemplate.queryForObject(
+                        """
+                        SELECT EXISTS (
+                            SELECT 1
+                            FROM authorization_role_delegations
+                            WHERE delegator_role_key='organization_owner'
+                              AND target_role_key='platform_super_administrator')
+                        """,
+                        Boolean.class))
+                .isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+                        """
+                        SELECT EXISTS (
+                            SELECT 1
+                            FROM authorization_role_delegations
+                            WHERE delegator_role_key='platform_super_administrator'
+                              AND target_role_key='platform_super_administrator')
+                        """,
+                        Boolean.class))
+                .isTrue();
+        assertThatThrownBy(() -> executeAsMigrator("""
+                        INSERT INTO authorization_role_delegations
+                            (delegator_role_key, target_role_key, registry_version)
+                        VALUES
+                            ('organization_administrator',
+                             'organization_administrator',
+                             'platform-access-v1')
+                        """))
+                .isInstanceOf(SQLException.class)
+                .hasMessageContaining("authorization_role_delegations_non_reflexive_check");
+
+        var approvedAuthorization = new PostgresTenantAuthorizationOperations(
+                jdbcTemplate, transactionManager, clock, false);
+        var permissionRequest = new TenantAuthorizationRequest(
+                REFERENCE_ORGANIZATION,
+                new AuthenticatedActorContext(
+                        REFERENCE_OWNER, "platform-super-admin-test", "platform-super-admin-42"),
+                new OperationKey("workforce.dashboard.read"));
+        assertThat(approvedAuthorization.execute(permissionRequest, () -> true)).isTrue();
+
+        var delegationRequest = new TenantAuthorizationRequest(
+                REFERENCE_ORGANIZATION,
+                new AuthenticatedActorContext(
+                        REFERENCE_OWNER, "platform-super-admin-test", "platform-delegation-42"),
+                new OperationKey("access.membership.read"));
+        assertThat(approvedAuthorization.execute(
+                        delegationRequest,
+                        () -> jdbcTemplate.queryForObject(
+                                "SELECT careos_can_delegate_active_interactive_role(?,?,?)",
+                                Boolean.class,
+                                REFERENCE_ORGANIZATION,
+                                REFERENCE_OWNER,
+                                "integration_administrator")))
+                .isTrue();
+        assertThat(approvedAuthorization.execute(
+                        delegationRequest,
+                        () -> jdbcTemplate.queryForObject(
+                                "SELECT careos_can_delegate_active_interactive_role(?,?,?)",
+                                Boolean.class,
+                                REFERENCE_ORGANIZATION,
+                                REFERENCE_OWNER,
+                                "service_m13_delivery")))
+                .isFalse();
+        assertThat(approvedAuthorization.execute(
+                        delegationRequest,
+                        () -> jdbcTemplate.queryForObject(
+                                "SELECT careos_can_delegate_active_interactive_role(?,?,?)",
+                                Boolean.class,
+                                ORG_TWO,
+                                REFERENCE_OWNER,
+                                "integration_administrator")))
+                .isFalse();
+
+        var crossTenantRequest = new TenantAuthorizationRequest(
+                ORG_TWO,
+                new AuthenticatedActorContext(
+                        REFERENCE_OWNER, "platform-super-admin-test", "platform-cross-tenant-42"),
+                new OperationKey("workforce.dashboard.read"));
+        assertThatThrownBy(() -> approvedAuthorization.execute(crossTenantRequest, () -> true))
+                .isInstanceOf(TenantAuthorizationException.class)
+                .extracting(exception -> ((TenantAuthorizationException) exception).reason())
+                .isEqualTo(TenantAuthorizationException.Reason.MEMBERSHIP_NOT_FOUND);
     }
 
     @Test
@@ -2383,7 +2647,9 @@ class TenantRlsIntegrationTest {
     }
 
     private void assignReferenceOwnerRole(String roleKey) throws SQLException {
-        if (!roleKey.equals("local_bootstrap") && !roleKey.equals("organization_owner")) {
+        if (!roleKey.equals("local_bootstrap")
+                && !roleKey.equals("organization_owner")
+                && !roleKey.equals("platform_super_administrator")) {
             throw new IllegalArgumentException("Unsupported reference-owner test role");
         }
         executeAsMigrator("""
@@ -2466,6 +2732,47 @@ class TenantRlsIntegrationTest {
                     var result = query.executeQuery()) {
                 result.next();
                 return result.getBoolean(1);
+            } finally {
+                connection.rollback();
+            }
+        }
+    }
+
+    private List<String> projectedPermissionsAsRuntime(
+            UUID boundOrganizationId,
+            UUID boundActorId,
+            UUID requestedOrganizationId,
+            UUID requestedActorId,
+            String referenceFlag)
+            throws SQLException {
+        try (var connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), APP_USER, APP_PASSWORD)) {
+            connection.setAutoCommit(false);
+            try (var setting = connection.prepareStatement("SELECT set_config(?, ?, true)")) {
+                setTransactionSetting(
+                        setting, "app.current_organization_id", boundOrganizationId.toString());
+                setTransactionSetting(setting, "app.current_actor_id", boundActorId.toString());
+                setTransactionSetting(setting, "app.current_actor_kind", "user");
+                if (referenceFlag != null) {
+                    setTransactionSetting(
+                            setting,
+                            "app.reference_authorization_policy_enabled",
+                            referenceFlag);
+                }
+            }
+            try (var query = connection.prepareStatement(
+                    "SELECT permission_key "
+                            + "FROM careos_projected_interactive_permissions(?, ?) "
+                            + "ORDER BY permission_key")) {
+                query.setObject(1, requestedOrganizationId);
+                query.setObject(2, requestedActorId);
+                try (var result = query.executeQuery()) {
+                    var permissions = new java.util.ArrayList<String>();
+                    while (result.next()) {
+                        permissions.add(result.getString(1));
+                    }
+                    return List.copyOf(permissions);
+                }
             } finally {
                 connection.rollback();
             }

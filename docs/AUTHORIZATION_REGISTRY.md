@@ -8,6 +8,8 @@ Flyway V20 records the approval in immutable `authorization_registry_releases` e
 
 The older `careos-phase0-reference-v1` entries remain historical reference mechanics. Production still rejects `careos.authorization.reference-policy-enabled=true`; active approved entries do not require that flag. Governed invitations, administrative MFA reset, and membership administration remain disabled by default, but production may enable them only while the configured active registry and approval-package digest exactly match the approved release. Identifier and address/contact operations likewise authorize only through the active approved registry. Reference service identities and actual workers remain unavailable in production.
 
+Flyway V117 separately records `platform-access-v1` under the cross-cutting `PLATFORM_ACCESS` scope. Its three source artifacts and SHA-256 values are checked by the repository security contract. It adds `platform_super_administrator`, an active MFA-required organization role containing the exact union of 277 permissions granted to active interactive roles backed by active releases at migration time. The 10 non-interactive worker/provider permissions are absent. The role is not invitation-assignable, not a final owner and not an RLS/database/provider bypass.
+
 An active permission entry is not an implemented endpoint. V20 authorizes incremental delivery against the approved catalogue; current runtime bindings cover organization profile/readiness, invitation issue/revoke/acceptance, administrative MFA reset, V21 membership list/read, V22 organization-wide non-owner membership role-change/revocation, V23 final-owner-safe owner promotion/demotion request/approval/execution, V24 mandatory-role MFA enrollment/use through the existing identity operations, V25 exact profile persistence, V26 identifier list/create/edit/verify/revoke/supersede plus live primary-verification readiness, and V27 address/contact list/create/verify/end/supersede plus live coverage readiness.
 
 ## Enforced invariants
@@ -25,16 +27,22 @@ An active permission entry is not an implemented endpoint. V20 authorizes increm
 - Membership read authorizes inside the tenant transaction, returns hidden denial, applies forced RLS, and projects only actions backed by current live approved permissions. Signed cursors cannot be rebound across tenant, filters, operation, or page limit.
 - Membership role change/revocation requires a strong current revision, exact reason, recent primary authentication plus MFA, independent live approval, maker/checker/target separation, and an allowed delegation edge. PostgreSQL binds the approval to the exact non-owner membership, from/to role, change type, revision, reason, and executor context before permitting one update and atomic changed/revoked evidence.
 - Owner promotion/demotion requires the same strong revision, reason, recent primary authentication plus MFA, 30-minute approval, and maker/checker/target separation. The approved maker executes the exact transition; PostgreSQL requires an indefinite promotion target, an allowed demotion delegation edge, and preserves the final effective owner while writing atomic `identity.owner.transferred` evidence.
-- `organization_owner`, `organization_administrator`, `configuration_approver`, `security_administrator`, `auditor`, and `export_approver` require enabled MFA while any membership is effective. Login without a factor receives restricted enrollment authority, protected requests re-evaluate the live requirement after role changes, and PostgreSQL permits enabled-factor removal only for the exact consumed governed administrative reset. `local_bootstrap`, editor, and viewer are not marked required.
+- `organization_owner`, `organization_administrator`, `configuration_approver`, `security_administrator`, `auditor`, `export_approver`, and `platform_super_administrator` require enabled MFA while any membership is effective. Login without a factor receives restricted enrollment authority, protected requests re-evaluate the live requirement after role changes, and PostgreSQL permits enabled-factor removal only for the exact consumed governed administrative reset. `local_bootstrap`, editor, and viewer are not marked required.
 - Readiness uses exact non-overrideable `access.final_owner` and `access.mfa_enforced` gates. Optional viewer/editor organization-level enforcement is not runtime authority until a separate approved contract defines its policy and lifecycle.
 - Human memberships accept only interactive roles. Reference non-interactive roles remain isolated to service identities and cannot be used through browser membership.
 - The approval release row contains the exact package, authorization-artifact, and approval-evidence digests and cannot be updated or deleted by either the runtime role or ordinary migration-owner SQL.
 
-## Approved interactive scope
+## Module 1 approved interactive scope
 
 The approved interactive roles are `organization_owner`, `organization_administrator`, `configuration_editor`, `configuration_approver`, `security_administrator`, `auditor`, `export_approver`, and `organization_viewer`. `local_bootstrap` remains reference-only for synthetic local development and is never production eligible.
 
 The exact permission families, grants, assurance windows, denial behavior, delegation ceilings, final-owner rules, and MFA enforcement are authoritative in `approved-inputs/module-1/05-authorization-policy.md`. Owners can delegate every non-owner role; administrators can delegate editor/viewer; security administrators can delegate viewer. No role can grant itself authority outside those edges.
+
+## Cross-cutting platform access scope
+
+The authoritative V117 artifacts are under `approved-inputs/platform-access/`. An owner may initiate promotion of an existing member to `platform_super_administrator`. A platform administrator can govern every active, release-backed, non-final human role for another user, including a peer platform administrator. Direct invitation is prohibited. The application and database reject targeting the actor, machine/service roles, the ordinary final-owner path, missing or stale independent approval, and cross-tenant requests. The peer edge is the only migration-owned exception to the otherwise non-reflexive role-delegation constraint.
+
+The fixed `local_bootstrap` identity is displayed as Local/UAT super administrator and receives the same human-role delegation catalogue only behind V115's deployment-owned capability plus transaction flag. It remains reference-only and production-ineligible. Individual permission rows are not runtime feature switches; access for another person is governed by assigning, changing, suspending or revoking an approved role.
 
 ## Remaining implementation work
 
@@ -46,4 +54,4 @@ The approved registry removes the input blocker; it does not complete M1B or the
 4. Production provisioning/rotation and approved activation for non-interactive identities, workers, consumers, notification delivery, and schedulers.
 5. Full allow/deny/delegation/final-owner/maker-checker/MFA attack coverage for each newly implemented operation and target-environment acceptance before production rollout.
 
-Do not expose runtime endpoints that mutate canonical authorization catalogs or infer implementation completeness merely because V20-V27 contain a permission, role attribute, or operation key.
+Do not expose runtime endpoints that mutate canonical authorization catalogs or infer implementation completeness merely because V20-V27 or V117 contain a permission, role attribute, delegation or operation key.

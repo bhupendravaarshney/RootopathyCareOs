@@ -264,6 +264,7 @@ const compactMembershipQuery = '(max-width: 760px)';
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const cursorPattern = /^[A-Za-z0-9_-]{1,512}$/;
 const membershipRoles = [
+  ['platform_super_administrator', 'Platform super administrator'],
   ['organization_owner', 'Organization owner'],
   ['organization_administrator', 'Organization administrator'],
   ['configuration_editor', 'Configuration editor'],
@@ -272,6 +273,20 @@ const membershipRoles = [
   ['auditor', 'Auditor'],
   ['export_approver', 'Export approver'],
   ['organization_viewer', 'Organization viewer'],
+  ['workforce_administrator', 'Workforce administrator'],
+  ['hr_administrator', 'HR administrator'],
+  ['facility_administrator', 'Facility administrator'],
+  ['credentialing_officer', 'Credentialing officer'],
+  ['clinical_governance_approver', 'Clinical governance approver'],
+  ['practitioner', 'Practitioner'],
+  ['clinical_support_staff', 'Clinical support staff'],
+  ['billing_administrator', 'Billing administrator'],
+  ['claims_officer', 'Claims officer'],
+  ['financial_auditor', 'Financial auditor'],
+  ['reporting_analyst', 'Reporting analyst'],
+  ['governance_report_auditor', 'Governance report auditor'],
+  ['integration_administrator', 'Integration administrator'],
+  ['integration_auditor', 'Integration auditor'],
 ] as const;
 
 type MembershipFilters = {
@@ -7587,7 +7602,7 @@ function ServiceCatalogueScreen({ client, organizationId }: AdministrationScreen
                     Service code
                     <input
                       required
-                      pattern="[A-Z][A-Z0-9_.-]{1,39}"
+                      pattern="[A-Z0-9](?:[A-Z0-9_]|-){1,31}"
                       value={form.serviceCode}
                       onChange={(event) =>
                         setForm({ ...form, serviceCode: event.target.value.toUpperCase() })

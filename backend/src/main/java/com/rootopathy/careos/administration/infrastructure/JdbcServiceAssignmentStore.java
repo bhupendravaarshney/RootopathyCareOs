@@ -15,7 +15,7 @@ public class JdbcServiceAssignmentStore implements ServiceAssignmentStore {
   public JdbcServiceAssignmentStore(JdbcTemplate jdbc) { this.jdbc = jdbc; }
 
   @Override public ServiceAssignmentDirectory directory(AuthorizedTenantContext c) {
-    var permissions = Set.copyOf(jdbc.queryForList("SELECT DISTINCT rp.permission_key FROM organization_memberships m JOIN authorization_role_permissions rp ON rp.role_key=m.role_key WHERE m.organization_id=? AND m.user_id=? AND m.status='active' AND m.effective_from<=clock_timestamp() AND (m.effective_to IS NULL OR m.effective_to>clock_timestamp())", String.class, c.organizationId(), c.actorId()));
+    var permissions = Set.copyOf(jdbc.queryForList("SELECT permission_key FROM careos_projected_interactive_permissions(?, ?)", String.class, c.organizationId(), c.actorId()));
     var rows = jdbc.query("SELECT id,service_id,facility_id,location_id,capacity,availability_notes,prerequisites,effective_from,effective_to,status,lock_version,created_at,updated_at FROM service_assignments WHERE organization_id=? ORDER BY effective_from,id", (r,n) -> {
       Array value = r.getArray(7);
       String[] prerequisites = value == null ? new String[0] : (String[]) value.getArray();

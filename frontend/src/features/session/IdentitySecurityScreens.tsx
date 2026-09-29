@@ -640,6 +640,20 @@ export function InvitationAdministrationScreen({
                 <option value="security_administrator">Security administrator</option>
                 <option value="auditor">Auditor</option>
                 <option value="export_approver">Export approver</option>
+                <option value="workforce_administrator">Workforce administrator</option>
+                <option value="hr_administrator">HR administrator</option>
+                <option value="facility_administrator">Facility administrator</option>
+                <option value="credentialing_officer">Credentialing officer</option>
+                <option value="clinical_governance_approver">Clinical governance approver</option>
+                <option value="practitioner">Practitioner</option>
+                <option value="clinical_support_staff">Clinical support staff</option>
+                <option value="billing_administrator">Billing administrator</option>
+                <option value="claims_officer">Claims officer</option>
+                <option value="financial_auditor">Financial auditor</option>
+                <option value="reporting_analyst">Reporting analyst</option>
+                <option value="governance_report_auditor">Governance report auditor</option>
+                <option value="integration_administrator">Integration administrator</option>
+                <option value="integration_auditor">Integration auditor</option>
               </select>
             </label>
             <label htmlFor="invitation-reason">
@@ -1113,7 +1127,7 @@ function MfaAdministrativeResetPanel({
             type="text"
             inputMode="text"
             autoComplete="off"
-            pattern="[0-9a-fA-F-]{36}"
+            pattern="[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[1-8][0-9A-Fa-f]{3}-[89AaBb][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}"
             maxLength={36}
             required
             value={targetUserId}
@@ -1129,7 +1143,7 @@ function MfaAdministrativeResetPanel({
               type="text"
               inputMode="text"
               autoComplete="off"
-              pattern="[0-9a-fA-F-]{36}"
+              pattern="[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[1-8][0-9A-Fa-f]{3}-[89AaBb][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}"
               maxLength={36}
               required
               value={approvalId}

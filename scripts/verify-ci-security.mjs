@@ -1,4 +1,5 @@
 import { readFileSync, readdirSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -735,12 +736,19 @@ export function validateQualityTopologyText(text) {
     );
   }
   for (const [marker, description] of [
+    [
+      "COMPOSE_FILE: compose.yaml:compose.uat.yaml",
+      "the synthetic UAT storage overlay",
+    ],
     ["docker compose build --pull", "an isolated Compose build"],
     ["docker compose up --detach --wait", "an isolated Compose start"],
     ["http://localhost:8080/livez", "the backend liveness probe"],
     ["http://localhost:8080/readyz", "the backend readiness probe"],
     ["http://localhost:4173/", "the frontend HTTP probe"],
     ["npm run test:live:audit", "the authenticated live audit"],
+    ["npm run test:uat:smoke", "the governed UAT mutation smoke"],
+    ["CAREOS_UAT_ALLOW_MUTATION", "explicit UAT mutation opt-in"],
+    ["frontend/test-results/uat-smoke", "UAT evidence artifacts"],
     ["actions/upload-artifact@", "commit-bound audit artifacts"],
     ["docker compose down --volumes --remove-orphans", "volume teardown"],
   ]) {
@@ -801,6 +809,8 @@ export function validateReferenceAuthorityBoundaryTexts({
   compose,
   migration,
   operations,
+  projectionMigration,
+  projectionSources,
   productionGuard,
   productionTest,
   tenantTest,
@@ -832,6 +842,26 @@ export function validateReferenceAuthorityBoundaryTexts({
       "V115: inherited-authority denial",
     ],
     [migration, /NOT membership\.set_option/, "V115: SET ROLE denial"],
+    [
+      projectionMigration,
+      /SECURITY INVOKER[\s\S]*careos_reference_authorization_enabled\(\)/,
+      "V116: invoker-rights capability-gated action projection",
+    ],
+    [
+      projectionMigration,
+      /requested_organization_id=[\s\S]*current_setting\('app\.current_organization_id', true\)[\s\S]*requested_user_id=[\s\S]*current_setting\('app\.current_actor_id', true\)/,
+      "V116: exact transaction organization and actor binding",
+    ],
+    [
+      projectionMigration,
+      /REVOKE ALL ON FUNCTION careos_projected_interactive_permissions\(uuid,uuid\) FROM PUBLIC/,
+      "V116: public execution denial",
+    ],
+    [
+      projectionSources,
+      /careos_projected_interactive_permissions\(\?, \?\)/,
+      "action stores: centralized capability-gated projection",
+    ],
     [
       bootstrap,
       /CAREOS_DB_LOCAL_REFERENCE_AUTHORITY:-false/,
@@ -874,6 +904,16 @@ export function validateReferenceAuthorityBoundaryTexts({
     }
   }
 
+  if (
+    /current_setting\(\s*'app\.reference_authorization_policy_enabled'/m.test(
+      projectionSources,
+    )
+  ) {
+    errors.push(
+      "action stores: raw reference GUC checks must use the database capability boundary",
+    );
+  }
+
   for (const [method, description] of [
     [
       "deniesLocalBootstrapWorkforceAccessWhenTheReferenceFlagIsMissingOrFalse",
@@ -887,9 +927,123 @@ export function validateReferenceAuthorityBoundaryTexts({
       "runtimeRoleCannotManufactureReferenceAuthorityBySettingTheCustomGuc",
       "runtime GUC escalation attack test",
     ],
+    [
+      "projectsLocalBootstrapActionsOnlyWithCapabilityAndExactTransactionContext",
+      "capability-gated action projection attack test",
+    ],
+    [
+      "keepsActiveActionProjectionUnchangedAndCapabilityRemovalFailClosed",
+      "active-policy preservation and capability-removal test",
+    ],
   ]) {
     if (!tenantTest.includes(method)) {
       errors.push(`TenantRlsIntegrationTest.java: ${description} is missing`);
+    }
+  }
+  return errors;
+}
+
+export function validatePlatformAccessReleaseTexts({
+  administrationStore,
+  direction,
+  evidence,
+  identityTest,
+  migration,
+  policy,
+  tenantTest,
+}) {
+  const errors = [];
+  const digest = (text) =>
+    createHash("sha256")
+      .update(text.replaceAll("\r\n", "\n"), "utf8")
+      .digest("hex");
+  const artifacts = [
+    [
+      direction,
+      "approval package",
+      "dd8e15a5c5ce16addf7e6a0e709766a93837308777008998a2a40d7347f95ed2",
+    ],
+    [
+      policy,
+      "authorization artifact",
+      "a6e4b41f86b762bf71ec032c6894779c4f99f74e50196e7f334f259c5e7d80f5",
+    ],
+    [
+      evidence,
+      "approval evidence",
+      "5aebdff872fb6c4d551744068b116825d04d6d1e535f009c58f2a592bb3beacf",
+    ],
+  ];
+  for (const [text, label, expected] of artifacts) {
+    if (digest(text) !== expected) {
+      errors.push(`platform access: ${label} digest does not match V117`);
+    }
+    if (!migration.includes(expected)) {
+      errors.push(`V117: ${label} digest evidence is missing`);
+    }
+  }
+  const required = [
+    [migration, /'platform-access-v1'/, "dedicated registry release"],
+    [migration, /'PLATFORM_ACCESS'/, "cross-cutting release scope"],
+    [
+      migration,
+      /'platform_super_administrator'[\s\S]*'platform-access-v1',[\s\S]*true, false, false, true/,
+      "MFA-bound non-invitable role",
+    ],
+    [
+      migration,
+      /source_role\.status='active'[\s\S]*source_role\.interactive[\s\S]*permission\.status='active'/,
+      "active human permission composition",
+    ],
+    [
+      migration,
+      /target\.status='active'[\s\S]*target\.interactive[\s\S]*NOT target\.final_owner/,
+      "non-owner interactive delegation ceiling",
+    ],
+    [
+      migration,
+      /authorization_role_delegations_non_reflexive_check[\s\S]*delegator_role_key <> target_role_key[\s\S]*delegator_role_key='platform_super_administrator'/,
+      "single migration-owned peer-delegation exception",
+    ],
+    [
+      migration,
+      /careos_sync_identity_mfa_role_requirement[\s\S]*role\.mfa_required[\s\S]*authorization_registry_releases[\s\S]*release\.status='active'/,
+      "active-release mandatory-MFA synchronization",
+    ],
+    [
+      administrationStore,
+      /roles\.mfa_required[\s\S]*roles\.interactive[\s\S]*authorization_registry_releases[\s\S]*release\.status = 'active'/,
+      "active-release mandatory-MFA readiness",
+    ],
+    [
+      tenantTest,
+      /composesPlatformSuperAdministratorFromHumanAuthorityWithoutServiceAuthority/,
+      "database composition attack test",
+    ],
+    [
+      tenantTest,
+      /billing\.payment\.provider\.record[\s\S]*reporting\.export\.complete[\s\S]*\.isEmpty\(\)/,
+      "service-authority exclusion test",
+    ],
+    [
+      tenantTest,
+      /organization_administrator'[\s\S]*organization_administrator'[\s\S]*authorization_role_delegations_non_reflexive_check/,
+      "non-platform peer-delegation rejection test",
+    ],
+    [
+      tenantTest,
+      /careos_user_requires_mfa\(\?\)[\s\S]*REFERENCE_OWNER[\s\S]*\.isTrue\(\)/,
+      "derived platform-role MFA test",
+    ],
+    [
+      identityTest,
+      /requiresExactIndependentApprovalForMembershipRoleChangesAndRevocation[\s\S]*SET role_key = 'platform_super_administrator'[\s\S]*"toRoleKey", "platform_super_administrator"[\s\S]*jsonPath\("\$\.status"\)\.value\("changed"\)[\s\S]*jsonPath\("\$\.status"\)\.value\("revoked"\)/,
+      "peer promotion and revocation HTTP integration test",
+    ],
+  ];
+  for (const [text, pattern, label] of required) {
+    if (!pattern.test(text)) {
+      errors.push(`platform access: ${label} is missing`);
     }
   }
   return errors;
@@ -1057,6 +1211,7 @@ export function validateProjectVerificationTexts({ shell, powershell }) {
   ];
   const requiredMarkers = [
     ["Node 24.15 runtime floor", "24.15.0"],
+    ["UAT-overlay Compose validation", "compose.uat.yaml"],
     ["scanner-overlay Compose validation", "compose.scanner.yaml"],
     ["prototype registry", "verify-prototype-register.mjs"],
     ["API verifier", "verify-api-contract.mjs"],
@@ -1233,7 +1388,11 @@ export function validateRepository(rootDirectory) {
       ),
     }),
   );
-  for (const compose of ["compose.yaml", "compose.scanner.yaml"]) {
+  for (const compose of [
+    "compose.yaml",
+    "compose.uat.yaml",
+    "compose.scanner.yaml",
+  ]) {
     errors.push(
       ...validateComposeText(compose, requiredFile(root, compose, errors)),
     );
@@ -1273,6 +1432,42 @@ export function validateRepository(rootDirectory) {
         "backend/src/main/resources/db/migration/V115__local_reference_authority_capability.sql",
         errors,
       ),
+      projectionMigration: requiredFile(
+        root,
+        "backend/src/main/resources/db/migration/V116__capability_gated_local_action_projection.sql",
+        errors,
+      ),
+      projectionSources: [
+        "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcConfigurationActivationStore.java",
+        "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcEvidenceExportStore.java",
+        "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcFacilityStore.java",
+        "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcIdentifierSchemeStore.java",
+        "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcOperatingHoursStore.java",
+        "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcOrganizationAdministrationStore.java",
+        "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcOrganizationContactStore.java",
+        "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcOrganizationGovernanceStore.java",
+        "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcOrganizationIdentifierStore.java",
+        "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcOrganizationInternationalSettingsStore.java",
+        "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcOrganizationUnitStore.java",
+        "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcServiceAssignmentStore.java",
+        "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcServiceCatalogueStore.java",
+        "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcServiceLocationStore.java",
+        "backend/src/main/java/com/rootopathy/careos/ai/infrastructure/JdbcAiStore.java",
+        "backend/src/main/java/com/rootopathy/careos/assessment/infrastructure/JdbcAssessmentStore.java",
+        "backend/src/main/java/com/rootopathy/careos/billing/infrastructure/JdbcBillingStore.java",
+        "backend/src/main/java/com/rootopathy/careos/careplan/infrastructure/JdbcCarePlanStore.java",
+        "backend/src/main/java/com/rootopathy/careos/document/infrastructure/JdbcDocumentStore.java",
+        "backend/src/main/java/com/rootopathy/careos/encounter/infrastructure/JdbcEncounterStore.java",
+        "backend/src/main/java/com/rootopathy/careos/followup/infrastructure/JdbcFollowupStore.java",
+        "backend/src/main/java/com/rootopathy/careos/integration/infrastructure/JdbcIntegrationStore.java",
+        "backend/src/main/java/com/rootopathy/careos/patientregistry/infrastructure/JdbcPatientRegistryStore.java",
+        "backend/src/main/java/com/rootopathy/careos/reporting/infrastructure/JdbcReportingStore.java",
+        "backend/src/main/java/com/rootopathy/careos/scheduling/infrastructure/JdbcSchedulingStore.java",
+        "backend/src/main/java/com/rootopathy/careos/workforce/infrastructure/JdbcWorkforceStore.java",
+        "backend/src/main/java/com/rootopathy/careos/identity/infrastructure/persistence/JdbcInvitationStore.java",
+      ]
+        .map((path) => requiredFile(root, path, errors))
+        .join("\n"),
       operations: requiredFile(
         root,
         "backend/src/main/java/com/rootopathy/careos/tenancy/infrastructure/PostgresTenantAuthorizationOperations.java",
@@ -1296,6 +1491,45 @@ export function validateRepository(rootDirectory) {
       testInit: requiredFile(
         root,
         "backend/src/test/resources/db/test-init.sql",
+        errors,
+      ),
+    }),
+  );
+  errors.push(
+    ...validatePlatformAccessReleaseTexts({
+      administrationStore: requiredFile(
+        root,
+        "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcOrganizationAdministrationStore.java",
+        errors,
+      ),
+      direction: requiredFile(
+        root,
+        "approved-inputs/platform-access/01-implementation-direction.md",
+        errors,
+      ),
+      evidence: requiredFile(
+        root,
+        "approved-inputs/platform-access/03-approval-evidence.md",
+        errors,
+      ),
+      identityTest: requiredFile(
+        root,
+        "backend/src/test/java/com/rootopathy/careos/identity/api/IdentitySecurityIntegrationTest.java",
+        errors,
+      ),
+      migration: requiredFile(
+        root,
+        "backend/src/main/resources/db/migration/V117__governed_platform_super_administrator.sql",
+        errors,
+      ),
+      policy: requiredFile(
+        root,
+        "approved-inputs/platform-access/02-authorization-policy.json",
+        errors,
+      ),
+      tenantTest: requiredFile(
+        root,
+        "backend/src/test/java/com/rootopathy/careos/tenancy/infrastructure/TenantRlsIntegrationTest.java",
         errors,
       ),
     }),

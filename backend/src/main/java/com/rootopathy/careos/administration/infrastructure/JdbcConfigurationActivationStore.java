@@ -15,7 +15,7 @@ public class JdbcConfigurationActivationStore implements ConfigurationActivation
   public JdbcConfigurationActivationStore(JdbcTemplate jdbc){this.jdbc=jdbc;}
 
   @Override public ConfigurationActivationDirectory directory(AuthorizedTenantContext c){
-    var permissions=Set.copyOf(jdbc.queryForList("SELECT DISTINCT rp.permission_key FROM organization_memberships m JOIN authorization_role_permissions rp ON rp.role_key=m.role_key WHERE m.organization_id=? AND m.user_id=? AND m.status='active' AND m.effective_from<=clock_timestamp() AND (m.effective_to IS NULL OR m.effective_to>clock_timestamp())",String.class,c.organizationId(),c.actorId()));
+    var permissions=Set.copyOf(jdbc.queryForList("SELECT permission_key FROM careos_projected_interactive_permissions(?, ?)",String.class,c.organizationId(),c.actorId()));
     var evaluatedAt=now();
     var rows=jdbc.query("""
       SELECT v.id,v.display_number,v.parent_version_id,v.baseline_digest,v.change_summary,v.requested_effective_at,v.status,v.lock_version,v.maker_id,

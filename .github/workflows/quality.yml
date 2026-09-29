@@ -169,6 +169,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
+      COMPOSE_FILE: compose.yaml:compose.uat.yaml
       COMPOSE_PROJECT_NAME: careos-smoke-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -197,6 +198,11 @@ jobs:
       - name: Run authenticated live product audit
         working-directory: frontend
         run: npm run test:live:audit
+      - name: Run governed UAT mutation smoke
+        working-directory: frontend
+        env:
+          CAREOS_UAT_ALLOW_MUTATION: "true"
+        run: npm run test:uat:smoke
       - name: Capture product stack logs
         if: failure()
         run: docker compose logs --no-color > product-smoke-compose.log
@@ -207,8 +213,9 @@ jobs:
           name: authenticated-product-audit-${{ github.sha }}
           path: |
             frontend/test-results/live-product-audit
+            frontend/test-results/uat-smoke
             product-smoke-compose.log
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30
       - name: Tear down isolated product stack
         if: always()

@@ -170,7 +170,11 @@ function ActionField({
       <input
         autoComplete="off"
         min={field.inputType === 'number' ? 1 : undefined}
-        pattern={field.inputType === 'uuid' ? '[0-9a-fA-F-]{36}' : undefined}
+        pattern={
+          field.inputType === 'uuid'
+            ? '[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[1-8][0-9A-Fa-f]{3}-[89AaBb][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}'
+            : undefined
+        }
         required={field.required}
         step={field.inputType === 'number' ? 1 : undefined}
         type={field.inputType === 'uuid' ? 'text' : field.inputType}

@@ -82,7 +82,7 @@ function isStringMap(value: unknown): value is Record<string, string> {
   return (
     isRecord(value) &&
     Object.entries(value).every(
-      ([key, item]) => fieldKeyPattern.test(key) && typeof item === 'string',
+      ([key, item]) => (key === '$kind' || fieldKeyPattern.test(key)) && typeof item === 'string',
     )
   );
 }

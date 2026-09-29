@@ -23,6 +23,7 @@ try {
     )
 
     Invoke-CareOsCommand "docker" @("compose", "--env-file", ".env.example", "-f", "compose.yaml", "config", "--quiet")
+    Invoke-CareOsCommand "docker" @("compose", "--env-file", ".env.example", "-f", "compose.yaml", "-f", "compose.uat.yaml", "config", "--quiet")
     Invoke-CareOsCommand "docker" @("compose", "--env-file", ".env.example", "-f", "compose.yaml", "-f", "compose.scanner.yaml", "config", "--quiet")
     Invoke-CareOsCommand "node" @("scripts/build-s3-test-fixture.mjs")
 

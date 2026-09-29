@@ -84,27 +84,7 @@ public class JdbcPatientRegistryStore implements PatientRegistryStore {
     public Set<String> permissions(AuthorizedTenantContext context) {
         requireOperationScope(context);
         return Set.copyOf(jdbc.queryForList(
-                """
-                SELECT DISTINCT grants.permission_key
-                FROM organization_memberships memberships
-                JOIN authorization_roles roles ON roles.role_key=memberships.role_key
-                JOIN authorization_role_permissions grants ON grants.role_key=roles.role_key
-                JOIN authorization_permissions permissions
-                  ON permissions.permission_key=grants.permission_key
-                WHERE memberships.organization_id=? AND memberships.user_id=?
-                  AND memberships.status='active'
-                  AND memberships.effective_from<=clock_timestamp()
-                  AND (memberships.effective_to IS NULL
-                       OR memberships.effective_to>clock_timestamp())
-                  AND roles.status='active' AND roles.interactive
-                  AND permissions.status='active'
-                  AND EXISTS(SELECT 1 FROM authorization_registry_releases release
-                      WHERE release.registry_version=roles.registry_version
-                        AND release.status='active')
-                  AND EXISTS(SELECT 1 FROM authorization_registry_releases release
-                      WHERE release.registry_version=permissions.registry_version
-                        AND release.status='active')
-                """,
+                "SELECT permission_key FROM careos_projected_interactive_permissions(?, ?)",
                 String.class,
                 context.organizationId(),
                 context.actorId()));

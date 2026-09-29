@@ -1,26 +1,24 @@
 # Build status
 
-## Repository stabilization evidence (29 September 2026)
+## UAT-preparation evidence (29 September 2026)
 
-This is a local-candidate status, not a hosted release approval. Commit `56f2fa643482bc8cd46a8e4864306d0c65d555f1` is local `main` and contains the focus-revalidation correction through Flyway V115. `origin/main` still pointed to `bb4ad13715f59a4dbde26fcb92907671b8b57215` when inspected; hosted security passed and every independent hosted quality lane except frontend passed for that earlier commit. The local candidate has not yet been exercised by GitHub Actions as an exact commit.
+This is local working-tree evidence based on commit `0c53e5ca766f0e52ead8127a59718dcf8e1cce94`, not hosted release approval. The tree adds Flyway V116/V117, a governed super-administrator and a private-quarantine UAT pathway. It has not been committed or exercised by GitHub Actions as exact bytes.
 
 | Gate | Current state |
 | --- | --- |
-| Local backend | PASS — 279/279, including 257 core and 22 required S3/Object Lock/ClamAV compatibility tests; zero failures, errors, or skips. |
-| Local frontend | PASS — generated-client, architecture, typecheck, lint, format, 144/144 unit tests, and production build. |
+| Local backend | PASS — 283/283, including 261 core and 22 required S3/Object Lock/ClamAV compatibility tests; zero failures, errors or skips; V1–V117 from empty PostgreSQL 18. |
+| Local frontend | PASS — generated-client, architecture, typecheck, lint, format, 144/144 unit tests and production build. |
 | Local browser | PASS — 185/185 across 1440/1024/768/390/320 with Axe and document/body overflow checks. |
-| Local contracts | PASS — 140/140 repository/API/input/security negative and positive tests; 195 screens and 135 API operations. |
-| Local authenticated product audit | PASS — login, organization selection, 193 protected routes, zero unexpected API/console failures, and four intentional 428 boundaries. |
-| Local security reproduction | PASS — exact Trivy 0.74.0 filesystem plus rebuilt backend/frontend image scans report zero fixed HIGH/CRITICAL findings after patch-level Jackson fixes; the repository security contract passes. |
-| Hosted quality for `97ea69d9…` | FAIL — frontend, backend, contracts, and product-smoke passed; compatibility rejected a non-reproducible fixture digest and browser found the administration header badge at 780px in the 768px project. |
-| Hosted security for `97ea69d9…` | FAIL — both CodeQL languages passed; source and backend-image Trivy found CVE-2026-68497 in Jackson 2.21.5/3.1.5, and the later frontend-image scan was skipped. |
-| Hosted quality for `bb4ad137…` | FAIL — backend, compatibility, contracts, browser, and product-smoke passed; frontend alone failed on a focus-revalidation effect-order race. |
-| Hosted security for `bb4ad137…` | PASS — CodeQL, source scan, and backend/frontend image scans passed. |
-| Hosted quality/security for `56f2fa64…` | NOT RUN — the candidate was local-only and `origin/main` remained `bb4ad137…` when inspected. |
-| Repository release gate | **FAIL** until both hosted workflows pass for the same final commit. |
+| Local contracts | PASS — 141/141 repository/API/input/security tests; 195 screens and 135 API operations. |
+| Authenticated product audit | PASS — login, organization selection, 193 protected routes, zero unexpected API/console failures and four intentional 428 boundaries. |
+| Governed UAT mutation smoke | PASS — 16 server-projected actions, one service draft, two successive workforce pathways, complete normal registration, private-quarantine document upload and the required urgent-path denial; zero unexpected API/console failures. |
+| S3 fixture preflight | PASS — reproducible manifest `sha256:9b225075e9847bde86fa19f8274353ae7c5c4018af813ebb5bb9ce12d329b744`. |
+| Hosted quality/security | NOT RUN for this uncommitted tree. |
+| Formal target-environment UAT | **NOT EXECUTED** — use `docs/UAT_GUIDE.md` and `docs/UAT_ACCEPTANCE_RECORD.md`. |
+| Repository release gate | **FAIL** until an exact committed SHA passes both hosted workflows. |
 | Production acceptance | **NOT GRANTED**. |
 
-The remediation makes browser evidence independent, adds a required product-smoke lane, separates required core and compatibility diagnostics, replaces the removed Quay fixture with a repository-owned source build locked to Docker V2 manifest `sha256:9b225075e9847bde86fa19f8274353ae7c5c4018af813ebb5bb9ce12d329b744`, hardens local reference authority with a deployment-owned PostgreSQL capability, and prevents raw `X-Authorization-Reason` values from reaching logs or telemetry. The hosted runner exposed that `SOURCE_DATE_EPOCH` alone did not normalize layer file timestamps; the fixture now also pins BuildKit and the Dockerfile frontend, uses the image exporter's timestamp rewrite, and emits a single manifest portable across Docker image-store implementations. `build/qa-evidence.json` records dirty/clean source state so local evidence cannot be mistaken for commit-bound hosted evidence.
+V116 fixes the local administrator’s missing action projections without making `local_bootstrap` production eligible: it requires the V115 deployment-owned capability, transaction flag, exact actor/tenant and active membership. V117 adds the active MFA-required `platform_super_administrator` with all 277 approved human-interactive permissions and none of the 10 machine-only permissions. Its assignment to another existing user remains maker/checker governed; direct invitation, self-targeting, final-owner bypass, service-role assignment and cross-tenant access remain denied. Successive workforce onboarding uses collision-resistant full-UUID member numbers, and the UAT overlay enables private document quarantine without enabling downstream providers. The CI product-smoke lane runs both audits and retains commit-named artifacts. `build/qa-evidence.json` records dirty/clean source state so local evidence cannot be mistaken for commit-bound hosted evidence.
 
 ## Verified in the delivery environment
 

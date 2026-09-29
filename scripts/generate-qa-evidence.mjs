@@ -204,6 +204,13 @@ export function buildEvidence({
         `authenticated-product-audit-${commit}`,
       status: status(environment.PRODUCT_SMOKE_RESULT),
     },
+    uatSmoke: {
+      artifact:
+        environment.PRODUCT_SMOKE_ARTIFACT ??
+        `authenticated-product-audit-${commit}`,
+      mutationScope: "guarded-synthetic-data-only",
+      status: status(environment.PRODUCT_SMOKE_RESULT),
+    },
     securityWorkflow: {
       status: securityStatus,
       note:

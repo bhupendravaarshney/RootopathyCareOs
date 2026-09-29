@@ -357,32 +357,8 @@ public class JdbcOrganizationInternationalSettingsStore
     private Set<String> effectivePermissions(AuthorizedTenantContext context) {
         return Set.copyOf(jdbcTemplate.queryForList(
                 """
-                SELECT DISTINCT permissions.permission_key
-                FROM organization_memberships memberships
-                JOIN authorization_roles roles ON roles.role_key = memberships.role_key
-                JOIN authorization_role_permissions role_permissions
-                  ON role_permissions.role_key = roles.role_key
-                JOIN authorization_permissions permissions
-                  ON permissions.permission_key = role_permissions.permission_key
-                 AND permissions.registry_version = roles.registry_version
-                WHERE memberships.organization_id = ?
-                  AND memberships.user_id = ?
-                  AND memberships.status = 'active'
-                  AND memberships.effective_from <= clock_timestamp()
-                  AND (memberships.effective_to IS NULL
-                       OR memberships.effective_to > clock_timestamp())
-                  AND roles.registry_version = 'm1-candidate-1'
-                  AND roles.interactive
-                  AND (roles.status = 'active'
-                       OR (coalesce(nullif(current_setting(
-                               'app.reference_authorization_policy_enabled', true), '')::boolean,
-                           false)
-                           AND roles.status = 'reference'))
-                  AND (permissions.status = 'active'
-                       OR (coalesce(nullif(current_setting(
-                               'app.reference_authorization_policy_enabled', true), '')::boolean,
-                           false)
-                           AND permissions.status = 'reference'))
+                SELECT permission_key
+                FROM careos_projected_interactive_permissions(?, ?)
                 """,
                 String.class,
                 context.organizationId(),

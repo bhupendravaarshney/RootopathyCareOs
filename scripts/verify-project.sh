@@ -6,6 +6,7 @@ root_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 node -e 'const [major, minor] = process.versions.node.split(".").map(Number); if (major !== 24 || minor < 15) { console.error(`CareOS QA requires Node >=24.15.0 <25; found ${process.versions.node}`); process.exit(1); }'
 
 docker compose --env-file "$root_dir/.env.example" -f "$root_dir/compose.yaml" config --quiet
+docker compose --env-file "$root_dir/.env.example" -f "$root_dir/compose.yaml" -f "$root_dir/compose.uat.yaml" config --quiet
 docker compose --env-file "$root_dir/.env.example" -f "$root_dir/compose.yaml" -f "$root_dir/compose.scanner.yaml" config --quiet
 node "$root_dir/scripts/build-s3-test-fixture.mjs"
 

@@ -93,11 +93,9 @@ public class JdbcOrganizationGovernanceStore implements OrganizationGovernanceSt
         List<String> actions=!manage?List.of():"active".equals(lifecycle)?List.of("supersede"):"scheduled".equals(lifecycle)?List.of("supersede","end"):List.of();
         return new GovernanceResponsibility(r.getObject("id",UUID.class),r.getString("responsibility_type"),membership!=null?"membership":"external_contact",membership!=null?membership:r.getObject("external_contact_id",UUID.class),membership!=null?r.getString("display_name"):mask(channel,raw),maskEmail(r.getString("escalation_email")),maskPhone(r.getString("escalation_phone")),r.getBoolean("is_primary"),from,to,r.getObject("supersedes_id",UUID.class),lifecycle,actions,r.getLong("lock_version"),r.getTimestamp("created_at").toInstant(),r.getTimestamp("updated_at").toInstant());
     }
-    private Set<String> permissions(AuthorizedTenantContext c){return Set.copyOf(jdbc.queryForList("""
-        SELECT DISTINCT p.permission_key FROM organization_memberships m JOIN authorization_roles r ON r.role_key=m.role_key
-        JOIN authorization_role_permissions rp ON rp.role_key=r.role_key JOIN authorization_permissions p ON p.permission_key=rp.permission_key AND p.registry_version=r.registry_version
-        WHERE m.organization_id=? AND m.user_id=? AND m.status='active' AND r.registry_version='m1-candidate-1' AND r.interactive AND r.status='active' AND p.status='active'
-        """,String.class,c.organizationId(),c.actorId()));}
+    private Set<String> permissions(AuthorizedTenantContext c){return Set.copyOf(jdbc.queryForList(
+        "SELECT permission_key FROM careos_projected_interactive_permissions(?, ?)",
+        String.class,c.organizationId(),c.actorId()));}
     private static Instant nullable(ResultSet r,String n)throws SQLException{var t=r.getTimestamp(n);return t==null?null:t.toInstant();}
     private static String mask(String channel,String v){if(v==null)return "Unavailable";return switch(channel){case "email"->maskEmail(v);case "phone"->maskPhone(v);default->"https://***";};}
     private static String maskEmail(String v){if(v==null)return null;var at=v.indexOf('@');return at>0?v.substring(0,1)+"***@***"+(v.lastIndexOf('.')>at?v.substring(v.lastIndexOf('.')):""):"***";}

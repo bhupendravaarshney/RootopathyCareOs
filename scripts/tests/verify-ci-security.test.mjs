@@ -10,6 +10,7 @@ import {
   validateDockerfileText,
   validateFoundationDataScopeTexts,
   validateNginxText,
+  validatePlatformAccessReleaseTexts,
   validateProductionConfigText,
   validateProjectVerificationTexts,
   validateQualityTopologyText,
@@ -141,13 +142,20 @@ test("keeps browser and product evidence independent and aggregates every lane",
     timeout-minutes: 5
   product-smoke:
     timeout-minutes: 5
+    env:
+      COMPOSE_FILE: compose.yaml:compose.uat.yaml
     steps:
       - run: docker compose build --pull
       - run: docker compose up --detach --wait
       - run: curl http://localhost:8080/livez && curl http://localhost:8080/readyz && curl http://localhost:4173/
       - run: npm run test:live:audit
+      - env:
+          CAREOS_UAT_ALLOW_MUTATION: "true"
+        run: npm run test:uat:smoke
       - if: always()
         uses: actions/upload-artifact@immutable
+        with:
+          path: frontend/test-results/uat-smoke
       - if: always()
         run: docker compose down --volumes --remove-orphans
   quality-gate:
@@ -565,6 +573,25 @@ test("locks local reference authority behind a deployment-owned capability", () 
     migration: repositorySource(
       "backend/src/main/resources/db/migration/V115__local_reference_authority_capability.sql",
     ),
+    projectionMigration: repositorySource(
+      "backend/src/main/resources/db/migration/V116__capability_gated_local_action_projection.sql",
+    ),
+    projectionSources: [
+      "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcConfigurationActivationStore.java",
+      "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcEvidenceExportStore.java",
+      "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcIdentifierSchemeStore.java",
+      "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcOperatingHoursStore.java",
+      "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcOrganizationAdministrationStore.java",
+      "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcOrganizationContactStore.java",
+      "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcOrganizationIdentifierStore.java",
+      "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcOrganizationInternationalSettingsStore.java",
+      "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcServiceAssignmentStore.java",
+      "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcServiceCatalogueStore.java",
+      "backend/src/main/java/com/rootopathy/careos/identity/infrastructure/persistence/JdbcInvitationStore.java",
+      "backend/src/main/java/com/rootopathy/careos/workforce/infrastructure/JdbcWorkforceStore.java",
+    ]
+      .map(repositorySource)
+      .join("\n"),
     operations: repositorySource(
       "backend/src/main/java/com/rootopathy/careos/tenancy/infrastructure/PostgresTenantAuthorizationOperations.java",
     ),
@@ -590,6 +617,71 @@ test("locks local reference authority behind a deployment-owned capability", () 
       ),
     }).join("\n"),
     /session-user binding/,
+  );
+  assert.match(
+    validateReferenceAuthorityBoundaryTexts({
+      ...sources,
+      projectionMigration: sources.projectionMigration.replace(
+        "careos_reference_authorization_enabled()",
+        "true",
+      ),
+    }).join("\n"),
+    /capability-gated action projection/,
+  );
+});
+
+test("binds the platform super-administrator to exact evidence and human authority", () => {
+  const sources = {
+    administrationStore: repositorySource(
+      "backend/src/main/java/com/rootopathy/careos/administration/infrastructure/JdbcOrganizationAdministrationStore.java",
+    ),
+    direction: repositorySource(
+      "approved-inputs/platform-access/01-implementation-direction.md",
+    ),
+    evidence: repositorySource(
+      "approved-inputs/platform-access/03-approval-evidence.md",
+    ),
+    identityTest: repositorySource(
+      "backend/src/test/java/com/rootopathy/careos/identity/api/IdentitySecurityIntegrationTest.java",
+    ),
+    migration: repositorySource(
+      "backend/src/main/resources/db/migration/V117__governed_platform_super_administrator.sql",
+    ),
+    policy: repositorySource(
+      "approved-inputs/platform-access/02-authorization-policy.json",
+    ),
+    tenantTest: repositorySource(
+      "backend/src/test/java/com/rootopathy/careos/tenancy/infrastructure/TenantRlsIntegrationTest.java",
+    ),
+  };
+  assert.deepEqual(validatePlatformAccessReleaseTexts(sources), []);
+
+  assert.match(
+    validatePlatformAccessReleaseTexts({
+      ...sources,
+      direction: `${sources.direction}\nunauthorized drift`,
+    }).join("\n"),
+    /approval package digest/,
+  );
+  assert.match(
+    validatePlatformAccessReleaseTexts({
+      ...sources,
+      migration: sources.migration.replace(
+        "AND NOT target.final_owner",
+        "AND target.final_owner",
+      ),
+    }).join("\n"),
+    /delegation ceiling/,
+  );
+  assert.match(
+    validatePlatformAccessReleaseTexts({
+      ...sources,
+      migration: sources.migration.replace(
+        "OR delegator_role_key='platform_super_administrator'",
+        "OR true",
+      ),
+    }).join("\n"),
+    /peer-delegation exception/,
   );
 });
 

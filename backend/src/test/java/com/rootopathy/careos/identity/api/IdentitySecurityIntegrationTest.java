@@ -746,15 +746,20 @@ class IdentitySecurityIntegrationTest {
                     ('%s', '%s', '%s', 'organization_owner', 'active'),
                     ('%s', '%s', '%s', 'security_administrator', 'active')
                 """.formatted(UUID.randomUUID(), ORG_ONE, checkerId, membershipId, ORG_ONE, targetId));
+        executeAsMigrator("""
+                UPDATE organization_memberships
+                SET role_key = 'platform_super_administrator'
+                WHERE organization_id = '%s' AND user_id = '%s'
+                """.formatted(ORG_ONE, userId));
 
         var makerSession = enrollMfaAndAuthenticate(email, "198.51.100.75");
         var checkerSession = enrollMfaAndAuthenticate(checkerEmail, "198.51.100.76");
         var basePath = "/api/v1/organizations/" + ORG_ONE + "/memberships/" + membershipId
                 + "/change-requests";
-        var roleChangeReason = "Approved least-privilege role adjustment CARE-52";
+        var roleChangeReason = "Approved platform administrator role adjustment CARE-52";
         var roleChangeJson = objectMapper.writeValueAsString(Map.of(
                 "changeType", "role_change",
-                "toRoleKey", "organization_viewer",
+                "toRoleKey", "platform_super_administrator",
                 "reason", roleChangeReason));
 
         browserIdempotentPost(
@@ -793,7 +798,7 @@ class IdentitySecurityIntegrationTest {
                 .andExpect(jsonPath("$.targetUserId").value(targetId.toString()))
                 .andExpect(jsonPath("$.changeType").value("role_change"))
                 .andExpect(jsonPath("$.fromRoleKey").value("security_administrator"))
-                .andExpect(jsonPath("$.toRoleKey").value("organization_viewer"))
+                .andExpect(jsonPath("$.toRoleKey").value("platform_super_administrator"))
                 .andExpect(jsonPath("$.lockVersion").value(0))
                 .andExpect(jsonPath("$.status").value("pending"))
                 .andReturn();
@@ -850,7 +855,7 @@ class IdentitySecurityIntegrationTest {
         }
         assertThat(migratorCount("""
                         SELECT count(*) FROM organization_memberships
-                        WHERE id = '%s' AND role_key = 'organization_viewer'
+                        WHERE id = '%s' AND role_key = 'platform_super_administrator'
                           AND status = 'active' AND lock_version = 1
                           AND updated_by = '%s'
                         """.formatted(membershipId, userId)))
@@ -898,7 +903,7 @@ class IdentitySecurityIntegrationTest {
 
         assertThat(migratorCount("""
                         SELECT count(*) FROM organization_memberships
-                        WHERE id = '%s' AND role_key = 'organization_viewer'
+                        WHERE id = '%s' AND role_key = 'platform_super_administrator'
                           AND status = 'revoked' AND effective_to IS NOT NULL
                           AND lock_version = 2 AND updated_by = '%s'
                         """.formatted(membershipId, userId)))

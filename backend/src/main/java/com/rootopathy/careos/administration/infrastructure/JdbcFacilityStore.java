@@ -39,7 +39,7 @@ public class JdbcFacilityStore implements FacilityStore {
  WHERE organization_id=? AND id=? AND status='draft' AND lock_version=?
  """,c.actorId(),c.organizationId(),id,revision);if(changed!=1)throw new FacilityException(FacilityException.Reason.STALE,"Facility changed or is no longer a draft.");return new Result(directory(c,null,null),id,revision+1);}
  public Result transition(AuthorizedTenantContext c,UUID id,long revision,String from,String to,String closureReason){AuthorizedTenantTransactionGuard.requireBound(jdbc,c);var changed=jdbc.update("UPDATE facilities SET status=?,closure_reason=?,closed_at=CASE WHEN ?='closed' THEN clock_timestamp() ELSE NULL END,lock_version=lock_version+1,updated_at=clock_timestamp(),updated_by=? WHERE organization_id=? AND id=? AND status=? AND lock_version=?",to,closureReason,to,c.actorId(),c.organizationId(),id,from,revision);if(changed!=1)throw new FacilityException(FacilityException.Reason.STALE,"Facility changed or the lifecycle transition is no longer available.");return new Result(directory(c,null,null),id,revision+1);}
- private Set<String> permissions(AuthorizedTenantContext c){return Set.copyOf(jdbc.queryForList("""
- SELECT DISTINCT p.permission_key FROM organization_memberships m JOIN authorization_roles r ON r.role_key=m.role_key JOIN authorization_role_permissions rp ON rp.role_key=r.role_key JOIN authorization_permissions p ON p.permission_key=rp.permission_key AND p.registry_version=r.registry_version WHERE m.organization_id=? AND m.user_id=? AND m.status='active' AND r.registry_version='m1-candidate-1' AND r.status='active' AND p.status='active'
- """,String.class,c.organizationId(),c.actorId()));}
+ private Set<String> permissions(AuthorizedTenantContext c){return Set.copyOf(jdbc.queryForList(
+ "SELECT permission_key FROM careos_projected_interactive_permissions(?, ?)",
+ String.class,c.organizationId(),c.actorId()));}
 }

@@ -100,33 +100,17 @@ public class JdbcInvitationStore implements InvitationStore {
                 """
                 SELECT EXISTS (
                     SELECT 1
-                    FROM organization_memberships membership
-                    JOIN authorization_roles delegator_role
-                      ON delegator_role.role_key = membership.role_key
-                    JOIN authorization_role_delegations delegation
-                      ON delegation.delegator_role_key = delegator_role.role_key
-                     AND delegation.target_role_key = ?
-                     AND delegation.registry_version = delegator_role.registry_version
-                    JOIN authorization_roles target_role
-                      ON target_role.role_key = delegation.target_role_key
-                     AND target_role.registry_version = delegation.registry_version
-                    WHERE membership.organization_id = ?
-                      AND membership.user_id = ?
-                      AND membership.status = 'active'
-                      AND membership.effective_from <= clock_timestamp()
-                      AND (membership.effective_to IS NULL
-                           OR membership.effective_to > clock_timestamp())
+                    FROM authorization_roles target_role
+                    WHERE target_role.role_key = ?
+                      AND target_role.status = 'active'
+                      AND target_role.interactive
                       AND target_role.invitation_assignable
-                      AND (delegator_role.status = 'active'
-                           OR (coalesce(nullif(current_setting(
-                                   'app.reference_authorization_policy_enabled', true), '')::boolean,
-                                   false)
-                               AND delegator_role.status = 'reference'))
-                      AND (target_role.status = 'active'
-                           OR (coalesce(nullif(current_setting(
-                                   'app.reference_authorization_policy_enabled', true), '')::boolean,
-                                   false)
-                               AND target_role.status = 'reference'))
+                      AND EXISTS (
+                          SELECT 1
+                          FROM authorization_registry_releases release
+                          WHERE release.registry_version = target_role.registry_version
+                            AND release.status = 'active')
+                      AND careos_can_delegate_active_interactive_role(?,?,target_role.role_key)
                 )
                 """,
                 Boolean.class,

@@ -52,9 +52,13 @@ public class JdbcMembershipChangeStore implements MembershipChangeStore {
                           AND (membership.effective_to IS NULL
                                OR membership.effective_to > clock_timestamp())
                           AND target_user.status = 'active'
-                          AND role.registry_version = 'm1-candidate-1'
                           AND role.status = 'active'
                           AND role.interactive
+                          AND EXISTS (
+                              SELECT 1
+                              FROM authorization_registry_releases release
+                              WHERE release.registry_version = role.registry_version
+                                AND release.status = 'active')
                         FOR UPDATE OF membership
                         """,
                         (resultSet, rowNumber) -> new TargetMembership(
@@ -82,40 +86,11 @@ public class JdbcMembershipChangeStore implements MembershipChangeStore {
                         "The requested role must differ from the current role.");
             }
             var delegable = Boolean.TRUE.equals(jdbcTemplate.queryForObject(
-                    """
-                    SELECT EXISTS (
-                        SELECT 1
-                        FROM authorization_roles target_role
-                        WHERE target_role.role_key = ?
-                          AND target_role.registry_version = 'm1-candidate-1'
-                          AND target_role.status = 'active'
-                          AND target_role.interactive
-                          AND NOT target_role.final_owner
-                          AND EXISTS (
-                              SELECT 1
-                              FROM organization_memberships actor_membership
-                              JOIN authorization_roles actor_role
-                                ON actor_role.role_key = actor_membership.role_key
-                              JOIN authorization_role_delegations delegation
-                                ON delegation.delegator_role_key = actor_role.role_key
-                               AND delegation.target_role_key = target_role.role_key
-                               AND delegation.registry_version = 'm1-candidate-1'
-                              WHERE actor_membership.organization_id = ?
-                                AND actor_membership.user_id = ?
-                                AND actor_membership.status = 'active'
-                                AND actor_membership.effective_from <= clock_timestamp()
-                                AND (actor_membership.effective_to IS NULL
-                                     OR actor_membership.effective_to > clock_timestamp())
-                                AND actor_role.registry_version = 'm1-candidate-1'
-                                AND actor_role.status = 'active'
-                                AND actor_role.interactive
-                          )
-                    )
-                    """,
+                    "SELECT careos_can_delegate_active_interactive_role(?,?,?)",
                     Boolean.class,
-                    toRoleKey,
                     context.organizationId(),
-                    context.actorId()));
+                    context.actorId(),
+                    toRoleKey));
             if (!delegable) {
                 throw new MembershipAdministrationException(
                         Reason.TARGET_UNAVAILABLE,

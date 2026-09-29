@@ -46,7 +46,7 @@ function documentScreen(): DocumentScreen {
         patientId: '0199a2a0-0000-7000-8000-000000000005',
         revision: 2,
         status: 'clean',
-        values: { primary: 'Laboratory report' },
+        values: { $kind: 'document', primary: 'Laboratory report' },
       },
     ],
     screenId: 'P7-04',
