@@ -1,16 +1,16 @@
 # CareOS consolidated QA report
 
-**Evidence date:** 29 September 2026
+**Evidence date:** 30 September 2026
 
 **Baseline commit reviewed:** `0c53e5ca766f0e52ead8127a59718dcf8e1cce94` (`main` and `origin/main` at the start of this pass)
 
-**Evidence subject:** an uncommitted UAT-preparation working tree based on the baseline commit
+**Evidence subject:** executable candidate `fb5388fa9de73e1f5dc3e7c98c0037648d67e055`
 
 **Schema/API boundary:** Flyway V117, OpenAPI 3.1.0, 195 screens, 135 operations
 
 **Local UAT readiness: PASS.**
 
-**Repository release gate: FAIL.** The exact working tree is not a commit and therefore cannot have commit-bound hosted quality and security evidence.
+**Repository release gate: PASS** for the evidence-subject commit.
 
 **Target-environment UAT: NOT EXECUTED.**
 
@@ -47,13 +47,15 @@ The mutation smoke is guarded by `CAREOS_UAT_ALLOW_MUTATION=true`, permits local
 
 ## Hosted GitHub quality
 
-**NOT RUN for the exact UAT-preparation tree.** The quality workflow is configured with independent frontend, browser, backend-core, compatibility, contracts and product-smoke lanes. Its product-smoke lane runs both authenticated audits and uploads screenshots, reports and traces under the exact commit SHA; the aggregate gate requires every lane.
+**PASS for `fb5388fa9de73e1f5dc3e7c98c0037648d67e055`.** Frontend, browser, backend core, compatibility, contracts and authenticated product-smoke all passed independently, and the aggregate quality gate passed. Commit-bound QA evidence and authenticated product-audit artifacts were uploaded.
+
+The quality workflow is configured with independent frontend, browser, backend-core, compatibility, contracts and product-smoke lanes. Its product-smoke lane runs both authenticated audits and uploads screenshots, reports and traces under the exact commit SHA; the aggregate gate requires every lane.
 
 No earlier hosted result is carried forward to these changed bytes.
 
 ## Hosted GitHub security
 
-**NOT RUN for the exact UAT-preparation tree.** The immutable-action, image-pin and repository security contracts pass locally, but hosted CodeQL, Trivy and CycloneDX evidence must be produced for a committed candidate before repository release.
+**PASS for `fb5388fa9de73e1f5dc3e7c98c0037648d67e055`.** Source controls, Java and JavaScript/TypeScript CodeQL, pinned hardened image builds, Trivy scans, dependency review/SBOM behavior and the immutable-action/image contracts passed for the complete candidate.
 
 ## Target-environment acceptance
 
@@ -72,4 +74,4 @@ Both classes remain required for release. The classification improves diagnosis 
 
 ## Evidence interpretation
 
-Local engineering and UAT-readiness gates are green for this working tree. Repository release remains failed until the changes are committed and the exact SHA passes hosted quality and security with retained artifacts. Formal target UAT and production acceptance are separate accountable decisions.
+Local engineering and UAT-readiness gates plus hosted quality/security are green for the evidence-subject commit. Formal target UAT and production acceptance remain separate accountable decisions.

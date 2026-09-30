@@ -1,7 +1,7 @@
 # CareOS implementation gap ledger
 
-**Audit date:** 13 September 2026; UAT-preparation evidence updated 29 September 2026
-**Overall status:** **Phase 0 mechanics plus Modules 1-13 remain complete at the repository-construction boundary, now through Flyway V117. The UAT-preparation working tree based on `0c53e5ca766f0e52ead8127a59718dcf8e1cce94` is green at 283 backend, 144 frontend, 185 browser and 141 repository contract tests, with 195 screens and 135 operations. The authenticated product audit and guarded synthetic UAT smoke pass locally, including 16 server-projected actions, two successive workforce onboarding records, complete normal registration, private-quarantine document upload and the required urgent-path denial. V117 adds a governed production-capable super-administrator without granting machine authority or bypassing safety controls. It is not a released baseline: the working tree is uncommitted and hosted quality/security have not run for its exact bytes, so the repository release gate remains FAIL and target-environment UAT remains NOT EXECUTED. The protected COS source package, M1 facility-scope extension, target-environment controls, policy/provider/profile/worker activation and production acceptance remain open.**
+**Audit date:** 13 September 2026; UAT-preparation evidence updated 30 September 2026
+**Overall status:** **Phase 0 mechanics plus Modules 1-13 remain complete at the repository-construction boundary, now through Flyway V117. Executable candidate `fb5388fa9de73e1f5dc3e7c98c0037648d67e055` is green in hosted quality and security and locally at 283 backend, 144 frontend, 185 browser and 141 repository contract tests, with 195 screens and 135 operations. The authenticated product audit and guarded synthetic UAT smoke pass in hosted CI and locally, including 16 server-projected actions, two successive workforce onboarding records, complete normal registration, private-quarantine document upload and the required urgent-path denial. V117 adds a governed production-capable super-administrator without granting machine authority or bypassing safety controls. The repository release gate for that candidate is PASS; target-environment UAT remains NOT EXECUTED and production acceptance remains NOT GRANTED. The protected COS source package, M1 facility-scope extension, target-environment controls, policy/provider/profile/worker activation and production acceptance remain open.**
 
 This ledger reconciles the repository with the authoritative 46-page _CareOS Complete Build Specification_, the repository architecture/roadmap documents, and the checked-in implementation. It is intentionally evidence-based: a clickable route, a database table, or a dependency is not counted as a completed production capability unless the behavior is persisted, authorized, tenant-safe, audited, and covered by the required tests.
 
@@ -44,7 +44,7 @@ Executable evidence closes the code-level regressions identified on the baseline
 
 The removed Quay MinIO artifact is no longer referenced. A repository-owned source build uses a digest-pinned Go builder, checksum-pinned MinIO archive/commit, fixed build platform and source epoch, and a fail-closed expected manifest digest. V115 prevents a custom-GUC-only authorization bypass, and V116 extends that capability check to UI/action projections for the exact transaction tenant and actor. Raw `X-Authorization-Reason` values are captured before telemetry, normalized and bounded for the governed operation, then hidden from downstream headers, logs, traces, metrics, proxy access logs and browser analytics.
 
-This remediation is not marked released. The changed working tree has not been committed or run through hosted quality/security, and no current image scan, SBOM, provenance artifact or target-environment evidence exists for its exact bytes.
+Repository remediation candidate `fb5388fa9de73e1f5dc3e7c98c0037648d67e055` is complete and passes hosted quality and security, including current image scanning, CycloneDX SBOM generation and commit-bound QA/product-audit artifacts. This does not supply target-environment UAT, infrastructure provenance, operational acceptance or production acceptance.
 
 ## What is already usable
 
@@ -864,7 +864,7 @@ Mark an item complete only when its approved route/screen, permission, handler/s
 
 ## Verification snapshot
 
-Run against the uncommitted UAT-preparation tree based on `0c53e5ca766f0e52ead8127a59718dcf8e1cce94` on 29 September 2026:
+Run locally against the exact executable bytes committed as `fb5388fa9de73e1f5dc3e7c98c0037648d67e055` on 30 September 2026, with matching hosted quality/security success:
 
 | Check | Result | Notes |
 | --- | --- | --- |

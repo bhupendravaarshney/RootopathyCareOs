@@ -1,8 +1,8 @@
 # Build status
 
-## UAT-preparation evidence (29 September 2026)
+## UAT-preparation evidence (30 September 2026)
 
-This is local working-tree evidence based on commit `0c53e5ca766f0e52ead8127a59718dcf8e1cce94`, not hosted release approval. The tree adds Flyway V116/V117, a governed super-administrator and a private-quarantine UAT pathway. It has not been committed or exercised by GitHub Actions as exact bytes.
+This evidence is bound to executable candidate `fb5388fa9de73e1f5dc3e7c98c0037648d67e055`. Its hosted quality and security workflows passed on 30 September 2026. Repository release readiness does not imply target-environment UAT or production acceptance.
 
 | Gate | Current state |
 | --- | --- |
@@ -13,9 +13,9 @@ This is local working-tree evidence based on commit `0c53e5ca766f0e52ead8127a597
 | Authenticated product audit | PASS — login, organization selection, 193 protected routes, zero unexpected API/console failures and four intentional 428 boundaries. |
 | Governed UAT mutation smoke | PASS — 16 server-projected actions, one service draft, two successive workforce pathways, complete normal registration, private-quarantine document upload and the required urgent-path denial; zero unexpected API/console failures. |
 | S3 fixture preflight | PASS — reproducible manifest `sha256:9b225075e9847bde86fa19f8274353ae7c5c4018af813ebb5bb9ce12d329b744`. |
-| Hosted quality/security | NOT RUN for this uncommitted tree. |
+| Hosted quality/security | PASS for `fb5388fa…`: all six quality lanes and the aggregate gate pass; source, CodeQL, hardened-image/Trivy, dependency/SBOM and security controls pass. |
 | Formal target-environment UAT | **NOT EXECUTED** — use `docs/UAT_GUIDE.md` and `docs/UAT_ACCEPTANCE_RECORD.md`. |
-| Repository release gate | **FAIL** until an exact committed SHA passes both hosted workflows. |
+| Repository release gate | **PASS** for `fb5388fa9de73e1f5dc3e7c98c0037648d67e055`. |
 | Production acceptance | **NOT GRANTED**. |
 
 V116 fixes the local administrator’s missing action projections without making `local_bootstrap` production eligible: it requires the V115 deployment-owned capability, transaction flag, exact actor/tenant and active membership. V117 adds the active MFA-required `platform_super_administrator` with all 277 approved human-interactive permissions and none of the 10 machine-only permissions. Its assignment to another existing user remains maker/checker governed; direct invitation, self-targeting, final-owner bypass, service-role assignment and cross-tenant access remain denied. Successive workforce onboarding uses collision-resistant full-UUID member numbers, and the UAT overlay enables private document quarantine without enabling downstream providers. The CI product-smoke lane runs both audits and retains commit-named artifacts. `build/qa-evidence.json` records dirty/clean source state so local evidence cannot be mistaken for commit-bound hosted evidence.

@@ -8,7 +8,7 @@ The executable repository—not prior QA prose—was used as the baseline. The a
 
 ## 2. Final commit
 
-No final commit was created. The deliverable is an uncommitted working tree based on `0c53e5ca766f0e52ead8127a59718dcf8e1cce94`. This is stated explicitly so local evidence cannot be mistaken for hosted, commit-bound release evidence.
+The complete executable/UAT candidate is `fb5388fa9de73e1f5dc3e7c98c0037648d67e055` (`main`/`origin/main` at verification). It includes the approval inputs, V116/V117, regression test, UAT overlay, UAT evidence templates and mutation smoke omitted from the preceding partial commit. Hosted quality and security both passed for this exact SHA.
 
 ## 3–5. Problems, root causes and exact fixes
 
@@ -85,15 +85,14 @@ The repository-owned S3 fixture reproduced manifest `sha256:9b225075e9847bde86fa
 
 ## 15. Hosted CI status
 
-Hosted quality: **NOT RUN for the exact working tree**.
+Hosted quality for `fb5388fa9de73e1f5dc3e7c98c0037648d67e055`: **PASS** ([run 36685996202](https://github.com/bhupendravaarshney/RootopathyCareOs/actions/runs/36685996202)).
 
-Hosted security: **NOT RUN for the exact working tree**.
+Hosted security for `fb5388fa9de73e1f5dc3e7c98c0037648d67e055`: **PASS** ([run 36685996110](https://github.com/bhupendravaarshney/RootopathyCareOs/actions/runs/36685996110)).
 
 The quality workflow is configured to run frontend, browser, backend-core, compatibility, contracts and product-smoke independently, aggregate all required results, run both authenticated audits and upload commit-named evidence. The security workflow and its immutable-action/image contracts are retained. Local results are not substituted for hosted CodeQL, Trivy, CycloneDX or GitHub-runner evidence.
 
 ## 16. Remaining external/non-code blockers
 
-- Commit the candidate and obtain green hosted quality and security workflows for that exact SHA.
 - Execute the manual UAT scenarios with separate maker/checker identities in an isolated target environment and obtain accountable sign-off.
 - Protected COS source reconciliation and facility-scoped authorization approval/implementation.
 - Dedicated patient clinical workspace and care-plan/follow-up-specific UX.
@@ -105,6 +104,6 @@ Unavailable capabilities remain fail closed; no clinical policy, credential, par
 
 ## 17. Gate decision
 
-**Repository release gate: FAIL.** Local engineering and UAT-readiness gates pass, but the changes are not an exact committed SHA with successful hosted quality and security evidence.
+**Repository release gate: PASS** for `fb5388fa9de73e1f5dc3e7c98c0037648d67e055`.
 
 **Production acceptance: NOT GRANTED unless separately evidenced.**
