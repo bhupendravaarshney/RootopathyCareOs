@@ -1,0 +1,44 @@
+{
+  "version": "platform-access-v1",
+  "role": {
+    "key": "platform_super_administrator",
+    "displayName": "Platform super administrator",
+    "scope": "organization",
+    "status": "active",
+    "interactive": true,
+    "invitationAssignable": false,
+    "finalOwner": false,
+    "mfaRequired": true
+  },
+  "permissions": {
+    "rule": "exact union of active permissions granted to active interactive roles backed by active registry releases at migration V117",
+    "expectedCountAtV117": 277,
+    "serviceOnlyExcluded": [
+      "billing.payment.provider.record",
+      "evidence.export.retention",
+      "evidence.export.worker",
+      "identity.invitation.accept",
+      "integration.delivery.attempt",
+      "integration.delivery.create",
+      "integration.delivery.replay",
+      "integration.fhir.exchange.record",
+      "integration.webhook.receive",
+      "reporting.export.complete"
+    ]
+  },
+  "delegation": {
+    "assignmentRequiresExistingMembership": true,
+    "invitationDirectAssignment": false,
+    "independentApprovalRequired": true,
+    "selfTargetDenied": true,
+    "finalOwnerProtected": true,
+    "targets": "every active non-final interactive role backed by an active registry release"
+  },
+  "invariants": [
+    "tenant isolation and forced RLS remain enforced",
+    "provider and worker readiness remains fail closed",
+    "audit and outbox evidence remains mandatory",
+    "strong revisions and idempotency remain mandatory",
+    "production assignment and target-environment acceptance are separate"
+  ]
+}

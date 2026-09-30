@@ -1,0 +1,9 @@
+# Synthetic local/UAT overlay. This enables only private quarantine storage so
+# document upload can be acceptance-tested against the repository-owned S3
+# fixture. It does not enable clean promotion, signed access, retention, or any
+# production provider policy. Add compose.scanner.yaml when malware-scanning UAT
+# is explicitly required.
+services:
+  backend:
+    environment:
+      CAREOS_STORAGE_S3_ENABLED: "true"
