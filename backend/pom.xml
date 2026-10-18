@@ -14,7 +14,7 @@
     <name>CareOS Backend</name>
     <description>CareOS modular-monolith foundation</description>
     <properties>
-        <archunit.version>1.5.0</archunit.version>
+        <archunit.version>1.5.1</archunit.version>
         <bouncycastle.version>1.86</bouncycastle.version>
         <!-- Fixed floors for CVE-2026-68497; both Jackson generations are present transitively. -->
         <jackson-2-bom.version>2.21.6</jackson-2-bom.version>
