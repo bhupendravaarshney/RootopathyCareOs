@@ -20,7 +20,7 @@
         <jackson-2-bom.version>2.21.6</jackson-2-bom.version>
         <jackson-bom.version>3.1.6</jackson-bom.version>
         <java.version>25</java.version>
-        <minio.version>9.0.1</minio.version>
+        <minio.version>9.0.3</minio.version>
         <okhttp.version>5.3.2</okhttp.version>
         <testcontainers.version>2.0.5</testcontainers.version>
         <!-- Spring Boot 4.1.1 manages 11.0.24; 11.0.25 is the current fixed Tomcat 11 security floor. -->
